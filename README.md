@@ -18,6 +18,12 @@ Read these before implementation:
 - `DEVELOPMENT_CONTRACT.md`
 - `ARCHITECTURE.md`
 - `PRODUCT_SCOPE.md`
+- `IMPLEMENTATION_PLAN.md`
+- `DATA_MODEL.md`
+- `API_CONTRACTS.md`
+- `THREAT_MODEL.md`
+- `TEST_STRATEGY.md`
+- `OWNER_SETUP.md`
 - `AGENTS.md`
 
 ## Local Environment
