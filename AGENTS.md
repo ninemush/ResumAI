@@ -32,3 +32,7 @@ Before implementation work, read and follow:
 - `DEVELOPMENT_CONTRACT.md`
 - `ARCHITECTURE.md`
 - `PRODUCT_SCOPE.md`
+- `USER_FLOWS.md`
+- `PRIVACY_IMPACT.md`
+- `UX_STATES.md`
+- `ROLLBACK_PLAN.md`

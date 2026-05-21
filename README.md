@@ -23,6 +23,10 @@ Read these before implementation:
 - `API_CONTRACTS.md`
 - `THREAT_MODEL.md`
 - `TEST_STRATEGY.md`
+- `USER_FLOWS.md`
+- `PRIVACY_IMPACT.md`
+- `UX_STATES.md`
+- `ROLLBACK_PLAN.md`
 - `OWNER_SETUP.md`
 - `AGENTS.md`
 
