@@ -7,7 +7,7 @@ AI-powered job application assistant.
 - Next.js App Router + TypeScript scaffold
 - GitHub remote: `ninemush/ResumAI`
 - Vercel project linked: `resum-ai/ai-resume-app`
-- Supabase project linked: `zwjdjjovuxezatqltuwr`
+- Supabase project linked: `raqsevuqlwofhgljiazv`
 - Cursor is the primary IDE
 - Codex is the coding assistant inside Cursor
 
@@ -47,6 +47,10 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+The default dev command enables polling so Cursor/Mac file watching reliably
+detects App Router files. Use `npm run dev:fast` only if native watching is
+stable on your machine.
 
 ## Infra
 
