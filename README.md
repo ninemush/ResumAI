@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ResumAI
 
-## Getting Started
+AI-powered job application assistant.
 
-First, run the development server:
+## Current Setup
+
+- Next.js App Router + TypeScript scaffold
+- GitHub remote: `ninemush/ResumAI`
+- Vercel project linked: `resum-ai/ai-resume-app`
+- Supabase project linked: `zwjdjjovuxezatqltuwr`
+- Cursor is the primary IDE
+- Codex is the coding assistant inside Cursor
+
+## Governance
+
+Read these before implementation:
+
+- `DEVELOPMENT_CONTRACT.md`
+- `ARCHITECTURE.md`
+- `PRODUCT_SCOPE.md`
+- `AGENTS.md`
+
+## Local Environment
+
+Create `.env.local` from `.env.example`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+OPENAI_API_KEY=
+```
+
+## Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Infra
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Supabase CLI:
 
-## Learn More
+```bash
+npx supabase projects list
+npx supabase status
+```
 
-To learn more about Next.js, take a look at the following resources:
+Vercel CLI:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx vercel project ls
+npx vercel env ls
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## V1 Boundary
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Conversation-first profile build
+- Natural-language, file, OCR, and link ingestion
+- Role-fit and seniority recommendations
+- ATS-friendly master resume generation
+- Job URL validation against profile
+- Logged applications with quota tracking
+- Job-specific resume and cover letter PDFs
+- Application status tracking
+- Owner/admin tier configuration
+- No auto-apply
+- No job scanning
+- No payments yet
