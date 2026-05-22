@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 import type { Provider } from "@supabase/supabase-js";
+import Image from "next/image";
 
-import { brand, getBrandInitials } from "@/lib/brand";
+import { brand } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/browser";
 
 type AuthMode = "sign-in" | "sign-up";
@@ -80,15 +81,19 @@ export function AuthPanel() {
   return (
     <section className="auth-shell" aria-labelledby="auth-title">
       <div className="auth-copy">
-        <div className="brand-mark" aria-hidden="true">
-          {getBrandInitials()}
-        </div>
-        <p className="eyebrow">{brand.name} workspace</p>
-        <h1 id="auth-title">Build calmer, sharper job applications.</h1>
+        <Image
+          alt={brand.logoAlt}
+          className="auth-logo"
+          height={221}
+          priority
+          src={brand.logoPath}
+          width={600}
+        />
+        <p className="eyebrow">{brand.tagline}</p>
+        <h1 id="auth-title">Career clarity, guided by intelligence.</h1>
         <p>
-          Sign in to enter the protected workspace. The next foundation step is
-          profile building, resume intake, and job-post analysis on top of this
-          secure shell.
+          Sign in to enter a private workspace for profile building, role clarity,
+          resume tailoring, and thoughtful job applications.
         </p>
         <div className="trust-note">
           <ShieldCheck size={18} aria-hidden="true" />

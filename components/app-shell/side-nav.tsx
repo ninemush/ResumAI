@@ -10,10 +10,11 @@ import {
   Shield,
   UserRound,
 } from "lucide-react";
+import Image from "next/image";
 
 import type { WorkspaceSession } from "@/lib/commands/session";
 import { SignOutButton } from "@/components/app-shell/sign-out-button";
-import { brand, getBrandInitials } from "@/lib/brand";
+import { brand } from "@/lib/brand";
 
 const primaryItems = [
   { label: "Profile", icon: UserRound, active: true },
@@ -33,12 +34,16 @@ export function SideNav({ collapsed, onToggleCollapsed, session }: SideNavProps)
   return (
     <aside className={collapsed ? "side-nav collapsed" : "side-nav"} aria-label="Workspace navigation">
       <div className="side-nav-header">
-        <div className="brand-mark small" aria-hidden="true">
-          {getBrandInitials()}
-        </div>
+        <Image
+          alt={brand.logoAlt}
+          className="side-nav-logo"
+          height={42}
+          src={brand.logoPath}
+          width={42}
+        />
         <div className="side-nav-brand-copy">
           <strong>{brand.name}</strong>
-          <span>{brand.category}</span>
+          <span>{brand.tagline}</span>
         </div>
         <button
           aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}

@@ -3,9 +3,11 @@ const configuredTagline = process.env.NEXT_PUBLIC_APP_TAGLINE?.trim();
 
 export const brand = {
   name: configuredName || "Pramania",
-  tagline: configuredTagline || "Apply smarter",
-  category: "Application OS",
+  tagline: configuredTagline || "Career clarity, guided by intelligence",
+  category: "Career intelligence",
   description: "AI-assisted job application workspace.",
+  logoAlt: "Pramania primary logo",
+  logoPath: "/brand/pramania-primary-logo.svg",
 } as const;
 
 export function getBrandInitials(name = brand.name) {
