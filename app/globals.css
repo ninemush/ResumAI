@@ -896,16 +896,21 @@ input:focus {
 
 @media (max-width: 1080px) {
   .workspace-shell {
-    grid-template-columns: var(--nav-width, 220px) 6px minmax(0, 1fr);
+    grid-template-columns:
+      var(--nav-width, 78px) 6px minmax(0, 1fr) 6px
+      minmax(320px, var(--conversation-width, 380px));
   }
 
   .conversation-pane {
-    border-width: 1px 0 0;
-    grid-column: 1 / -1;
+    border-width: 0 0 0 1px;
   }
 
   .conversation-resize-handle {
-    display: none;
+    display: block;
+  }
+
+  .workspace-main {
+    padding: 26px;
   }
 }
 
