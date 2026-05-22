@@ -69,12 +69,20 @@ const generalQuestionStarts = [
 ];
 
 export type ProfileIntakeScopeCheck = {
+  capabilityAnswer?: string;
   inScope: boolean;
   redirectMessage?: string;
 };
 
 export function checkProfileIntakeScope(message: string): ProfileIntakeScopeCheck {
   const normalizedMessage = normalize(message);
+
+  if (isCapabilityQuestion(normalizedMessage)) {
+    return {
+      inScope: false,
+      capabilityAnswer: buildCapabilityAnswer(),
+    };
+  }
 
   if (hasAnyTerm(normalizedMessage, careerScopeTerms)) {
     return { inScope: true };
@@ -95,6 +103,20 @@ export function checkProfileIntakeScope(message: string): ProfileIntakeScopeChec
 
 function buildRedirectMessage() {
   return `I can help with your career profile, resume, role fit, job posts, applications, and interview direction. I cannot really branch into general chat here, but share anything about your work history, strengths, goals, credentials, or a job you are considering and I will help shape it.`;
+}
+
+function buildCapabilityAnswer() {
+  return `I can help you build a strong career profile, understand what roles may fit you, tailor resumes and cover letters, read job posts, compare them against your background, and keep track of applications. You can start naturally: tell me about your work history, drop a resume, paste your LinkedIn or portfolio link, or share a job post you are considering.`;
+}
+
+function isCapabilityQuestion(message: string) {
+  return [
+    "what can you help me with",
+    "what do you do",
+    "how can you help",
+    "how do you help",
+    "what are you for",
+  ].some((phrase) => message.includes(phrase));
 }
 
 function hasAnyTerm(message: string, terms: string[]) {

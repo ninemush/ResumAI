@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Paperclip, Loader2, SendHorizontal, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
@@ -54,6 +54,7 @@ export function ConversationPanel({
 }: ConversationPanelProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ConversationMessage[]>(
     initialMessages.length > 0
@@ -69,6 +70,15 @@ export function ConversationPanel({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
+
+  useEffect(() => {
+    const messageList = messageListRef.current;
+    if (!messageList) {
+      return;
+    }
+
+    messageList.scrollTop = messageList.scrollHeight;
+  }, [messages, status, error]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -125,13 +135,9 @@ export function ConversationPanel({
       throw new Error(payload.error ?? "PROFILE_INTAKE_FAILED");
     }
 
-    if (payload.followUpQuestions?.length) {
-      appendAssistantMessage(payload.followUpQuestions.join(" "), true);
-    }
-
     setStatus(
       payload.inScope === false
-        ? "No profile details saved. I kept the conversation focused on the app's purpose."
+        ? null
         : `Saved ${payload.savedFactCount} profile detail${payload.savedFactCount === 1 ? "" : "s"}.`,
     );
 
@@ -341,7 +347,7 @@ export function ConversationPanel({
         <Sparkles size={20} aria-hidden="true" />
       </div>
 
-      <div className="message-list">
+      <div className="message-list" ref={messageListRef}>
         {messages.map((item, index) => (
           <div
             className={item.speaker === "user" ? "user-message" : "assistant-message"}

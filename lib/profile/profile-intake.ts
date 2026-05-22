@@ -87,12 +87,15 @@ export async function runProfileIntake({
     return {
       inScope: false,
       assistantMessage:
+        scopeCheck.capabilityAnswer ??
         scopeCheck.redirectMessage ??
         "I can help with your career profile, resume, role fit, job posts, applications, and interview direction. Share something in that lane and I will help shape it.",
       facts: [],
-      followUpQuestions: [
-        "Would you like to tell me about your recent roles, strongest achievements, or the kind of job you want next?",
-      ],
+      followUpQuestions: scopeCheck.capabilityAnswer
+        ? []
+        : [
+            "Would you like to tell me about your recent roles, strongest achievements, or the kind of job you want next?",
+          ],
       profileDraft: {
         displayName: null,
         headline: null,

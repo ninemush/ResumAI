@@ -784,6 +784,7 @@ input:focus {
   min-height: 0;
   overflow-y: auto;
   padding-right: 2px;
+  scroll-behavior: smooth;
 }
 
 .assistant-message,
