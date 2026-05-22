@@ -20,7 +20,7 @@ const sourceUrlSchema = z
   .string()
   .trim()
   .url()
-  .refine((value) => ["http:", "https:"].includes(new URL(value).protocol), {
+  .refine((value) => isHttpUrl(value), {
     message: "Only http and https links are supported.",
   });
 
@@ -121,5 +121,13 @@ function validateSourceShape(input: ProfileSourceRequest) {
     if (!hostname.endsWith("linkedin.com")) {
       throw new Error("LINKEDIN_URL_REQUIRED");
     }
+  }
+}
+
+function isHttpUrl(value: string) {
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
   }
 }

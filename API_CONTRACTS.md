@@ -150,6 +150,12 @@ Controls:
 
 Purpose: ingest and parse a job posting URL.
 
+Current implementation fetches public HTML job pages, extracts readable text,
+stores `job_ingestions`, and shows recent ingestions in the workspace. A
+lightweight, non-AI fit snapshot compares current profile keywords against the
+stored job text. Full AI fit evaluation and application logging are separate
+follow-up commands.
+
 Request:
 
 ```json
@@ -162,7 +168,7 @@ Controls:
 
 - Auth required.
 - URL validation.
-- SSRF protection.
+- SSRF protection for obvious local/private targets.
 - Timeout and content-size limits.
 - Extracted job text stored in `job_ingestions`.
 

@@ -7,10 +7,44 @@ import {
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  let body: unknown;
 
   try {
-    const payload = profileSourceRequestSchema.parse(await request.json());
-    const source = await ingestProfileSource(payload);
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "validation",
+          code: "request.invalid_json",
+          message: "Invalid JSON body.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const parsed = profileSourceRequestSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "validation",
+          code: "source.invalid_input",
+          message: "The source type and provided source details do not match.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const source = await ingestProfileSource(parsed.data);
 
     return NextResponse.json({
       ok: true,

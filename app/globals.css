@@ -274,12 +274,19 @@ input:focus {
   margin-top: auto;
 }
 
+.workspace-main,
 .profile-pane {
   display: grid;
   gap: 24px;
-  grid-template-rows: auto auto 1fr;
   min-width: 0;
+}
+
+.workspace-main {
   padding: 34px;
+}
+
+.profile-pane {
+  grid-template-rows: auto auto 1fr;
 }
 
 .pane-heading p {
@@ -305,6 +312,7 @@ input:focus {
 
 .profile-summary-grid div,
 .facts-panel,
+.jobs-panel,
 .sources-panel,
 .source-uploader {
   background: rgba(255, 250, 243, 0.68);
@@ -351,6 +359,7 @@ input:focus {
 }
 
 .source-upload-target,
+.job-link-form,
 .source-link-form {
   align-items: center;
   background: rgba(247, 243, 237, 0.7);
@@ -380,6 +389,11 @@ input:focus {
   border-style: solid;
 }
 
+.job-link-form {
+  border-style: solid;
+}
+
+.job-link-form input,
 .source-link-form input {
   background: transparent;
   border: 0;
@@ -389,10 +403,12 @@ input:focus {
   padding: 0;
 }
 
+.job-link-form input:focus,
 .source-link-form input:focus {
   box-shadow: none;
 }
 
+.job-link-form button,
 .source-link-form button {
   align-items: center;
   background: var(--sage-strong);
@@ -407,6 +423,7 @@ input:focus {
   padding: 0 12px;
 }
 
+.job-link-form button:disabled,
 .source-link-form button:disabled {
   background: #c8beb0;
 }
@@ -439,6 +456,18 @@ input:focus {
   gap: 10px;
 }
 
+.jobs-panel {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.job-list {
+  display: grid;
+  gap: 10px;
+}
+
+.job-row,
 .source-row {
   align-items: center;
   background: var(--panel-strong);
@@ -451,16 +480,20 @@ input:focus {
 }
 
 .source-row h3,
+.job-row h3,
+.job-row p,
 .source-row p {
   margin: 0;
 }
 
+.job-row h3,
 .source-row h3 {
   color: var(--foreground);
   font-size: 0.98rem;
   overflow-wrap: anywhere;
 }
 
+.job-row p,
 .source-row p {
   color: var(--muted);
   font-size: 0.86rem;
@@ -468,8 +501,26 @@ input:focus {
   margin-top: 4px;
 }
 
+.job-row .source-failure,
 .source-row .source-failure {
   color: var(--danger);
+}
+
+.keyword-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.keyword-row span {
+  background: rgba(109, 139, 127, 0.14);
+  border: 1px solid rgba(109, 139, 127, 0.22);
+  border-radius: 999px;
+  color: var(--sage-strong);
+  font-size: 0.75rem;
+  font-weight: 750;
+  padding: 4px 8px;
 }
 
 .source-pill {
@@ -728,6 +779,7 @@ input:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .workspace-main,
   .profile-pane,
   .conversation-pane {
     padding: 22px;

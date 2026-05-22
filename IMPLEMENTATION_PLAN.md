@@ -144,6 +144,11 @@ Exit criteria:
 
 Goal: validate job fit and create application-specific materials.
 
+Status: in progress. Public job URL ingestion now stores extracted job-post text,
+recent ingestion status, and a lightweight profile-keyword fit snapshot for
+testing. Full AI fit analysis, application logging, quota consumption, and
+job-specific artifacts remain follow-up work.
+
 Deliverables:
 
 - Job URL ingestion.
