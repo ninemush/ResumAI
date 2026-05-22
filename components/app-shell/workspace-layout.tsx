@@ -8,6 +8,7 @@ import { ConversationPanel } from "@/components/conversation/conversation-panel"
 import { JobIngestionPanel } from "@/components/jobs/job-ingestion-panel";
 import { ProfileExplorer } from "@/components/profile/profile-explorer";
 import type { WorkspaceSession } from "@/lib/commands/session";
+import type { ConversationMessage } from "@/lib/conversation/conversation-messages";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
@@ -20,6 +21,7 @@ const MIN_CONVERSATION_WIDTH = 340;
 const MAX_CONVERSATION_WIDTH = 540;
 
 type WorkspaceLayoutProps = {
+  conversationMessages: ConversationMessage[];
   jobOverview: JobOverview;
   profileOverview: ProfileOverview;
   session: WorkspaceSession;
@@ -32,6 +34,7 @@ type WorkspaceLayoutState = {
 };
 
 export function WorkspaceLayout({
+  conversationMessages,
   jobOverview,
   profileOverview,
   session,
@@ -122,7 +125,11 @@ export function WorkspaceLayout({
         type="button"
       />
 
-      <ConversationPanel userEmail={session.user.email} userId={session.user.id} />
+      <ConversationPanel
+        initialMessages={conversationMessages}
+        userEmail={session.user.email}
+        userId={session.user.id}
+      />
     </div>
   );
 }

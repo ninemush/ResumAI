@@ -7,12 +7,14 @@ import { brand } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/browser";
 
 type ConversationPanelProps = {
+  initialMessages: ConversationMessage[];
   userEmail: string | null;
   userId: string;
 };
 
 type ConversationMessage = {
-  speaker: "assistant" | "user";
+  id?: string;
+  speaker: "assistant" | "user" | "system";
   text: string;
 };
 
@@ -45,16 +47,24 @@ const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image">([
   ["image/heif", "image"],
 ]);
 
-export function ConversationPanel({ userEmail, userId }: ConversationPanelProps) {
+export function ConversationPanel({
+  initialMessages,
+  userEmail,
+  userId,
+}: ConversationPanelProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<ConversationMessage[]>([
-    {
-      speaker: "assistant",
-      text: `Hi${userEmail ? `, ${userEmail.split("@")[0]}` : ""}. Tell me about your background, paste a role, or drop a resume here. I will keep this focused on your career profile and applications.`,
-    },
-  ]);
+  const [messages, setMessages] = useState<ConversationMessage[]>(
+    initialMessages.length > 0
+      ? initialMessages
+      : [
+          {
+            speaker: "assistant",
+            text: `Hi${userEmail ? `, ${userEmail.split("@")[0]}` : ""}. Tell me about your background, paste a role, or drop a resume here. I will keep this focused on your career profile and applications.`,
+          },
+        ],
+  );
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,6 +83,7 @@ export function ConversationPanel({ userEmail, userId }: ConversationPanelProps)
     setError(null);
     setIsSubmitting(true);
     appendUserMessage(trimmedMessage);
+    persistConversationMessage("user", trimmedMessage);
 
     try {
       await processMessage(trimmedMessage);
@@ -97,7 +108,7 @@ export function ConversationPanel({ userEmail, userId }: ConversationPanelProps)
     }
 
     if (summaries.length > 0) {
-      appendAssistantMessage(summaries.join(" "));
+      appendAssistantMessage(summaries.join(" "), true);
       router.refresh();
     }
   }
@@ -115,7 +126,7 @@ export function ConversationPanel({ userEmail, userId }: ConversationPanelProps)
     }
 
     if (payload.followUpQuestions?.length) {
-      appendAssistantMessage(payload.followUpQuestions.join(" "));
+      appendAssistantMessage(payload.followUpQuestions.join(" "), true);
     }
 
     setStatus(
@@ -178,6 +189,12 @@ export function ConversationPanel({ userEmail, userId }: ConversationPanelProps)
         ? `Dropped ${fileList[0].name}`
         : `Dropped ${fileList.length} files`,
     );
+    persistConversationMessage(
+      "user",
+      fileList.length === 1
+        ? `Dropped ${fileList[0].name}`
+        : `Dropped ${fileList.length} files`,
+    );
 
     const summaries: string[] = [];
 
@@ -185,7 +202,7 @@ export function ConversationPanel({ userEmail, userId }: ConversationPanelProps)
       summaries.push(await processFile(file));
     }
 
-    appendAssistantMessage(summaries.join(" "));
+    appendAssistantMessage(summaries.join(" "), true);
     setIsSubmitting(false);
     router.refresh();
   }
@@ -282,8 +299,11 @@ export function ConversationPanel({ userEmail, userId }: ConversationPanelProps)
     };
   }
 
-  function appendAssistantMessage(text: string) {
+  function appendAssistantMessage(text: string, persist = false) {
     setMessages((current) => [...current, { speaker: "assistant", text }]);
+    if (persist) {
+      persistConversationMessage("assistant", text);
+    }
   }
 
   function appendUserMessage(text: string) {
@@ -325,7 +345,7 @@ export function ConversationPanel({ userEmail, userId }: ConversationPanelProps)
         {messages.map((item, index) => (
           <div
             className={item.speaker === "user" ? "user-message" : "assistant-message"}
-            key={`${item.text}-${index}`}
+            key={item.id ?? `${item.text}-${index}`}
           >
             <strong>{item.speaker === "user" ? "You" : brand.name}</strong>
             <p>{item.text}</p>
@@ -384,6 +404,21 @@ export function ConversationPanel({ userEmail, userId }: ConversationPanelProps)
       </form>
     </aside>
   );
+}
+
+async function persistConversationMessage(
+  speaker: ConversationMessage["speaker"],
+  text: string,
+) {
+  try {
+    await fetch("/api/conversation/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ speaker, text }),
+    });
+  } catch {
+    // Conversation memory should not block the user from continuing their flow.
+  }
 }
 
 function extractUrls(value: string) {
