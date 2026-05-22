@@ -1,4 +1,4 @@
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Compass, Sparkles } from "lucide-react";
 
 import { brand } from "@/lib/brand";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
@@ -48,6 +48,73 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
           <strong>{overview.profile?.targetDirection ?? "Needs direction"}</strong>
         </div>
       </section>
+
+      {overview.profile?.summary ||
+      overview.profile?.targetDirection ||
+      overview.profile?.targetLevel ? (
+        <section className="profile-draft-panel" aria-label="Profile draft">
+          <div className="section-heading">
+            <p className="eyebrow">Working draft</p>
+            <h2>The current read</h2>
+          </div>
+          {overview.profile?.summary ? <p>{overview.profile.summary}</p> : null}
+          <div className="draft-chips" aria-label="Draft direction">
+            {overview.profile?.targetDirection ? (
+              <span>
+                <Compass size={15} aria-hidden="true" />
+                {overview.profile.targetDirection}
+              </span>
+            ) : null}
+            {overview.profile?.targetLevel ? (
+              <span>
+                <Sparkles size={15} aria-hidden="true" />
+                {overview.profile.targetLevel}
+              </span>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {overview.roleRecommendations.length > 0 ? (
+        <section className="roles-panel" aria-label="Role recommendations">
+          <div className="section-heading">
+            <p className="eyebrow">Role paths</p>
+            <h2>Directions worth considering</h2>
+          </div>
+          <div className="role-list">
+            {overview.roleRecommendations.map((recommendation) => (
+              <article className="role-card" key={recommendation.id}>
+                <div className="role-card-header">
+                  <div>
+                    <h3>{recommendation.role_family}</h3>
+                    {recommendation.seniority_level ? (
+                      <p>{recommendation.seniority_level}</p>
+                    ) : null}
+                  </div>
+                  {recommendation.confidence !== null ? (
+                    <span>{Math.round(recommendation.confidence * 100)}%</span>
+                  ) : null}
+                </div>
+                {recommendation.role_titles.length > 0 ? (
+                  <div className="keyword-row">
+                    {recommendation.role_titles.map((title) => (
+                      <span key={title}>{title}</span>
+                    ))}
+                  </div>
+                ) : null}
+                <p>{recommendation.rationale}</p>
+                {recommendation.open_questions.length > 0 ? (
+                  <ul>
+                    {recommendation.open_questions.map((question) => (
+                      <li key={question}>{question}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {overview.recentSources.length > 0 ? (
         <section className="sources-panel" aria-label="Recent profile sources">

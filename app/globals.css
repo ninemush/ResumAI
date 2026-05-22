@@ -462,6 +462,8 @@ input:focus {
 .profile-summary-grid div,
 .facts-panel,
 .jobs-panel,
+.profile-draft-panel,
+.roles-panel,
 .sources-panel {
   background: rgba(255, 250, 243, 0.68);
   border: 1px solid var(--line);
@@ -489,15 +491,99 @@ input:focus {
 }
 
 .facts-panel,
+.profile-draft-panel,
+.roles-panel,
 .sources-panel {
   display: grid;
   gap: 18px;
   padding: 20px;
 }
 
+.profile-draft-panel p,
+.role-card p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.draft-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.draft-chips span {
+  align-items: center;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--sage-strong);
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 750;
+  gap: 7px;
+  padding: 8px 11px;
+}
+
 .source-list {
   display: grid;
   gap: 10px;
+}
+
+.role-list {
+  display: grid;
+  gap: 12px;
+}
+
+.role-card {
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.role-card-header {
+  align-items: start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.role-card h3,
+.role-card-header p {
+  margin: 0;
+}
+
+.role-card h3 {
+  color: var(--foreground);
+  font-size: 1rem;
+}
+
+.role-card-header p {
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin-top: 4px;
+}
+
+.role-card-header > span {
+  border: 1px solid rgba(109, 139, 127, 0.26);
+  border-radius: 999px;
+  color: var(--sage-strong);
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 5px 8px;
+}
+
+.role-card ul {
+  color: var(--ink-soft);
+  display: grid;
+  gap: 8px;
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 18px;
 }
 
 .jobs-panel {

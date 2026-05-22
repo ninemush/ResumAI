@@ -21,6 +21,19 @@ type ProfileSource = {
   created_at: string;
 };
 
+type RoleRecommendation = {
+  id: string;
+  role_family: string;
+  role_titles: string[];
+  seniority_level: string | null;
+  rationale: string;
+  assumptions: string[];
+  open_questions: string[];
+  confidence: number | null;
+  user_acknowledged: boolean;
+  created_at: string;
+};
+
 export type ProfileOverview = {
   profile: {
     id: string;
@@ -35,6 +48,7 @@ export type ProfileOverview = {
   factCount: number;
   confirmedFactCount: number;
   recentSources: ProfileSource[];
+  roleRecommendations: RoleRecommendation[];
   sourceCount: number;
   readinessScore: number;
   tierName: string | null;
@@ -58,6 +72,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
       factCount: 0,
       confirmedFactCount: 0,
       recentSources: [],
+      roleRecommendations: [],
       sourceCount: 0,
       readinessScore: 0,
       tierName: null,
@@ -68,6 +83,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     { data: facts },
     { count: sourceCount },
     { data: recentSources },
+    { data: roleRecommendations },
     { data: tierAssignments },
   ] =
     await Promise.all([
@@ -88,6 +104,14 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(5),
+      supabase
+        .from("role_recommendations")
+        .select(
+          "id, role_family, role_titles, seniority_level, rationale, assumptions, open_questions, confidence, user_acknowledged, created_at",
+        )
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(3),
       supabase
         .from("user_tiers")
         .select("tiers(name)")
@@ -121,6 +145,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     factCount: profileFacts.length,
     confirmedFactCount,
     recentSources: recentSources ?? [],
+    roleRecommendations: roleRecommendations ?? [],
     sourceCount: sourceCount ?? 0,
     readinessScore: calculateReadinessScore({
       factCount: profileFacts.length,

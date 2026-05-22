@@ -36,6 +36,26 @@ const profileIntakeResponseSchema = z.object({
     )
     .max(12),
   followUpQuestions: z.array(z.string().min(1).max(220)).max(3),
+  profileDraft: z.object({
+    displayName: z.string().max(120).nullable(),
+    headline: z.string().max(180).nullable(),
+    summary: z.string().max(900).nullable(),
+    targetDirection: z.string().max(240).nullable(),
+    targetLevel: z.string().max(120).nullable(),
+  }),
+  roleRecommendations: z
+    .array(
+      z.object({
+        roleFamily: z.string().min(1).max(160),
+        roleTitles: z.array(z.string().min(1).max(120)).max(5),
+        seniorityLevel: z.string().max(120).nullable(),
+        rationale: z.string().min(1).max(700),
+        assumptions: z.array(z.string().min(1).max(180)).max(4),
+        openQuestions: z.array(z.string().min(1).max(180)).max(4),
+        confidence: z.number().min(0).max(1),
+      }),
+    )
+    .max(3),
   suggestedDirection: z.string().max(500).nullable(),
 });
 
@@ -73,6 +93,14 @@ export async function runProfileIntake({
       followUpQuestions: [
         "Would you like to tell me about your recent roles, strongest achievements, or the kind of job you want next?",
       ],
+      profileDraft: {
+        displayName: null,
+        headline: null,
+        summary: null,
+        targetDirection: null,
+        targetLevel: null,
+      },
+      roleRecommendations: [],
       suggestedDirection: null,
       savedFactCount: 0,
       promptVersion: PROFILE_INTAKE_PROMPT_VERSION,
@@ -173,6 +201,8 @@ export async function extractProfileFactsFromText({
             "assistantMessage",
             "facts",
             "followUpQuestions",
+            "profileDraft",
+            "roleRecommendations",
             "suggestedDirection",
           ],
           properties: {
@@ -202,6 +232,78 @@ export async function extractProfileFactsFromText({
               type: "array",
               maxItems: 3,
               items: { type: "string" },
+            },
+            profileDraft: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "displayName",
+                "headline",
+                "summary",
+                "targetDirection",
+                "targetLevel",
+              ],
+              properties: {
+                displayName: {
+                  anyOf: [{ type: "string" }, { type: "null" }],
+                },
+                headline: {
+                  anyOf: [{ type: "string" }, { type: "null" }],
+                },
+                summary: {
+                  anyOf: [{ type: "string" }, { type: "null" }],
+                },
+                targetDirection: {
+                  anyOf: [{ type: "string" }, { type: "null" }],
+                },
+                targetLevel: {
+                  anyOf: [{ type: "string" }, { type: "null" }],
+                },
+              },
+            },
+            roleRecommendations: {
+              type: "array",
+              maxItems: 3,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: [
+                  "roleFamily",
+                  "roleTitles",
+                  "seniorityLevel",
+                  "rationale",
+                  "assumptions",
+                  "openQuestions",
+                  "confidence",
+                ],
+                properties: {
+                  roleFamily: { type: "string" },
+                  roleTitles: {
+                    type: "array",
+                    maxItems: 5,
+                    items: { type: "string" },
+                  },
+                  seniorityLevel: {
+                    anyOf: [{ type: "string" }, { type: "null" }],
+                  },
+                  rationale: { type: "string" },
+                  assumptions: {
+                    type: "array",
+                    maxItems: 4,
+                    items: { type: "string" },
+                  },
+                  openQuestions: {
+                    type: "array",
+                    maxItems: 4,
+                    items: { type: "string" },
+                  },
+                  confidence: {
+                    type: "number",
+                    minimum: 0,
+                    maximum: 1,
+                  },
+                },
+              },
             },
             suggestedDirection: {
               anyOf: [{ type: "string" }, { type: "null" }],
@@ -237,6 +339,13 @@ export async function extractProfileFactsFromText({
     }
   }
 
+  await saveProfileDraft({
+    profileDraft: parsed.profileDraft,
+    profileId,
+    roleRecommendations: parsed.roleRecommendations,
+    userId: user.id,
+  });
+
   return {
     ...parsed,
     inScope: true,
@@ -261,6 +370,72 @@ Return structured JSON only. Keep the assistantMessage concise, calm, and useful
 If useful, include a suggestedDirection, but make it tentative and ask for the
 user's acknowledgement before treating it as final.
 `.trim();
+}
+
+async function saveProfileDraft({
+  profileDraft,
+  profileId,
+  roleRecommendations,
+  userId,
+}: {
+  profileDraft: z.infer<typeof profileIntakeResponseSchema>["profileDraft"];
+  profileId: string;
+  roleRecommendations: z.infer<typeof profileIntakeResponseSchema>["roleRecommendations"];
+  userId: string;
+}) {
+  const supabase = await createClient();
+  const profilePatch = {
+    display_name: normalizeOptionalText(profileDraft.displayName),
+    headline: normalizeOptionalText(profileDraft.headline),
+    summary: normalizeOptionalText(profileDraft.summary),
+    target_direction: normalizeOptionalText(profileDraft.targetDirection),
+    target_level: normalizeOptionalText(profileDraft.targetLevel),
+    profile_status: "needs_review",
+  };
+  const compactProfilePatch = Object.fromEntries(
+    Object.entries(profilePatch).filter(([, value]) => value !== null),
+  );
+
+  if (Object.keys(compactProfilePatch).length > 1) {
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update(compactProfilePatch)
+      .eq("id", profileId)
+      .eq("user_id", userId);
+
+    if (profileError) {
+      throw new Error("PROFILE_DRAFT_UPDATE_FAILED");
+    }
+  }
+
+  if (roleRecommendations.length === 0) {
+    return;
+  }
+
+  const recommendationRows = roleRecommendations.map((recommendation) => ({
+    user_id: userId,
+    profile_id: profileId,
+    role_family: recommendation.roleFamily,
+    role_titles: recommendation.roleTitles,
+    seniority_level: normalizeOptionalText(recommendation.seniorityLevel),
+    rationale: recommendation.rationale,
+    assumptions: recommendation.assumptions,
+    open_questions: recommendation.openQuestions,
+    confidence: recommendation.confidence,
+  }));
+
+  const { error: recommendationError } = await supabase
+    .from("role_recommendations")
+    .insert(recommendationRows);
+
+  if (recommendationError) {
+    throw new Error("ROLE_RECOMMENDATION_INSERT_FAILED");
+  }
+}
+
+function normalizeOptionalText(value: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
 }
 
 function hashUserId(userId: string) {
