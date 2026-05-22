@@ -115,10 +115,13 @@ export function ProfileSourceUploader({ userId }: ProfileSourceUploaderProps) {
       return;
     }
 
-    if ((sourceType === "txt" || sourceType === "pdf") && payload.source?.id) {
+    if (
+      (sourceType === "txt" || sourceType === "pdf" || sourceType === "docx") &&
+      payload.source?.id
+    ) {
       setStatus({
         tone: "info",
-        message: `${sourceType.toUpperCase()} file saved. Extracting profile details now...`,
+        message: `${formatSourceType(sourceType)} file saved. Extracting profile details now...`,
       });
 
       const extraction = await extractSource(payload.source.id);
@@ -144,7 +147,7 @@ export function ProfileSourceUploader({ userId }: ProfileSourceUploaderProps) {
     setStatus({
       tone: "success",
       message:
-        "Source saved. TXT and PDF extraction are live now; Word, image, and link parsers are next.",
+        "Source saved. TXT, PDF, and Word extraction are live now; image and link parsers are next.",
     });
     router.refresh();
   }
@@ -270,6 +273,14 @@ function inferFileSourceType(file: File) {
   }
 
   return null;
+}
+
+function formatSourceType(sourceType: string) {
+  if (sourceType === "docx") {
+    return "Word";
+  }
+
+  return sourceType.toUpperCase();
 }
 
 function inferLinkSourceType(value: string) {

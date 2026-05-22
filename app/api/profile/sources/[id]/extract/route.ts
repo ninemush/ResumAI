@@ -83,7 +83,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.unsupported_type",
-        message: "TXT and PDF extraction are available now. Word, image, and link extraction are next.",
+        message: "TXT, PDF, and Word extraction are available now. Image and link extraction are next.",
         status: 422,
       };
     }
@@ -129,6 +129,24 @@ function toApiError(error: unknown) {
         category: "validation",
         code: "source.pdf_text_empty",
         message: "I could not find selectable text in that PDF. It may need OCR, which is coming next.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "DOCX_FILE_TOO_LARGE") {
+      return {
+        category: "validation",
+        code: "source.docx_file_too_large",
+        message: "Word document extraction currently supports files up to 15 MB.",
+        status: 413,
+      };
+    }
+
+    if (error.message === "DOCX_TEXT_EMPTY") {
+      return {
+        category: "validation",
+        code: "source.docx_text_empty",
+        message: "I could not find readable text in that Word document.",
         status: 422,
       };
     }

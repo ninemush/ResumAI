@@ -305,6 +305,7 @@ input:focus {
 
 .profile-summary-grid div,
 .facts-panel,
+.sources-panel,
 .source-uploader {
   background: rgba(255, 250, 243, 0.68);
   border: 1px solid var(--line);
@@ -331,7 +332,8 @@ input:focus {
   text-transform: capitalize;
 }
 
-.facts-panel {
+.facts-panel,
+.sources-panel {
   display: grid;
   gap: 18px;
   padding: 20px;
@@ -430,6 +432,72 @@ input:focus {
 .source-status.error {
   background: rgba(159, 63, 54, 0.12);
   color: var(--danger);
+}
+
+.source-list {
+  display: grid;
+  gap: 10px;
+}
+
+.source-row {
+  align-items: center;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.source-row h3,
+.source-row p {
+  margin: 0;
+}
+
+.source-row h3 {
+  color: var(--foreground);
+  font-size: 0.98rem;
+  overflow-wrap: anywhere;
+}
+
+.source-row p {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.source-row .source-failure {
+  color: var(--danger);
+}
+
+.source-pill {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+  padding: 6px 10px;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.source-pill.succeeded {
+  background: rgba(109, 139, 127, 0.16);
+  border-color: rgba(109, 139, 127, 0.28);
+  color: var(--sage-strong);
+}
+
+.source-pill.failed {
+  background: rgba(159, 63, 54, 0.12);
+  border-color: rgba(159, 63, 54, 0.22);
+  color: var(--danger);
+}
+
+.source-pill.processing {
+  background: #eee7dc;
+  color: var(--ink-soft);
 }
 
 .section-heading h2,

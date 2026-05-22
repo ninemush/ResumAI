@@ -1,5 +1,6 @@
 import "server-only";
 
+import mammoth from "mammoth";
 import { extractText } from "unpdf";
 import { z } from "zod";
 
@@ -10,6 +11,7 @@ const PROFILE_SOURCE_BUCKET = "profile-sources";
 const MAX_TXT_BYTES = 1_000_000;
 const MAX_PDF_BYTES = 15_000_000;
 const MAX_PDF_PAGES = 15;
+const MAX_DOCX_BYTES = 15_000_000;
 const MAX_PROFILE_TEXT_CHARS = 12_000;
 
 export const profileSourceExtractionRequestSchema = z.object({
@@ -50,7 +52,7 @@ export async function extractProfileSourceText({
     throw new Error("SOURCE_NOT_FOUND");
   }
 
-  if (!["txt", "pdf"].includes(source.source_type)) {
+  if (!["txt", "pdf", "docx"].includes(source.source_type)) {
     throw new Error("UNSUPPORTED_SOURCE_TYPE");
   }
 
@@ -68,6 +70,8 @@ export async function extractProfileSourceText({
     const extractedText =
       source.source_type === "pdf"
         ? await extractPdfFromStorage(source.storage_path)
+        : source.source_type === "docx"
+          ? await extractDocxFromStorage(source.storage_path)
         : await extractTxtFromStorage(source.storage_path);
     const normalizedText = normalizeExtractedText(extractedText);
 
@@ -144,6 +148,24 @@ async function extractPdfFromStorage(storagePath: string) {
 
   if (text.length < 3) {
     throw new Error("PDF_TEXT_EMPTY");
+  }
+
+  return text;
+}
+
+async function extractDocxFromStorage(storagePath: string) {
+  const data = await downloadProfileSource(storagePath);
+
+  if (data.size > MAX_DOCX_BYTES) {
+    throw new Error("DOCX_FILE_TOO_LARGE");
+  }
+
+  const buffer = Buffer.from(await data.arrayBuffer());
+  const result = await mammoth.extractRawText({ buffer });
+  const text = result.value.trim();
+
+  if (text.length < 3) {
+    throw new Error("DOCX_TEXT_EMPTY");
   }
 
   return text;

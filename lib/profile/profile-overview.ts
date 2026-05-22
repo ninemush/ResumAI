@@ -11,6 +11,16 @@ type ProfileFact = {
   created_at: string;
 };
 
+type ProfileSource = {
+  id: string;
+  source_type: string;
+  source_url: string | null;
+  original_filename: string | null;
+  extraction_status: string;
+  failure_reason: string | null;
+  created_at: string;
+};
+
 export type ProfileOverview = {
   profile: {
     id: string;
@@ -24,6 +34,7 @@ export type ProfileOverview = {
   factsByType: Record<string, ProfileFact[]>;
   factCount: number;
   confirmedFactCount: number;
+  recentSources: ProfileSource[];
   sourceCount: number;
   readinessScore: number;
   tierName: string | null;
@@ -46,13 +57,19 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
       factsByType: {},
       factCount: 0,
       confirmedFactCount: 0,
+      recentSources: [],
       sourceCount: 0,
       readinessScore: 0,
       tierName: null,
     };
   }
 
-  const [{ data: facts }, { count: sourceCount }, { data: tierAssignments }] =
+  const [
+    { data: facts },
+    { count: sourceCount },
+    { data: recentSources },
+    { data: tierAssignments },
+  ] =
     await Promise.all([
       supabase
         .from("profile_facts")
@@ -63,6 +80,14 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
         .from("profile_sources")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId),
+      supabase
+        .from("profile_sources")
+        .select(
+          "id, source_type, source_url, original_filename, extraction_status, failure_reason, created_at",
+        )
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(5),
       supabase
         .from("user_tiers")
         .select("tiers(name)")
@@ -95,6 +120,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     factsByType,
     factCount: profileFacts.length,
     confirmedFactCount,
+    recentSources: recentSources ?? [],
     sourceCount: sourceCount ?? 0,
     readinessScore: calculateReadinessScore({
       factCount: profileFacts.length,
