@@ -11,6 +11,18 @@ type SourceStatus = {
   message: string;
 };
 
+type SourceCreateResponse = {
+  ok: boolean;
+  source?: {
+    id: string;
+    extractionStatus: string;
+    sourceType: string;
+  };
+  error?: {
+    message?: string;
+  };
+};
+
 const PROFILE_SOURCE_BUCKET = "profile-sources";
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 
@@ -92,11 +104,10 @@ export function ProfileSourceUploader({ userId }: ProfileSourceUploaderProps) {
         mimeType: file.type || "application/octet-stream",
       }),
     });
-    const payload = await response.json();
-
-    setIsUploading(false);
+    const payload = (await response.json()) as SourceCreateResponse;
 
     if (!response.ok) {
+      setIsUploading(false);
       setStatus({
         tone: "error",
         message: payload.error?.message ?? "Unable to record that source.",
@@ -104,9 +115,36 @@ export function ProfileSourceUploader({ userId }: ProfileSourceUploaderProps) {
       return;
     }
 
+    if (sourceType === "txt" && payload.source?.id) {
+      setStatus({
+        tone: "info",
+        message: "Text file saved. Extracting profile details now...",
+      });
+
+      const extraction = await extractSource(payload.source.id);
+      setIsUploading(false);
+
+      if (!extraction.ok) {
+        setStatus({
+          tone: "error",
+          message: extraction.message,
+        });
+        return;
+      }
+
+      setStatus({
+        tone: "success",
+        message: extraction.message,
+      });
+      router.refresh();
+      return;
+    }
+
+    setIsUploading(false);
     setStatus({
       tone: "success",
-      message: "Source saved. Parsing and profile enrichment are queued for the next build slice.",
+      message:
+        "Source saved. TXT extraction is live now; PDF, Word, image, and link parsers are next.",
     });
     router.refresh();
   }
@@ -193,6 +231,27 @@ export function ProfileSourceUploader({ userId }: ProfileSourceUploaderProps) {
       ) : null}
     </section>
   );
+}
+
+async function extractSource(sourceId: string) {
+  const response = await fetch(`/api/profile/sources/${sourceId}/extract`, {
+    method: "POST",
+  });
+  const payload = await response.json();
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      message: payload.error?.message ?? "Unable to extract that source.",
+    };
+  }
+
+  const savedFactCount = payload.intake?.savedFactCount ?? 0;
+
+  return {
+    ok: true,
+    message: `Text extracted and ${savedFactCount} profile detail${savedFactCount === 1 ? "" : "s"} saved.`,
+  };
 }
 
 function inferFileSourceType(file: File) {

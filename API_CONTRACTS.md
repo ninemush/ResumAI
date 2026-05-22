@@ -33,8 +33,10 @@ Every route must:
 Purpose: ingest a profile source from text, file metadata, or link.
 
 Current implementation saves validated source records and uploaded-file metadata.
-Full parser/OCR/link extraction runs are separate follow-up commands so every
-source type can feed the same normalized profile fact pipeline.
+TXT extraction is implemented and feeds the same normalized profile fact
+pipeline as conversational intake. Full PDF/DOCX/OCR/link extraction runs are
+separate follow-up commands so every source type can keep using the same
+normalization path.
 
 Request:
 
@@ -74,6 +76,40 @@ Controls:
   LinkedIn import must be implemented later as an explicit consent-based
   integration, subject to provider terms, legal review, and security design.
 - Link ingestion must apply SSRF controls before launch.
+
+## `POST /api/profile/sources/:id/extract`
+
+Purpose: extract text from a stored profile source and normalize useful profile
+facts through the shared profile fact pipeline.
+
+Current support:
+
+- TXT files stored in the private `profile-sources` bucket.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "requestId": "uuid",
+  "source": {
+    "id": "uuid",
+    "extractionStatus": "succeeded",
+    "extractedTextLength": 1200
+  },
+  "intake": {
+    "savedFactCount": 4
+  }
+}
+```
+
+Controls:
+
+- Auth required.
+- User can only extract owned source records.
+- Storage path must be scoped to the authenticated user's private folder.
+- Non-TXT sources return a typed unsupported-source response until their
+  adapters are implemented.
 
 ## `PATCH /api/profile/facts/:id`
 

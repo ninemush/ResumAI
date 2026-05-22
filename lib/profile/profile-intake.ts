@@ -48,6 +48,14 @@ type RunProfileIntakeParams = {
   message: string;
 };
 
+type ExtractProfileFactsFromTextParams = {
+  profileId: string;
+  sourceId: string;
+  text: string;
+  origin: "user_provided" | "imported";
+  inputLabel: string;
+};
+
 export async function runProfileIntake({
   message,
 }: RunProfileIntakeParams): Promise<ProfileIntakeResult> {
@@ -86,11 +94,45 @@ export async function runProfileIntake({
     throw new Error("PROFILE_SOURCE_INSERT_FAILED");
   }
 
+  return extractProfileFactsFromText({
+    profileId: profile.id,
+    sourceId: source.id,
+    text: message,
+    origin: "user_provided",
+    inputLabel: "User message",
+  });
+}
+
+export async function extractProfileFactsFromText({
+  profileId,
+  sourceId,
+  text,
+  origin,
+  inputLabel,
+}: ExtractProfileFactsFromTextParams): Promise<ProfileIntakeResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const normalizedText = text.trim();
+
+  if (normalizedText.length < 3) {
+    throw new Error("TEXT_REQUIRED");
+  }
+
   const model = getProfileIntakeModel();
   const response = await getOpenAIClient().responses.create({
     model,
     instructions: PROFILE_INTAKE_INSTRUCTIONS,
-    input: buildProfileIntakeInput(message),
+    input: buildProfileIntakeInput({
+      label: inputLabel,
+      text: normalizedText,
+    }),
     max_output_tokens: 1100,
     metadata: {
       prompt_version: PROFILE_INTAKE_PROMPT_VERSION,
@@ -157,11 +199,11 @@ export async function runProfileIntake({
   const parsed = profileIntakeResponseSchema.parse(JSON.parse(response.output_text));
   const factRows = parsed.facts.map((fact) => ({
     user_id: user.id,
-    profile_id: profile.id,
+    profile_id: profileId,
     fact_type: fact.type,
     fact_value: fact.value,
-    origin: "user_provided",
-    source_ids: [source.id],
+    origin,
+    source_ids: [sourceId],
     confidence: fact.confidence,
     user_confirmed: false,
   }));
@@ -182,10 +224,16 @@ export async function runProfileIntake({
   };
 }
 
-function buildProfileIntakeInput(message: string) {
+function buildProfileIntakeInput({
+  label,
+  text,
+}: {
+  label: string;
+  text: string;
+}) {
   return `
-User message:
-${message}
+${label}:
+${text}
 
 Return structured JSON only. Keep the assistantMessage concise, calm, and useful.
 If useful, include a suggestedDirection, but make it tentative and ask for the

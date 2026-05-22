@@ -102,8 +102,10 @@ Exit criteria:
 Goal: build the conversation-first profile system.
 
 Status: in progress. Natural-language intake exists. Profile source metadata
-ingestion now supports user-scoped uploads and user-provided profile links;
-parsing, OCR, and authenticated LinkedIn import remain follow-up work.
+ingestion now supports user-scoped uploads and user-provided profile links. TXT
+file extraction now feeds the shared profile fact pipeline. PDF/DOCX parsing,
+OCR, public link extraction, and authenticated LinkedIn import remain follow-up
+work.
 
 Deliverables:
 
