@@ -1,8 +1,10 @@
 # Development Contract
 
-This contract governs all product, engineering, design, infrastructure, and AI work for ResumAI.
+This contract governs all product, engineering, design, infrastructure, and AI work for the application currently branded as Pramania.
 
-ResumAI must be built as an enterprise-grade, secure, auditable product from the first version. This document is not a certification claim. It is an engineering control baseline designed to support future readiness for SOC 1, SOC 2, ISO/IEC 27001, GDPR, UAE/GCC privacy regimes, SOX-style change controls, and similar enterprise due diligence.
+Pramania must be built as an enterprise-grade, secure, auditable product from the first version. This document is not a certification claim. It is an engineering control baseline designed to support future readiness for SOC 1, SOC 2, ISO/IEC 27001, GDPR, UAE/GCC privacy regimes, SOX-style change controls, and similar enterprise due diligence.
+
+The brand name must remain configurable. Product code must use the shared brand configuration instead of hardcoded product names so a later rename is a controlled configuration/content change.
 
 ## 1. Non-Negotiable Product Boundary
 

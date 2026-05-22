@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, SendHorizontal, Sparkles } from "lucide-react";
+import { brand } from "@/lib/brand";
 
 type ConversationPanelProps = {
   userEmail: string | null;
@@ -64,7 +65,7 @@ export function ConversationPanel({ userEmail }: ConversationPanelProps) {
       <div className="message-list">
         {assistantMessages.map((item, index) => (
           <div className="assistant-message" key={`${item}-${index}`}>
-            <strong>ResumAI</strong>
+            <strong>{brand.name}</strong>
             <p>{item}</p>
           </div>
         ))}

@@ -1,6 +1,10 @@
-# ResumAI
+# Pramania
 
 AI-powered job application assistant.
+
+The product name is configurable and may change before launch. Use
+`lib/brand.ts` and the optional public environment values instead of hardcoding
+the brand in product UI.
 
 ## Current Setup
 
@@ -38,6 +42,9 @@ Create `.env.local` from `.env.example`:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 OPENAI_API_KEY=
+OPENAI_PROFILE_INTAKE_MODEL=gpt-5-mini
+NEXT_PUBLIC_APP_NAME=Pramania
+NEXT_PUBLIC_APP_TAGLINE=Apply smarter
 ```
 
 ## Development

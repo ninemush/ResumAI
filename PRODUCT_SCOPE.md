@@ -1,10 +1,12 @@
 # Product Scope
 
-This document defines the V1 product scope for ResumAI.
+This document defines the V1 product scope for the application currently branded as Pramania.
 
 ## Product Positioning
 
-ResumAI is a conversation-first job application assistant that helps a user understand their profile, identify suitable roles, generate ATS-friendly materials, and track application outcomes.
+Pramania is a conversation-first job application assistant that helps a user understand their profile, identify suitable roles, generate ATS-friendly materials, and track application outcomes.
+
+The product name is not a permanent architecture decision. UI, prompts, and docs should use shared brand configuration where code is involved.
 
 The experience should feel like talking with a warm, candid, patient career advisor who has deep job-placement experience and always focuses on the user's best outcome.
 
@@ -125,4 +127,3 @@ Future versions may include:
 - Company career-site integrations.
 - Native mobile app using shared TypeScript/domain logic.
 - Deeper analytics and job-search optimization loops.
-

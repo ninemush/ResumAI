@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 
+import { brand, getBrandInitials } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/browser";
 
 type AuthMode = "sign-in" | "sign-up";
@@ -46,9 +47,9 @@ export function AuthPanel() {
     <section className="auth-shell" aria-labelledby="auth-title">
       <div className="auth-copy">
         <div className="brand-mark" aria-hidden="true">
-          RA
+          {getBrandInitials()}
         </div>
-        <p className="eyebrow">ResumAI workspace</p>
+        <p className="eyebrow">{brand.name} workspace</p>
         <h1 id="auth-title">Build calmer, sharper job applications.</h1>
         <p>
           Sign in to enter the protected workspace. The next foundation step is

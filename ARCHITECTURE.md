@@ -1,10 +1,10 @@
 # Architecture
 
-This document describes the intended architecture for ResumAI before feature implementation expands.
+This document describes the intended architecture for the application currently branded as Pramania before feature implementation expands.
 
 ## 1. Product Summary
 
-ResumAI is an AI-powered job application assistant.
+Pramania is an AI-powered job application assistant.
 
 V1 helps a user:
 
@@ -37,6 +37,7 @@ Current scaffold:
 - TypeScript.
 - Tailwind CSS.
 - ESLint.
+- Shared brand configuration in `lib/brand.ts`.
 - Local Supabase CLI config.
 - Local Vercel CLI dependency.
 - Local Supabase CLI dependency.

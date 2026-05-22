@@ -1,10 +1,11 @@
 import { CheckCircle2, CircleDashed, FileUp, Link2, MessageSquareText } from "lucide-react";
 
+import { brand } from "@/lib/brand";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
 const profileSteps = [
   {
-    label: "Tell ResumAI your story",
+    label: `Tell ${brand.name} your story`,
     detail: "Conversational intake for experience, strengths, goals, and constraints.",
     icon: MessageSquareText,
     state: "Ready",
@@ -72,7 +73,7 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
       <section className="facts-panel" aria-label="Captured profile facts">
         <div className="section-heading">
           <p className="eyebrow">Captured details</p>
-          <h2>What ResumAI knows so far</h2>
+          <h2>What {brand.name} knows so far</h2>
         </div>
         {hasFacts ? (
           <div className="fact-groups">

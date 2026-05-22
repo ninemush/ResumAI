@@ -9,6 +9,7 @@ import {
 
 import type { WorkspaceSession } from "@/lib/commands/session";
 import { SignOutButton } from "@/components/app-shell/sign-out-button";
+import { brand, getBrandInitials } from "@/lib/brand";
 
 const primaryItems = [
   { label: "Profile", icon: UserRound, active: true },
@@ -27,11 +28,11 @@ export function SideNav({ session }: SideNavProps) {
     <aside className="side-nav" aria-label="Workspace navigation">
       <div className="side-nav-header">
         <div className="brand-mark small" aria-hidden="true">
-          RA
+          {getBrandInitials()}
         </div>
         <div>
-          <strong>ResumAI</strong>
-          <span>Application OS</span>
+          <strong>{brand.name}</strong>
+          <span>{brand.category}</span>
         </div>
       </div>
 
