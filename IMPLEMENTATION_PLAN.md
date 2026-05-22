@@ -101,6 +101,10 @@ Exit criteria:
 
 Goal: build the conversation-first profile system.
 
+Status: in progress. Natural-language intake exists. Profile source metadata
+ingestion now supports user-scoped uploads and user-provided profile links;
+parsing, OCR, and authenticated LinkedIn import remain follow-up work.
+
 Deliverables:
 
 - Natural-language profile input.
@@ -204,4 +208,3 @@ Exit criteria:
 - Analytics/event tracking provider.
 - Mobile navigation model.
 - Retention durations for audit-safe application records and generated artifacts.
-

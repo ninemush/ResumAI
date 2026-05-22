@@ -1,5 +1,6 @@
 import { CheckCircle2, CircleDashed, FileUp, Link2, MessageSquareText } from "lucide-react";
 
+import { ProfileSourceUploader } from "@/components/profile/profile-source-uploader";
 import { brand } from "@/lib/brand";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
@@ -26,9 +27,10 @@ const profileSteps = [
 
 type ProfileExplorerProps = {
   overview: ProfileOverview;
+  userId: string;
 };
 
-export function ProfileExplorer({ overview }: ProfileExplorerProps) {
+export function ProfileExplorer({ overview, userId }: ProfileExplorerProps) {
   const profileName = overview.profile?.displayName ?? "Your profile";
   const headline = overview.profile?.headline ?? "Profile direction not set yet";
   const hasFacts = overview.factCount > 0;
@@ -69,6 +71,8 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
           <strong>{overview.profile?.targetDirection ?? "Needs direction"}</strong>
         </div>
       </section>
+
+      <ProfileSourceUploader userId={userId} />
 
       <section className="facts-panel" aria-label="Captured profile facts">
         <div className="section-heading">

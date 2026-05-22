@@ -32,13 +32,19 @@ Every route must:
 
 Purpose: ingest a profile source from text, file metadata, or link.
 
+Current implementation saves validated source records and uploaded-file metadata.
+Full parser/OCR/link extraction runs are separate follow-up commands so every
+source type can feed the same normalized profile fact pipeline.
+
 Request:
 
 ```json
 {
-  "sourceType": "natural_language",
+  "sourceType": "pdf",
   "sourceUrl": "https://example.com/profile",
   "storagePath": "user-id/source-id/file.pdf",
+  "originalFilename": "resume.pdf",
+  "mimeType": "application/pdf",
   "text": "I led finance transformation programs..."
 }
 ```
@@ -61,6 +67,12 @@ Controls:
 - Auth required.
 - User can only create own source records.
 - File upload must happen to user-scoped private storage.
+- Supported source types include natural language, PDF, Word/DOCX, TXT, image,
+  public links, LinkedIn profile links, portfolio links, and other approved
+  profile sources.
+- LinkedIn URL capture is supported as a user-provided source. Authenticated
+  LinkedIn import must be implemented later as an explicit consent-based
+  integration, subject to provider terms, legal review, and security design.
 - Link ingestion must apply SSRF controls before launch.
 
 ## `PATCH /api/profile/facts/:id`
@@ -180,4 +192,3 @@ Controls:
 - Create/update/disable tiers.
 - No hardcoded tier limits in application logic.
 - Audit all changes.
-

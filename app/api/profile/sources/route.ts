@@ -1,0 +1,78 @@
+import { NextResponse } from "next/server";
+
+import {
+  ingestProfileSource,
+  profileSourceRequestSchema,
+} from "@/lib/profile/profile-source-ingestion";
+
+export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+
+  try {
+    const payload = profileSourceRequestSchema.parse(await request.json());
+    const source = await ingestProfileSource(payload);
+
+    return NextResponse.json({
+      ok: true,
+      requestId,
+      source,
+    });
+  } catch (error) {
+    const { code, message, status } = toApiError(error);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: status === 401 ? "auth" : "validation",
+          code,
+          message,
+        },
+      },
+      { status },
+    );
+  }
+}
+
+function toApiError(error: unknown) {
+  if (error instanceof Error) {
+    if (error.message === "AUTH_REQUIRED") {
+      return {
+        code: "auth.required",
+        message: "Please sign in before adding profile sources.",
+        status: 401,
+      };
+    }
+
+    if (error.message === "INVALID_STORAGE_PATH") {
+      return {
+        code: "source.invalid_storage_path",
+        message: "Uploaded files must stay inside your private user folder.",
+        status: 400,
+      };
+    }
+
+    if (error.message === "LINKEDIN_URL_REQUIRED") {
+      return {
+        code: "source.linkedin_url_required",
+        message: "LinkedIn sources must use a linkedin.com URL.",
+        status: 400,
+      };
+    }
+
+    if (error.message.endsWith("_REQUIRED")) {
+      return {
+        code: `source.${error.message.toLowerCase()}`,
+        message: "The source type and provided source details do not match.",
+        status: 400,
+      };
+    }
+  }
+
+  return {
+    code: "source.create_failed",
+    message: "Unable to save that profile source yet.",
+    status: 400,
+  };
+}

@@ -304,7 +304,8 @@ input:focus {
 }
 
 .profile-summary-grid div,
-.facts-panel {
+.facts-panel,
+.source-uploader {
   background: rgba(255, 250, 243, 0.68);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -334,6 +335,101 @@ input:focus {
   display: grid;
   gap: 18px;
   padding: 20px;
+}
+
+.source-uploader {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.source-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.source-upload-target,
+.source-link-form {
+  align-items: center;
+  background: rgba(247, 243, 237, 0.7);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--ink-soft);
+  display: flex;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 12px;
+}
+
+.source-upload-target {
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.source-upload-target input {
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  position: absolute;
+  width: 1px;
+}
+
+.source-link-form {
+  border-style: solid;
+}
+
+.source-link-form input {
+  background: transparent;
+  border: 0;
+  flex: 1;
+  min-height: 40px;
+  min-width: 0;
+  padding: 0;
+}
+
+.source-link-form input:focus {
+  box-shadow: none;
+}
+
+.source-link-form button {
+  align-items: center;
+  background: var(--sage-strong);
+  border: 0;
+  border-radius: 8px;
+  color: #fffaf3;
+  display: inline-flex;
+  font-weight: 750;
+  justify-content: center;
+  min-height: 38px;
+  min-width: 62px;
+  padding: 0 12px;
+}
+
+.source-link-form button:disabled {
+  background: #c8beb0;
+}
+
+.source-status {
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+  padding: 12px;
+}
+
+.source-status.info {
+  background: #eee7dc;
+  color: var(--muted);
+}
+
+.source-status.success {
+  background: rgba(109, 139, 127, 0.16);
+  color: var(--sage-strong);
+}
+
+.source-status.error {
+  background: rgba(159, 63, 54, 0.12);
+  color: var(--danger);
 }
 
 .section-heading h2,

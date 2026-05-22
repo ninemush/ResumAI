@@ -14,7 +14,7 @@ export async function WorkspaceShell({ session }: WorkspaceShellProps) {
   return (
     <div className="workspace-shell">
       <SideNav session={session} />
-      <ProfileExplorer overview={profileOverview} />
+      <ProfileExplorer overview={profileOverview} userId={session.user.id} />
       <ConversationPanel userEmail={session.user.email} />
     </div>
   );
