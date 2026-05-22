@@ -102,8 +102,9 @@ Tier changes must be configuration/data changes, not code changes.
 Desktop:
 
 - Left navigation bar.
-- Center console for profile explorer/editor and artifact review.
-- Right conversational AI interface.
+- Center console for profile explorer/editor, source visibility, job review, and artifacts.
+- Right conversational AI interface as the primary input surface.
+- Users should be able to type, paste profile/job links, and drop files directly into the conversational AI. Avoid separate intake widgets unless there is a clear workflow need.
 
 Mobile:
 

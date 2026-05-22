@@ -224,6 +224,8 @@ Conversational AI behavior:
 
 - The conversational AI is the primary interaction model.
 - Forms and editors support the conversation; they must not become a separate competing workflow.
+- File uploads, profile links, and job links should enter through the conversational surface whenever possible, including drag/drop and paste interactions.
+- Avoid instructional step cards, redundant upload widgets, and parallel controls that make the user decide where an input belongs.
 - The AI tone must be warm, candid, patient, and practical.
 - It should feel like a highly experienced job-placement advisor with good judgment and respect for the user's time.
 - It must ask clarifying questions gently and sparingly, without feeling interrogative.

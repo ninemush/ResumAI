@@ -1,36 +1,13 @@
-import { CheckCircle2, CircleDashed, FileUp, Link2, MessageSquareText } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 
-import { ProfileSourceUploader } from "@/components/profile/profile-source-uploader";
 import { brand } from "@/lib/brand";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
-const profileSteps = [
-  {
-    label: `Tell ${brand.name} your story`,
-    detail: "Conversational intake for experience, strengths, goals, and constraints.",
-    icon: MessageSquareText,
-    state: "Ready",
-  },
-  {
-    label: "Upload source material",
-    detail: "PDF, DOCX, text, image/OCR, and public profile links belong here next.",
-    icon: FileUp,
-    state: "Next",
-  },
-  {
-    label: "Enrich from trusted links",
-    detail: "Public LinkedIn, portfolio, and profile pages after validation and consent.",
-    icon: Link2,
-    state: "Planned",
-  },
-];
-
 type ProfileExplorerProps = {
   overview: ProfileOverview;
-  userId: string;
 };
 
-export function ProfileExplorer({ overview, userId }: ProfileExplorerProps) {
+export function ProfileExplorer({ overview }: ProfileExplorerProps) {
   const profileName = overview.profile?.displayName ?? "Your profile";
   const headline = overview.profile?.headline ?? "Profile direction not set yet";
   const hasFacts = overview.factCount > 0;
@@ -72,14 +49,12 @@ export function ProfileExplorer({ overview, userId }: ProfileExplorerProps) {
         </div>
       </section>
 
-      <ProfileSourceUploader userId={userId} />
-
-      <section className="sources-panel" aria-label="Recent profile sources">
-        <div className="section-heading">
-          <p className="eyebrow">Recent sources</p>
-          <h2>What you have added</h2>
-        </div>
-        {overview.recentSources.length > 0 ? (
+      {overview.recentSources.length > 0 ? (
+        <section className="sources-panel" aria-label="Recent profile sources">
+          <div className="section-heading">
+            <p className="eyebrow">Recent sources</p>
+            <h2>What you have added</h2>
+          </div>
           <div className="source-list">
             {overview.recentSources.map((source) => (
               <article className="source-row" key={source.id}>
@@ -96,13 +71,8 @@ export function ProfileExplorer({ overview, userId }: ProfileExplorerProps) {
               </article>
             ))}
           </div>
-        ) : (
-          <p className="empty-state">
-            Upload a resume, Word document, PDF, text file, or add a profile link to
-            start building your source library.
-          </p>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       <section className="facts-panel" aria-label="Captured profile facts">
         <div className="section-heading">
@@ -127,41 +97,7 @@ export function ProfileExplorer({ overview, userId }: ProfileExplorerProps) {
               </article>
             ))}
           </div>
-        ) : (
-          <p className="empty-state">
-            Start with a sentence or two in the conversation panel. Keep it casual:
-            roles, wins, tools, credentials, and what you want next all help.
-          </p>
-        )}
-      </section>
-
-      <section className="step-list" aria-label="Profile build steps">
-        {profileSteps.map((step) => {
-          const Icon = step.icon;
-          const isReady = step.state === "Ready";
-
-          return (
-            <article className="step-row" key={step.label}>
-              <div className={isReady ? "step-icon ready" : "step-icon"}>
-                {isReady ? (
-                  <CheckCircle2 size={20} aria-hidden="true" />
-                ) : (
-                  <Icon size={20} aria-hidden="true" />
-                )}
-              </div>
-              <div>
-                <h2>{step.label}</h2>
-                <p>{step.detail}</p>
-              </div>
-              <span className="status-pill">
-                {step.state === "Planned" ? (
-                  <CircleDashed size={14} aria-hidden="true" />
-                ) : null}
-                {step.state}
-              </span>
-            </article>
-          );
-        })}
+        ) : null}
       </section>
     </main>
   );
