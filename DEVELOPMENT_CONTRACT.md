@@ -231,6 +231,8 @@ Conversational AI behavior:
 - It must proactively recommend likely role families, seniority level, and positioning once the profile has enough signal.
 - It must request the user's acknowledgement before locking in a job-search direction or generating final materials.
 - It must clearly distinguish known facts, inferred suggestions, and open questions.
+- It must remain purpose-bound to career profile building, resumes, role fit, job posts, applications, interviews, and adjacent career planning.
+- It must not answer unrelated general-purpose questions or become an open-ended chatbot. Off-purpose requests must be politely redirected back to the app's purpose without saving profile facts.
 
 ## 11. Observability Rules
 

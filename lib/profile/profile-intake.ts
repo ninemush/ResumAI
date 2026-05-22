@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { PROFILE_INTAKE_INSTRUCTIONS, PROFILE_INTAKE_PROMPT_VERSION } from "@/lib/ai/prompts/profile-intake";
 import { getOpenAIClient, getProfileIntakeModel } from "@/lib/ai/openai";
+import { checkProfileIntakeScope } from "@/lib/profile/profile-intake-scope";
 import { createClient } from "@/lib/supabase/server";
 
 const profileFactTypeSchema = z.enum([
@@ -39,6 +40,7 @@ const profileIntakeResponseSchema = z.object({
 });
 
 export type ProfileIntakeResult = z.infer<typeof profileIntakeResponseSchema> & {
+  inScope: boolean;
   savedFactCount: number;
   promptVersion: string;
   model: string;
@@ -59,6 +61,25 @@ type ExtractProfileFactsFromTextParams = {
 export async function runProfileIntake({
   message,
 }: RunProfileIntakeParams): Promise<ProfileIntakeResult> {
+  const scopeCheck = checkProfileIntakeScope(message);
+
+  if (!scopeCheck.inScope) {
+    return {
+      inScope: false,
+      assistantMessage:
+        scopeCheck.redirectMessage ??
+        "I can help with your career profile, resume, role fit, job posts, applications, and interview direction. Share something in that lane and I will help shape it.",
+      facts: [],
+      followUpQuestions: [
+        "Would you like to tell me about your recent roles, strongest achievements, or the kind of job you want next?",
+      ],
+      suggestedDirection: null,
+      savedFactCount: 0,
+      promptVersion: PROFILE_INTAKE_PROMPT_VERSION,
+      model: "scope-gate",
+    };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -218,6 +239,7 @@ export async function extractProfileFactsFromText({
 
   return {
     ...parsed,
+    inScope: true,
     savedFactCount: factRows.length,
     promptVersion: PROFILE_INTAKE_PROMPT_VERSION,
     model,

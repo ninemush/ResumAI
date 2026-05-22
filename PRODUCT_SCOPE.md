@@ -10,6 +10,11 @@ The product name is not a permanent architecture decision. UI, prompts, and docs
 
 The experience should feel like talking with a warm, candid, patient career advisor who has deep job-placement experience and always focuses on the user's best outcome.
 
+The conversational assistant is purpose-bound. It should not behave like a
+general chatbot for unrelated topics; off-purpose requests should be politely
+redirected back to career profile, resume, role-fit, job-post, application, or
+interview work.
+
 ## V1 Experience
 
 ### 1. Profile Build

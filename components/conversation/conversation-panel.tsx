@@ -49,7 +49,11 @@ export function ConversationPanel({ userEmail }: ConversationPanelProps) {
       payload.assistantMessage,
       ...(payload.followUpQuestions ?? []),
     ]);
-    setStatus(`Saved ${payload.savedFactCount} profile detail${payload.savedFactCount === 1 ? "" : "s"}.`);
+    setStatus(
+      payload.inScope === false
+        ? "No profile details saved. I kept the conversation focused on the app's purpose."
+        : `Saved ${payload.savedFactCount} profile detail${payload.savedFactCount === 1 ? "" : "s"}.`,
+    );
   }
 
   return (
