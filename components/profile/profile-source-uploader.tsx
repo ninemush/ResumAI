@@ -115,10 +115,10 @@ export function ProfileSourceUploader({ userId }: ProfileSourceUploaderProps) {
       return;
     }
 
-    if (sourceType === "txt" && payload.source?.id) {
+    if ((sourceType === "txt" || sourceType === "pdf") && payload.source?.id) {
       setStatus({
         tone: "info",
-        message: "Text file saved. Extracting profile details now...",
+        message: `${sourceType.toUpperCase()} file saved. Extracting profile details now...`,
       });
 
       const extraction = await extractSource(payload.source.id);
@@ -144,7 +144,7 @@ export function ProfileSourceUploader({ userId }: ProfileSourceUploaderProps) {
     setStatus({
       tone: "success",
       message:
-        "Source saved. TXT extraction is live now; PDF, Word, image, and link parsers are next.",
+        "Source saved. TXT and PDF extraction are live now; Word, image, and link parsers are next.",
     });
     router.refresh();
   }

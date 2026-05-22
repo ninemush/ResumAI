@@ -1,5 +1,6 @@
 import "server-only";
 
+import { extractText } from "unpdf";
 import { z } from "zod";
 
 import { extractProfileFactsFromText, type ProfileIntakeResult } from "@/lib/profile/profile-intake";
@@ -7,6 +8,8 @@ import { createClient } from "@/lib/supabase/server";
 
 const PROFILE_SOURCE_BUCKET = "profile-sources";
 const MAX_TXT_BYTES = 1_000_000;
+const MAX_PDF_BYTES = 15_000_000;
+const MAX_PDF_PAGES = 15;
 const MAX_PROFILE_TEXT_CHARS = 12_000;
 
 export const profileSourceExtractionRequestSchema = z.object({
@@ -47,7 +50,7 @@ export async function extractProfileSourceText({
     throw new Error("SOURCE_NOT_FOUND");
   }
 
-  if (source.source_type !== "txt") {
+  if (!["txt", "pdf"].includes(source.source_type)) {
     throw new Error("UNSUPPORTED_SOURCE_TYPE");
   }
 
@@ -62,7 +65,10 @@ export async function extractProfileSourceText({
   await updateSourceStatus(source.id, "processing");
 
   try {
-    const extractedText = await extractTxtFromStorage(source.storage_path);
+    const extractedText =
+      source.source_type === "pdf"
+        ? await extractPdfFromStorage(source.storage_path)
+        : await extractTxtFromStorage(source.storage_path);
     const normalizedText = normalizeExtractedText(extractedText);
 
     if (normalizedText.length < 3) {
@@ -88,7 +94,7 @@ export async function extractProfileSourceText({
       sourceId: source.id,
       text: normalizedText,
       origin: "imported",
-      inputLabel: `Text file${source.original_filename ? ` (${source.original_filename})` : ""}`,
+      inputLabel: `${source.source_type.toUpperCase()} file${source.original_filename ? ` (${source.original_filename})` : ""}`,
     });
 
     return {
@@ -111,6 +117,39 @@ export async function extractProfileSourceText({
 }
 
 async function extractTxtFromStorage(storagePath: string) {
+  const data = await downloadProfileSource(storagePath);
+
+  if (data.size > MAX_TXT_BYTES) {
+    throw new Error("TEXT_FILE_TOO_LARGE");
+  }
+
+  return data.text();
+}
+
+async function extractPdfFromStorage(storagePath: string) {
+  const data = await downloadProfileSource(storagePath);
+
+  if (data.size > MAX_PDF_BYTES) {
+    throw new Error("PDF_FILE_TOO_LARGE");
+  }
+
+  const buffer = new Uint8Array(await data.arrayBuffer());
+  const result = await extractText(buffer, { mergePages: false });
+
+  if (result.totalPages > MAX_PDF_PAGES) {
+    throw new Error("PDF_PAGE_LIMIT_EXCEEDED");
+  }
+
+  const text = result.text.join("\n\n").trim();
+
+  if (text.length < 3) {
+    throw new Error("PDF_TEXT_EMPTY");
+  }
+
+  return text;
+}
+
+async function downloadProfileSource(storagePath: string) {
   const supabase = await createClient();
   const { data, error } = await supabase.storage
     .from(PROFILE_SOURCE_BUCKET)
@@ -120,11 +159,7 @@ async function extractTxtFromStorage(storagePath: string) {
     throw new Error("STORAGE_DOWNLOAD_FAILED");
   }
 
-  if (data.size > MAX_TXT_BYTES) {
-    throw new Error("TEXT_FILE_TOO_LARGE");
-  }
-
-  return data.text();
+  return data;
 }
 
 function normalizeExtractedText(text: string) {

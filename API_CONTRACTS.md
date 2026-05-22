@@ -33,8 +33,8 @@ Every route must:
 Purpose: ingest a profile source from text, file metadata, or link.
 
 Current implementation saves validated source records and uploaded-file metadata.
-TXT extraction is implemented and feeds the same normalized profile fact
-pipeline as conversational intake. Full PDF/DOCX/OCR/link extraction runs are
+TXT and PDF extraction are implemented and feed the same normalized profile fact
+pipeline as conversational intake. Full DOCX/OCR/link extraction runs are
 separate follow-up commands so every source type can keep using the same
 normalization path.
 
@@ -85,6 +85,8 @@ facts through the shared profile fact pipeline.
 Current support:
 
 - TXT files stored in the private `profile-sources` bucket.
+- PDF files stored in the private `profile-sources` bucket, with size and page
+  limits and graceful handling for image-only/scanned PDFs that need OCR.
 
 Response:
 
@@ -108,7 +110,7 @@ Controls:
 - Auth required.
 - User can only extract owned source records.
 - Storage path must be scoped to the authenticated user's private folder.
-- Non-TXT sources return a typed unsupported-source response until their
+- Non-TXT/PDF sources return a typed unsupported-source response until their
   adapters are implemented.
 
 ## `PATCH /api/profile/facts/:id`
