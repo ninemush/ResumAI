@@ -1,7 +1,11 @@
+"use client";
+
 import {
   BriefcaseBusiness,
   FileText,
   Layers3,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   Shield,
   UserRound,
@@ -20,20 +24,31 @@ const primaryItems = [
 ];
 
 type SideNavProps = {
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   session: WorkspaceSession;
 };
 
-export function SideNav({ session }: SideNavProps) {
+export function SideNav({ collapsed, onToggleCollapsed, session }: SideNavProps) {
   return (
-    <aside className="side-nav" aria-label="Workspace navigation">
+    <aside className={collapsed ? "side-nav collapsed" : "side-nav"} aria-label="Workspace navigation">
       <div className="side-nav-header">
         <div className="brand-mark small" aria-hidden="true">
           {getBrandInitials()}
         </div>
-        <div>
+        <div className="side-nav-brand-copy">
           <strong>{brand.name}</strong>
           <span>{brand.category}</span>
         </div>
+        <button
+          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+          className="collapse-nav-button"
+          onClick={onToggleCollapsed}
+          title={collapsed ? "Expand navigation" : "Collapse navigation"}
+          type="button"
+        >
+          {collapsed ? <PanelLeftOpen size={18} aria-hidden="true" /> : <PanelLeftClose size={18} aria-hidden="true" />}
+        </button>
       </div>
 
       <nav className="nav-list">
@@ -43,27 +58,34 @@ export function SideNav({ session }: SideNavProps) {
           return (
             <button
               aria-current={item.active ? "page" : undefined}
+              aria-label={collapsed ? item.label : undefined}
               className={item.active ? "nav-item active" : "nav-item"}
               key={item.label}
+              title={collapsed ? item.label : undefined}
               type="button"
             >
               <Icon size={18} aria-hidden="true" />
-              {item.label}
+              <span className="nav-label">{item.label}</span>
             </button>
           );
         })}
 
         {session.admin.isOwner ? (
-          <button className="nav-item" type="button">
+          <button
+            aria-label={collapsed ? "Owner Console" : undefined}
+            className="nav-item"
+            title={collapsed ? "Owner Console" : undefined}
+            type="button"
+          >
             <Shield size={18} aria-hidden="true" />
-            Owner Console
+            <span className="nav-label">Owner Console</span>
           </button>
         ) : null}
       </nav>
 
       <div className="side-nav-footer">
-        <span>{session.user.email ?? "Signed in"}</span>
-        <SignOutButton />
+        {collapsed ? null : <span>{session.user.email ?? "Signed in"}</span>}
+        <SignOutButton compact={collapsed} />
       </div>
     </aside>
   );

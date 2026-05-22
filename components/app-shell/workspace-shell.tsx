@@ -1,7 +1,4 @@
-import { SideNav } from "@/components/app-shell/side-nav";
-import { ConversationPanel } from "@/components/conversation/conversation-panel";
-import { JobIngestionPanel } from "@/components/jobs/job-ingestion-panel";
-import { ProfileExplorer } from "@/components/profile/profile-explorer";
+import { WorkspaceLayout } from "@/components/app-shell/workspace-layout";
 import type { WorkspaceSession } from "@/lib/commands/session";
 import { getJobOverview } from "@/lib/jobs/job-overview";
 import { getProfileOverview } from "@/lib/profile/profile-overview";
@@ -16,14 +13,5 @@ export async function WorkspaceShell({ session }: WorkspaceShellProps) {
     getJobOverview(session.user.id),
   ]);
 
-  return (
-    <div className="workspace-shell">
-      <SideNav session={session} />
-      <div className="workspace-main">
-        <ProfileExplorer overview={profileOverview} />
-        <JobIngestionPanel overview={jobOverview} />
-      </div>
-      <ConversationPanel userEmail={session.user.email} userId={session.user.id} />
-    </div>
-  );
+  return <WorkspaceLayout jobOverview={jobOverview} profileOverview={profileOverview} session={session} />;
 }

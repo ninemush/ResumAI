@@ -7,7 +7,7 @@ const publicEnvSchema = z.object({
 
 const serverEnvSchema = publicEnvSchema.extend({
   OPENAI_API_KEY: z.string().min(1),
-  OPENAI_PROFILE_INTAKE_MODEL: z.string().min(1).default("gpt-5-mini"),
+  OPENAI_PROFILE_INTAKE_MODEL: z.string().min(1).default("gpt-5.4"),
 });
 
 export function getPublicEnv() {
