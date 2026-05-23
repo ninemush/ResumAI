@@ -37,13 +37,13 @@ export function SideNav({ collapsed, onToggleCollapsed, session }: SideNavProps)
         <Image
           alt={brand.logoAlt}
           className="side-nav-logo"
-          height={42}
-          src={brand.logoPath}
-          width={42}
+          height={52}
+          src={brand.appIconPath}
+          width={52}
         />
         <div className="side-nav-brand-copy">
           <strong>{brand.name}</strong>
-          <span>{brand.tagline}</span>
+          <span>{brand.category}</span>
         </div>
         <button
           aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}

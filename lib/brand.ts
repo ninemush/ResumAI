@@ -6,6 +6,9 @@ export const brand = {
   tagline: configuredTagline || "Career clarity, guided by intelligence",
   category: "Career intelligence",
   description: "AI-assisted job application workspace.",
+  appIconPath: "/brand/pramania-app-icon.svg",
+  bloomMarkPath: "/brand/pramania-bloom-mark.svg",
+  horizontalLogoPath: "/brand/pramania-horizontal-lockup.svg",
   logoAlt: "Pramania primary logo",
   logoPath: "/brand/pramania-primary-logo.svg",
 } as const;

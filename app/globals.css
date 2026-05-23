@@ -76,16 +76,17 @@ input:disabled {
 
 .auth-logo {
   display: block;
+  height: auto;
   max-width: min(520px, 86vw);
   width: 100%;
 }
 
 .side-nav-logo {
   flex: 0 0 auto;
-  height: 42px;
+  height: 52px;
   object-fit: contain;
   object-position: left center;
-  width: 42px;
+  width: 52px;
 }
 
 .eyebrow {
@@ -897,8 +898,48 @@ input:focus {
 @media (max-width: 1080px) {
   .workspace-shell {
     grid-template-columns:
-      var(--nav-width, 78px) 6px minmax(0, 1fr) 6px
+      78px 6px minmax(0, 1fr) 6px
       minmax(320px, var(--conversation-width, 380px));
+  }
+
+  .side-nav {
+    align-items: center;
+    gap: 24px;
+    padding: 20px 12px;
+  }
+
+  .side-nav-header {
+    flex-direction: column;
+  }
+
+  .side-nav-logo {
+    height: 48px;
+    width: 48px;
+  }
+
+  .side-nav-brand-copy,
+  .nav-label {
+    display: none;
+  }
+
+  .side-nav.collapsed .side-nav-brand-copy,
+  .side-nav.collapsed .nav-label {
+    display: none;
+  }
+
+  .collapse-nav-button {
+    margin-left: 0;
+  }
+
+  .nav-list,
+  .side-nav-footer {
+    width: 100%;
+  }
+
+  .nav-item,
+  .icon-text-button {
+    justify-content: center;
+    padding: 0;
   }
 
   .conversation-pane {

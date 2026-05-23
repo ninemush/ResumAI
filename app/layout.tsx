@@ -23,6 +23,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: brand.name,
   description: brand.description,
+  icons: {
+    icon: brand.appIconPath,
+  },
 };
 
 export default function RootLayout({
