@@ -102,6 +102,15 @@ function toApiError(error: unknown) {
         status: 404,
       };
     }
+
+    if (error.message === "FINAL_MATERIALS_REQUIRED") {
+      return {
+        category: "validation",
+        code: "application.final_materials_required",
+        message: "Export final resume and cover-letter PDFs before marking this application applied.",
+        status: 422,
+      };
+    }
   }
 
   return {

@@ -4,12 +4,43 @@ import {
   generateApplicationMaterials,
   generateApplicationMaterialsSchema,
 } from "@/lib/applications/material-generation";
+import {
+  getMaterialReview,
+  updateMaterialReview,
+  updateMaterialReviewSchema,
+} from "@/lib/applications/material-review";
 
 type RouteContext = {
   params: Promise<{
     id: string;
   }>;
 };
+
+export async function GET(_request: Request, context: RouteContext) {
+  const requestId = crypto.randomUUID();
+  const params = await context.params;
+
+  try {
+    const review = await getMaterialReview({ applicationId: params.id });
+
+    return NextResponse.json({
+      ok: true,
+      requestId,
+      review,
+    });
+  } catch (error) {
+    const { category, code, message, status } = toApiError(error);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: { category, code, message },
+      },
+      { status },
+    );
+  }
+}
 
 export async function POST(_request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
@@ -59,6 +90,70 @@ export async function POST(_request: Request, context: RouteContext) {
   }
 }
 
+export async function PATCH(request: Request, context: RouteContext) {
+  const requestId = crypto.randomUUID();
+  const params = await context.params;
+  let body: unknown;
+
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "validation",
+          code: "request.invalid_json",
+          message: "Invalid JSON body.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const parsed = updateMaterialReviewSchema.safeParse({
+    ...(typeof body === "object" && body ? body : {}),
+    applicationId: params.id,
+  });
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "validation",
+          code: "application.invalid_material_update",
+          message: "Use valid resume sections or cover-letter text before saving.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const review = await updateMaterialReview(parsed.data);
+
+    return NextResponse.json({
+      ok: true,
+      requestId,
+      review,
+    });
+  } catch (error) {
+    const { category, code, message, status } = toApiError(error);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: { category, code, message },
+      },
+      { status },
+    );
+  }
+}
+
 function toApiError(error: unknown) {
   if (error instanceof Error) {
     if (error.message === "AUTH_REQUIRED") {
@@ -79,12 +174,30 @@ function toApiError(error: unknown) {
       };
     }
 
+    if (error.message === "MATERIAL_UPDATE_REQUIRED") {
+      return {
+        category: "validation",
+        code: "application.material_update_required",
+        message: "Change resume or cover-letter content before saving.",
+        status: 400,
+      };
+    }
+
     if (error.message === "JOB_TEXT_REQUIRED") {
       return {
         category: "validation",
         code: "application.job_text_required",
         message: "The job post needs readable text before I can generate targeted materials.",
         status: 422,
+      };
+    }
+
+    if (error.message === "RESUME_NOT_FOUND" || error.message === "COVER_LETTER_NOT_FOUND") {
+      return {
+        category: "not_found",
+        code: "application.materials_not_found",
+        message: "Generate materials before reviewing or editing them.",
+        status: 404,
       };
     }
 

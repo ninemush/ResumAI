@@ -152,6 +152,13 @@ export async function updateApplicationStatus(
     throw new Error("AUTH_REQUIRED");
   }
 
+  if (parsed.status === "applied") {
+    await assertFinalMaterialsExist({
+      applicationId: parsed.applicationId,
+      userId: user.id,
+    });
+  }
+
   const { data: application, error } = await supabase
     .from("applications")
     .update({ status: parsed.status })
@@ -168,6 +175,42 @@ export async function updateApplicationStatus(
     application: mapApplication(application),
     created: false,
   };
+}
+
+async function assertFinalMaterialsExist({
+  applicationId,
+  userId,
+}: {
+  applicationId: string;
+  userId: string;
+}) {
+  const supabase = await createClient();
+  const [{ data: resume }, { data: coverLetter }] = await Promise.all([
+    supabase
+      .from("generated_resumes")
+      .select("id, pdf_storage_path, status")
+      .eq("application_id", applicationId)
+      .eq("user_id", userId)
+      .eq("status", "ready")
+      .not("pdf_storage_path", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("generated_cover_letters")
+      .select("id, pdf_storage_path, status")
+      .eq("application_id", applicationId)
+      .eq("user_id", userId)
+      .eq("status", "ready")
+      .not("pdf_storage_path", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (!resume?.pdf_storage_path || !coverLetter?.pdf_storage_path) {
+    throw new Error("FINAL_MATERIALS_REQUIRED");
+  }
 }
 
 function mapApplication(application: {

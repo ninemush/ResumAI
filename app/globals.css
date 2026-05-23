@@ -684,7 +684,7 @@ input:focus {
 }
 
 .job-row:has(.secondary-action) {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
 }
 
 .source-row h3,
@@ -761,12 +761,16 @@ input:focus {
 
 .secondary-action,
 .status-select {
+  align-items: center;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--line);
   border-radius: var(--pr-radius-pill);
   color: var(--sage-strong);
+  display: inline-flex;
   font-size: 0.8rem;
   font-weight: 800;
+  gap: 7px;
+  justify-content: center;
   min-height: 36px;
   padding: 0 12px;
 }
@@ -777,6 +781,86 @@ input:focus {
 
 .status-select {
   max-width: 210px;
+}
+
+.materials-review {
+  background: rgba(255, 250, 243, 0.8);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.materials-review-header {
+  align-items: start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.materials-review-header h2 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.review-actions,
+.download-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.materials-editor-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.materials-editor-grid label {
+  color: var(--sage-strong);
+  display: grid;
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  gap: 7px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.materials-editor-grid input,
+.materials-editor-grid textarea {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  color: var(--foreground);
+  font: inherit;
+  font-family: var(--font-pr-sans), system-ui, sans-serif;
+  letter-spacing: 0;
+  line-height: 1.5;
+  min-width: 0;
+  padding: 11px 12px;
+  resize: vertical;
+  text-transform: none;
+}
+
+.cover-letter-editor {
+  grid-column: 1 / -1;
+}
+
+.download-row {
+  justify-content: flex-start;
+}
+
+.download-row a {
+  border: 1px solid rgba(185, 155, 103, 0.36);
+  border-radius: var(--pr-radius-pill);
+  color: var(--sage-strong);
+  font-size: 0.84rem;
+  font-weight: 800;
+  padding: 8px 11px;
+  text-decoration: none;
 }
 
 .section-heading h2,
@@ -1209,7 +1293,19 @@ input:focus {
 
   .readiness-panel,
   .profile-summary-grid,
+  .job-row,
+  .job-row:has(.secondary-action),
+  .materials-editor-grid,
   .fact-groups {
     grid-template-columns: 1fr;
+  }
+
+  .materials-review-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .review-actions {
+    justify-content: flex-start;
   }
 }
