@@ -103,8 +103,9 @@ Goal: build the conversation-first profile system.
 
 Status: in progress. Natural-language intake exists. Profile source metadata
 ingestion now supports user-scoped uploads and user-provided profile links. TXT
-PDF, and DOCX file extraction now feed the shared profile fact pipeline. OCR,
-public link extraction, and authenticated LinkedIn import remain follow-up work.
+PDF, DOCX, and public profile/portfolio link extraction now feed the shared
+profile fact pipeline. OCR and authenticated LinkedIn import remain follow-up
+work.
 
 Deliverables:
 

@@ -175,9 +175,19 @@ export function ConversationPanel({
       return payload.error?.message ?? "I could not save that profile link yet.";
     }
 
-    return sourceType === "linkedin"
-      ? "I saved that LinkedIn profile link. Authenticated import will come through a separate consent step."
-      : "I saved that profile link.";
+    if (!payload.source?.id) {
+      return "I saved that profile link.";
+    }
+
+    const extraction = await extractSource(payload.source.id);
+
+    if (!extraction.ok) {
+      return sourceType === "linkedin"
+        ? `I saved that LinkedIn profile link. I could not read the public page directly yet: ${extraction.message} Authenticated import will come through a separate consent step.`
+        : `I saved that profile link, but I could not read it directly yet: ${extraction.message}`;
+    }
+
+    return `I read that profile link and captured ${extraction.savedFactCount} profile detail${extraction.savedFactCount === 1 ? "" : "s"}.`;
   }
 
   async function handleFiles(files: FileList | File[]) {

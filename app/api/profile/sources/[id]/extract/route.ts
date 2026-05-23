@@ -83,8 +83,17 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.unsupported_type",
-        message: "TXT, PDF, and Word extraction are available now. Image and link extraction are next.",
+        message: "TXT, PDF, Word, and public profile link extraction are available now. Image OCR is next.",
         status: 422,
+      };
+    }
+
+    if (error.message === "URL_REQUIRED") {
+      return {
+        category: "validation",
+        code: "source.url_required",
+        message: "That profile source needs a URL before I can read it.",
+        status: 400,
       };
     }
 
@@ -147,6 +156,51 @@ function toApiError(error: unknown) {
         category: "validation",
         code: "source.docx_text_empty",
         message: "I could not find readable text in that Word document.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "PROFILE_LINK_BLOCKED") {
+      return {
+        category: "validation",
+        code: "source.profile_link_blocked",
+        message: "For security, I can only read public internet profile links.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "PROFILE_LINK_FETCH_FAILED") {
+      return {
+        category: "validation",
+        code: "source.profile_link_fetch_failed",
+        message: "I could not open that public profile link.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "PROFILE_LINK_UNSUPPORTED_CONTENT_TYPE") {
+      return {
+        category: "validation",
+        code: "source.profile_link_unsupported_content_type",
+        message: "That link did not return a readable web page.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "PROFILE_LINK_TOO_LARGE") {
+      return {
+        category: "validation",
+        code: "source.profile_link_too_large",
+        message: "That profile page is larger than the current extraction limit.",
+        status: 413,
+      };
+    }
+
+    if (error.message === "PROFILE_LINK_TEXT_TOO_SHORT") {
+      return {
+        category: "validation",
+        code: "source.profile_link_text_too_short",
+        message: "I could not find enough readable profile text on that page.",
         status: 422,
       };
     }
