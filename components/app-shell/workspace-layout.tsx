@@ -44,7 +44,7 @@ export function WorkspaceLayout({
 }: WorkspaceLayoutProps) {
   const [layout, setLayout] = useState<WorkspaceLayoutState>({
     conversationWidth: DEFAULT_CONVERSATION_WIDTH,
-    navCollapsed: typeof window === "undefined" ? false : window.innerWidth < 1120,
+    navCollapsed: false,
     navWidth: DEFAULT_NAV_WIDTH,
   });
 

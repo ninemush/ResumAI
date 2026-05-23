@@ -61,16 +61,19 @@ Before public launch:
 - Edge smoke test.
 - Mobile viewport check for core shell and conversation flow.
 
+## Active Tooling
+
+- `npm run lint` for static analysis.
+- `npm run build` for TypeScript and production build verification.
+- `npm run test:e2e` for Playwright browser smoke/regression tests.
+
 ## Tooling Direction
 
-Final tool choices are still open.
-
-Recommended starting point:
+Recommended next layers:
 
 - Vitest for unit tests.
-- Playwright for browser/feature tests.
 - Supabase SQL/policy tests or scripted policy verification for RLS.
-- ESLint and TypeScript build in CI.
+- CI gates that run lint, build, and e2e smoke tests before deployment.
 
 ## Completion Rule
 
@@ -81,3 +84,6 @@ A feature is not complete until:
 - Security/authorization behavior is tested where relevant.
 - At least one regression risk is covered or explicitly deferred with approval.
 
+Large UI or workflow changes must include a browser smoke run across desktop and
+mobile viewports. Hydration, auth entry, chat input visibility, and basic layout
+fit are now baseline e2e concerns.
