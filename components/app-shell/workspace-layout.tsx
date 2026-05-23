@@ -7,6 +7,7 @@ import { SideNav } from "@/components/app-shell/side-nav";
 import { ConversationPanel } from "@/components/conversation/conversation-panel";
 import { JobIngestionPanel } from "@/components/jobs/job-ingestion-panel";
 import { ProfileExplorer } from "@/components/profile/profile-explorer";
+import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { WorkspaceSession } from "@/lib/commands/session";
 import type { ConversationMessage } from "@/lib/conversation/conversation-messages";
 import type { JobOverview } from "@/lib/jobs/job-overview";
@@ -21,6 +22,7 @@ const MIN_CONVERSATION_WIDTH = 340;
 const MAX_CONVERSATION_WIDTH = 540;
 
 type WorkspaceLayoutProps = {
+  applicationOverview: ApplicationOverview;
   conversationMessages: ConversationMessage[];
   jobOverview: JobOverview;
   profileOverview: ProfileOverview;
@@ -34,6 +36,7 @@ type WorkspaceLayoutState = {
 };
 
 export function WorkspaceLayout({
+  applicationOverview,
   conversationMessages,
   jobOverview,
   profileOverview,
@@ -126,7 +129,10 @@ export function WorkspaceLayout({
       />
 
       <ConversationPanel
+        applicationOverview={applicationOverview}
         initialMessages={conversationMessages}
+        jobOverview={jobOverview}
+        profileOverview={profileOverview}
         userEmail={session.user.email}
         userId={session.user.id}
       />

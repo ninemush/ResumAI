@@ -4,10 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Paperclip, SendHorizontal, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
+import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import type { JobOverview } from "@/lib/jobs/job-overview";
+import type { ProfileOverview } from "@/lib/profile/profile-overview";
 import { createClient } from "@/lib/supabase/browser";
 
 type ConversationPanelProps = {
+  applicationOverview: ApplicationOverview;
   initialMessages: ConversationMessage[];
+  jobOverview: JobOverview;
+  profileOverview: ProfileOverview;
   userEmail: string | null;
   userId: string;
 };
@@ -50,7 +56,10 @@ const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image">([
 ]);
 
 export function ConversationPanel({
+  applicationOverview,
   initialMessages,
+  jobOverview,
+  profileOverview,
   userEmail,
   userId,
 }: ConversationPanelProps) {
@@ -61,6 +70,13 @@ export function ConversationPanel({
   const [messages, setMessages] = useState<ConversationMessage[]>(
     buildInitialMessages(initialMessages, userEmail),
   );
+  const sessionPrompt = buildSessionPrompt({
+    applicationOverview,
+    hasConversationHistory: initialMessages.length > 0,
+    jobOverview,
+    profileOverview,
+    userEmail,
+  });
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -355,6 +371,11 @@ export function ConversationPanel({
       </div>
 
       <div className="message-list" ref={messageListRef}>
+        {sessionPrompt ? (
+          <div className="session-prompt" aria-label="Suggested next step">
+            {sessionPrompt}
+          </div>
+        ) : null}
         {messages.map((item, index) => (
           <div
             className={item.speaker === "user" ? "user-message" : "assistant-message"}
@@ -447,6 +468,99 @@ function buildInitialMessages(
       text: welcomeMessage(userEmail),
     },
   ];
+}
+
+function buildSessionPrompt({
+  applicationOverview,
+  hasConversationHistory,
+  jobOverview,
+  profileOverview,
+  userEmail,
+}: {
+  applicationOverview: ApplicationOverview;
+  hasConversationHistory: boolean;
+  jobOverview: JobOverview;
+  profileOverview: ProfileOverview;
+  userEmail: string | null;
+}) {
+  const name = profileOverview.profile?.displayName ?? userEmail?.split("@")[0] ?? null;
+  const greeting = `Welcome back${name ? `, ${name}` : ""}.`;
+  const applicationPrompt = buildApplicationFollowUpPrompt(applicationOverview);
+
+  if (applicationPrompt) {
+    return `${greeting ?? "Good to see you."} ${applicationPrompt}`;
+  }
+
+  const profilePrompt = buildProfileGapPrompt(profileOverview);
+
+  if (profilePrompt) {
+    return `${greeting ?? "Good to see you."} ${profilePrompt}`;
+  }
+
+  const jobPrompt = buildJobPrompt(jobOverview);
+
+  if (jobPrompt) {
+    return `${greeting ?? "Good to see you."} ${jobPrompt}`;
+  }
+
+  if (hasConversationHistory) {
+    return `${greeting} We can keep building from your last conversation.`;
+  }
+
+  return null;
+}
+
+function buildApplicationFollowUpPrompt(applicationOverview: ApplicationOverview) {
+  const followUpApplications = applicationOverview.recentApplications.filter((application) =>
+    ["applied", "interview_in_progress"].includes(application.status),
+  );
+
+  if (followUpApplications.length === 0) {
+    return null;
+  }
+
+  const application = followUpApplications[0];
+  const roleLabel = [application.jobTitle, application.companyName].filter(Boolean).join(" at ");
+
+  return `You have ${followUpApplications.length} application${followUpApplications.length === 1 ? "" : "s"} that may need a status check. Did you hear back on ${roleLabel}? Reply with the outcome and I will help update the right record once status updates are enabled.`;
+}
+
+function buildProfileGapPrompt(profileOverview: ProfileOverview) {
+  if (!profileOverview.profile || profileOverview.factCount === 0) {
+    return "The highest-value next step is to give me a resume, LinkedIn/portfolio link, or a quick work-history note so I can identify hiring signal and gaps.";
+  }
+
+  const missing: string[] = [];
+
+  if (!profileOverview.profile.summary) missing.push("a sharp profile summary");
+  if (!profileOverview.profile.targetDirection) missing.push("target role direction");
+  if (profileOverview.confirmedFactCount === 0) missing.push("confirmed proof points");
+
+  if (missing.length === 0) {
+    return null;
+  }
+
+  return `Your profile has ${profileOverview.factCount} captured detail${profileOverview.factCount === 1 ? "" : "s"}, but it is still missing ${formatList(missing)}. Those are high-value screening signals.`;
+}
+
+function buildJobPrompt(jobOverview: JobOverview) {
+  const highFitJob = jobOverview.recentJobs.find(
+    (job) => typeof job.fitSnapshot.score === "number" && job.fitSnapshot.score >= 70,
+  );
+
+  if (!highFitJob) {
+    return null;
+  }
+
+  return `Your recent job post${highFitJob.title ? ` for ${highFitJob.title}` : ""} looks like a stronger match based on the current keyword snapshot. We should review the fit before generating materials.`;
+}
+
+function formatList(items: string[]) {
+  if (items.length <= 1) {
+    return items[0] ?? "";
+  }
+
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 function isLegacyAssistantSeed(text: string) {

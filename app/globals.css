@@ -867,6 +867,16 @@ input:focus {
   padding: 13px 14px;
 }
 
+.session-prompt {
+  background: rgba(236, 230, 218, 0.52);
+  border: 1px solid rgba(185, 155, 103, 0.34);
+  border-radius: 14px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  padding: 12px 14px;
+}
+
 .assistant-message {
   border-top-left-radius: 6px;
   max-width: min(94%, 620px);
