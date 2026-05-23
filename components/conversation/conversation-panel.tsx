@@ -116,6 +116,14 @@ export function ConversationPanel({
   }
 
   async function processMessage(text: string) {
+    const applicationAction = await processApplicationAction(text);
+
+    if (applicationAction) {
+      appendAssistantMessage(applicationAction, true);
+      router.refresh();
+      return;
+    }
+
     const urls = extractUrls(text);
     const textWithoutUrls = removeUrls(text, urls).trim();
     const summaries: string[] = [];
@@ -132,6 +140,69 @@ export function ConversationPanel({
       appendAssistantMessage(summaries.join(" "), true);
       router.refresh();
     }
+  }
+
+  async function processApplicationAction(text: string) {
+    const inferredStatus = inferApplicationStatus(text);
+
+    if (inferredStatus) {
+      const candidates = applicationOverview.recentApplications.filter((application) =>
+        ["applied", "interview_in_progress", "draft"].includes(application.status),
+      );
+      const matchedCandidates = candidates.filter((application) =>
+        applicationMatchesText(application, text),
+      );
+      const actionableCandidates = matchedCandidates.length > 0 ? matchedCandidates : candidates;
+
+      if (actionableCandidates.length !== 1) {
+        return actionableCandidates.length === 0
+          ? null
+          : `I can update that, but I need to be precise. Which application should I mark as ${formatApplicationStatus(inferredStatus)}: ${actionableCandidates.map(formatApplicationLabel).join(", ")}?`;
+      }
+
+      const application = actionableCandidates[0];
+      const response = await fetch(`/api/applications/${application.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: inferredStatus }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        return payload.error?.message ?? "I could not update that application status yet.";
+      }
+
+      return `Updated ${formatApplicationLabel(application)} to ${formatApplicationStatus(inferredStatus)}.`;
+    }
+
+    if (!looksLikeApplicationLogRequest(text)) {
+      return null;
+    }
+
+    const readyJobs = jobOverview.recentJobs.filter(
+      (job) => job.ingestion_status === "succeeded",
+    );
+
+    if (readyJobs.length !== 1) {
+      return readyJobs.length === 0
+        ? "I can log an application once we have a successfully ingested job post. Paste the job link first, then tell me to proceed."
+        : `I can log it, but I need to know which job. Do you mean ${readyJobs.map((job) => job.title ?? formatJobUrl(job.job_url)).join(", ")}?`;
+    }
+
+    const response = await fetch("/api/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobIngestionId: readyJobs[0].id, status: "draft" }),
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      return payload.error?.message ?? "I could not log that application yet.";
+    }
+
+    return payload.created
+      ? `Logged ${payload.application?.jobTitle ?? "that role"} at ${payload.application?.companyName ?? "the company"} as an application. Next, we should generate targeted materials before marking it applied.`
+      : `That application is already logged. Next, we should review status or generate targeted materials.`;
   }
 
   async function processProfileText(text: string) {
@@ -561,6 +632,77 @@ function formatList(items: string[]) {
   }
 
   return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+
+function inferApplicationStatus(text: string) {
+  const normalized = text.toLowerCase();
+
+  if (/\b(interviewed but|interviewed,? not selected|after interview.*rejected)\b/.test(normalized)) {
+    return "interviewed_not_selected";
+  }
+
+  if (/\b(rejected|declined|not selected|passed on me|turned me down)\b/.test(normalized)) {
+    return "rejected";
+  }
+
+  if (/\b(no reply|no response|haven't heard|have not heard|ghosted)\b/.test(normalized)) {
+    return "no_reply";
+  }
+
+  if (/\b(interviewing|interview scheduled|interview in progress|next round)\b/.test(normalized)) {
+    return "interview_in_progress";
+  }
+
+  if (/\b(offer|selected|got it|hired)\b/.test(normalized)) {
+    return "interviewed_selected";
+  }
+
+  if (/\b(withdrawn|withdrew|not pursuing)\b/.test(normalized)) {
+    return "withdrawn";
+  }
+
+  if (/\b(applied|submitted)\b/.test(normalized)) {
+    return "applied";
+  }
+
+  return null;
+}
+
+function looksLikeApplicationLogRequest(text: string) {
+  const normalized = text.toLowerCase();
+
+  return (
+    /\b(log|track|create)\b.*\bapplication\b/.test(normalized) ||
+    /\b(proceed|go ahead|move forward)\b.*\b(apply|application|role|job)\b/.test(normalized)
+  );
+}
+
+function formatApplicationLabel(application: ApplicationOverview["recentApplications"][number]) {
+  return [application.jobTitle, application.companyName].filter(Boolean).join(" at ");
+}
+
+function applicationMatchesText(
+  application: ApplicationOverview["recentApplications"][number],
+  text: string,
+) {
+  const normalizedText = text.toLowerCase();
+  const searchableValues = [application.companyName, application.jobTitle, formatJobUrl(application.jobUrl)]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => value.toLowerCase());
+
+  return searchableValues.some((value) => value.length >= 3 && normalizedText.includes(value));
+}
+
+function formatApplicationStatus(status: string) {
+  return status.replaceAll("_", " ");
+}
+
+function formatJobUrl(jobUrl: string) {
+  try {
+    return new URL(jobUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return "that job";
+  }
 }
 
 function isLegacyAssistantSeed(text: string) {

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 
 import { SideNav } from "@/components/app-shell/side-nav";
+import { ApplicationPanel } from "@/components/applications/application-panel";
 import { ConversationPanel } from "@/components/conversation/conversation-panel";
 import { JobIngestionPanel } from "@/components/jobs/job-ingestion-panel";
 import { ProfileExplorer } from "@/components/profile/profile-explorer";
@@ -118,6 +119,7 @@ export function WorkspaceLayout({
       <div className="workspace-main">
         <ProfileExplorer overview={profileOverview} />
         <JobIngestionPanel overview={jobOverview} />
+        <ApplicationPanel overview={applicationOverview} />
       </div>
 
       <button

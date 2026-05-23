@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 
 type JobIngestionPanelProps = {
@@ -5,8 +9,40 @@ type JobIngestionPanelProps = {
 };
 
 export function JobIngestionPanel({ overview }: JobIngestionPanelProps) {
+  const router = useRouter();
+  const [pendingJobId, setPendingJobId] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
   if (overview.recentJobs.length === 0) {
     return null;
+  }
+
+  async function logApplication(jobId: string) {
+    setPendingJobId(jobId);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobIngestionId: jobId, status: "draft" }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to log that application.");
+        return;
+      }
+
+      setMessage(
+        payload.created
+          ? "Application logged. Next we should generate targeted materials."
+          : "That application was already logged.",
+      );
+      router.refresh();
+    } finally {
+      setPendingJobId(null);
+    }
   }
 
   return (
@@ -17,6 +53,7 @@ export function JobIngestionPanel({ overview }: JobIngestionPanelProps) {
       </div>
 
       <div className="job-list">
+        {message ? <p className="system-note success">{message}</p> : null}
         {overview.recentJobs.map((job) => (
           <article className="job-row" key={job.id}>
             <div>
@@ -42,6 +79,16 @@ export function JobIngestionPanel({ overview }: JobIngestionPanelProps) {
             <span className={`source-pill ${job.ingestion_status}`}>
               {job.ingestion_status.replace("_", " ")}
             </span>
+            {job.ingestion_status === "succeeded" ? (
+              <button
+                className="secondary-action"
+                disabled={pendingJobId === job.id}
+                onClick={() => logApplication(job.id)}
+                type="button"
+              >
+                {pendingJobId === job.id ? "Logging..." : "Log application"}
+              </button>
+            ) : null}
           </article>
         ))}
       </div>

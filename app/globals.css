@@ -530,6 +530,7 @@ input:focus {
 }
 
 .profile-summary-grid div,
+.applications-panel,
 .facts-panel,
 .jobs-panel,
 .profile-draft-panel,
@@ -658,7 +659,8 @@ input:focus {
   padding-left: 18px;
 }
 
-.jobs-panel {
+.jobs-panel,
+.applications-panel {
   display: grid;
   gap: 16px;
   padding: 20px;
@@ -679,6 +681,10 @@ input:focus {
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 14px;
+}
+
+.job-row:has(.secondary-action) {
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .source-row h3,
@@ -751,6 +757,26 @@ input:focus {
 .source-pill.processing {
   background: var(--pr-mist-beige);
   color: var(--ink-soft);
+}
+
+.secondary-action,
+.status-select {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-pill);
+  color: var(--sage-strong);
+  font-size: 0.8rem;
+  font-weight: 800;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.secondary-action:hover {
+  background: var(--pr-mist-beige);
+}
+
+.status-select {
+  max-width: 210px;
 }
 
 .section-heading h2,
