@@ -36,10 +36,18 @@ export function SideNav({ collapsed, onToggleCollapsed, session }: SideNavProps)
       <div className="side-nav-header">
         <Image
           alt={brand.logoAlt}
-          className="side-nav-logo"
-          height={52}
+          className="side-nav-logo side-nav-logo-icon"
+          height={56}
           src={brand.appIconPath}
-          width={52}
+          width={56}
+        />
+        <Image
+          alt={brand.logoAlt}
+          className="side-nav-logo side-nav-logo-lockup"
+          height={78}
+          priority
+          src={brand.horizontalLogoPath}
+          width={280}
         />
         <div className="side-nav-brand-copy">
           <strong>{brand.name}</strong>

@@ -12,7 +12,7 @@ import type { ConversationMessage } from "@/lib/conversation/conversation-messag
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
-const DEFAULT_NAV_WIDTH = 260;
+const DEFAULT_NAV_WIDTH = 280;
 const COLLAPSED_NAV_WIDTH = 78;
 const DEFAULT_CONVERSATION_WIDTH = 400;
 const MIN_NAV_WIDTH = 220;
