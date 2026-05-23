@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, Loader2, SendHorizontal, Sparkles } from "lucide-react";
+import { Loader2, Paperclip, SendHorizontal, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/browser";
@@ -32,6 +32,8 @@ type SourceCreateResponse = {
 
 const PROFILE_SOURCE_BUCKET = "profile-sources";
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
+const welcomeMessage = (userEmail: string | null) =>
+  `Hi${userEmail ? `, ${userEmail.split("@")[0]}` : ""}. Share a resume, LinkedIn or portfolio link, job post, or a rough work-history note. I will read it like a recruiter and hiring manager would: signal, keywords, credibility, gaps, and what will help you stand out.`;
 const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image">([
   ["application/pdf", "pdf"],
   [
@@ -57,14 +59,7 @@ export function ConversationPanel({
   const messageListRef = useRef<HTMLDivElement>(null);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ConversationMessage[]>(
-    initialMessages.length > 0
-      ? initialMessages
-      : [
-          {
-            speaker: "assistant",
-            text: `Hi${userEmail ? `, ${userEmail.split("@")[0]}` : ""}. Tell me about your background, paste a role, or drop a resume here. I will look at it like a recruiter and hiring manager would: signal, keywords, credibility, gaps, and what will help you stand out.`,
-          },
-        ],
+    buildInitialMessages(initialMessages, userEmail),
   );
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,10 +130,12 @@ export function ConversationPanel({
       throw new Error(payload.error ?? "PROFILE_INTAKE_FAILED");
     }
 
+    const savedFactCount = payload.savedFactCount ?? 0;
+
     setStatus(
-      payload.inScope === false
+      payload.inScope === false || savedFactCount === 0
         ? null
-        : `Saved ${payload.savedFactCount} profile detail${payload.savedFactCount === 1 ? "" : "s"}.`,
+        : `Saved ${savedFactCount} profile detail${savedFactCount === 1 ? "" : "s"}.`,
     );
 
     return payload.assistantMessage as string;
@@ -352,7 +349,7 @@ export function ConversationPanel({
       <div className="conversation-header">
         <div>
           <p className="eyebrow">AI agent</p>
-          <h2 id="conversation-title">Start here.</h2>
+          <h2 id="conversation-title">Talent advisor</h2>
         </div>
         <Sparkles size={20} aria-hidden="true" />
       </div>
@@ -367,6 +364,12 @@ export function ConversationPanel({
             <p>{item.text}</p>
           </div>
         ))}
+        {isSubmitting ? (
+          <div className="assistant-message pending-message" aria-live="polite">
+            <strong>{brand.name}</strong>
+            <p>Reading this with a hiring lens...</p>
+          </div>
+        ) : null}
         {isDragActive ? <div className="drop-hint">Drop it here.</div> : null}
         {status ? <div className="system-note success">{status}</div> : null}
         {error ? <div className="system-note error">{error}</div> : null}
@@ -393,7 +396,7 @@ export function ConversationPanel({
               handleFiles(files);
             }
           }}
-          placeholder="Tell me, paste a job link, or drop a resume..."
+          placeholder="Share background, role, link, or resume..."
           type="text"
           value={message}
         />
@@ -420,6 +423,49 @@ export function ConversationPanel({
       </form>
     </aside>
   );
+}
+
+function buildInitialMessages(
+  initialMessages: ConversationMessage[],
+  userEmail: string | null,
+) {
+  const cleanedMessages = initialMessages.filter(
+    (item) =>
+      !(
+        (item.speaker === "assistant" && isLegacyAssistantSeed(item.text)) ||
+        (item.speaker === "user" && isLegacyUserTestMessage(item.text))
+      ),
+  );
+
+  if (cleanedMessages.length > 0) {
+    return cleanedMessages;
+  }
+
+  return [
+    {
+      speaker: "assistant" as const,
+      text: welcomeMessage(userEmail),
+    },
+  ];
+}
+
+function isLegacyAssistantSeed(text: string) {
+  const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
+
+  return [
+    "what specific area are you looking to focus on?",
+    "i can help you build your career profile, including your resume",
+    "hello! i’d love to help you with your career profile.",
+    "hello! i'd love to help you with your career profile.",
+    "i'm here to assist you with building your career profile",
+    "tell me about your background, paste a role, or drop a resume here.",
+  ].some((phrase) => normalized.includes(phrase));
+}
+
+function isLegacyUserTestMessage(text: string) {
+  const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
+
+  return ["what llm are you using?", "what llm are you using"].includes(normalized);
 }
 
 async function persistConversationMessage(

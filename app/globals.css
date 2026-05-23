@@ -823,7 +823,7 @@ input:focus {
   height: 100svh;
   min-width: 0;
   overflow: hidden;
-  padding: 24px;
+  padding: 22px;
   position: relative;
 }
 
@@ -835,11 +835,12 @@ input:focus {
   align-items: center;
   display: flex;
   justify-content: space-between;
+  min-height: 54px;
 }
 
 .conversation-header h2 {
   font-family: var(--font-pr-brand), Georgia, serif;
-  font-size: 1.15rem;
+  font-size: 1.08rem;
   font-weight: 600;
   margin: 0;
 }
@@ -847,11 +848,11 @@ input:focus {
 .message-list {
   align-content: start;
   display: grid;
-  gap: 14px;
-  margin-top: 24px;
+  gap: 12px;
+  margin-top: 18px;
   min-height: 0;
   overflow-y: auto;
-  padding-right: 2px;
+  padding: 0 2px 14px 0;
   scroll-behavior: smooth;
 }
 
@@ -860,23 +861,42 @@ input:focus {
 .system-note {
   background: var(--panel-strong);
   border: 1px solid var(--line);
-  border-radius: var(--pr-radius-md);
-  padding: 16px;
+  border-radius: 14px;
+  font-size: 0.94rem;
+  line-height: 1.55;
+  padding: 13px 14px;
+}
+
+.assistant-message {
+  border-top-left-radius: 6px;
+  max-width: min(94%, 620px);
 }
 
 .user-message {
   background: rgba(236, 230, 218, 0.72);
+  border-top-right-radius: 6px;
   justify-self: end;
-  max-width: 92%;
+  max-width: min(88%, 520px);
 }
 
 .assistant-message p,
 .user-message p {
-  margin: 8px 0 0;
+  margin: 7px 0 0;
+}
+
+.assistant-message strong,
+.user-message strong {
+  display: block;
+  font-size: 0.76rem;
+  line-height: 1.2;
 }
 
 .system-note {
   font-size: 0.9rem;
+}
+
+.pending-message p {
+  color: var(--clay);
 }
 
 .drop-hint {
@@ -900,11 +920,14 @@ input:focus {
   gap: 8px;
   grid-template-columns: 42px minmax(0, 1fr) 42px;
   padding: 6px;
+  position: sticky;
+  bottom: 0;
 }
 
 .chat-input input {
   background: transparent;
   border: 0;
+  font-size: 0.95rem;
   min-height: 40px;
 }
 

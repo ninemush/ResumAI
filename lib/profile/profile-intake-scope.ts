@@ -84,6 +84,13 @@ export function checkProfileIntakeScope(message: string): ProfileIntakeScopeChec
     };
   }
 
+  if (isModelQuestion(normalizedMessage)) {
+    return {
+      inScope: false,
+      capabilityAnswer: buildModelAnswer(),
+    };
+  }
+
   if (hasAnyTerm(normalizedMessage, careerScopeTerms)) {
     return { inScope: true };
   }
@@ -109,6 +116,10 @@ function buildCapabilityAnswer() {
   return `I can help you build a hiring-ready profile, identify roles and seniority levels that fit, sharpen ATS-friendly resume language, read job posts, spot keyword gaps, and turn your experience into clear employer value. You can start naturally: tell me about your work history, drop a resume, paste your LinkedIn or portfolio link, or share a job post you are considering.`;
 }
 
+function buildModelAnswer() {
+  return `I use an OpenAI language model behind the scenes, but my job here is narrower than a general chatbot: I am tuned for career profile building, recruiter-style screening judgment, ATS-aware resume guidance, role fit, job posts, and application materials. If you share a resume, role, or work-history note, I will review it through that hiring lens.`;
+}
+
 function isCapabilityQuestion(message: string) {
   return [
     "what can you help me with",
@@ -116,6 +127,17 @@ function isCapabilityQuestion(message: string) {
     "how can you help",
     "how do you help",
     "what are you for",
+  ].some((phrase) => message.includes(phrase));
+}
+
+function isModelQuestion(message: string) {
+  return [
+    "what llm",
+    "which llm",
+    "what model",
+    "which model",
+    "are you using",
+    "powered by",
   ].some((phrase) => message.includes(phrase));
 }
 
