@@ -3,6 +3,8 @@ import { Cormorant_Garamond, IBM_Plex_Mono, Inter } from "next/font/google";
 import { brand } from "@/lib/brand";
 import "./globals.css";
 
+const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
 const inter = Inter({
   variable: "--font-pr-ui",
   subsets: ["latin"],
@@ -21,6 +23,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: configuredSiteUrl ? new URL(configuredSiteUrl) : undefined,
   title: brand.name,
   description: brand.description,
   icons: {

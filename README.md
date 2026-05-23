@@ -43,9 +43,12 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 OPENAI_API_KEY=
 OPENAI_PROFILE_INTAKE_MODEL=gpt-4o-mini
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_APP_NAME=Pramania
 NEXT_PUBLIC_APP_TAGLINE=Career clarity, guided by intelligence
 ```
+
+For production, set `NEXT_PUBLIC_SITE_URL=https://pramania.com`.
 
 ## Development
 
