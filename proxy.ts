@@ -1,8 +1,15 @@
-import { type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 import { updateSession } from "@/lib/supabase/middleware";
 
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.hostname === "www.pramania.com") {
+    const canonicalUrl = request.nextUrl.clone();
+    canonicalUrl.hostname = "pramania.com";
+
+    return NextResponse.redirect(canonicalUrl, 308);
+  }
+
   return updateSession(request);
 }
 
