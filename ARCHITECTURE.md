@@ -60,6 +60,7 @@ flowchart TD
   Integrations["Import / Link Integrations"]
   AI["AI Service Layer"]
   Admin["Admin Tier Configuration"]
+  Support["Support System"]
   Observability["Logs / Events / Error Tracking"]
 
   User --> Web
@@ -75,6 +76,7 @@ flowchart TD
   API --> Integrations
   API --> AI
   API --> Admin
+  API --> Support
   API --> Observability
 ```
 
@@ -684,10 +686,50 @@ Before public launch:
 - Audit events table.
 - AI latency and failure metrics.
 - Basic funnel events.
+- Owner/admin operating console with aggregate product, usage, outcome, support, and health metrics.
+- Support-safe user timeline for troubleshooting by authorized support flows.
 
 Sensitive data must be excluded from logs.
 
-## 12.1 Failure Intelligence Architecture
+Operating console metrics must be admin-only and aggregate-first:
+
+- Signed-up users from auth/account data.
+- Active users from recent sign-in or product activity.
+- Feature usage from quota events, audit events, profile sources, job ingestions, application records, material generations, and support events.
+- Resume/profile creation counts.
+- Job application counts and status distribution.
+- Conversion proxy counts, initially `interviewed_selected`.
+- Support ticket volume, L1 resolution, L2 escalation, refund/sensitive escalation, and aging.
+
+Admin drill-down must be justified by support, security, billing, fraud, or explicit user troubleshooting consent. Drill-down must write an audit/support action record.
+
+## 12.1 Support Architecture
+
+Support is a controlled product subsystem, not a general chatbot.
+
+Support levels:
+
+- L0: self-serve docs and guided troubleshooting.
+- L1: autonomous support agent that can inspect support-safe account context and recent platform events.
+- L2: human support for sensitive, unresolved, refund, legal/privacy, security, billing dispute, user distress, or escalation cases.
+
+Support data model should include:
+
+- `support_docs`: versioned support articles.
+- `support_tickets`: user-owned support cases with status, severity, category, escalation level, and summary.
+- `support_messages`: user/support-agent conversation messages.
+- `support_actions`: append-only troubleshooting actions, logs inspected, tool calls, and escalation summaries.
+- `support_escalations`: human handoff packets with temperament, timeline, actions taken, results, and recommended next action.
+
+L1 agent access must be least-privilege:
+
+- Allowed: account metadata, plan/tier, feature usage metadata, quota events, application/job status metadata, recent error categories, support history, and user-provided issue details.
+- Not allowed by default: full resume text, full cover letters, raw profile facts, chat history contents, secrets, OAuth tokens, payment card data, or another user's data.
+- Sensitive content access requires explicit user consent, need-to-know purpose, and an audit/support action record.
+
+Every support response and action must be logged. L1 must escalate rather than decide refunds, legal/privacy requests, deletion disputes, security incidents, or emotionally sensitive cases.
+
+## 12.2 Failure Intelligence Architecture
 
 The system must support self-detection, self-diagnosis, and safe self-healing.
 

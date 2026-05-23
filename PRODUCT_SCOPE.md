@@ -94,8 +94,19 @@ The admin console must allow tier configuration without code changes:
 - Set generation limits if needed.
 - Enable or disable tiers.
 - View usage and audit-safe quota events.
+- Monitor operating metrics: signed-up users, active users, feature usage, profile/resume creation, job applications, application outcomes, support tickets, escalations, and system-health indicators.
 
 Tier changes must be configuration/data changes, not code changes.
+
+### 6. Support
+
+Support is included as an operating foundation.
+
+- L0: self-serve documentation and guided troubleshooting.
+- L1: autonomous support agent for platform-support issues only.
+- L2: human support for refunds, sensitive matters, legal/privacy/security concerns, unresolved issues, and escalations.
+
+The L1 support agent must be empathetic, expert in the product, able to review support-safe logs and user activity metadata, and able to produce a complete escalation packet when human help is required.
 
 ## V1 Layout
 

@@ -237,3 +237,32 @@ Controls:
 - Create/update/disable tiers.
 - No hardcoded tier limits in application logic.
 - Audit all changes.
+
+## `GET /api/admin/metrics`
+
+Purpose: owner/admin operating metrics.
+
+Controls:
+
+- Admin only.
+- Aggregate-first.
+- No raw resume, profile, cover-letter, or chat content.
+- Database-side authorization.
+- Response includes signed-up users, active users, feature usage, profile/resume creation, job applications, application status distribution, conversion proxy, support metrics, and system-health indicators.
+
+## Support APIs
+
+Planned:
+
+- `GET /api/support/docs`
+- `POST /api/support/tickets`
+- `POST /api/support/tickets/:id/messages`
+- `POST /api/support/tickets/:id/escalate`
+
+Controls:
+
+- Auth required for user tickets.
+- Admin/support authorization for L2 queue.
+- L1 agent can access only support-safe context.
+- Refund, legal/privacy/security, unresolved, and sensitive issues must escalate.
+- All support actions and autonomous responses must be logged.

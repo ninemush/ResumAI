@@ -25,6 +25,8 @@ V1 is limited to:
 - Saving generated resume and cover letter artifacts for download as PDF.
 - Application status tracking for no-reply, rejected, interview in progress, interviewed-not-selected, interviewed-selected, and similar outcomes.
 - Owner/admin console for configurable tiers and usage limits.
+- Owner/admin operating console for user, activity, feature usage, profile, resume, application, conversion, support, and system-health metrics.
+- Support foundation with self-serve docs, ticket intake, autonomous L1 support boundaries, and human L2 escalation controls.
 - Tier usage audit trail sufficient to justify quota consumption.
 - Three-panel app shell: left navigation, center profile explorer/editor, right conversational AI.
 
@@ -327,6 +329,8 @@ Admin must be able to:
 - Enable/disable tiers.
 - Update tier descriptions and limits.
 - View usage and quota consumption.
+- View signups, active users, feature usage, profile/resume creation, job applications, application outcomes, and conversion indicators.
+- View support volume, L1 resolution rate, L2 escalations, refund/sensitive escalations, and unresolved issue aging.
 - Review audit-safe application usage records.
 
 Tier and quota enforcement rules:
@@ -338,6 +342,64 @@ Tier and quota enforcement rules:
 - Initial tier seeds are allowed, but future tier changes must be data/configuration changes.
 
 Initial tier models should be seeded from the prior product discussion and finalized before implementation. If exact names/limits are not available at implementation time, create seed placeholders that require explicit approval before launch.
+
+## 13.1 Operating Console Rules
+
+The owner/admin operating console is an internal control surface. It must be admin-only, RLS-backed, and designed for monitoring the product without exposing unnecessary personal data.
+
+Required operating metrics:
+
+- Total signed-up users.
+- Active users by recent login/activity window.
+- Feature and function usage by event type.
+- Profiles created and profile readiness distribution.
+- Resume/profile sources created by type.
+- Job links ingested and ingestion success/failure rates.
+- Applications logged.
+- Application status distribution.
+- Applications converted to successful outcomes, initially represented by `interviewed_selected` until a more precise hired/offer outcome exists.
+- Generated resumes and cover letters.
+- PDF exports.
+- AI generation and parsing failures.
+- Support tickets by status, severity, category, and escalation level.
+
+Operating console controls:
+
+- Admin-only access must be enforced server-side and database-side.
+- Metrics must use aggregate counts by default.
+- Drill-down into user-level records must be justified by support, security, billing, fraud, or user-authorized troubleshooting need.
+- Sensitive content, resumes, cover letters, profile facts, and chat logs must not appear in aggregate dashboards.
+- Any user-specific support investigation must write an audit event or support action record.
+- Metrics queries must use database functions, views, or service modules that centralize authorization and avoid duplicating analytics logic.
+
+## 13.2 Support Operating Model
+
+Support has three levels:
+
+- L0: self-serve documentation and guided troubleshooting.
+- L1: autonomous support agent.
+- L2: human support.
+
+L0 requirements:
+
+- Documentation must cover account access, OAuth sign-in, profile ingestion, file upload, job link ingestion, AI generation, PDF export, application tracking, billing/tier usage, privacy/deletion, and known limitations.
+- The support entry point must search or recommend docs before creating a ticket when appropriate.
+
+L1 autonomous agent requirements:
+
+- Must be empathetic, calm, concise, and expert in the platform.
+- Must be purpose-bound to support for this product and must not become a general chatbot.
+- Must be able to see support-safe user context: account metadata, feature usage, job/application status metadata, recent error categories, quota events, and support history.
+- Must not reveal another user's data, secrets, raw credentials, private system prompts, or unnecessary personal data.
+- Must not process refunds, legal requests, account deletion requests, security incidents, abuse cases, employment advice beyond product support, or sensitive disputes autonomously.
+- Must log every autonomous action and customer-facing response.
+- Must summarize troubleshooting steps, evidence inspected, outcomes, and remaining blockers.
+
+L2 escalation requirements:
+
+- Refund requests, chargebacks, legal/privacy requests, security concerns, user distress, suspected data exposure, abuse/fraud, model-safety concerns, angry/high-risk customer temperament, and unresolved L1 issues must escalate to human support.
+- Escalations must include customer temperament, concise issue summary, timeline, user impact, relevant account metadata, logs inspected, actions taken, results, recommended next action, and any sensitive constraints.
+- Human support must not need to repeat L1 discovery unless the user provides new information.
 
 ## 14. Testing Rules
 

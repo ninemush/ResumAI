@@ -508,6 +508,11 @@ input:focus {
   grid-template-rows: auto auto 1fr;
 }
 
+.owner-console {
+  display: grid;
+  gap: 22px;
+}
+
 .pane-heading p {
   max-width: 780px;
 }
@@ -529,7 +534,15 @@ input:focus {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.owner-metric-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .profile-summary-grid div,
+.owner-detail-panel,
+.owner-metric-card,
 .applications-panel,
 .facts-panel,
 .jobs-panel,
@@ -546,6 +559,75 @@ input:focus {
   gap: 6px;
   min-width: 0;
   padding: 16px;
+}
+
+.owner-metric-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.owner-metric-card div {
+  align-items: center;
+  color: var(--sage-strong);
+  display: flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 8px;
+  text-transform: uppercase;
+}
+
+.owner-metric-card strong {
+  color: var(--foreground);
+  font-family: var(--font-pr-brand), Georgia, serif;
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.owner-metric-card p {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.owner-detail-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.owner-detail-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.metric-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.metric-list div {
+  align-items: center;
+  border-top: 1px solid rgba(215, 204, 188, 0.72);
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding-top: 8px;
+}
+
+.metric-list dt {
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.metric-list dd {
+  color: var(--foreground);
+  font-weight: 850;
+  margin: 0;
 }
 
 .profile-summary-grid span {
@@ -1293,6 +1375,8 @@ input:focus {
 
   .readiness-panel,
   .profile-summary-grid,
+  .owner-detail-grid,
+  .owner-metric-grid,
   .job-row,
   .job-row:has(.secondary-action),
   .materials-editor-grid,

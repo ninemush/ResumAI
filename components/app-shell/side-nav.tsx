@@ -17,20 +17,22 @@ import { SignOutButton } from "@/components/app-shell/sign-out-button";
 import { brand } from "@/lib/brand";
 
 const primaryItems = [
-  { label: "Profile", icon: UserRound, active: true },
-  { label: "Resume", icon: FileText, active: false },
-  { label: "Applications", icon: BriefcaseBusiness, active: false },
-  { label: "Artifacts", icon: Layers3, active: false },
-  { label: "Settings", icon: Settings, active: false },
+  { label: "Profile", icon: UserRound },
+  { label: "Resume", icon: FileText },
+  { label: "Applications", icon: BriefcaseBusiness },
+  { label: "Artifacts", icon: Layers3 },
+  { label: "Settings", icon: Settings },
 ];
 
 type SideNavProps = {
+  activeView: "profile" | "owner";
   collapsed: boolean;
+  onSelectView: (view: "profile" | "owner") => void;
   onToggleCollapsed: () => void;
   session: WorkspaceSession;
 };
 
-export function SideNav({ collapsed, onToggleCollapsed, session }: SideNavProps) {
+export function SideNav({ activeView, collapsed, onSelectView, onToggleCollapsed, session }: SideNavProps) {
   return (
     <aside className={collapsed ? "side-nav collapsed" : "side-nav"} aria-label="Workspace navigation">
       <div className="side-nav-header">
@@ -67,13 +69,15 @@ export function SideNav({ collapsed, onToggleCollapsed, session }: SideNavProps)
       <nav className="nav-list">
         {primaryItems.map((item) => {
           const Icon = item.icon;
+          const isActive = activeView === "profile" && item.label === "Profile";
 
           return (
             <button
-              aria-current={item.active ? "page" : undefined}
+              aria-current={isActive ? "page" : undefined}
               aria-label={collapsed ? item.label : undefined}
-              className={item.active ? "nav-item active" : "nav-item"}
+              className={isActive ? "nav-item active" : "nav-item"}
               key={item.label}
+              onClick={() => onSelectView("profile")}
               title={collapsed ? item.label : undefined}
               type="button"
             >
@@ -85,8 +89,10 @@ export function SideNav({ collapsed, onToggleCollapsed, session }: SideNavProps)
 
         {session.admin.isOwner ? (
           <button
+            aria-current={activeView === "owner" ? "page" : undefined}
             aria-label={collapsed ? "Owner Console" : undefined}
-            className="nav-item"
+            className={activeView === "owner" ? "nav-item active" : "nav-item"}
+            onClick={() => onSelectView("owner")}
             title={collapsed ? "Owner Console" : undefined}
             type="button"
           >

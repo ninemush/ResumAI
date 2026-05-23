@@ -29,6 +29,8 @@ Admin-only operations use `admin_roles`.
 - `generated_cover_letters`: job-specific cover letter artifacts.
 - `quota_events`: append-only quota consumption records.
 - `audit_events`: append-only security/product audit records.
+- `application_status_events`: append-only application status history.
+- Planned support tables: `support_docs`, `support_tickets`, `support_messages`, `support_actions`, and `support_escalations`.
 
 ## Deletion And Retention
 
@@ -51,3 +53,19 @@ These are launch placeholders and must be approved before public release.
 The migration creates the owner/admin model but does not insert an owner automatically.
 
 After the first user signs up, follow `OWNER_SETUP.md` to insert the owner row.
+
+## Operating Console Metrics
+
+Admin metrics should be produced by database functions or centralized service modules, not ad hoc component queries.
+
+Initial aggregate sources:
+
+- `auth.users`: signed-up and recently active users.
+- `profiles`: profiles created and readiness proxy.
+- `profile_sources`: source count and source-type usage.
+- `job_ingestions`: job-link ingestion volume and success/failure rate.
+- `applications`: logged applications, status distribution, and conversion proxy.
+- `generated_resumes` and `generated_cover_letters`: generated material volume.
+- `quota_events`: quota-consuming feature usage.
+- `application_status_events`: outcome history.
+- Support tables once introduced: ticket volume, aging, L1 resolution, and L2 escalation.

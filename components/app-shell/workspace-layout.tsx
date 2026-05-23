@@ -3,12 +3,14 @@
 import { useMemo, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 
+import { OwnerConsole } from "@/components/admin/owner-console";
 import { SideNav } from "@/components/app-shell/side-nav";
 import { ApplicationPanel } from "@/components/applications/application-panel";
 import { ConversationPanel } from "@/components/conversation/conversation-panel";
 import { JobIngestionPanel } from "@/components/jobs/job-ingestion-panel";
 import { ProfileExplorer } from "@/components/profile/profile-explorer";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
 import type { WorkspaceSession } from "@/lib/commands/session";
 import type { ConversationMessage } from "@/lib/conversation/conversation-messages";
 import type { JobOverview } from "@/lib/jobs/job-overview";
@@ -26,12 +28,14 @@ type WorkspaceLayoutProps = {
   applicationOverview: ApplicationOverview;
   conversationMessages: ConversationMessage[];
   jobOverview: JobOverview;
+  ownerMetrics: OwnerMetrics | null;
   profileOverview: ProfileOverview;
   session: WorkspaceSession;
 };
 
 type WorkspaceLayoutState = {
   conversationWidth: number;
+  activeView: "profile" | "owner";
   navCollapsed: boolean;
   navWidth: number;
 };
@@ -40,10 +44,12 @@ export function WorkspaceLayout({
   applicationOverview,
   conversationMessages,
   jobOverview,
+  ownerMetrics,
   profileOverview,
   session,
 }: WorkspaceLayoutProps) {
   const [layout, setLayout] = useState<WorkspaceLayoutState>({
+    activeView: "profile",
     conversationWidth: DEFAULT_CONVERSATION_WIDTH,
     navCollapsed: false,
     navWidth: DEFAULT_NAV_WIDTH,
@@ -98,7 +104,14 @@ export function WorkspaceLayout({
   return (
     <div className="workspace-shell" style={shellStyle}>
       <SideNav
+        activeView={layout.activeView}
         collapsed={layout.navCollapsed}
+        onSelectView={(activeView) =>
+          setLayout((currentLayout) => ({
+            ...currentLayout,
+            activeView,
+          }))
+        }
         onToggleCollapsed={() =>
           setLayout((currentLayout) => ({
             ...currentLayout,
@@ -117,9 +130,15 @@ export function WorkspaceLayout({
       />
 
       <div className="workspace-main">
-        <ProfileExplorer overview={profileOverview} />
-        <JobIngestionPanel overview={jobOverview} />
-        <ApplicationPanel overview={applicationOverview} />
+        {layout.activeView === "owner" && ownerMetrics ? (
+          <OwnerConsole metrics={ownerMetrics} />
+        ) : (
+          <>
+            <ProfileExplorer overview={profileOverview} />
+            <JobIngestionPanel overview={jobOverview} />
+            <ApplicationPanel overview={applicationOverview} />
+          </>
+        )}
       </div>
 
       <button
