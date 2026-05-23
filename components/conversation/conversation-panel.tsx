@@ -192,7 +192,7 @@ export function ConversationPanel({
       const response = await fetch(`/api/applications/${application.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: inferredStatus }),
+        body: JSON.stringify({ source: "chat", status: inferredStatus }),
       });
       const payload = await response.json();
 

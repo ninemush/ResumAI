@@ -24,6 +24,7 @@ export const createApplicationFromJobSchema = z.object({
 export const updateApplicationStatusSchema = z.object({
   applicationId: z.string().uuid(),
   status: applicationStatusSchema,
+  source: z.enum(["chat", "ui", "system"]).default("ui"),
 });
 
 export type ApplicationCommandResult = {
@@ -152,65 +153,27 @@ export async function updateApplicationStatus(
     throw new Error("AUTH_REQUIRED");
   }
 
-  if (parsed.status === "applied") {
-    await assertFinalMaterialsExist({
-      applicationId: parsed.applicationId,
-      userId: user.id,
-    });
-  }
-
-  const { data: application, error } = await supabase
-    .from("applications")
-    .update({ status: parsed.status })
-    .eq("id", parsed.applicationId)
-    .eq("user_id", user.id)
-    .select("id, company_name, job_title, job_url, status")
-    .single();
+  const { data: application, error } = await supabase.rpc("update_application_status", {
+    p_application_id: parsed.applicationId,
+    p_metadata: {},
+    p_new_status: parsed.status,
+    p_source: parsed.source,
+  });
 
   if (error || !application) {
+    throw new Error(mapStatusUpdateError(error?.message));
+  }
+
+  const updatedApplication = Array.isArray(application) ? application[0] : application;
+
+  if (!updatedApplication) {
     throw new Error("APPLICATION_NOT_FOUND");
   }
 
   return {
-    application: mapApplication(application),
+    application: mapApplication(updatedApplication),
     created: false,
   };
-}
-
-async function assertFinalMaterialsExist({
-  applicationId,
-  userId,
-}: {
-  applicationId: string;
-  userId: string;
-}) {
-  const supabase = await createClient();
-  const [{ data: resume }, { data: coverLetter }] = await Promise.all([
-    supabase
-      .from("generated_resumes")
-      .select("id, pdf_storage_path, status")
-      .eq("application_id", applicationId)
-      .eq("user_id", userId)
-      .eq("status", "ready")
-      .not("pdf_storage_path", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("generated_cover_letters")
-      .select("id, pdf_storage_path, status")
-      .eq("application_id", applicationId)
-      .eq("user_id", userId)
-      .eq("status", "ready")
-      .not("pdf_storage_path", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-
-  if (!resume?.pdf_storage_path || !coverLetter?.pdf_storage_path) {
-    throw new Error("FINAL_MATERIALS_REQUIRED");
-  }
 }
 
 function mapApplication(application: {
@@ -227,6 +190,13 @@ function mapApplication(application: {
     jobUrl: application.job_url,
     status: application.status,
   };
+}
+
+function mapStatusUpdateError(message: string | undefined) {
+  if (message?.includes("AUTH_REQUIRED")) return "AUTH_REQUIRED";
+  if (message?.includes("APPLICATION_NOT_FOUND")) return "APPLICATION_NOT_FOUND";
+  if (message?.includes("FINAL_MATERIALS_REQUIRED")) return "FINAL_MATERIALS_REQUIRED";
+  return "APPLICATION_STATUS_EVENT_FAILED";
 }
 
 function inferCompanyName(jobUrl: string) {

@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 
-import {
-  applicationStatusSchema,
-  updateApplicationStatus,
-  updateApplicationStatusSchema,
-} from "@/lib/applications/application-commands";
+import { updateApplicationStatus, updateApplicationStatusSchema } from "@/lib/applications/application-commands";
 
 type RouteContext = {
   params: Promise<{
@@ -34,12 +30,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  const parsedBody = applicationStatusSchema.safeParse(
-    typeof body === "object" && body && "status" in body ? body.status : undefined,
-  );
   const parsed = updateApplicationStatusSchema.safeParse({
+    ...(typeof body === "object" && body ? body : {}),
     applicationId: params.id,
-    status: parsedBody.success ? parsedBody.data : undefined,
   });
 
   if (!parsed.success) {
@@ -109,6 +102,15 @@ function toApiError(error: unknown) {
         code: "application.final_materials_required",
         message: "Export final resume and cover-letter PDFs before marking this application applied.",
         status: 422,
+      };
+    }
+
+    if (error.message === "APPLICATION_STATUS_EVENT_FAILED") {
+      return {
+        category: "server",
+        code: "application.status_audit_failed",
+        message: "Status could not be finalized because the audit event was not recorded.",
+        status: 500,
       };
     }
   }
