@@ -62,7 +62,7 @@ export function ConversationPanel({
       : [
           {
             speaker: "assistant",
-            text: `Hi${userEmail ? `, ${userEmail.split("@")[0]}` : ""}. Tell me about your background, paste a role, or drop a resume here. I will keep this focused on your career profile and applications.`,
+            text: `Hi${userEmail ? `, ${userEmail.split("@")[0]}` : ""}. Tell me about your background, paste a role, or drop a resume here. I will look at it like a recruiter and hiring manager would: signal, keywords, credibility, gaps, and what will help you stand out.`,
           },
         ],
   );

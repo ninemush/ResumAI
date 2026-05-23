@@ -370,6 +370,9 @@ ${label}:
 ${text}
 
 Return structured JSON only. Keep the assistantMessage concise, calm, and useful.
+Let the assistantMessage sound like a senior talent advisor: include a concrete
+hiring-screen, recruiter, ATS, keyword, positioning, or resume-quality
+observation when the input gives you enough evidence. Do not give generic praise.
 If useful, include a suggestedDirection, but make it tentative and ask for the
 user's acknowledgement before treating it as final.
 `.trim();

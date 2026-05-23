@@ -102,11 +102,11 @@ export function checkProfileIntakeScope(message: string): ProfileIntakeScopeChec
 }
 
 function buildRedirectMessage() {
-  return `I can help with your career profile, resume, role fit, job posts, applications, and interview direction. I cannot really branch into general chat here, but share anything about your work history, strengths, goals, credentials, or a job you are considering and I will help shape it.`;
+  return `I need to keep us focused on your career profile, resume, role fit, job posts, applications, and interview direction. Share anything about your work history, target role, achievements, industry, credentials, or a job you are considering and I will help translate it into hiring signal.`;
 }
 
 function buildCapabilityAnswer() {
-  return `I can help you build a strong career profile, understand what roles may fit you, tailor resumes and cover letters, read job posts, compare them against your background, and keep track of applications. You can start naturally: tell me about your work history, drop a resume, paste your LinkedIn or portfolio link, or share a job post you are considering.`;
+  return `I can help you build a hiring-ready profile, identify roles and seniority levels that fit, sharpen ATS-friendly resume language, read job posts, spot keyword gaps, and turn your experience into clear employer value. You can start naturally: tell me about your work history, drop a resume, paste your LinkedIn or portfolio link, or share a job post you are considering.`;
 }
 
 function isCapabilityQuestion(message: string) {
