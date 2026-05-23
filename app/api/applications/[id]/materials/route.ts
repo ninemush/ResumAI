@@ -96,6 +96,15 @@ function toApiError(error: unknown) {
         status: 422,
       };
     }
+
+    if (error.message === "QUOTA_EVENT_RECORD_FAILED") {
+      return {
+        category: "server",
+        code: "application.material_quota_audit_failed",
+        message: "The materials were generated, but usage tracking could not be finalized.",
+        status: 500,
+      };
+    }
   }
 
   return {

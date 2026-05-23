@@ -97,6 +97,18 @@ function toApiError(error: unknown) {
         status: 422,
       };
     }
+
+    if (
+      error.message === "QUOTA_EVENT_RECORD_FAILED" ||
+      error.message === "APPLICATION_QUOTA_LINK_FAILED"
+    ) {
+      return {
+        category: "server",
+        code: "application.quota_audit_failed",
+        message: "The application was created, but usage tracking could not be finalized.",
+        status: 500,
+      };
+    }
   }
 
   return {

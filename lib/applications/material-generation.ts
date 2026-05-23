@@ -8,6 +8,7 @@ import {
   APPLICATION_MATERIALS_PROMPT_VERSION,
 } from "@/lib/ai/prompts/application-materials";
 import { getMaterialsModel, getOpenAIClient } from "@/lib/ai/openai";
+import { recordQuotaEvent } from "@/lib/quota/quota-events";
 import { createClient } from "@/lib/supabase/server";
 
 export const generateApplicationMaterialsSchema = z.object({
@@ -226,6 +227,18 @@ export async function generateApplicationMaterials(
   if (coverLetterError || !coverLetter) {
     throw new Error("COVER_LETTER_SAVE_FAILED");
   }
+
+  await recordQuotaEvent({
+    eventType: "generation_created",
+    metadata: {
+      cover_letter_id: coverLetter.id,
+      model,
+      prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
+      resume_id: resume.id,
+    },
+    resourceId: context.id,
+    resourceType: "application_materials",
+  });
 
   return {
     coverLetterId: coverLetter.id,

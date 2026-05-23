@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { recordQuotaEvent } from "@/lib/quota/quota-events";
 import { createClient } from "@/lib/supabase/server";
 
 export const applicationStatusSchema = z.enum([
@@ -109,6 +110,27 @@ export async function createApplicationFromJob(
 
   if (applicationError || !application) {
     throw new Error("APPLICATION_CREATE_FAILED");
+  }
+
+  const quotaEventId = await recordQuotaEvent({
+    eventType: "application_logged",
+    metadata: {
+      company_name: application.company_name,
+      job_ingestion_id: job.id,
+      job_title: application.job_title,
+    },
+    resourceId: application.id,
+    resourceType: "application",
+  });
+
+  const { error: quotaLinkError } = await supabase
+    .from("applications")
+    .update({ quota_event_id: quotaEventId })
+    .eq("id", application.id)
+    .eq("user_id", user.id);
+
+  if (quotaLinkError) {
+    throw new Error("APPLICATION_QUOTA_LINK_FAILED");
   }
 
   return {
