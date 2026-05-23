@@ -20,3 +20,7 @@ export function getOpenAIClient() {
 export function getProfileIntakeModel() {
   return getServerEnv().OPENAI_PROFILE_INTAKE_MODEL;
 }
+
+export function getMaterialsModel() {
+  return getServerEnv().OPENAI_MATERIALS_MODEL;
+}

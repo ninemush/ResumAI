@@ -143,6 +143,34 @@ export function ConversationPanel({
   }
 
   async function processApplicationAction(text: string) {
+    if (looksLikeMaterialGenerationRequest(text)) {
+      const candidates = applicationOverview.recentApplications.filter((application) =>
+        ["draft", "applied", "interview_in_progress"].includes(application.status),
+      );
+      const matchedCandidates = candidates.filter((application) =>
+        applicationMatchesText(application, text),
+      );
+      const actionableCandidates = matchedCandidates.length > 0 ? matchedCandidates : candidates;
+
+      if (actionableCandidates.length !== 1) {
+        return actionableCandidates.length === 0
+          ? "I can generate targeted materials once an application is logged from a readable job post."
+          : `I can do that, but I need to know which application. Do you mean ${actionableCandidates.map(formatApplicationLabel).join(", ")}?`;
+      }
+
+      const application = actionableCandidates[0];
+      const response = await fetch(`/api/applications/${application.id}/materials`, {
+        method: "POST",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        return payload.error?.message ?? "I could not generate those materials yet.";
+      }
+
+      return `${payload.summary} I saved them to this application record so we can review and refine them next.`;
+    }
+
     const inferredStatus = inferApplicationStatus(text);
 
     if (inferredStatus) {
@@ -674,6 +702,15 @@ function looksLikeApplicationLogRequest(text: string) {
   return (
     /\b(log|track|create)\b.*\bapplication\b/.test(normalized) ||
     /\b(proceed|go ahead|move forward)\b.*\b(apply|application|role|job)\b/.test(normalized)
+  );
+}
+
+function looksLikeMaterialGenerationRequest(text: string) {
+  const normalized = text.toLowerCase();
+
+  return (
+    /\b(generate|create|draft|write|make)\b.*\b(resume|cover letter|materials)\b/.test(normalized) ||
+    /\b(resume|cover letter|materials)\b.*\b(generate|create|draft|write|make)\b/.test(normalized)
   );
 }
 

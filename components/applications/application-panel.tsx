@@ -22,6 +22,7 @@ const applicationStatuses = [
 
 export function ApplicationPanel({ overview }: ApplicationPanelProps) {
   const router = useRouter();
+  const [generatingApplicationId, setGeneratingApplicationId] = useState<string | null>(null);
   const [pendingApplicationId, setPendingApplicationId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -53,6 +54,28 @@ export function ApplicationPanel({ overview }: ApplicationPanelProps) {
     }
   }
 
+  async function generateMaterials(applicationId: string) {
+    setGeneratingApplicationId(applicationId);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/applications/${applicationId}/materials`, {
+        method: "POST",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to generate materials.");
+        return;
+      }
+
+      setMessage(payload.summary ?? "Generated targeted resume and cover-letter materials.");
+      router.refresh();
+    } finally {
+      setGeneratingApplicationId(null);
+    }
+  }
+
   return (
     <section className="applications-panel" aria-label="Tracked applications">
       <div className="section-heading">
@@ -68,6 +91,18 @@ export function ApplicationPanel({ overview }: ApplicationPanelProps) {
               <h3>{application.jobTitle ?? "Application"}</h3>
               <p>{application.companyName}</p>
               <p>{formatStatus(application.status)}</p>
+              {application.latestResumeStatus || application.latestCoverLetterStatus ? (
+                <p>
+                  Materials: resume {application.latestResumeStatus ?? "not ready"}, cover letter{" "}
+                  {application.latestCoverLetterStatus ?? "not ready"}
+                </p>
+              ) : null}
+              {application.latestResumeHeadline ? (
+                <p>Resume direction: {application.latestResumeHeadline}</p>
+              ) : null}
+              {application.latestCoverLetterExcerpt ? (
+                <p>Cover letter: {application.latestCoverLetterExcerpt}</p>
+              ) : null}
             </div>
             <select
               aria-label={`Update ${application.companyName} application status`}
@@ -82,6 +117,14 @@ export function ApplicationPanel({ overview }: ApplicationPanelProps) {
                 </option>
               ))}
             </select>
+            <button
+              className="secondary-action"
+              disabled={generatingApplicationId === application.id}
+              onClick={() => generateMaterials(application.id)}
+              type="button"
+            >
+              {generatingApplicationId === application.id ? "Generating..." : "Generate materials"}
+            </button>
           </article>
         ))}
       </div>
