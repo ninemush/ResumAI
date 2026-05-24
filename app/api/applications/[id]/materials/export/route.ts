@@ -78,6 +78,15 @@ function toApiError(error: unknown) {
         status: 404,
       };
     }
+
+    if (error.message === "PDF_VALIDATION_FAILED") {
+      return {
+        category: "validation",
+        code: "application.pdf_validation_failed",
+        message: "The PDF export did not pass layout/content validation. Keep the editable materials and try again after reviewing the content.",
+        status: 422,
+      };
+    }
   }
 
   return {

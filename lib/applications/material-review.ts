@@ -4,6 +4,7 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { z } from "zod";
 
 import { brand } from "@/lib/brand";
+import { validateGeneratedPdf } from "@/lib/applications/pdf-validation";
 import { createClient } from "@/lib/supabase/server";
 
 const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
@@ -175,6 +176,21 @@ export async function exportMaterialPdfs(input: z.input<typeof materialReviewSch
     buildResumePdf({ application, resume: resumeContent }),
     buildCoverLetterPdf({ application, coverLetter: coverLetter.content }),
   ]);
+  const [resumeValidation, coverLetterValidation] = await Promise.all([
+    validateGeneratedPdf({
+      bytes: resumePdf,
+      requiredPhrases: [resumeContent.headline, resumeContent.summary],
+    }),
+    validateGeneratedPdf({
+      bytes: coverLetterPdf,
+      requiredPhrases: [application.companyName, coverLetter.content.slice(0, 80)],
+    }),
+  ]);
+
+  if (!resumeValidation.valid || !coverLetterValidation.valid) {
+    throw new Error("PDF_VALIDATION_FAILED");
+  }
+
   const resumePath = `${userId}/${application.id}/${resume.id}-resume.pdf`;
   const coverLetterPath = `${userId}/${application.id}/${coverLetter.id}-cover-letter.pdf`;
 

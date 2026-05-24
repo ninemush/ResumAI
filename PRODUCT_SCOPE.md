@@ -23,6 +23,7 @@ Users can build their profile through:
 
 - Natural-language conversation.
 - Direct profile explorer/editor updates.
+- Optional profile photo upload for formats that support a photo.
 - Resume uploads.
 - Credential uploads.
 - Experience and accolade notes.
@@ -48,6 +49,9 @@ The app generates an ATS-friendly master resume that:
 - Does not sound generic or obviously AI-written.
 - Preserves a hint of the user's voice and personality.
 - Avoids invented facts, dates, credentials, companies, or accomplishments.
+- Uses ATS-friendly layout by default.
+- Excludes profile photos from ATS-first formats unless the user selects a photo-compatible format.
+- Produces PDFs only after validation confirms required content is present, readable, and not clipped.
 
 ### 3. Job-Specific Application Flow
 

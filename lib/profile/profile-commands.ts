@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 export const updateProfileDraftSchema = z.object({
   displayName: z.string().trim().max(120).nullable().optional(),
   headline: z.string().trim().max(180).nullable().optional(),
+  photoStoragePath: z.string().trim().max(700).nullable().optional(),
   summary: z.string().trim().max(900).nullable().optional(),
   targetDirection: z.string().trim().max(240).nullable().optional(),
   targetLevel: z.string().trim().max(120).nullable().optional(),
@@ -34,6 +35,7 @@ export async function updateProfileDraft(input: z.input<typeof updateProfileDraf
   const patch = {
     display_name: normalizeOptionalText(parsed.displayName),
     headline: normalizeOptionalText(parsed.headline),
+    photo_storage_path: normalizePhotoStoragePath(parsed.photoStoragePath, user.id),
     summary: normalizeOptionalText(parsed.summary),
     target_direction: normalizeOptionalText(parsed.targetDirection),
     target_level: normalizeOptionalText(parsed.targetLevel),
@@ -60,6 +62,20 @@ export async function updateProfileDraft(input: z.input<typeof updateProfileDraf
   }
 
   return { id: profile.id };
+}
+
+function normalizePhotoStoragePath(value: string | null | undefined, userId: string) {
+  const normalized = normalizeOptionalText(value);
+
+  if (!normalized) {
+    return normalized;
+  }
+
+  if (!normalized.startsWith(`${userId}/`)) {
+    throw new Error("INVALID_PHOTO_STORAGE_PATH");
+  }
+
+  return normalized;
 }
 
 export async function confirmProfileFact(input: z.input<typeof confirmProfileFactSchema>) {

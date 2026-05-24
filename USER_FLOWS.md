@@ -12,6 +12,7 @@ Goal: help the user build a high-confidence profile without feeling interrogated
 4. User provides profile material by:
    - typing natural language,
    - uploading files,
+   - adding an optional profile photo,
    - pasting links,
    - editing the profile explorer directly.
 5. App creates profile source records.
@@ -51,7 +52,8 @@ Goal: generate an ATS-friendly master resume that preserves the user's voice.
 5. App validates output schema.
 6. App stores the generated resume.
 7. App creates a private PDF artifact.
-8. User reviews and edits.
+8. App validates that the PDF opens, required sections are present, text is readable where ATS compatibility requires it, and content is not clipped.
+9. User reviews and edits.
 
 Success state:
 
@@ -62,12 +64,14 @@ Failure states:
 - Profile lacks confirmed facts.
 - AI output fails schema validation.
 - PDF generation fails.
+- PDF validation fails because content is clipped, missing, unreadable, or layout is not acceptable.
 
 Recovery:
 
 - Ask for missing facts.
 - Retry safe generation once.
 - Keep editable structured content even if PDF generation fails.
+- Keep editable structured content and block ready/download state if PDF validation fails.
 
 ## Flow 3: Job Link Evaluation
 
@@ -109,7 +113,8 @@ Goal: log an application, consume quota, and create job-specific materials.
 5. App generates a tailored resume.
 6. App generates a tailored cover letter.
 7. App stores generated content and PDF artifacts.
-8. User reviews/downloads artifacts.
+8. App validates PDF layout and content before marking artifacts ready.
+9. User reviews/downloads artifacts.
 
 Success state:
 
@@ -121,6 +126,7 @@ Failure states:
 - Job ingestion unavailable.
 - AI output invalid.
 - PDF generation fails.
+- PDF validation fails.
 
 Recovery:
 

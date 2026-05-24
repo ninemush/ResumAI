@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Compass, Save, Sparkles } from "lucide-react";
+import { Camera, CheckCircle2, Compass, Save, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { brand } from "@/lib/brand";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
+import { createClient } from "@/lib/supabase/browser";
 
 type ProfileExplorerProps = {
   overview: ProfileOverview;
@@ -14,10 +15,15 @@ type ProfileExplorerProps = {
 type ProfileDraft = {
   displayName: string;
   headline: string;
+  photoStoragePath: string;
   summary: string;
   targetDirection: string;
   targetLevel: string;
 };
+
+const PROFILE_PHOTO_BUCKET = "profile-photos";
+const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
+const acceptedProfilePhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export function ProfileExplorer({ overview }: ProfileExplorerProps) {
   const router = useRouter();
@@ -27,6 +33,7 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
   const [draft, setDraft] = useState<ProfileDraft>({
     displayName: overview.profile?.displayName ?? "",
     headline: overview.profile?.headline ?? "",
+    photoStoragePath: overview.profile?.photoStoragePath ?? "",
     summary: overview.profile?.summary ?? "",
     targetDirection: overview.profile?.targetDirection ?? "",
     targetLevel: overview.profile?.targetLevel ?? "",
@@ -45,6 +52,7 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
         body: JSON.stringify({
           displayName: draft.displayName,
           headline: draft.headline,
+          photoStoragePath: draft.photoStoragePath,
           summary: draft.summary,
           targetDirection: draft.targetDirection,
           targetLevel: draft.targetLevel,
@@ -58,6 +66,69 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
       }
 
       setMessage("Saved your profile direction.");
+      router.refresh();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function uploadProfilePhoto(file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    setPendingId("photo");
+    setMessage(null);
+
+    try {
+      if (!acceptedProfilePhotoTypes.has(file.type)) {
+        setMessage("Use a JPG, PNG, or WebP image for your profile photo.");
+        return;
+      }
+
+      if (file.size > MAX_PROFILE_PHOTO_BYTES) {
+        setMessage("Profile photos must be under 5 MB.");
+        return;
+      }
+
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setMessage("Please sign in before adding a profile photo.");
+        return;
+      }
+
+      const extension = readImageExtension(file.type);
+      const storagePath = `${user.id}/profile-photo.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from(PROFILE_PHOTO_BUCKET)
+        .upload(storagePath, file, {
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        setMessage(`I could not upload that photo: ${uploadError.message}`);
+        return;
+      }
+
+      const response = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoStoragePath: storagePath }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to save the profile photo.");
+        return;
+      }
+
+      setDraft((currentDraft) => ({ ...currentDraft, photoStoragePath: storagePath }));
+      setMessage("Profile photo saved. ATS-first resumes will still exclude it unless you choose a photo-compatible format.");
       router.refresh();
     } finally {
       setPendingId(null);
@@ -135,6 +206,27 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
         <div className="section-heading">
           <p className="eyebrow">Working profile</p>
           <h2>Shape the story</h2>
+        </div>
+        <div className="profile-photo-row">
+          <div className="profile-photo-preview" aria-hidden="true">
+            {draft.photoStoragePath ? <Camera size={20} /> : <Camera size={20} />}
+          </div>
+          <div>
+            <strong>Profile photo</strong>
+            <p>
+              Optional. Kept private and only used for photo-compatible resume formats, not ATS-first exports.
+            </p>
+          </div>
+          <label className="secondary-action profile-photo-action">
+            <Camera size={15} aria-hidden="true" />
+            {pendingId === "photo" ? "Uploading..." : draft.photoStoragePath ? "Replace" : "Add photo"}
+            <input
+              accept="image/jpeg,image/png,image/webp"
+              disabled={pendingId === "photo"}
+              onChange={(event) => uploadProfilePhoto(event.target.files?.[0] ?? null)}
+              type="file"
+            />
+          </label>
         </div>
         <div className="profile-editor-grid">
           <label>
@@ -388,4 +480,10 @@ function formatFailureReason(reason: string) {
   };
 
   return friendlyMessages[reason] ?? "Extraction needs another attempt.";
+}
+
+function readImageExtension(mimeType: string) {
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/webp") return "webp";
+  return "jpg";
 }

@@ -39,6 +39,7 @@ export type ProfileOverview = {
     id: string;
     displayName: string | null;
     headline: string | null;
+    photoStoragePath: string | null;
     summary: string | null;
     targetDirection: string | null;
     targetLevel: string | null;
@@ -60,7 +61,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "id, display_name, headline, summary, target_direction, target_level, profile_status",
+      "id, display_name, headline, photo_storage_path, summary, target_direction, target_level, profile_status",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -136,6 +137,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
       id: profile.id,
       displayName: profile.display_name,
       headline: profile.headline,
+      photoStoragePath: profile.photo_storage_path,
       summary: profile.summary,
       targetDirection: profile.target_direction,
       targetLevel: profile.target_level,

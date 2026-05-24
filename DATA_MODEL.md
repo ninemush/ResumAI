@@ -36,6 +36,10 @@ Admin-only operations use `admin_roles`.
 
 Users may delete or replace editable profile data, source files, generated master resumes, and non-submitted drafts.
 
+Profile photos are optional personal data. They must be stored in private
+user-scoped storage and referenced from `profiles.photo_storage_path`.
+ATS-first resume formats must not include profile photos by default.
+
 Applications that consumed quota must retain audit-safe usage evidence. Deletion requests should minimize retained data while preserving the minimum quota/accounting/audit record required by the contract.
 
 ## Tier Seeds

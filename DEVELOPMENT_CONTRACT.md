@@ -14,6 +14,7 @@ V1 is limited to:
 - Supabase Auth, Storage, and Postgres.
 - Warm conversational profile-building experience.
 - User profile enrichment from natural-language input, file uploads, and user-provided links.
+- Optional user-controlled profile photo storage for formats that support or benefit from a photo.
 - Resume, credential, experience, accolade, portfolio, LinkedIn, and public profile ingestion.
 - OCR/PDF/DOCX/TXT/image/link ingestion for common user-provided profile sources.
 - Proactive role-fit and seniority-level recommendations.
@@ -221,6 +222,16 @@ Every AI feature must include:
 - No invented employers, roles, dates, credentials, or achievements.
 
 Generated resume bullets and cover letters must be grounded in user-provided resume content and the ingested job description.
+
+Resume layout and export rules:
+
+- ATS-friendly resume output is the default format.
+- Profile photos must be optional and excluded from ATS-first resumes unless the user explicitly selects a format where a photo is appropriate.
+- If new resume screening formats or parser expectations emerge, the resume engine must adapt through versioned format definitions, not one-off layout hacks.
+- PDF generation must be validated before artifacts are marked ready.
+- Validation must check that required sections are present, text is not cut off, content is extractable where ATS compatibility requires it, pages are within expected bounds, and generated files open successfully.
+- If PDF validation fails, the app must keep editable structured content, mark the export as failed or not ready, and explain the next safe recovery action.
+- Generated artifacts must never silently ship with clipped text, missing sections, unreadable content, or broken layout.
 
 Conversational AI behavior:
 

@@ -111,6 +111,7 @@ Deliverables:
 
 - Natural-language profile input.
 - Direct profile explorer/editor updates.
+- Optional profile photo upload and replacement.
 - File upload for PDF/DOCX/TXT/image.
 - Link ingestion records.
 - OCR/parsing provider adapter boundary.
@@ -133,12 +134,15 @@ Deliverables:
 - Structured AI output schemas.
 - Master resume generation command.
 - PDF artifact generation.
+- PDF layout/content validation before ready state.
 - Generated artifact storage.
 
 Exit criteria:
 
 - AI output validates against schema.
 - Generated resume does not invent facts.
+- ATS-first format excludes profile photo unless a photo-compatible format is explicitly selected.
+- PDF export validation confirms required content is present, readable, and not clipped.
 - Artifact is stored in a private user-scoped path.
 
 ## Phase 7: Job And Application Flow
@@ -241,7 +245,7 @@ Exit criteria:
 
 - Final tier names and limits.
 - OCR provider.
-- PDF generation approach.
+- PDF generation and validation approach.
 - Error tracking provider.
 - Analytics/event tracking provider.
 - Mobile navigation model.

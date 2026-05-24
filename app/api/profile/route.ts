@@ -72,6 +72,15 @@ function toApiError(error: unknown) {
     };
   }
 
+  if (error instanceof Error && error.message === "INVALID_PHOTO_STORAGE_PATH") {
+    return {
+      category: "validation",
+      code: "profile.invalid_photo_storage_path",
+      message: "Profile photos must stay inside your private user folder.",
+      status: 400,
+    };
+  }
+
   return {
     category: "server",
     code: "profile.update_failed",

@@ -220,6 +220,7 @@ Fields:
 - `summary`
 - `target_direction`
 - `target_level`
+- `photo_storage_path`
 - `profile_status`
 - `created_at`
 - `updated_at`
@@ -228,6 +229,8 @@ Controls:
 
 - RLS by `auth.uid() = user_id`.
 - User can read/update own profile only.
+- Profile photo is optional personal data stored in private user-scoped storage.
+- ATS-first resumes exclude photo by default; photo-compatible formats must opt in through a versioned resume format.
 
 ### `profile_sources`
 
@@ -399,6 +402,34 @@ Controls:
 - RLS by `auth.uid() = user_id`.
 - Output must pass schema validation.
 - No generated facts beyond provided source material.
+
+### Resume Format And PDF Validation
+
+Resume generation must be format-driven.
+
+Default format:
+
+- ATS-friendly.
+- Single-column or parser-safe layout.
+- Searchable/extractable text.
+- No profile photo by default.
+- Conservative typography and spacing.
+
+Photo-compatible formats:
+
+- Must be explicitly selected.
+- Must preserve the same structured resume content.
+- Must not replace the ATS-first format unless the user chooses it.
+
+PDF validation pipeline:
+
+- Open generated PDF successfully.
+- Extract text and verify required sections are present.
+- Check expected page count bounds.
+- Verify no section content is silently dropped.
+- Verify storage upload succeeded and signed download can be created.
+- Mark artifact ready only after validation passes.
+- If validation fails, keep structured content editable and report the validation failure.
 
 ### `tiers`
 
