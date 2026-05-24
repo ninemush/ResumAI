@@ -110,7 +110,14 @@ export function AuthPanel() {
     <div className="auth-page">
       <header className="auth-topbar" aria-label="Public navigation">
         <a className="auth-topbar-brand" href="#overview" aria-label={`${brand.name} overview`}>
-          <Image alt="" height={32} src={brand.appIconPath} width={32} />
+          <Image
+            alt=""
+            className="auth-topbar-logo"
+            height={44}
+            priority
+            src={brand.appIconPath}
+            width={44}
+          />
           <span>{brand.name}</span>
         </a>
         <nav>
@@ -124,15 +131,6 @@ export function AuthPanel() {
 
       <section className="auth-shell" id="overview" aria-labelledby="auth-title">
       <div className="auth-copy">
-        <Image
-          alt={brand.logoAlt}
-          className="auth-logo"
-          height={221}
-          priority
-          src={brand.logoPath}
-          width={600}
-        />
-        <p className="eyebrow">{brand.tagline}</p>
         <h1 id="auth-title">Turn your experience into a sharper career story.</h1>
         <p>
           {brand.name} is a private career workspace for building your profile,

@@ -65,8 +65,8 @@ type SpeechWindow = Window &
 
 const PROFILE_SOURCE_BUCKET = "profile-sources";
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
-const welcomeMessage = (userEmail: string | null) =>
-  `Hi${userEmail ? `, ${userEmail.split("@")[0]}` : ""}. Share a resume, LinkedIn or portfolio link, job post, or a rough work-history note. I will read it like a recruiter and hiring manager would: signal, keywords, credibility, gaps, and what will help you stand out.`;
+const welcomeMessage = (name: string | null) =>
+  `Hi${name ? `, ${name}` : ""}. I'm ${brand.name}. Tell me your target role, or drop a resume/link and I will help shape your profile.`;
 const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image">([
   ["application/pdf", "pdf"],
   [
@@ -96,7 +96,7 @@ export function ConversationPanel({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ConversationMessage[]>(
-    buildInitialMessages(initialMessages, userEmail),
+    buildInitialMessages(initialMessages, readFirstName(profileOverview, userEmail)),
   );
   const sessionPrompt = buildSessionPrompt({
     applicationOverview,
@@ -644,7 +644,7 @@ export function ConversationPanel({
 
 function buildInitialMessages(
   initialMessages: ConversationMessage[],
-  userEmail: string | null,
+  firstName: string | null,
 ) {
   const cleanedMessages = initialMessages.filter(
     (item) =>
@@ -661,7 +661,7 @@ function buildInitialMessages(
   return [
     {
       speaker: "assistant" as const,
-      text: welcomeMessage(userEmail),
+      text: welcomeMessage(firstName),
     },
   ];
 }
@@ -679,6 +679,10 @@ function buildSessionPrompt({
   profileOverview: ProfileOverview;
   userEmail: string | null;
 }) {
+  if (!hasConversationHistory) {
+    return null;
+  }
+
   const name = profileOverview.profile?.displayName ?? userEmail?.split("@")[0] ?? null;
   const greeting = `Welcome back${name ? `, ${name}` : ""}.`;
   const applicationPrompt = buildApplicationFollowUpPrompt(applicationOverview);
@@ -699,11 +703,14 @@ function buildSessionPrompt({
     return `${greeting ?? "Good to see you."} ${jobPrompt}`;
   }
 
-  if (hasConversationHistory) {
-    return `${greeting} We can keep building from your last conversation.`;
-  }
+  return `${greeting} We can keep building from your last conversation.`;
+}
 
-  return null;
+function readFirstName(profileOverview: ProfileOverview, userEmail: string | null) {
+  const name = profileOverview.profile?.displayName ?? userEmail?.split("@")[0] ?? null;
+  const firstName = name?.trim().split(/\s+/)[0];
+
+  return firstName || null;
 }
 
 function buildApplicationFollowUpPrompt(applicationOverview: ApplicationOverview) {
