@@ -40,6 +40,7 @@ export type ProfileOverview = {
     displayName: string | null;
     headline: string | null;
     photoStoragePath: string | null;
+    photoUrl: string | null;
     summary: string | null;
     targetDirection: string | null;
     targetLevel: string | null;
@@ -131,6 +132,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     {},
   );
   const confirmedFactCount = profileFacts.filter((fact) => fact.user_confirmed).length;
+  const photoUrl = await createProfilePhotoUrl(supabase, profile.photo_storage_path);
 
   return {
     profile: {
@@ -138,6 +140,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
       displayName: profile.display_name,
       headline: profile.headline,
       photoStoragePath: profile.photo_storage_path,
+      photoUrl,
       summary: profile.summary,
       targetDirection: profile.target_direction,
       targetLevel: profile.target_level,
@@ -181,6 +184,25 @@ function calculateReadinessScore({
     (hasTargetDirection ? 16 : 0);
 
   return Math.min(100, score);
+}
+
+async function createProfilePhotoUrl(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  storagePath: string | null,
+) {
+  if (!storagePath) {
+    return null;
+  }
+
+  const { data, error } = await supabase.storage
+    .from("profile-photos")
+    .createSignedUrl(storagePath, 60 * 10);
+
+  if (error) {
+    return null;
+  }
+
+  return data.signedUrl;
 }
 
 function readTierName(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowRight, Compass, FileText, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import type { Provider } from "@supabase/supabase-js";
 import Image from "next/image";
 
@@ -21,6 +21,24 @@ const oauthProviders: Array<{
   { id: "apple", label: "Apple", icon: "apple" },
   { id: "linkedin_oidc" as OAuthProviderId, label: "LinkedIn", icon: "linkedin" },
   { id: "facebook", label: "Facebook", icon: "facebook" },
+];
+
+const authHighlights = [
+  {
+    icon: FileText,
+    title: "Build from what you have",
+    body: `Bring a resume, LinkedIn profile, portfolio, or plain-language notes. ${brand.name} turns raw career history into structured profile evidence.`,
+  },
+  {
+    icon: Compass,
+    title: "Find the strongest direction",
+    body: "Clarify role fit, level, gaps, and the language hiring teams are likely to respond to.",
+  },
+  {
+    icon: Sparkles,
+    title: "Apply with sharper materials",
+    body: "Generate ATS-friendly resumes and cover letters that stay grounded in your experience and still sound like you.",
+  },
 ];
 
 export function AuthPanel() {
@@ -90,18 +108,44 @@ export function AuthPanel() {
           width={600}
         />
         <p className="eyebrow">{brand.tagline}</p>
-        <h1 id="auth-title">Career clarity, guided by intelligence.</h1>
+        <h1 id="auth-title">Turn your experience into a sharper career story.</h1>
         <p>
-          Sign in to enter a private workspace for profile building, role clarity,
-          resume tailoring, and thoughtful job applications.
+          {brand.name} is a private career workspace for building your profile,
+          understanding where you fit, and preparing thoughtful applications
+          without losing your voice.
         </p>
+        <div className="auth-highlight-grid" aria-label={`${brand.name} helps you`}>
+          {authHighlights.map((highlight) => {
+            const Icon = highlight.icon;
+
+            return (
+              <article className="auth-highlight-card" key={highlight.title}>
+                <span>
+                  <Icon size={17} aria-hidden="true" />
+                </span>
+                <div>
+                  <h2>{highlight.title}</h2>
+                  <p>{highlight.body}</p>
+                </div>
+              </article>
+            );
+          })}
+        </div>
         <div className="trust-note">
           <ShieldCheck size={18} aria-hidden="true" />
-          <span>Private user data stays behind Supabase authentication and RLS.</span>
+          <span>Private by default. You decide what is saved, confirmed, and exported.</span>
         </div>
       </div>
 
       <form className="auth-card" onSubmit={handleSubmit}>
+        <div className="auth-card-intro">
+          <h2>{mode === "sign-in" ? "Welcome back" : "Create your workspace"}</h2>
+          <p>
+            {mode === "sign-in"
+              ? "Pick up where your profile, applications, and career context left off."
+              : "Start with email or a trusted provider. You can add your profile details after sign up."}
+          </p>
+        </div>
         <div className="segmented-control" aria-label="Authentication mode">
           <button
             className={mode === "sign-in" ? "active" : ""}

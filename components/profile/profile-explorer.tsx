@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Camera, CheckCircle2, Compass, Save, Sparkles } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { brand } from "@/lib/brand";
@@ -27,8 +28,10 @@ const acceptedProfilePhotoTypes = new Set(["image/jpeg", "image/png", "image/web
 
 export function ProfileExplorer({ overview }: ProfileExplorerProps) {
   const router = useRouter();
-  const profileName = overview.profile?.displayName ?? "Your profile";
-  const headline = overview.profile?.headline ?? "Profile direction not set yet";
+  const profileName = overview.profile?.displayName ?? "Career profile";
+  const headline =
+    overview.profile?.headline ??
+    "Add a resume, LinkedIn profile, portfolio, or a few notes to shape your direction.";
   const hasFacts = overview.factCount > 0;
   const [draft, setDraft] = useState<ProfileDraft>({
     displayName: overview.profile?.displayName ?? "",
@@ -196,7 +199,7 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
         <p>
           {hasFacts
             ? `${overview.factCount} profile details captured from ${overview.sourceCount} source${overview.sourceCount === 1 ? "" : "s"}. ${overview.confirmedFactCount} detail${overview.confirmedFactCount === 1 ? "" : "s"} confirmed.`
-            : "Start naturally in the AI agent: type a quick work-history note, paste LinkedIn or a portfolio, or drag in a resume. I will turn that into structured profile evidence here."}
+            : "Share a resume, LinkedIn or portfolio link, or a quick work-history note in the AI agent. Confirmed evidence will appear here as the profile takes shape."}
         </p>
       </section>
 
@@ -205,16 +208,26 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
       <section className="profile-editor-panel" aria-label="Profile direction editor">
         <div className="section-heading">
           <p className="eyebrow">Working profile</p>
-          <h2>Shape the story</h2>
+          <h2>Your career signal</h2>
         </div>
         <div className="profile-photo-row">
           <div className="profile-photo-preview" aria-hidden="true">
-            {draft.photoStoragePath ? <Camera size={20} /> : <Camera size={20} />}
+            {overview.profile?.photoUrl ? (
+              <Image
+                alt=""
+                height={52}
+                src={overview.profile.photoUrl}
+                unoptimized
+                width={52}
+              />
+            ) : (
+              <Camera size={20} />
+            )}
           </div>
           <div>
             <strong>Profile photo</strong>
             <p>
-              Optional. Kept private and only used for photo-compatible resume formats, not ATS-first exports.
+              Optional. Available for photo-friendly formats; ATS resumes stay text-first.
             </p>
           </div>
           <label className="secondary-action profile-photo-action">
@@ -285,15 +298,15 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
       <section className="profile-summary-grid" aria-label="Profile summary">
         <div>
           <span>Tier</span>
-          <strong>{overview.tierName ?? "Unassigned"}</strong>
+          <strong>{overview.tierName ?? "No active tier"}</strong>
         </div>
         <div>
           <span>Status</span>
-          <strong>{overview.profile?.status.replace("_", " ") ?? "draft"}</strong>
+          <strong>{formatProfileStatus(overview.profile?.status)}</strong>
         </div>
         <div>
           <span>Target</span>
-          <strong>{overview.profile?.targetDirection ?? "Needs direction"}</strong>
+          <strong>{overview.profile?.targetDirection ?? "Still calibrating"}</strong>
         </div>
       </section>
 
@@ -438,13 +451,26 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
           </div>
         ) : (
           <p className="empty-state">
-            Once you share a resume, link, or work-history note in the AI agent,
-            captured details will appear here for confirmation.
+            Confirmed profile evidence will appear here after you share a source or note.
           </p>
         )}
       </section>
     </main>
   );
+}
+
+function formatProfileStatus(status: string | undefined) {
+  const statusLabels: Record<string, string> = {
+    draft: "Taking shape",
+    profile_ready: "Ready to tailor",
+    needs_review: "Needs your review",
+  };
+
+  if (!status) {
+    return "Taking shape";
+  }
+
+  return statusLabels[status] ?? status.replaceAll("_", " ");
 }
 
 function formatSourceType(sourceType: string) {
