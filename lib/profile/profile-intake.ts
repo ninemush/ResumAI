@@ -418,6 +418,17 @@ async function saveProfileDraft({
     return;
   }
 
+  const { error: clearRecommendationsError } = await supabase
+    .from("role_recommendations")
+    .delete()
+    .eq("profile_id", profileId)
+    .eq("user_id", userId)
+    .eq("user_acknowledged", false);
+
+  if (clearRecommendationsError) {
+    throw new Error("ROLE_RECOMMENDATION_REFRESH_FAILED");
+  }
+
   const recommendationRows = roleRecommendations.map((recommendation) => ({
     user_id: userId,
     profile_id: profileId,

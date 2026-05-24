@@ -546,6 +546,7 @@ input:focus {
 .applications-panel,
 .facts-panel,
 .jobs-panel,
+.profile-editor-panel,
 .profile-draft-panel,
 .roles-panel,
 .sources-panel {
@@ -646,12 +647,54 @@ input:focus {
 }
 
 .facts-panel,
+.profile-editor-panel,
 .profile-draft-panel,
 .roles-panel,
 .sources-panel {
   display: grid;
   gap: 18px;
   padding: 20px;
+}
+
+.profile-editor-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-editor-grid label {
+  color: var(--sage-strong);
+  display: grid;
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.75rem;
+  font-weight: 750;
+  gap: 7px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.profile-editor-grid input,
+.profile-editor-grid textarea {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  color: var(--foreground);
+  font: inherit;
+  font-family: var(--font-pr-sans), system-ui, sans-serif;
+  letter-spacing: 0;
+  line-height: 1.5;
+  min-width: 0;
+  padding: 11px 12px;
+  resize: vertical;
+  text-transform: none;
+}
+
+.profile-summary-editor {
+  grid-column: 1 / -1;
+}
+
+.profile-save-action {
+  justify-self: start;
 }
 
 .profile-draft-panel p,
@@ -987,6 +1030,20 @@ input:focus {
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto;
   line-height: 1.45;
+}
+
+.fact-confirm-button {
+  background: transparent;
+  border: 1px solid rgba(185, 155, 103, 0.32);
+  border-radius: var(--pr-radius-pill);
+  color: var(--sage-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 5px 8px;
+}
+
+.fact-confirm-button:hover {
+  background: rgba(185, 155, 103, 0.1);
 }
 
 .empty-state {
@@ -1377,6 +1434,7 @@ input:focus {
   .profile-summary-grid,
   .owner-detail-grid,
   .owner-metric-grid,
+  .profile-editor-grid,
   .job-row,
   .job-row:has(.secondary-action),
   .materials-editor-grid,
@@ -1391,5 +1449,9 @@ input:focus {
 
   .review-actions {
     justify-content: flex-start;
+  }
+
+  .profile-summary-editor {
+    grid-column: auto;
   }
 }

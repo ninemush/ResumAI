@@ -1,0 +1,83 @@
+import { NextResponse } from "next/server";
+
+import {
+  acknowledgeRoleRecommendation,
+  acknowledgeRoleRecommendationSchema,
+} from "@/lib/profile/profile-commands";
+
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+export async function POST(_request: Request, context: RouteContext) {
+  const requestId = crypto.randomUUID();
+  const params = await context.params;
+  const parsed = acknowledgeRoleRecommendationSchema.safeParse({
+    recommendationId: params.id,
+  });
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "validation",
+          code: "role_recommendation.invalid_id",
+          message: "Choose a valid role recommendation.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const recommendation = await acknowledgeRoleRecommendation(parsed.data);
+
+    return NextResponse.json({
+      ok: true,
+      requestId,
+      recommendation,
+    });
+  } catch (error) {
+    const { category, code, message, status } = toApiError(error);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: { category, code, message },
+      },
+      { status },
+    );
+  }
+}
+
+function toApiError(error: unknown) {
+  if (error instanceof Error && error.message === "AUTH_REQUIRED") {
+    return {
+      category: "auth",
+      code: "auth.required",
+      message: "Please sign in before acknowledging role direction.",
+      status: 401,
+    };
+  }
+
+  if (error instanceof Error && error.message === "ROLE_RECOMMENDATION_NOT_FOUND") {
+    return {
+      category: "not_found",
+      code: "role_recommendation.not_found",
+      message: "That role recommendation could not be found.",
+      status: 404,
+    };
+  }
+
+  return {
+    category: "server",
+    code: "role_recommendation.acknowledge_failed",
+    message: "Unable to acknowledge that direction right now.",
+    status: 500,
+  };
+}
