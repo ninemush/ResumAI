@@ -206,6 +206,37 @@ Exit criteria:
 - Logs avoid sensitive personal data.
 - Known failure modes have user-safe recovery states.
 
+## Phase 10: Support And Documentation Foundation
+
+Status: deferred until the core V1 product experience is correctly implemented.
+
+Goal: create the support structure without pulling focus from profile building,
+resume generation, and application workflows.
+
+Deliverables:
+
+- L0 self-serve documentation structure.
+- Initial docs for account access, profile build, uploads, job links, AI
+  generation, PDF export, application tracking, quota/tier usage, and
+  privacy/deletion.
+- Support ticket data model.
+- User ticket intake.
+- Support-safe user context snapshot.
+- Autonomous L1 support agent prompt, tools, and escalation boundaries.
+- L2 escalation packet generator with customer temperament, issue summary,
+  timeline, logs inspected, actions taken, results, blockers, and recommended
+  next action.
+- Owner console support metrics.
+
+Exit criteria:
+
+- L0 docs can answer common product-support questions.
+- L1 can troubleshoot platform issues using only support-safe context.
+- Refunds, legal/privacy/security, sensitive matters, distressed users, and
+  unresolved issues are escalated to L2.
+- All L1 actions and customer-facing responses are logged.
+- L2 receives enough context to avoid repeating discovery.
+
 ## Open Decisions
 
 - Final tier names and limits.
@@ -215,3 +246,4 @@ Exit criteria:
 - Analytics/event tracking provider.
 - Mobile navigation model.
 - Retention durations for audit-safe application records and generated artifacts.
+- Final support categories, severities, SLA targets, and L2 notification channel.
