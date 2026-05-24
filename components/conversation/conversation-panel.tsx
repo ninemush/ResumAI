@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Paperclip, SendHorizontal, Sparkles } from "lucide-react";
+import { Loader2, Mic, Paperclip, SendHorizontal, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
@@ -36,6 +36,33 @@ type SourceCreateResponse = {
   };
 };
 
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onend: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onresult:
+    | ((event: {
+        resultIndex: number;
+        results: ArrayLike<{
+          0: { transcript: string };
+          isFinal: boolean;
+        }>;
+      }) => void)
+    | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechWindow = Window &
+  typeof globalThis & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+
 const PROFILE_SOURCE_BUCKET = "profile-sources";
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 const welcomeMessage = (userEmail: string | null) =>
@@ -66,6 +93,7 @@ export function ConversationPanel({
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ConversationMessage[]>(
     buildInitialMessages(initialMessages, userEmail),
@@ -81,6 +109,7 @@ export function ConversationPanel({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
+  const [isListening, setIsListening] = useState(false);
 
   useEffect(() => {
     const messageList = messageListRef.current;
@@ -90,6 +119,12 @@ export function ConversationPanel({
 
     messageList.scrollTop = messageList.scrollHeight;
   }, [messages, status, error]);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+    };
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -335,6 +370,58 @@ export function ConversationPanel({
     router.refresh();
   }
 
+  function toggleVoiceInput() {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition =
+      (window as SpeechWindow).SpeechRecognition ??
+      (window as SpeechWindow).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setError("Voice input is not available in this browser yet. You can still type or paste.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || "en-US";
+    recognition.onresult = (event) => {
+      let transcript = "";
+
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        if (event.results[index].isFinal) {
+          transcript += event.results[index][0].transcript;
+        }
+      }
+
+      if (!transcript.trim()) {
+        return;
+      }
+
+      setMessage((currentMessage) => {
+        const separator = currentMessage.trim().length > 0 ? " " : "";
+        return `${currentMessage}${separator}${transcript}`.trimStart();
+      });
+    };
+    recognition.onerror = () => {
+      setError("I could not hear that clearly. Try again or type the message.");
+      setIsListening(false);
+    };
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+    recognitionRef.current = recognition;
+    setError(null);
+    setStatus("Listening. I will place the transcript in the box so you can steer it before sending.");
+    setIsListening(true);
+    recognition.start();
+  }
+
   async function processFile(file: File) {
     const sourceType = inferFileSourceType(file);
 
@@ -504,6 +591,16 @@ export function ConversationPanel({
           type="button"
         >
           <Paperclip size={18} aria-hidden="true" />
+        </button>
+        <button
+          aria-label={isListening ? "Stop voice input" : "Start voice input"}
+          className={isListening ? "voice-button active" : "voice-button"}
+          disabled={isSubmitting}
+          onClick={toggleVoiceInput}
+          title={isListening ? "Stop voice input" : "Voice input"}
+          type="button"
+        >
+          <Mic size={18} aria-hidden="true" />
         </button>
         <input
           disabled={isSubmitting}

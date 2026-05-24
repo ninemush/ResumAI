@@ -24,20 +24,22 @@ const oauthProviders: Array<{
 const authHighlights = [
   {
     icon: FileText,
-    title: "Build from what you have",
-    body: `Bring a resume, LinkedIn profile, portfolio, or plain-language notes. ${brand.name} turns raw career history into structured profile evidence.`,
+    title: "Profile from messy inputs",
+    body: "Resumes, links, files, and notes become structured career evidence.",
   },
   {
     icon: Compass,
-    title: "Find the strongest direction",
-    body: "Clarify role fit, level, gaps, and the language hiring teams are likely to respond to.",
+    title: "Recruiter-grade direction",
+    body: "Clarify fit, level, gaps, keywords, and what hiring teams value.",
   },
   {
     icon: Sparkles,
-    title: "Apply with sharper materials",
-    body: "Generate ATS-friendly resumes and cover letters that stay grounded in your experience and still sound like you.",
+    title: "Sharper applications",
+    body: "Create ATS-friendly materials grounded in the user's real experience.",
   },
 ];
+
+const pageLinks = ["Overview", "Features", "Pricing"];
 
 export function AuthPanel() {
   const [mode, setMode] = useState<AuthMode>("sign-in");
@@ -105,7 +107,22 @@ export function AuthPanel() {
   }
 
   return (
-    <section className="auth-shell" aria-labelledby="auth-title">
+    <div className="auth-page">
+      <header className="auth-topbar" aria-label="Public navigation">
+        <a className="auth-topbar-brand" href="#overview" aria-label={`${brand.name} overview`}>
+          <Image alt="" height={32} src={brand.appIconPath} width={32} />
+          <span>{brand.name}</span>
+        </a>
+        <nav>
+          {pageLinks.map((link) => (
+            <a href={`#${link.toLowerCase()}`} key={link}>
+              {link}
+            </a>
+          ))}
+        </nav>
+      </header>
+
+      <section className="auth-shell" id="overview" aria-labelledby="auth-title">
       <div className="auth-copy">
         <Image
           alt={brand.logoAlt}
@@ -243,7 +260,36 @@ export function AuthPanel() {
           ))}
         </div>
       </form>
-    </section>
+      </section>
+
+      <section className="auth-section" id="features" aria-labelledby="features-title">
+        <p className="eyebrow">Features</p>
+        <h2 id="features-title">Built for the full application loop.</h2>
+        <div className="auth-section-grid">
+          <article>
+            <strong>Profile cockpit</strong>
+            <p>Readiness, captured evidence, role direction, and application progress in one place.</p>
+          </article>
+          <article>
+            <strong>Conversation-first intake</strong>
+            <p>Type, speak, paste links, or drop files directly into Pramania.</p>
+          </article>
+          <article>
+            <strong>ATS-aware materials</strong>
+            <p>Generate resumes and cover letters that are specific, reviewable, and grounded.</p>
+          </article>
+        </div>
+      </section>
+
+      <section className="auth-section auth-pricing-section" id="pricing" aria-labelledby="pricing-title">
+        <p className="eyebrow">Pricing</p>
+        <h2 id="pricing-title">Simple tiers are coming.</h2>
+        <p>
+          Early access will focus on profile quality, application credits, and transparent limits.
+          The product is being built so tiers can be configured without code changes.
+        </p>
+      </section>
+    </div>
   );
 }
 
