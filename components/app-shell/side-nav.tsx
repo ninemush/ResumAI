@@ -10,24 +10,35 @@ import {
   Shield,
   UserRound,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 
 import type { WorkspaceSession } from "@/lib/commands/session";
 import { SignOutButton } from "@/components/app-shell/sign-out-button";
 import { brand } from "@/lib/brand";
 
+export type AppView =
+  | "profile"
+  | "jobs"
+  | "applications"
+  | "resume"
+  | "artifacts"
+  | "settings"
+  | "owner";
+
 const primaryItems = [
-  { label: "Profile", icon: UserRound },
-  { label: "Resume", icon: FileText },
-  { label: "Applications", icon: BriefcaseBusiness },
-  { label: "Artifacts", icon: Layers3 },
-  { label: "Settings", icon: Settings },
-];
+  { label: "Profile", icon: UserRound, view: "profile" },
+  { label: "Jobs", icon: BriefcaseBusiness, view: "jobs" },
+  { label: "Applications", icon: BriefcaseBusiness, view: "applications" },
+  { label: "Resume", icon: FileText, view: "resume" },
+  { label: "Artifacts", icon: Layers3, view: "artifacts" },
+  { label: "Settings", icon: Settings, view: "settings" },
+] satisfies { label: string; icon: LucideIcon; view: AppView }[];
 
 type SideNavProps = {
-  activeView: "profile" | "owner";
+  activeView: AppView;
   collapsed: boolean;
-  onSelectView: (view: "profile" | "owner") => void;
+  onSelectView: (view: AppView) => void;
   onToggleCollapsed: () => void;
   session: WorkspaceSession;
 };
@@ -69,7 +80,7 @@ export function SideNav({ activeView, collapsed, onSelectView, onToggleCollapsed
       <nav className="nav-list">
         {primaryItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeView === "profile" && item.label === "Profile";
+          const isActive = activeView === item.view;
 
           return (
             <button
@@ -77,8 +88,8 @@ export function SideNav({ activeView, collapsed, onSelectView, onToggleCollapsed
               aria-label={collapsed ? item.label : undefined}
               className={isActive ? "nav-item active" : "nav-item"}
               key={item.label}
-              onClick={() => onSelectView("profile")}
-              title={collapsed ? item.label : undefined}
+              onClick={() => onSelectView(item.view)}
+              title={item.label}
               type="button"
             >
               <Icon size={18} aria-hidden="true" />
@@ -93,7 +104,7 @@ export function SideNav({ activeView, collapsed, onSelectView, onToggleCollapsed
             aria-label={collapsed ? "Owner Console" : undefined}
             className={activeView === "owner" ? "nav-item active" : "nav-item"}
             onClick={() => onSelectView("owner")}
-            title={collapsed ? "Owner Console" : undefined}
+            title="Owner Console"
             type="button"
           >
             <Shield size={18} aria-hidden="true" />

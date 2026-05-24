@@ -17,9 +17,28 @@ export type ApplicationOverview = {
     updatedAt: string;
   }[];
   openFollowUpCount: number;
+  summary: {
+    total: number;
+    applied: number;
+    interviewing: number;
+    selected: number;
+    rejected: number;
+    needsReview: number;
+    byStage: {
+      label: string;
+      value: number;
+    }[];
+  };
 };
 
 const followUpStatuses = new Set(["applied", "interview_in_progress"]);
+const appliedStatuses = new Set(["applied", "no_reply"]);
+const interviewingStatuses = new Set([
+  "interview_in_progress",
+  "interviewed_not_selected",
+  "interviewed_selected",
+]);
+const rejectedStatuses = new Set(["rejected", "interviewed_not_selected", "withdrawn"]);
 
 export async function getApplicationOverview(userId: string): Promise<ApplicationOverview> {
   const supabase = await createClient();
@@ -28,7 +47,7 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
     .select("id, company_name, job_title, job_url, status, created_at, updated_at")
     .eq("user_id", userId)
     .order("updated_at", { ascending: false })
-    .limit(5);
+    .limit(100);
 
   if (error) {
     throw new Error("APPLICATION_OVERVIEW_READ_FAILED");
@@ -65,10 +84,44 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
   }));
 
   return {
-    recentApplications,
+    recentApplications: recentApplications.slice(0, 5),
     openFollowUpCount: recentApplications.filter((application) =>
       followUpStatuses.has(application.status),
     ).length,
+    summary: summarizeApplications(recentApplications),
+  };
+}
+
+function summarizeApplications(applications: { status: string }[]) {
+  const total = applications.length;
+  const applied = applications.filter((application) =>
+    appliedStatuses.has(application.status),
+  ).length;
+  const interviewing = applications.filter((application) =>
+    interviewingStatuses.has(application.status),
+  ).length;
+  const selected = applications.filter(
+    (application) => application.status === "interviewed_selected",
+  ).length;
+  const rejected = applications.filter((application) =>
+    rejectedStatuses.has(application.status),
+  ).length;
+  const needsReview = applications.filter((application) => application.status === "draft").length;
+
+  return {
+    total,
+    applied,
+    interviewing,
+    selected,
+    rejected,
+    needsReview,
+    byStage: [
+      { label: "Review", value: needsReview },
+      { label: "Applied", value: applied },
+      { label: "Interview", value: interviewing },
+      { label: "Selected", value: selected },
+      { label: "Closed", value: rejected },
+    ],
   };
 }
 

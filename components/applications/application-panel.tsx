@@ -8,6 +8,7 @@ import type { ApplicationOverview } from "@/lib/applications/application-overvie
 
 type ApplicationPanelProps = {
   overview: ApplicationOverview;
+  showEmptyState?: boolean;
 };
 
 type ResumeContent = {
@@ -54,7 +55,7 @@ const applicationStatuses = [
   { value: "withdrawn", label: "Withdrawn" },
 ];
 
-export function ApplicationPanel({ overview }: ApplicationPanelProps) {
+export function ApplicationPanel({ overview, showEmptyState = false }: ApplicationPanelProps) {
   const router = useRouter();
   const [activeReview, setActiveReview] = useState<MaterialReview | null>(null);
   const [coverLetterDraft, setCoverLetterDraft] = useState("");
@@ -66,7 +67,7 @@ export function ApplicationPanel({ overview }: ApplicationPanelProps) {
   const [savingApplicationId, setSavingApplicationId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  if (overview.recentApplications.length === 0) {
+  if (overview.recentApplications.length === 0 && !showEmptyState) {
     return null;
   }
 
@@ -212,6 +213,11 @@ export function ApplicationPanel({ overview }: ApplicationPanelProps) {
 
       <div className="job-list">
         {message ? <p className="system-note success">{message}</p> : null}
+        {overview.recentApplications.length === 0 ? (
+          <p className="empty-state">
+            Applications will appear here after you approve logging a readable job post.
+          </p>
+        ) : null}
         {overview.recentApplications.map((application) => (
           <article className="job-row" key={application.id}>
             <div>

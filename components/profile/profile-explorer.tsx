@@ -1,15 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { Camera, CheckCircle2, Compass, Save, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { brand } from "@/lib/brand";
+import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import type { JobOverview } from "@/lib/jobs/job-overview";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 import { createClient } from "@/lib/supabase/browser";
 
 type ProfileExplorerProps = {
+  applicationOverview: ApplicationOverview;
+  jobOverview: JobOverview;
   overview: ProfileOverview;
 };
 
@@ -26,7 +31,7 @@ const PROFILE_PHOTO_BUCKET = "profile-photos";
 const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
 const acceptedProfilePhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-export function ProfileExplorer({ overview }: ProfileExplorerProps) {
+export function ProfileExplorer({ applicationOverview, jobOverview, overview }: ProfileExplorerProps) {
   const router = useRouter();
   const profileName = overview.profile?.displayName ?? "Career profile";
   const headline =
@@ -185,10 +190,42 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
 
   return (
     <main className="profile-pane" aria-labelledby="profile-title">
-      <div className="pane-heading">
-        <p className="eyebrow">Profile explorer</p>
-        <h1 id="profile-title">{profileName}</h1>
-        <p>{headline}</p>
+      <div className="profile-heading">
+        <div className="pane-heading">
+          <p className="eyebrow">Profile cockpit</p>
+          <h1 id="profile-title">{profileName}</h1>
+          <p>{headline}</p>
+        </div>
+        <div className="profile-heading-photo">
+          <div className="profile-photo-preview large" aria-hidden="true">
+            {overview.profile?.photoUrl ? (
+              <Image
+                alt=""
+                height={88}
+                src={overview.profile.photoUrl}
+                unoptimized
+                width={88}
+              />
+            ) : (
+              <Camera size={30} />
+            )}
+          </div>
+          <label
+            className="profile-photo-icon-action"
+            title={draft.photoStoragePath ? "Replace profile photo" : "Add profile photo"}
+          >
+            <Camera size={15} aria-hidden="true" />
+            <span className="sr-only">
+              {draft.photoStoragePath ? "Replace profile photo" : "Add profile photo"}
+            </span>
+            <input
+              accept="image/jpeg,image/png,image/webp"
+              disabled={pendingId === "photo"}
+              onChange={(event) => uploadProfilePhoto(event.target.files?.[0] ?? null)}
+              type="file"
+            />
+          </label>
+        </div>
       </div>
 
       <section className="readiness-panel" aria-label="Profile readiness">
@@ -203,43 +240,62 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
         </p>
       </section>
 
+      <section className="cockpit-panel" aria-label="Career cockpit">
+        <CockpitMetric
+          detail="Confirmed profile evidence improves recommendations and generated materials."
+          label="Readiness"
+          value={`${overview.readinessScore}%`}
+        />
+        <CockpitMetric
+          detail={`${applicationOverview.summary.needsReview} application${applicationOverview.summary.needsReview === 1 ? "" : "s"} still need a decision or next action.`}
+          label="Applications"
+          value={applicationOverview.summary.total}
+        />
+        <CockpitMetric
+          detail="Use this to keep follow-up conversations precise."
+          label="Interviewing"
+          value={applicationOverview.summary.interviewing}
+        />
+        <CockpitMetric
+          detail={`${jobOverview.summary.readyForReview} readable job post${jobOverview.summary.readyForReview === 1 ? "" : "s"} ready for fit review.`}
+          label="Jobs to review"
+          value={jobOverview.summary.identified}
+        />
+        <div className="stage-progress-card">
+          <div>
+            <span>Application stages</span>
+            <strong>{applicationOverview.summary.selected} selected</strong>
+          </div>
+          <div className="stage-progress" aria-label="Application status distribution">
+            {applicationOverview.summary.byStage.map((stage) => (
+              <span
+                key={stage.label}
+                title={`${stage.label}: ${stage.value}`}
+              >
+                <i
+                  style={
+                    {
+                      "--stage-width": `${readStageWidth(
+                        stage.value,
+                        applicationOverview.summary.total,
+                      )}%`,
+                    } as CSSProperties & Record<"--stage-width", string>
+                  }
+                />
+                <em>{stage.value}</em>
+                {stage.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {message ? <p className="system-note success">{message}</p> : null}
 
       <section className="profile-editor-panel" aria-label="Profile direction editor">
         <div className="section-heading">
           <p className="eyebrow">Working profile</p>
           <h2>Your career signal</h2>
-        </div>
-        <div className="profile-photo-row">
-          <div className="profile-photo-preview" aria-hidden="true">
-            {overview.profile?.photoUrl ? (
-              <Image
-                alt=""
-                height={52}
-                src={overview.profile.photoUrl}
-                unoptimized
-                width={52}
-              />
-            ) : (
-              <Camera size={20} />
-            )}
-          </div>
-          <div>
-            <strong>Profile photo</strong>
-            <p>
-              Optional. Available for photo-friendly formats; ATS resumes stay text-first.
-            </p>
-          </div>
-          <label className="secondary-action profile-photo-action">
-            <Camera size={15} aria-hidden="true" />
-            {pendingId === "photo" ? "Uploading..." : draft.photoStoragePath ? "Replace" : "Add photo"}
-            <input
-              accept="image/jpeg,image/png,image/webp"
-              disabled={pendingId === "photo"}
-              onChange={(event) => uploadProfilePhoto(event.target.files?.[0] ?? null)}
-              type="file"
-            />
-          </label>
         </div>
         <div className="profile-editor-grid">
           <label>
@@ -456,6 +512,32 @@ export function ProfileExplorer({ overview }: ProfileExplorerProps) {
         )}
       </section>
     </main>
+  );
+}
+
+function readStageWidth(value: number, total: number) {
+  if (total <= 0) {
+    return 0;
+  }
+
+  return Math.max(8, Math.round((value / total) * 100));
+}
+
+function CockpitMetric({
+  detail,
+  label,
+  value,
+}: {
+  detail: string;
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <article className="cockpit-metric" title={detail}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <p>{detail}</p>
+    </article>
   );
 }
 

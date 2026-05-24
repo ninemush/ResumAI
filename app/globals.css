@@ -74,6 +74,18 @@ input:disabled {
   cursor: not-allowed;
 }
 
+.sr-only {
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 .auth-shell {
   align-items: center;
   display: grid;
@@ -85,6 +97,7 @@ input:disabled {
 }
 
 .auth-copy {
+  justify-self: center;
   max-width: 700px;
 }
 
@@ -571,6 +584,144 @@ input:focus {
 
 .profile-pane {
   grid-template-rows: auto auto 1fr;
+}
+
+.profile-heading {
+  align-items: start;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.profile-heading-photo {
+  display: grid;
+  justify-items: center;
+  position: relative;
+}
+
+.profile-photo-preview.large {
+  height: 88px;
+  width: 88px;
+}
+
+.profile-photo-icon-action {
+  align-items: center;
+  background: var(--pr-deep-ink);
+  border: 2px solid var(--background);
+  border-radius: 50%;
+  bottom: -2px;
+  color: var(--pr-soft-ivory);
+  cursor: pointer;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  position: absolute;
+  right: -2px;
+  width: 34px;
+}
+
+.profile-photo-icon-action:hover {
+  background: var(--sage-strong);
+}
+
+.profile-photo-icon-action input {
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.cockpit-panel {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cockpit-metric,
+.stage-progress-card {
+  background: rgba(255, 250, 243, 0.68);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.cockpit-metric span,
+.stage-progress-card span {
+  color: var(--muted);
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cockpit-metric strong,
+.stage-progress-card strong {
+  color: var(--foreground);
+  font-family: var(--font-pr-brand), Georgia, serif;
+  font-size: 2rem;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.cockpit-metric p {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.stage-progress-card {
+  grid-column: 1 / -1;
+}
+
+.stage-progress-card > div:first-child {
+  align-items: end;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.stage-progress {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  min-height: 74px;
+}
+
+.stage-progress span {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  color: var(--ink-soft);
+  display: grid;
+  gap: 4px;
+  min-height: 82px;
+  padding: 8px 4px;
+  position: relative;
+  text-align: center;
+}
+
+.stage-progress i {
+  background: rgba(185, 155, 103, 0.36);
+  border-radius: var(--pr-radius-pill);
+  display: block;
+  height: 6px;
+  margin: 0 auto 2px;
+  width: var(--stage-width, 0%);
+}
+
+.stage-progress em {
+  color: var(--foreground);
+  font-family: var(--font-pr-brand), Georgia, serif;
+  font-size: 1.35rem;
+  font-style: normal;
+  line-height: 1;
 }
 
 .owner-console {
@@ -1351,17 +1502,17 @@ input:focus {
 @media (max-width: 1080px) {
   .workspace-shell {
     grid-template-columns:
-      78px 6px minmax(0, 1fr) 6px
+      var(--nav-width, 78px) 6px minmax(0, 1fr) 6px
       minmax(320px, var(--conversation-width, 380px));
   }
 
-  .side-nav {
+  .side-nav.collapsed {
     align-items: center;
     gap: 24px;
     padding: 20px 12px;
   }
 
-  .side-nav-header {
+  .side-nav.collapsed .side-nav-header {
     flex-direction: column;
     padding-right: 0;
     width: auto;
@@ -1371,19 +1522,14 @@ input:focus {
     height: auto;
   }
 
-  .side-nav-logo-lockup {
+  .side-nav.collapsed .side-nav-logo-lockup {
     display: none;
   }
 
-  .side-nav-logo-icon {
+  .side-nav.collapsed .side-nav-logo-icon {
     display: block;
     height: 48px;
     width: 48px;
-  }
-
-  .side-nav-brand-copy,
-  .nav-label {
-    display: none;
   }
 
   .side-nav.collapsed .side-nav-brand-copy,
@@ -1391,7 +1537,7 @@ input:focus {
     display: none;
   }
 
-  .collapse-nav-button {
+  .side-nav.collapsed .collapse-nav-button {
     position: static;
     transform: none;
   }
@@ -1401,8 +1547,8 @@ input:focus {
     width: 100%;
   }
 
-  .nav-item,
-  .icon-text-button {
+  .side-nav.collapsed .nav-item,
+  .side-nav.collapsed .icon-text-button {
     justify-content: center;
     padding: 0;
   }
@@ -1554,6 +1700,7 @@ input:focus {
   }
 
   .readiness-panel,
+  .cockpit-panel,
   .profile-summary-grid,
   .owner-detail-grid,
   .owner-metric-grid,
@@ -1576,6 +1723,14 @@ input:focus {
 
   .profile-summary-editor {
     grid-column: auto;
+  }
+
+  .profile-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-heading-photo {
+    justify-items: start;
   }
 
   .profile-photo-row {

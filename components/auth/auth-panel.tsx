@@ -14,13 +14,11 @@ type OAuthProviderId = Provider;
 const oauthProviders: Array<{
   id: OAuthProviderId;
   label: string;
-  icon: "google" | "microsoft" | "apple" | "linkedin" | "facebook";
+  icon: "google" | "microsoft" | "linkedin";
 }> = [
   { id: "google", label: "Google", icon: "google" },
   { id: "azure", label: "Microsoft", icon: "microsoft" },
-  { id: "apple", label: "Apple", icon: "apple" },
   { id: "linkedin_oidc" as OAuthProviderId, label: "LinkedIn", icon: "linkedin" },
-  { id: "facebook", label: "Facebook", icon: "facebook" },
 ];
 
 const authHighlights = [
@@ -44,6 +42,7 @@ const authHighlights = [
 export function AuthPanel() {
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,11 +55,19 @@ export function AuthPanel() {
     setIsSubmitting(true);
 
     const supabase = createClient();
-    const credentials = { email, password };
     const result =
       mode === "sign-in"
-        ? await supabase.auth.signInWithPassword(credentials)
-        : await supabase.auth.signUp(credentials);
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                full_name: fullName,
+                name: fullName,
+              },
+            },
+          });
 
     setIsSubmitting(false);
 
@@ -70,6 +77,7 @@ export function AuthPanel() {
     }
 
     if (mode === "sign-up") {
+      await saveSignupProfileName(fullName);
       setStatus("Account created. Check your inbox if email confirmation is enabled.");
     }
 
@@ -163,6 +171,21 @@ export function AuthPanel() {
           </button>
         </div>
 
+        {mode === "sign-up" ? (
+          <label>
+            Full name
+            <input
+              autoComplete="name"
+              name="name"
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="Your full name"
+              required
+              type="text"
+              value={fullName}
+            />
+          </label>
+        ) : null}
+
         <label>
           Email
           <input
@@ -224,6 +247,20 @@ export function AuthPanel() {
   );
 }
 
+async function saveSignupProfileName(fullName: string) {
+  const normalizedName = fullName.trim();
+
+  if (!normalizedName) {
+    return;
+  }
+
+  await fetch("/api/profile", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ displayName: normalizedName }),
+  }).catch(() => undefined);
+}
+
 function ProviderIcon({ icon }: { icon: (typeof oauthProviders)[number]["icon"] }) {
   if (icon === "google") {
     return (
@@ -247,13 +284,5 @@ function ProviderIcon({ icon }: { icon: (typeof oauthProviders)[number]["icon"] 
     );
   }
 
-  if (icon === "apple") {
-    return (
-      <svg aria-hidden="true" className="provider-icon monochrome" viewBox="0 0 24 24">
-        <path d="M16.37 12.72c-.02-2.13 1.74-3.15 1.82-3.2-1-.46-2.55-.53-3.1-.54-1.32-.13-2.58.77-3.25.77-.68 0-1.72-.75-2.83-.73-1.46.02-2.81.85-3.56 2.16-1.52 2.64-.39 6.55 1.09 8.69.72 1.05 1.59 2.23 2.72 2.18 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.69.7 2.84.68 1.17-.02 1.92-1.07 2.64-2.12.83-1.22 1.17-2.39 1.19-2.45-.03-.02-2.35-.9-2.38-4.74ZM14.22 7.6c.6-.73 1.01-1.74.9-2.75-.87.04-1.92.58-2.54 1.31-.56.65-1.04 1.68-.91 2.67.97.08 1.95-.5 2.55-1.23Z" fill="currentColor" />
-      </svg>
-    );
-  }
-
-  return <span className="provider-monogram" aria-hidden="true">{icon === "linkedin" ? "in" : "f"}</span>;
+  return <span className="provider-monogram" aria-hidden="true">in</span>;
 }

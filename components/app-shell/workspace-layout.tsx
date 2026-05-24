@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 
 import { OwnerConsole } from "@/components/admin/owner-console";
+import type { AppView } from "@/components/app-shell/side-nav";
 import { SideNav } from "@/components/app-shell/side-nav";
 import { ApplicationPanel } from "@/components/applications/application-panel";
 import { ConversationPanel } from "@/components/conversation/conversation-panel";
@@ -35,7 +36,7 @@ type WorkspaceLayoutProps = {
 
 type WorkspaceLayoutState = {
   conversationWidth: number;
-  activeView: "profile" | "owner";
+  activeView: AppView;
   navCollapsed: boolean;
   navWidth: number;
 };
@@ -130,15 +131,13 @@ export function WorkspaceLayout({
       />
 
       <div className="workspace-main">
-        {layout.activeView === "owner" && ownerMetrics ? (
-          <OwnerConsole metrics={ownerMetrics} />
-        ) : (
-          <>
-            <ProfileExplorer overview={profileOverview} />
-            <JobIngestionPanel overview={jobOverview} />
-            <ApplicationPanel overview={applicationOverview} />
-          </>
-        )}
+        {renderWorkspaceView({
+          activeView: layout.activeView,
+          applicationOverview,
+          jobOverview,
+          ownerMetrics,
+          profileOverview,
+        })}
       </div>
 
       <button
@@ -158,6 +157,98 @@ export function WorkspaceLayout({
         userId={session.user.id}
       />
     </div>
+  );
+}
+
+function renderWorkspaceView({
+  activeView,
+  applicationOverview,
+  jobOverview,
+  ownerMetrics,
+  profileOverview,
+}: {
+  activeView: AppView;
+  applicationOverview: ApplicationOverview;
+  jobOverview: JobOverview;
+  ownerMetrics: OwnerMetrics | null;
+  profileOverview: ProfileOverview;
+}) {
+  if (activeView === "owner") {
+    return ownerMetrics ? (
+      <OwnerConsole metrics={ownerMetrics} />
+    ) : (
+      <WorkspacePlaceholder
+        eyebrow="Owner console"
+        title="Owner access required"
+        body="This console is reserved for configured owner/admin accounts."
+      />
+    );
+  }
+
+  if (activeView === "jobs") {
+    return <JobIngestionPanel overview={jobOverview} showEmptyState />;
+  }
+
+  if (activeView === "applications") {
+    return <ApplicationPanel overview={applicationOverview} showEmptyState />;
+  }
+
+  if (activeView === "resume") {
+    return (
+      <WorkspacePlaceholder
+        eyebrow="Resume"
+        title="Resume studio"
+        body="Master resume generation will use confirmed profile evidence and ATS validation. For now, keep building your profile in the AI agent so the first generated resume has enough signal."
+      />
+    );
+  }
+
+  if (activeView === "artifacts") {
+    return (
+      <WorkspacePlaceholder
+        eyebrow="Artifacts"
+        title="Generated materials"
+        body="Targeted resumes, cover letters, and validated PDFs will collect here after you log an application and generate materials."
+      />
+    );
+  }
+
+  if (activeView === "settings") {
+    return (
+      <WorkspacePlaceholder
+        eyebrow="Settings"
+        title="Workspace settings"
+        body="Account, privacy, data export, and notification controls will live here before public launch."
+      />
+    );
+  }
+
+  return (
+    <ProfileExplorer
+      applicationOverview={applicationOverview}
+      jobOverview={jobOverview}
+      overview={profileOverview}
+    />
+  );
+}
+
+function WorkspacePlaceholder({
+  body,
+  eyebrow,
+  title,
+}: {
+  body: string;
+  eyebrow: string;
+  title: string;
+}) {
+  return (
+    <main className="profile-pane" aria-labelledby="workspace-placeholder-title">
+      <div className="pane-heading">
+        <p className="eyebrow">{eyebrow}</p>
+        <h1 id="workspace-placeholder-title">{title}</h1>
+        <p>{body}</p>
+      </div>
+    </main>
   );
 }
 

@@ -19,6 +19,11 @@ export type JobOverview = {
       score: number | null;
     };
   }[];
+  summary: {
+    identified: number;
+    readyForReview: number;
+    failed: number;
+  };
 };
 
 export async function getJobOverview(userId: string): Promise<JobOverview> {
@@ -45,10 +50,16 @@ export async function getJobOverview(userId: string): Promise<JobOverview> {
   );
 
   return {
-    recentJobs: (jobs ?? []).map((job) => ({
+    recentJobs: (jobs ?? []).slice(0, 5).map((job) => ({
       ...job,
       fitSnapshot: calculateFitSnapshot(job.extracted_text, profileKeywords),
     })),
+    summary: {
+      identified: jobs?.length ?? 0,
+      readyForReview:
+        jobs?.filter((job) => job.ingestion_status === "succeeded").length ?? 0,
+      failed: jobs?.filter((job) => job.ingestion_status === "failed").length ?? 0,
+    },
   };
 }
 

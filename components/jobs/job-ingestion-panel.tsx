@@ -6,14 +6,15 @@ import type { JobOverview } from "@/lib/jobs/job-overview";
 
 type JobIngestionPanelProps = {
   overview: JobOverview;
+  showEmptyState?: boolean;
 };
 
-export function JobIngestionPanel({ overview }: JobIngestionPanelProps) {
+export function JobIngestionPanel({ overview, showEmptyState = false }: JobIngestionPanelProps) {
   const router = useRouter();
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  if (overview.recentJobs.length === 0) {
+  if (overview.recentJobs.length === 0 && !showEmptyState) {
     return null;
   }
 
@@ -54,6 +55,11 @@ export function JobIngestionPanel({ overview }: JobIngestionPanelProps) {
 
       <div className="job-list">
         {message ? <p className="system-note success">{message}</p> : null}
+        {overview.recentJobs.length === 0 ? (
+          <p className="empty-state">
+            Paste a public job post into Pramania to start a fit review.
+          </p>
+        ) : null}
         {overview.recentJobs.map((job) => (
           <article className="job-row" key={job.id}>
             <div>
