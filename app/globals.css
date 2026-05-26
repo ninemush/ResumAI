@@ -118,15 +118,24 @@ input:disabled {
   font-family: var(--font-pr-brand), Georgia, serif;
   font-size: 1.55rem;
   font-weight: 650;
+  flex: 0 1 auto;
+  height: 230px;
+  overflow: hidden;
+  position: relative;
   text-decoration: none;
+  width: min(860px, 58vw);
 }
 
 .auth-topbar-logo {
   display: block;
   height: auto !important;
+  left: 0;
+  max-width: none;
   object-fit: contain;
   object-position: left center;
-  width: min(520px, 44vw) !important;
+  position: absolute;
+  top: -30px;
+  width: min(1520px, 104vw) !important;
 }
 
 .auth-topbar nav {
@@ -1819,8 +1828,14 @@ input:focus {
     display: none;
   }
 
+  .auth-topbar-brand {
+    height: 86px;
+    width: min(320px, 64vw);
+  }
+
   .auth-topbar-logo {
-    width: min(260px, 58vw) !important;
+    top: -10px;
+    width: min(600px, 120vw) !important;
   }
 
   .auth-topbar nav {
