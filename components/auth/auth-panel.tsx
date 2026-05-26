@@ -32,19 +32,26 @@ const oauthProviders: Array<{
 const authHighlights = [
   {
     icon: FileText,
-    title: "Start with what you have",
-    body: "Drop the resume, paste the LinkedIn profile, or just explain what happened next.",
+    title: "Start messy",
+    body: "Drop a resume, paste LinkedIn, or just write what happened. Pramania will help organize the signal.",
   },
   {
     icon: Compass,
     title: "Find the strongest lane",
-    body: "Get candid guidance on roles, level, keywords, gaps, and what will land well.",
+    body: "Get candid guidance on roles, level, keywords, gaps, and what hiring teams are likely to value.",
   },
   {
     icon: Sparkles,
-    title: "Move with confidence",
-    body: "Turn scattered experience into tailored, ATS-friendly materials you can review.",
+    title: "Apply with clarity",
+    body: "Create tailored, ATS-friendly materials grounded in your real experience and voice.",
   },
+];
+
+const outcomeItems = [
+  "Structured career profile",
+  "Role-fit guidance",
+  "ATS-ready resume drafts",
+  "Cover letters with your voice",
 ];
 
 const featureHighlights = [
@@ -135,16 +142,6 @@ export function AuthPanel() {
   return (
     <div className="auth-page">
       <header className="auth-topbar" aria-label="Public navigation">
-        <a className="auth-topbar-brand" href="#overview" aria-label={`${brand.name} overview`}>
-          <Image
-            alt={brand.logoAlt}
-            className="auth-topbar-logo"
-            height={500}
-            priority
-            src={brand.horizontalLogoPath}
-            width={1800}
-          />
-        </a>
         <nav>
           {pageLinks.map((link) => (
             <a href={`#${link.toLowerCase()}`} key={link}>
@@ -156,12 +153,27 @@ export function AuthPanel() {
 
       <section className="auth-shell" id="overview" aria-labelledby="auth-title">
       <div className="auth-copy">
+        <div className="auth-hero-logo-frame">
+          <Image
+            alt={brand.logoAlt}
+            className="auth-hero-logo"
+            height={500}
+            priority
+            src={brand.horizontalLogoPath}
+            width={1800}
+          />
+        </div>
         <h1 id="auth-title">Turn your experience into a sharper career story.</h1>
         <p>
-          {brand.name} is a private career workspace for building your profile,
-          understanding where you fit, and preparing thoughtful applications
-          without losing your voice.
+          Job searching is noisy. {brand.name} helps you build a private career profile,
+          understand where you fit, and prepare thoughtful applications without losing
+          your voice.
         </p>
+        <div className="auth-outcome-strip" aria-label="What you get with Pramania">
+          {outcomeItems.map((item) => (
+            <span key={item}>{item}</span>
+          ))}
+        </div>
         <div className="auth-highlight-grid" aria-label={`${brand.name} helps you`}>
           {authHighlights.map((highlight) => {
             const Icon = highlight.icon;
@@ -181,7 +193,7 @@ export function AuthPanel() {
         </div>
         <div className="trust-note">
           <ShieldCheck size={18} aria-hidden="true" />
-          <span>Private by default. You decide what is saved, confirmed, and exported.</span>
+          <span>Private by default. You approve what is saved, used, and exported.</span>
         </div>
       </div>
 
@@ -191,7 +203,7 @@ export function AuthPanel() {
           <p>
             {mode === "sign-in"
               ? "Pick up where your profile, applications, and career context left off."
-              : "Start with email or a trusted provider. You can add your profile details after sign up."}
+              : "Start with a resume, LinkedIn link, or a messy note. Pramania will organize it with you."}
           </p>
         </div>
         <div className="segmented-control" aria-label="Authentication mode">
@@ -259,9 +271,13 @@ export function AuthPanel() {
 
         <button className="primary-action" disabled={isSubmitting} type="submit">
           {isSubmitting ? <Loader2 className="spin" size={18} /> : null}
-          {mode === "sign-in" ? "Enter workspace" : "Create secure account"}
+          {mode === "sign-in" ? "Enter workspace" : "Start my private profile"}
           <ArrowRight size={18} aria-hidden="true" />
         </button>
+
+        <p className="auth-card-note">
+          Built around how recruiters screen: clarity, fit, evidence, keywords, and momentum.
+        </p>
 
         <div className="auth-divider">
           <span>or continue with</span>
