@@ -169,23 +169,25 @@ export function ConversationPanel({
   }
 
   async function processMessage(text: string) {
-    const applicationAction = await processApplicationAction(text);
-
-    if (applicationAction) {
-      appendAssistantMessage(applicationAction, true);
-      router.refresh();
-      return;
-    }
-
     const urls = extractUrls(text);
     const textWithoutUrls = removeUrls(text, urls).trim();
     const summaries: string[] = [];
+
+    if (urls.length === 0) {
+      const applicationAction = await processApplicationAction(text);
+
+      if (applicationAction) {
+        appendAssistantMessage(applicationAction, true);
+        router.refresh();
+        return;
+      }
+    }
 
     for (const url of urls) {
       summaries.push(await processUrl(url, text));
     }
 
-    if (textWithoutUrls.length >= 3) {
+    if (shouldProcessProfileRemainder({ textWithoutUrls, urls })) {
       summaries.push(await processProfileText(textWithoutUrls));
     }
 
@@ -832,6 +834,49 @@ function formatList(items: string[]) {
   }
 
   return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+
+function shouldProcessProfileRemainder({
+  textWithoutUrls,
+  urls,
+}: {
+  textWithoutUrls: string;
+  urls: string[];
+}) {
+  if (textWithoutUrls.length < 3) {
+    return false;
+  }
+
+  if (urls.length === 0) {
+    return true;
+  }
+
+  const normalized = textWithoutUrls.toLowerCase().replace(/\s+/g, " ").trim();
+  const wordCount = normalized.split(" ").filter(Boolean).length;
+
+  if (wordCount <= 12 && looksLikeUrlInstruction(normalized)) {
+    return false;
+  }
+
+  return true;
+}
+
+function looksLikeUrlInstruction(text: string) {
+  return [
+    "can you",
+    "check",
+    "could you",
+    "here is",
+    "i found",
+    "i want to apply",
+    "look at",
+    "please",
+    "read",
+    "review",
+    "save",
+    "this is",
+    "use",
+  ].some((phrase) => text.startsWith(phrase));
 }
 
 function inferApplicationStatus(text: string) {
