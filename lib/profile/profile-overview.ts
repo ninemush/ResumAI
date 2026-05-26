@@ -34,6 +34,13 @@ type RoleRecommendation = {
   created_at: string;
 };
 
+export type ProfileMilestone = {
+  complete: boolean;
+  detail: string;
+  key: string;
+  label: string;
+};
+
 export type ProfileOverview = {
   profile: {
     id: string;
@@ -52,6 +59,7 @@ export type ProfileOverview = {
   recentSources: ProfileSource[];
   roleRecommendations: RoleRecommendation[];
   sourceCount: number;
+  milestones: ProfileMilestone[];
   readinessScore: number;
   tierName: string | null;
 };
@@ -76,6 +84,15 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
       recentSources: [],
       roleRecommendations: [],
       sourceCount: 0,
+      milestones: buildProfileMilestones({
+        confirmedFactCount: 0,
+        factCount: 0,
+        hasHeadline: false,
+        hasSummary: false,
+        hasTargetDirection: false,
+        hasTargetLevel: false,
+        sourceCount: 0,
+      }),
       readinessScore: 0,
       tierName: null,
     };
@@ -133,6 +150,10 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
   );
   const confirmedFactCount = profileFacts.filter((fact) => fact.user_confirmed).length;
   const photoUrl = await createProfilePhotoUrl(supabase, profile.photo_storage_path);
+  const hasHeadline = Boolean(profile.headline);
+  const hasSummary = Boolean(profile.summary);
+  const hasTargetDirection = Boolean(profile.target_direction);
+  const hasTargetLevel = Boolean(profile.target_level);
 
   return {
     profile: {
@@ -152,15 +173,79 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     recentSources: recentSources ?? [],
     roleRecommendations: roleRecommendations ?? [],
     sourceCount: sourceCount ?? 0,
+    milestones: buildProfileMilestones({
+      confirmedFactCount,
+      factCount: profileFacts.length,
+      hasHeadline,
+      hasSummary,
+      hasTargetDirection,
+      hasTargetLevel,
+      sourceCount: sourceCount ?? 0,
+    }),
     readinessScore: calculateReadinessScore({
       factCount: profileFacts.length,
       confirmedFactCount,
-      hasHeadline: Boolean(profile.headline),
-      hasSummary: Boolean(profile.summary),
-      hasTargetDirection: Boolean(profile.target_direction),
+      hasHeadline,
+      hasSummary,
+      hasTargetDirection,
     }),
     tierName: readTierName(tierAssignments),
   };
+}
+
+function buildProfileMilestones({
+  confirmedFactCount,
+  factCount,
+  hasHeadline,
+  hasSummary,
+  hasTargetDirection,
+  hasTargetLevel,
+  sourceCount,
+}: {
+  confirmedFactCount: number;
+  factCount: number;
+  hasHeadline: boolean;
+  hasSummary: boolean;
+  hasTargetDirection: boolean;
+  hasTargetLevel: boolean;
+  sourceCount: number;
+}): ProfileMilestone[] {
+  return [
+    {
+      complete: sourceCount > 0,
+      detail: sourceCount > 0 ? `${sourceCount} source added` : "Add a resume, note, or profile link",
+      key: "source",
+      label: "Source",
+    },
+    {
+      complete: factCount >= 5,
+      detail: `${factCount} captured detail${factCount === 1 ? "" : "s"}`,
+      key: "evidence",
+      label: "Evidence",
+    },
+    {
+      complete: hasTargetDirection && hasTargetLevel,
+      detail: hasTargetDirection
+        ? hasTargetLevel
+          ? "Direction and level are set"
+          : "Direction set, level still open"
+        : "Choose a target lane",
+      key: "direction",
+      label: "Direction",
+    },
+    {
+      complete: confirmedFactCount >= 3,
+      detail: `${confirmedFactCount} confirmed proof point${confirmedFactCount === 1 ? "" : "s"}`,
+      key: "proof",
+      label: "Proof",
+    },
+    {
+      complete: hasHeadline && hasSummary,
+      detail: hasSummary ? "Profile story drafted" : "Draft the positioning summary",
+      key: "story",
+      label: "Story",
+    },
+  ];
 }
 
 function calculateReadinessScore({

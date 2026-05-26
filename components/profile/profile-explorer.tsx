@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { CSSProperties } from "react";
-import { Camera, CheckCircle2, Compass, Save, Sparkles } from "lucide-react";
+import { Camera, CheckCircle2, Circle, Compass, Save, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
@@ -250,6 +250,32 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
             ? `${overview.factCount} profile details captured from ${overview.sourceCount} source${overview.sourceCount === 1 ? "" : "s"}. ${overview.confirmedFactCount} detail${overview.confirmedFactCount === 1 ? "" : "s"} confirmed.`
             : "Share a resume, LinkedIn or portfolio link, or a quick work-history note in the AI agent. Confirmed evidence will appear here as the profile takes shape."}
         </p>
+      </section>
+
+      <section className="profile-build-panel" aria-label="Profile build progress">
+        <div className="section-heading">
+          <p className="eyebrow">Profile build</p>
+          <h2>What is ready, and what needs signal</h2>
+        </div>
+        <div className="profile-milestone-list">
+          {overview.milestones.map((milestone) => (
+            <article
+              className={milestone.complete ? "complete" : undefined}
+              key={milestone.key}
+              title={milestone.detail}
+            >
+              {milestone.complete ? (
+                <CheckCircle2 size={16} aria-hidden="true" />
+              ) : (
+                <Circle size={16} aria-hidden="true" />
+              )}
+              <div>
+                <strong>{milestone.label}</strong>
+                <span>{milestone.detail}</span>
+              </div>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="next-action-panel" aria-label="Recommended next step">

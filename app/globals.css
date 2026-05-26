@@ -976,6 +976,7 @@ input:focus {
 .applications-panel,
 .facts-panel,
 .jobs-panel,
+.profile-build-panel,
 .profile-editor-panel,
 .profile-draft-panel,
 .roles-panel,
@@ -1077,6 +1078,7 @@ input:focus {
 }
 
 .facts-panel,
+.profile-build-panel,
 .profile-editor-panel,
 .profile-draft-panel,
 .roles-panel,
@@ -1090,6 +1092,51 @@ input:focus {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-milestone-list {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.profile-milestone-list article {
+  align-items: start;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  color: var(--muted);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 92px;
+  padding: 12px;
+}
+
+.profile-milestone-list article.complete {
+  background: rgba(185, 155, 103, 0.1);
+  color: var(--sage-strong);
+}
+
+.profile-milestone-list svg {
+  color: var(--sage-strong);
+  margin-top: 2px;
+}
+
+.profile-milestone-list strong,
+.profile-milestone-list span {
+  display: block;
+}
+
+.profile-milestone-list strong {
+  color: var(--foreground);
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+}
+
+.profile-milestone-list span {
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 
 .profile-photo-row {
@@ -1982,6 +2029,7 @@ input:focus {
   .readiness-panel,
   .next-action-panel,
   .cockpit-panel,
+  .profile-milestone-list,
   .profile-summary-grid,
   .owner-detail-grid,
   .owner-metric-grid,
