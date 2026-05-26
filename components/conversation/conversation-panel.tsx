@@ -36,6 +36,24 @@ type SourceCreateResponse = {
   };
 };
 
+type SourceExtractionResult =
+  | {
+      assistantMessage: string | null;
+      followUpQuestions: string[];
+      message: string;
+      ok: true;
+      savedFactCount: number;
+      suggestedDirection: string | null;
+    }
+  | {
+      assistantMessage?: null;
+      followUpQuestions?: [];
+      message: string;
+      ok: false;
+      savedFactCount: 0;
+      suggestedDirection?: null;
+    };
+
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 type SpeechRecognitionLike = {
@@ -334,7 +352,13 @@ export function ConversationPanel({
         : `I saved that profile link, but I could not read it directly yet: ${extraction.message}`;
     }
 
-    return `I read that profile link and captured ${extraction.savedFactCount} profile detail${extraction.savedFactCount === 1 ? "" : "s"}.`;
+    return formatSourceIntakeReply({
+      assistantMessage: extraction.assistantMessage,
+      followUpQuestions: extraction.followUpQuestions,
+      label: "I read that profile link",
+      savedFactCount: extraction.savedFactCount,
+      suggestedDirection: extraction.suggestedDirection,
+    });
   }
 
   async function handleFiles(files: FileList | File[]) {
@@ -359,15 +383,20 @@ export function ConversationPanel({
         : `Dropped ${fileList.length} files`,
     );
 
-    const summaries: string[] = [];
+    try {
+      const summaries: string[] = [];
 
-    for (const file of fileList) {
-      summaries.push(await processFile(file));
+      for (const file of fileList) {
+        summaries.push(await processFile(file));
+      }
+
+      appendAssistantMessage(summaries.join(" "), true);
+      router.refresh();
+    } catch {
+      setError("I could not finish reading that file. Try again, or paste the most important text directly.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    appendAssistantMessage(summaries.join(" "), true);
-    setIsSubmitting(false);
-    router.refresh();
   }
 
   function toggleVoiceInput() {
@@ -464,7 +493,13 @@ export function ConversationPanel({
         return `${file.name} was saved, but extraction needs attention: ${extraction.message}`;
       }
 
-      return `${file.name} was saved, read, and ${extraction.savedFactCount} profile detail${extraction.savedFactCount === 1 ? "" : "s"} were captured.`;
+      return formatSourceIntakeReply({
+        assistantMessage: extraction.assistantMessage,
+        followUpQuestions: extraction.followUpQuestions,
+        label: `${file.name} was saved and read`,
+        savedFactCount: extraction.savedFactCount,
+        suggestedDirection: extraction.suggestedDirection,
+      });
     }
 
     return `${file.name} was saved as a profile source.`;
@@ -493,7 +528,7 @@ export function ConversationPanel({
     return (await response.json()) as SourceCreateResponse;
   }
 
-  async function extractSource(sourceId: string) {
+  async function extractSource(sourceId: string): Promise<SourceExtractionResult> {
     const response = await fetch(`/api/profile/sources/${sourceId}/extract`, {
       method: "POST",
     });
@@ -508,9 +543,14 @@ export function ConversationPanel({
     }
 
     return {
+      assistantMessage: payload.intake?.assistantMessage ?? null,
+      followUpQuestions: Array.isArray(payload.intake?.followUpQuestions)
+        ? payload.intake.followUpQuestions
+        : [],
       ok: true,
       message: "Extracted.",
       savedFactCount: payload.intake?.savedFactCount ?? 0,
+      suggestedDirection: payload.intake?.suggestedDirection ?? null,
     };
   }
 
@@ -664,6 +704,34 @@ function buildInitialMessages(
       text: welcomeMessage(firstName),
     },
   ];
+}
+
+function formatSourceIntakeReply({
+  assistantMessage,
+  followUpQuestions,
+  label,
+  savedFactCount,
+  suggestedDirection,
+}: {
+  assistantMessage: string | null;
+  followUpQuestions: string[];
+  label: string;
+  savedFactCount: number;
+  suggestedDirection: string | null;
+}) {
+  const savedSummary =
+    savedFactCount > 0
+      ? `${label}. I saved ${savedFactCount} profile detail${savedFactCount === 1 ? "" : "s"}.`
+      : `${label}. I did not find any new profile details to save yet.`;
+  const advisorRead = assistantMessage?.trim();
+  const direction = suggestedDirection?.trim()
+    ? `Working direction: ${suggestedDirection.trim()}`
+    : null;
+  const nextQuestion = followUpQuestions.find((question) => question.trim().length > 0);
+
+  return [savedSummary, advisorRead, direction, nextQuestion ? `Next question: ${nextQuestion}` : null]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function buildSessionPrompt({
