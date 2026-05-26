@@ -776,9 +776,10 @@ input:focus {
 .cockpit-panel {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.next-action-panel,
 .cockpit-metric,
 .stage-progress-card {
   background: rgba(255, 250, 243, 0.68);
@@ -788,6 +789,65 @@ input:focus {
   gap: 8px;
   min-width: 0;
   padding: 16px;
+}
+
+.next-action-panel {
+  align-items: center;
+  background: rgba(236, 230, 218, 0.42);
+  grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.65fr);
+  padding: 20px;
+}
+
+.next-action-panel h2 {
+  color: var(--foreground);
+  font-family: var(--font-pr-brand), Georgia, serif;
+  font-size: 1.65rem;
+  font-weight: 650;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.next-action-panel p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 8px 0 0;
+}
+
+.next-action-support {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.next-action-support > span {
+  color: var(--muted);
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.next-action-support strong {
+  color: var(--foreground);
+  font-size: 0.92rem;
+}
+
+.profile-gap-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-gap-list strong {
+  background: rgba(185, 155, 103, 0.13);
+  border: 1px solid rgba(185, 155, 103, 0.24);
+  border-radius: var(--pr-radius-pill);
+  color: var(--sage-strong);
+  padding: 6px 9px;
 }
 
 .cockpit-metric span,
@@ -1731,6 +1791,10 @@ input:focus {
   .workspace-main {
     padding: 26px;
   }
+
+  .cockpit-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -1900,6 +1964,7 @@ input:focus {
   }
 
   .readiness-panel,
+  .next-action-panel,
   .cockpit-panel,
   .profile-summary-grid,
   .owner-detail-grid,

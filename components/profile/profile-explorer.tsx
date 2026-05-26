@@ -38,6 +38,18 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
     overview.profile?.headline ??
     "Add a resume, LinkedIn profile, portfolio, or a few notes to shape your direction.";
   const hasFacts = overview.factCount > 0;
+  const profileGaps = readProfileGaps(overview);
+  const pendingProfileApprovals = countPendingProfileApprovals(overview);
+  const pendingReviewCount =
+    pendingProfileApprovals +
+    applicationOverview.summary.needsReview +
+    jobOverview.summary.readyForReview;
+  const nextMove = readNextMove({
+    applicationOverview,
+    jobOverview,
+    overview,
+    profileGaps,
+  });
   const [draft, setDraft] = useState<ProfileDraft>({
     displayName: overview.profile?.displayName ?? "",
     headline: overview.profile?.headline ?? "",
@@ -240,6 +252,31 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
         </p>
       </section>
 
+      <section className="next-action-panel" aria-label="Recommended next step">
+        <div>
+          <p className="eyebrow">Next best move</p>
+          <h2>{nextMove.title}</h2>
+          <p>{nextMove.body}</p>
+        </div>
+        <div className="next-action-support">
+          {profileGaps.length > 0 ? (
+            <>
+              <span>Missing high-value signal</span>
+              <div className="profile-gap-list">
+                {profileGaps.map((gap) => (
+                  <strong key={gap}>{gap}</strong>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <span>Profile signal</span>
+              <strong>Enough to start tailoring</strong>
+            </>
+          )}
+        </div>
+      </section>
+
       <section className="cockpit-panel" aria-label="Career cockpit">
         <CockpitMetric
           detail="Confirmed profile evidence improves recommendations and generated materials."
@@ -261,10 +298,19 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
           label="Jobs to review"
           value={jobOverview.summary.identified}
         />
+        <CockpitMetric
+          detail={`${pendingReviewCount} item${pendingReviewCount === 1 ? "" : "s"} need your confirmation, review, or approval before ${brand.name} treats them as trusted.`}
+          label="Needs review"
+          value={pendingReviewCount}
+        />
         <div className="stage-progress-card">
           <div>
             <span>Application stages</span>
-            <strong>{applicationOverview.summary.selected} selected</strong>
+            <strong>
+              {applicationOverview.summary.total === 0
+                ? "No applications yet"
+                : `${applicationOverview.summary.selected} selected`}
+            </strong>
           </div>
           <div className="stage-progress" aria-label="Application status distribution">
             {applicationOverview.summary.byStage.map((stage) => (
@@ -523,6 +569,95 @@ function readStageWidth(value: number, total: number) {
   return Math.max(8, Math.round((value / total) * 100));
 }
 
+function readProfileGaps(overview: ProfileOverview) {
+  const gaps: string[] = [];
+
+  if (!overview.profile?.summary) {
+    gaps.push("Sharp profile summary");
+  }
+
+  if (!overview.profile?.targetDirection) {
+    gaps.push("Target role direction");
+  }
+
+  if (!overview.profile?.targetLevel) {
+    gaps.push("Target level");
+  }
+
+  if (overview.confirmedFactCount === 0) {
+    gaps.push("Confirmed proof points");
+  }
+
+  if (overview.sourceCount === 0) {
+    gaps.push("Resume or profile source");
+  }
+
+  return gaps.slice(0, 4);
+}
+
+function countPendingProfileApprovals(overview: ProfileOverview) {
+  const unconfirmedFacts = Object.values(overview.factsByType)
+    .flat()
+    .filter((fact) => !fact.user_confirmed).length;
+  const unacknowledgedRecommendations = overview.roleRecommendations.filter(
+    (recommendation) => !recommendation.user_acknowledged,
+  ).length;
+
+  return unconfirmedFacts + unacknowledgedRecommendations;
+}
+
+function readNextMove({
+  applicationOverview,
+  jobOverview,
+  overview,
+  profileGaps,
+}: {
+  applicationOverview: ApplicationOverview;
+  jobOverview: JobOverview;
+  overview: ProfileOverview;
+  profileGaps: string[];
+}) {
+  if (overview.factCount === 0) {
+    return {
+      title: "Start with the raw material",
+      body: `Drop a resume, paste LinkedIn or a portfolio, or tell ${brand.name} what you have done. One useful source is enough to begin building your profile.`,
+    };
+  }
+
+  if (countPendingProfileApprovals(overview) > 0) {
+    return {
+      title: "Confirm what is true",
+      body: `Review the captured details below and confirm the ones ${brand.name} should trust. This keeps recommendations and generated resumes grounded.`,
+    };
+  }
+
+  if (profileGaps.length > 0) {
+    return {
+      title: "Fill the gaps hiring teams notice",
+      body: `The profile is taking shape. Next, add ${formatList(profileGaps.map((gap) => gap.toLowerCase()))} so ${brand.name} can position you with more confidence.`,
+    };
+  }
+
+  if (jobOverview.summary.readyForReview > 0) {
+    return {
+      title: "Review the role fit",
+      body: "You have a readable job post ready. Review fit, gaps, and tradeoffs before generating materials.",
+    };
+  }
+
+  if (applicationOverview.summary.needsReview > 0) {
+    return {
+      title: "Finish the application record",
+      body: "You have an application waiting for a next action. Generate materials, update status, or decide whether to proceed.",
+    };
+  }
+
+  return {
+    title: "Ready for a job link",
+    body: `Paste a role you are considering into ${brand.name}. It will compare the posting against your profile and help decide whether it is worth pursuing.`,
+  };
+}
+
 function CockpitMetric({
   detail,
   label,
@@ -539,6 +674,14 @@ function CockpitMetric({
       <p>{detail}</p>
     </article>
   );
+}
+
+function formatList(items: string[]) {
+  if (items.length <= 1) {
+    return items[0] ?? "";
+  }
+
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 function formatProfileStatus(status: string | undefined) {
