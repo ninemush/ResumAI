@@ -351,7 +351,7 @@ export function ConversationPanel({
         return payload.error?.message ?? "I could not read that job link yet.";
       }
 
-      return `I saved that job post${payload.job?.title ? `: ${payload.job.title}` : ""}.`;
+      return formatJobIntakeReply(payload.job);
     }
 
     const sourceType = inferLinkSourceType(url);
@@ -759,6 +759,47 @@ function formatSourceIntakeReply({
   const nextQuestion = followUpQuestions.find((question) => question.trim().length > 0);
 
   return [savedSummary, advisorRead, direction, nextQuestion ? `Next question: ${nextQuestion}` : null]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function formatJobIntakeReply(job: {
+  company?: string | null;
+  fitAnalysis?: {
+    missingKeywords?: string[];
+    questions?: string[];
+    recommendation?: string;
+    risks?: string[];
+    score?: number | null;
+    summary?: string;
+  } | null;
+  title?: string | null;
+} | null | undefined) {
+  if (!job) {
+    return "I saved that job post. We can review fit once the page is readable.";
+  }
+
+  const roleLabel = [job.title, job.company].filter(Boolean).join(" at ") || "that job post";
+  const fit = job.fitAnalysis;
+
+  if (!fit || fit.score === null || fit.score === undefined) {
+    return `I saved ${roleLabel}. I need more confirmed profile evidence before I can give you a useful fit read.`;
+  }
+
+  const gaps = fit.missingKeywords?.length
+    ? `Potential gaps to verify: ${fit.missingKeywords.slice(0, 4).join(", ")}.`
+    : null;
+  const risk = fit.risks?.[0] ?? null;
+  const question =
+    fit.questions?.[0] ??
+    "Do you want to log this as an application and generate tailored materials?";
+
+  return [
+    `I read ${roleLabel}. ${fit.summary ?? `Fit is ${fit.score}%.`}`,
+    gaps,
+    risk,
+    question,
+  ]
     .filter(Boolean)
     .join(" ");
 }

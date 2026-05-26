@@ -4,6 +4,7 @@ import { isIP } from "node:net";
 import * as cheerio from "cheerio";
 import { z } from "zod";
 
+import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
 import { createClient } from "@/lib/supabase/server";
 
 const MAX_JOB_HTML_BYTES = 1_500_000;
@@ -30,6 +31,7 @@ export type JobIngestionResult = {
     title: string | null;
     company: string | null;
     extractedTextLength: number;
+    fitAnalysis: JobFitAnalysis | null;
     ingestionStatus: "pending" | "processing" | "succeeded" | "failed" | "deleted";
   };
 };
@@ -91,6 +93,13 @@ export async function ingestJobUrl({
       throw new Error("JOB_UPDATE_FAILED");
     }
 
+    const fitContext = await readUserFitContext(user.id);
+    const fitAnalysis = analyzeJobFit({
+      jobText: completedJob.extracted_text,
+      masterResume: fitContext.masterResume,
+      profileFacts: fitContext.profileFacts,
+    });
+
     return {
       job: {
         id: completedJob.id,
@@ -99,6 +108,7 @@ export async function ingestJobUrl({
         title: completedJob.title,
         company: completedJob.company,
         extractedTextLength: completedJob.extracted_text?.length ?? 0,
+        fitAnalysis,
         ingestionStatus: completedJob.ingestion_status,
       },
     };

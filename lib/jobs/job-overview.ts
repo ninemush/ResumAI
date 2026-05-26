@@ -1,5 +1,6 @@
 import "server-only";
 
+import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
 import { createClient } from "@/lib/supabase/server";
 
 export type JobOverview = {
@@ -18,6 +19,7 @@ export type JobOverview = {
       missingKeywords: string[];
       score: number | null;
     };
+    fitAnalysis: JobFitAnalysis;
   }[];
   summary: {
     identified: number;
@@ -28,7 +30,7 @@ export type JobOverview = {
 
 export async function getJobOverview(userId: string): Promise<JobOverview> {
   const supabase = await createClient();
-  const [{ data: jobs }, { data: facts }] = await Promise.all([
+  const [{ data: jobs }, fitContext] = await Promise.all([
     supabase
       .from("job_ingestions")
       .select(
@@ -37,23 +39,27 @@ export async function getJobOverview(userId: string): Promise<JobOverview> {
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(5),
-    supabase
-      .from("profile_facts")
-      .select("fact_value")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(50),
+    readUserFitContext(userId),
   ]);
 
-  const profileKeywords = extractProfileKeywords(
-    (facts ?? []).map((fact) => fact.fact_value),
-  );
-
   return {
-    recentJobs: (jobs ?? []).slice(0, 5).map((job) => ({
-      ...job,
-      fitSnapshot: calculateFitSnapshot(job.extracted_text, profileKeywords),
-    })),
+    recentJobs: (jobs ?? []).slice(0, 5).map((job) => {
+      const fitAnalysis = analyzeJobFit({
+        jobText: job.extracted_text,
+        masterResume: fitContext.masterResume,
+        profileFacts: fitContext.profileFacts,
+      });
+
+      return {
+        ...job,
+        fitAnalysis,
+        fitSnapshot: {
+          matchedKeywords: fitAnalysis.matchedKeywords,
+          missingKeywords: fitAnalysis.missingKeywords,
+          score: fitAnalysis.score,
+        },
+      };
+    }),
     summary: {
       identified: jobs?.length ?? 0,
       readyForReview:
@@ -61,53 +67,4 @@ export async function getJobOverview(userId: string): Promise<JobOverview> {
       failed: jobs?.filter((job) => job.ingestion_status === "failed").length ?? 0,
     },
   };
-}
-
-function calculateFitSnapshot(jobText: string | null, profileKeywords: string[]) {
-  if (!jobText || profileKeywords.length === 0) {
-    return {
-      matchedKeywords: [],
-      missingKeywords: [],
-      score: null,
-    };
-  }
-
-  const normalizedJobText = jobText.toLowerCase();
-  const matchedKeywords = profileKeywords
-    .filter((keyword) => normalizedJobText.includes(keyword.toLowerCase()))
-    .slice(0, 8);
-  const missingKeywords = profileKeywords
-    .filter((keyword) => !normalizedJobText.includes(keyword.toLowerCase()))
-    .slice(0, 8);
-
-  return {
-    matchedKeywords,
-    missingKeywords,
-    score: Math.round((matchedKeywords.length / Math.max(profileKeywords.length, 1)) * 100),
-  };
-}
-
-function extractProfileKeywords(factValues: string[]) {
-  const ignored = new Set([
-    "and",
-    "for",
-    "from",
-    "led",
-    "the",
-    "with",
-    "work",
-  ]);
-
-  return Array.from(
-    new Set(
-      factValues.flatMap((value) =>
-        value
-          .split(/[,.;:/|()[\]\n-]+|\s{2,}/)
-          .map((part) => part.trim())
-          .filter((part) => part.length >= 4)
-          .filter((part) => !ignored.has(part.toLowerCase()))
-          .slice(0, 4),
-      ),
-    ),
-  ).slice(0, 20);
 }

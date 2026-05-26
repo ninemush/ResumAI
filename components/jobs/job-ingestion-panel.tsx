@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AlertTriangle, CheckCircle2, CircleHelp, Sparkles } from "lucide-react";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 
 type JobIngestionPanelProps = {
@@ -67,17 +68,29 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
               <p>{job.company ?? formatJobUrl(job.resolved_url ?? job.job_url)}</p>
               {job.fitSnapshot.score !== null ? (
                 <p>
-                  Fit snapshot: {job.fitSnapshot.score}% based on current profile
-                  keywords.
+                  Fit review: {job.fitAnalysis.summary}
                 </p>
               ) : null}
-              {job.fitSnapshot.matchedKeywords.length > 0 ? (
-                <div className="keyword-row" aria-label="Matched profile keywords">
-                  {job.fitSnapshot.matchedKeywords.map((keyword) => (
-                    <span key={keyword}>{keyword}</span>
-                  ))}
-                </div>
-              ) : null}
+              <div className="fit-review-grid" aria-label="Fit review details">
+                <FitBucket
+                  icon="match"
+                  items={job.fitAnalysis.matchedKeywords}
+                  label="Matched"
+                  placeholder="No matched signals yet"
+                />
+                <FitBucket
+                  icon="risk"
+                  items={job.fitAnalysis.missingKeywords}
+                  label="Gaps"
+                  placeholder="No obvious gaps"
+                />
+                <FitBucket
+                  icon="question"
+                  items={job.fitAnalysis.questions}
+                  label="Questions"
+                  placeholder="No questions yet"
+                />
+              </div>
               {job.failure_reason ? (
                 <p className="source-failure">{formatFailureReason(job.failure_reason)}</p>
               ) : null}
@@ -90,15 +103,49 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                 className="secondary-action"
                 disabled={pendingJobId === job.id}
                 onClick={() => logApplication(job.id)}
+                title="Log this job as an application before generating tailored materials"
                 type="button"
               >
-                {pendingJobId === job.id ? "Logging..." : "Log application"}
+                <Sparkles size={15} aria-hidden="true" />
+                {pendingJobId === job.id ? "Logging..." : "Proceed"}
               </button>
             ) : null}
           </article>
         ))}
       </div>
     </section>
+  );
+}
+
+function FitBucket({
+  icon,
+  items,
+  label,
+  placeholder,
+}: {
+  icon: "match" | "question" | "risk";
+  items: string[];
+  label: string;
+  placeholder: string;
+}) {
+  const Icon = icon === "match" ? CheckCircle2 : icon === "risk" ? AlertTriangle : CircleHelp;
+
+  return (
+    <div className={`fit-bucket ${icon}`}>
+      <strong>
+        <Icon size={14} aria-hidden="true" />
+        {label}
+      </strong>
+      {items.length > 0 ? (
+        <div className="keyword-row">
+          {items.slice(0, 6).map((item) => (
+            <span key={item}>{item}</span>
+          ))}
+        </div>
+      ) : (
+        <p>{placeholder}</p>
+      )}
+    </div>
   );
 }
 

@@ -1469,6 +1469,50 @@ input:focus {
   color: var(--danger);
 }
 
+.fit-review-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.fit-bucket {
+  background: rgba(255, 255, 255, 0.54);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.fit-bucket strong {
+  align-items: center;
+  color: var(--foreground);
+  display: flex;
+  font-size: 0.8rem;
+  gap: 6px;
+}
+
+.fit-bucket.match svg {
+  color: var(--sage-strong);
+}
+
+.fit-bucket.risk svg {
+  color: var(--danger);
+}
+
+.fit-bucket.question svg {
+  color: var(--gold);
+}
+
+.fit-bucket p {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin: 0;
+}
+
 .keyword-row {
   display: flex;
   flex-wrap: wrap;
@@ -2129,6 +2173,7 @@ input:focus {
   .resume-readiness-panel,
   .owner-detail-grid,
   .owner-metric-grid,
+  .fit-review-grid,
   .profile-editor-grid,
   .job-row,
   .job-row:has(.secondary-action),
