@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Compass, FileText, Loader2, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  Brain,
+  Compass,
+  FileText,
+  Loader2,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import type { Provider } from "@supabase/supabase-js";
 import Image from "next/image";
 
@@ -24,18 +32,36 @@ const oauthProviders: Array<{
 const authHighlights = [
   {
     icon: FileText,
-    title: "Profile from messy inputs",
-    body: "Resumes, links, files, and notes become structured career evidence.",
+    title: "Start with what you have",
+    body: "Drop the resume, paste the LinkedIn profile, or just explain what happened next.",
   },
   {
     icon: Compass,
-    title: "Recruiter-grade direction",
-    body: "Clarify fit, level, gaps, keywords, and what hiring teams value.",
+    title: "Find the strongest lane",
+    body: "Get candid guidance on roles, level, keywords, gaps, and what will land well.",
   },
   {
     icon: Sparkles,
-    title: "Sharper applications",
-    body: "Create ATS-friendly materials grounded in the user's real experience.",
+    title: "Move with confidence",
+    body: "Turn scattered experience into tailored, ATS-friendly materials you can review.",
+  },
+];
+
+const featureHighlights = [
+  {
+    icon: Brain,
+    title: "When your head is full, start anywhere",
+    body: "Pramania can work from rough notes, resumes, job links, profile pages, or a spoken thought. You do not need to organize everything first.",
+  },
+  {
+    icon: Compass,
+    title: "Know what to aim for next",
+    body: "Get a calm read on role fit, seniority, strengths, gaps, and the evidence hiring teams are likely to care about.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Apply without sounding generic",
+    body: "Generate focused resumes and cover letters that stay grounded in your real experience and keep a hint of your voice.",
   },
 ];
 
@@ -111,14 +137,13 @@ export function AuthPanel() {
       <header className="auth-topbar" aria-label="Public navigation">
         <a className="auth-topbar-brand" href="#overview" aria-label={`${brand.name} overview`}>
           <Image
-            alt=""
+            alt={brand.logoAlt}
             className="auth-topbar-logo"
-            height={44}
+            height={500}
             priority
-            src={brand.appIconPath}
-            width={44}
+            src={brand.horizontalLogoPath}
+            width={1800}
           />
-          <span>{brand.name}</span>
         </a>
         <nav>
           {pageLinks.map((link) => (
@@ -262,20 +287,26 @@ export function AuthPanel() {
 
       <section className="auth-section" id="features" aria-labelledby="features-title">
         <p className="eyebrow">Features</p>
-        <h2 id="features-title">Built for the full application loop.</h2>
+        <h2 id="features-title">For the moments when job hunting feels heavy.</h2>
+        <p>
+          Whether you are actively searching, recovering from a layoff, or unsure how
+          to explain your next move, Pramania helps turn the blur into a practical
+          path forward.
+        </p>
         <div className="auth-section-grid">
-          <article>
-            <strong>Profile cockpit</strong>
-            <p>Readiness, captured evidence, role direction, and application progress in one place.</p>
-          </article>
-          <article>
-            <strong>Conversation-first intake</strong>
-            <p>Type, speak, paste links, or drop files directly into Pramania.</p>
-          </article>
-          <article>
-            <strong>ATS-aware materials</strong>
-            <p>Generate resumes and cover letters that are specific, reviewable, and grounded.</p>
-          </article>
+          {featureHighlights.map((feature) => {
+            const Icon = feature.icon;
+
+            return (
+              <article key={feature.title}>
+                <span className="auth-section-icon">
+                  <Icon size={18} aria-hidden="true" />
+                </span>
+                <strong>{feature.title}</strong>
+                <p>{feature.body}</p>
+              </article>
+            );
+          })}
         </div>
       </section>
 

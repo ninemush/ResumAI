@@ -123,9 +123,10 @@ input:disabled {
 
 .auth-topbar-logo {
   display: block;
-  height: 44px !important;
+  height: auto !important;
   object-fit: contain;
-  width: 44px !important;
+  object-position: left center;
+  width: min(520px, 44vw) !important;
 }
 
 .auth-topbar nav {
@@ -490,16 +491,31 @@ input:focus {
 }
 
 .auth-section-grid article {
+  align-content: start;
   background: rgba(255, 250, 243, 0.68);
   border: var(--pr-border-subtle);
   border-radius: var(--pr-radius-md);
   display: grid;
-  gap: 8px;
-  padding: 18px;
+  gap: 12px;
+  padding: 22px;
+}
+
+.auth-section-icon {
+  align-items: center;
+  background: rgba(185, 155, 103, 0.14);
+  border: 1px solid rgba(185, 155, 103, 0.24);
+  border-radius: 50%;
+  color: var(--sage-strong);
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
 }
 
 .auth-section-grid strong {
   color: var(--foreground);
+  font-size: 1.05rem;
+  line-height: 1.3;
 }
 
 .auth-section-grid p {
@@ -1737,6 +1753,10 @@ input:focus {
 
   .auth-topbar-brand span {
     display: none;
+  }
+
+  .auth-topbar-logo {
+    width: min(260px, 58vw) !important;
   }
 
   .auth-topbar nav {
