@@ -139,7 +139,7 @@ input:disabled {
   gap: clamp(32px, 6vw, 92px);
   grid-template-columns: minmax(0, 740px) minmax(380px, 460px);
   min-height: 100svh;
-  padding: 120px 48px 46px;
+  padding: 96px 48px 46px;
 }
 
 .auth-copy {
@@ -149,12 +149,12 @@ input:disabled {
   justify-content: center;
   justify-self: center;
   max-width: 700px;
-  min-height: 620px;
+  min-height: 660px;
 }
 
 .auth-hero-logo-frame {
-  height: 194px;
-  margin: 0 0 18px -20px;
+  height: 160px;
+  margin: 0 0 14px -20px;
   max-width: min(680px, 58vw);
   overflow: hidden;
   position: relative;
@@ -167,7 +167,7 @@ input:disabled {
   left: 0;
   max-width: none;
   position: absolute;
-  top: -20px;
+  top: -54px;
   width: min(1160px, 98vw) !important;
 }
 
@@ -219,7 +219,7 @@ input:disabled {
 }
 
 .auth-copy h1 {
-  font-size: clamp(2.7rem, 4.8vw, 4.4rem);
+  font-size: clamp(2.65rem, 4.65vw, 4.12rem);
   margin: 0 0 14px;
 }
 
@@ -229,7 +229,7 @@ input:disabled {
 .assistant-message p,
 .system-note {
   color: var(--muted);
-  line-height: 1.65;
+  line-height: 1.55;
   overflow-wrap: anywhere;
 }
 
@@ -243,9 +243,9 @@ input:disabled {
 
 .auth-highlight-grid {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   grid-template-columns: 1fr;
-  margin-top: 18px;
+  margin-top: 24px;
   max-width: 680px;
 }
 
