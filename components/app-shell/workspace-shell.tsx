@@ -5,17 +5,26 @@ import type { WorkspaceSession } from "@/lib/commands/session";
 import { getConversationMessages } from "@/lib/conversation/conversation-messages";
 import { getJobOverview } from "@/lib/jobs/job-overview";
 import { getProfileOverview } from "@/lib/profile/profile-overview";
+import { getMasterResumeOverview } from "@/lib/resumes/master-resume";
 
 type WorkspaceShellProps = {
   session: WorkspaceSession;
 };
 
 export async function WorkspaceShell({ session }: WorkspaceShellProps) {
-  const [profileOverview, jobOverview, conversationMessages, applicationOverview, ownerMetrics] = await Promise.all([
+  const [
+    profileOverview,
+    jobOverview,
+    conversationMessages,
+    applicationOverview,
+    masterResumeOverview,
+    ownerMetrics,
+  ] = await Promise.all([
     getProfileOverview(session.user.id),
     getJobOverview(session.user.id),
     getConversationMessages(session.user.id),
     getApplicationOverview(session.user.id),
+    getMasterResumeOverview(session.user.id),
     session.admin.roles.length > 0 ? getOwnerMetrics() : Promise.resolve(null),
   ]);
 
@@ -24,6 +33,7 @@ export async function WorkspaceShell({ session }: WorkspaceShellProps) {
       applicationOverview={applicationOverview}
       conversationMessages={conversationMessages}
       jobOverview={jobOverview}
+      masterResumeOverview={masterResumeOverview}
       ownerMetrics={ownerMetrics}
       profileOverview={profileOverview}
       session={session}

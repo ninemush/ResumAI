@@ -174,6 +174,14 @@ export function ConversationPanel({
     const summaries: string[] = [];
 
     if (urls.length === 0) {
+      const resumeAction = await processResumeAction(text);
+
+      if (resumeAction) {
+        appendAssistantMessage(resumeAction, true);
+        router.refresh();
+        return;
+      }
+
       const applicationAction = await processApplicationAction(text);
 
       if (applicationAction) {
@@ -195,6 +203,25 @@ export function ConversationPanel({
       appendAssistantMessage(summaries.join(" "), true);
       router.refresh();
     }
+  }
+
+  async function processResumeAction(text: string) {
+    if (!looksLikeMasterResumeRequest(text)) {
+      return null;
+    }
+
+    const response = await fetch("/api/resume/master", {
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+      body: JSON.stringify({ instruction: text }),
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      return payload.error?.message ?? "I could not generate the master resume yet.";
+    }
+
+    return `${payload.summary} I saved it in Resume Studio so you can review the wording, remove anything that does not sound like you, and keep unsupported claims out.`;
   }
 
   async function processApplicationAction(text: string) {
@@ -928,6 +955,22 @@ function looksLikeMaterialGenerationRequest(text: string) {
   return (
     /\b(generate|create|draft|write|make)\b.*\b(resume|cover letter|materials)\b/.test(normalized) ||
     /\b(resume|cover letter|materials)\b.*\b(generate|create|draft|write|make)\b/.test(normalized)
+  );
+}
+
+function looksLikeMasterResumeRequest(text: string) {
+  const normalized = text.toLowerCase();
+
+  if (/\b(cover letter|job-specific|targeted|for this role|for the role)\b/.test(normalized)) {
+    return false;
+  }
+
+  return (
+    /\b(make|sound|tone|voice|rewrite|revise|adjust)\b.*\b(senior|executive|less ai|more human|voice|resume|cv)\b/.test(normalized) ||
+    /\b(more senior|less ai|more human|my voice)\b/.test(normalized) ||
+    /\b(master resume|base resume|core resume)\b/.test(normalized) ||
+    /\b(generate|create|draft|build|make)\b.*\b(resume|cv)\b/.test(normalized) ||
+    /\b(resume|cv)\b.*\b(generate|create|draft|build|make)\b/.test(normalized)
   );
 }
 

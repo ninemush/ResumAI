@@ -9,6 +9,7 @@ import {
 } from "@/lib/ai/prompts/application-materials";
 import { getMaterialsModel, getOpenAIClient } from "@/lib/ai/openai";
 import { recordQuotaEvent } from "@/lib/quota/quota-events";
+import { resumeContentSchema } from "@/lib/resumes/resume-content";
 import { createClient } from "@/lib/supabase/server";
 
 export const generateApplicationMaterialsSchema = z.object({
@@ -16,14 +17,7 @@ export const generateApplicationMaterialsSchema = z.object({
 });
 
 const generatedMaterialsSchema = z.object({
-  resume: z.object({
-    headline: z.string().min(1).max(180),
-    summary: z.string().min(1).max(900),
-    skills: z.array(z.string().min(1).max(80)).max(18),
-    experienceBullets: z.array(z.string().min(1).max(260)).max(10),
-    keywordGaps: z.array(z.string().min(1).max(120)).max(12),
-    reviewerNotes: z.array(z.string().min(1).max(220)).max(6),
-  }),
+  resume: resumeContentSchema,
   coverLetter: z.string().min(1).max(4000),
 });
 

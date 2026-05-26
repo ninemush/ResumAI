@@ -10,12 +10,14 @@ import { ApplicationPanel } from "@/components/applications/application-panel";
 import { ConversationPanel } from "@/components/conversation/conversation-panel";
 import { JobIngestionPanel } from "@/components/jobs/job-ingestion-panel";
 import { ProfileExplorer } from "@/components/profile/profile-explorer";
+import { MasterResumePanel } from "@/components/resume/master-resume-panel";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
 import type { WorkspaceSession } from "@/lib/commands/session";
 import type { ConversationMessage } from "@/lib/conversation/conversation-messages";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
+import type { MasterResumeOverview } from "@/lib/resumes/master-resume";
 
 const DEFAULT_NAV_WIDTH = 280;
 const COLLAPSED_NAV_WIDTH = 78;
@@ -29,6 +31,7 @@ type WorkspaceLayoutProps = {
   applicationOverview: ApplicationOverview;
   conversationMessages: ConversationMessage[];
   jobOverview: JobOverview;
+  masterResumeOverview: MasterResumeOverview;
   ownerMetrics: OwnerMetrics | null;
   profileOverview: ProfileOverview;
   session: WorkspaceSession;
@@ -45,6 +48,7 @@ export function WorkspaceLayout({
   applicationOverview,
   conversationMessages,
   jobOverview,
+  masterResumeOverview,
   ownerMetrics,
   profileOverview,
   session,
@@ -135,6 +139,7 @@ export function WorkspaceLayout({
           activeView: layout.activeView,
           applicationOverview,
           jobOverview,
+          masterResumeOverview,
           ownerMetrics,
           profileOverview,
         })}
@@ -164,12 +169,14 @@ function renderWorkspaceView({
   activeView,
   applicationOverview,
   jobOverview,
+  masterResumeOverview,
   ownerMetrics,
   profileOverview,
 }: {
   activeView: AppView;
   applicationOverview: ApplicationOverview;
   jobOverview: JobOverview;
+  masterResumeOverview: MasterResumeOverview;
   ownerMetrics: OwnerMetrics | null;
   profileOverview: ProfileOverview;
 }) {
@@ -194,13 +201,7 @@ function renderWorkspaceView({
   }
 
   if (activeView === "resume") {
-    return (
-      <WorkspacePlaceholder
-        eyebrow="Resume"
-        title="Resume studio"
-        body="Master resume generation will use confirmed profile evidence and ATS validation. For now, keep building your profile in the AI agent so the first generated resume has enough signal."
-      />
-    );
+    return <MasterResumePanel overview={masterResumeOverview} />;
   }
 
   if (activeView === "artifacts") {

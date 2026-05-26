@@ -979,6 +979,9 @@ input:focus {
 .profile-build-panel,
 .profile-editor-panel,
 .profile-draft-panel,
+.resume-empty-panel,
+.resume-gap-panel,
+.resume-readiness-panel,
 .roles-panel,
 .sources-panel {
   background: rgba(255, 250, 243, 0.68);
@@ -1081,6 +1084,7 @@ input:focus {
 .profile-build-panel,
 .profile-editor-panel,
 .profile-draft-panel,
+.resume-gap-panel,
 .roles-panel,
 .sources-panel {
   display: grid;
@@ -1092,6 +1096,97 @@ input:focus {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.resume-readiness-panel {
+  align-items: center;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 20px;
+}
+
+.resume-readiness-panel > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.resume-readiness-panel span {
+  color: var(--foreground);
+  font-family: var(--font-pr-brand), Georgia, serif;
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.resume-readiness-panel strong {
+  color: var(--foreground);
+}
+
+.resume-readiness-panel p,
+.resume-empty-panel p {
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.resume-readiness-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.resume-gap-panel ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.resume-gap-panel li {
+  align-items: center;
+  color: var(--ink-soft);
+  display: flex;
+  gap: 8px;
+}
+
+.resume-gap-panel svg {
+  color: var(--danger);
+  flex: 0 0 auto;
+}
+
+.resume-empty-panel {
+  align-items: start;
+  color: var(--sage-strong);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 20px;
+}
+
+.resume-empty-panel h2 {
+  color: var(--foreground);
+  font-size: 1.1rem;
+  margin: 0 0 6px;
+}
+
+.resume-status-pill {
+  align-items: center;
+  background: rgba(185, 155, 103, 0.12);
+  border: 1px solid rgba(185, 155, 103, 0.28);
+  border-radius: var(--pr-radius-pill);
+  color: var(--sage-strong);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 7px;
+  padding: 7px 10px;
+  text-transform: capitalize;
+}
+
+.master-resume-editor {
+  margin-top: 0;
 }
 
 .profile-milestone-list {
@@ -2031,6 +2126,7 @@ input:focus {
   .cockpit-panel,
   .profile-milestone-list,
   .profile-summary-grid,
+  .resume-readiness-panel,
   .owner-detail-grid,
   .owner-metric-grid,
   .profile-editor-grid,

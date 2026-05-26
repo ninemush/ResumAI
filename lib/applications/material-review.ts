@@ -5,6 +5,11 @@ import { z } from "zod";
 
 import { brand } from "@/lib/brand";
 import { validateGeneratedPdf } from "@/lib/applications/pdf-validation";
+import {
+  parseResumeContent,
+  resumeContentSchema,
+  type ResumeContent,
+} from "@/lib/resumes/resume-content";
 import { createClient } from "@/lib/supabase/server";
 
 const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
@@ -14,21 +19,10 @@ export const materialReviewSchema = z.object({
   applicationId: z.string().uuid(),
 });
 
-const resumeContentSchema = z.object({
-  experienceBullets: z.array(z.string().trim().min(1).max(320)).max(14),
-  headline: z.string().trim().min(1).max(220),
-  keywordGaps: z.array(z.string().trim().min(1).max(140)).max(16),
-  reviewerNotes: z.array(z.string().trim().min(1).max(260)).max(8),
-  skills: z.array(z.string().trim().min(1).max(90)).max(24),
-  summary: z.string().trim().min(1).max(1200),
-});
-
 export const updateMaterialReviewSchema = materialReviewSchema.extend({
   coverLetter: z.string().trim().min(20).max(8000).optional(),
   resume: resumeContentSchema.optional(),
 });
-
-export type ResumeContent = z.infer<typeof resumeContentSchema>;
 
 export type MaterialReview = {
   application: {
@@ -302,10 +296,6 @@ async function readLatestCoverLetter(applicationId: string, userId: string) {
   }
 
   return data;
-}
-
-function parseResumeContent(value: unknown): ResumeContent {
-  return resumeContentSchema.parse(value);
 }
 
 async function buildResumePdf({
