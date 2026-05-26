@@ -32,8 +32,8 @@ const oauthProviders: Array<{
 const authHighlights = [
   {
     icon: FileText,
-    title: "Start messy",
-    body: "Drop a resume, paste LinkedIn, or just write what happened. Pramania will help organize the signal.",
+    title: "Start with your story",
+    body: "Share a resume, LinkedIn profile, or career note. Pramania will help turn it into clear, useful signal.",
   },
   {
     icon: Compass,
@@ -203,7 +203,7 @@ export function AuthPanel() {
           <p>
             {mode === "sign-in"
               ? "Pick up where your profile, applications, and career context left off."
-              : "Start with a resume, LinkedIn link, or a messy note. Pramania will organize it with you."}
+              : "Start with a resume, LinkedIn link, or career note. Pramania will shape it with you."}
           </p>
         </div>
         <div className="segmented-control" aria-label="Authentication mode">
