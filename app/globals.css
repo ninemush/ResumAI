@@ -149,6 +149,7 @@ input:disabled {
   justify-content: center;
   justify-self: center;
   max-width: 700px;
+  min-height: 620px;
 }
 
 .auth-hero-logo-frame {
@@ -237,43 +238,25 @@ input:disabled {
   color: var(--ink-soft);
   display: flex;
   gap: 10px;
-  margin-top: 18px;
-}
-
-.auth-outcome-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
-  max-width: 680px;
-}
-
-.auth-outcome-strip span {
-  background: rgba(255, 250, 243, 0.68);
-  border: 1px solid rgba(215, 204, 188, 0.7);
-  border-radius: var(--pr-radius-pill);
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-  font-weight: 750;
-  padding: 7px 10px;
+  margin-top: auto;
 }
 
 .auth-highlight-grid {
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 22px;
+  gap: 8px;
+  grid-template-columns: 1fr;
+  margin-top: 18px;
   max-width: 680px;
 }
 
 .auth-highlight-card {
-  align-content: start;
-  background: rgba(255, 250, 243, 0.58);
-  border: 1px solid rgba(215, 204, 188, 0.68);
-  border-radius: var(--pr-radius-md);
+  align-items: start;
+  background: transparent;
+  border: 0;
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 11px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 0;
 }
 
 .auth-highlight-card span {
@@ -291,14 +274,14 @@ input:disabled {
 
 .auth-highlight-card h2 {
   color: var(--foreground);
-  font-size: 0.92rem;
+  font-size: 0.94rem;
   line-height: 1.25;
-  margin: 0 0 4px;
+  margin: 0 0 2px;
 }
 
 .auth-highlight-card p {
   font-size: 0.82rem;
-  line-height: 1.42;
+  line-height: 1.36;
   margin: 0;
 }
 
@@ -310,6 +293,7 @@ input:disabled {
   box-shadow: var(--shadow);
   display: grid;
   gap: 14px;
+  min-height: 660px;
   padding: 22px;
 }
 
@@ -1870,6 +1854,7 @@ input:focus {
   .auth-card {
     flex: 0 0 auto;
     max-width: 100%;
+    min-height: 0;
     min-width: 0;
     overflow: hidden;
     width: calc(100vw - 48px);

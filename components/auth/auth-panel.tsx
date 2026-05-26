@@ -47,13 +47,6 @@ const authHighlights = [
   },
 ];
 
-const outcomeItems = [
-  "Structured career profile",
-  "Role-fit guidance",
-  "ATS-ready resume drafts",
-  "Cover letters with your voice",
-];
-
 const featureHighlights = [
   {
     icon: Brain,
@@ -169,11 +162,6 @@ export function AuthPanel() {
           understand where you fit, and prepare thoughtful applications without losing
           your voice.
         </p>
-        <div className="auth-outcome-strip" aria-label="What you get with Pramania">
-          {outcomeItems.map((item) => (
-            <span key={item}>{item}</span>
-          ))}
-        </div>
         <div className="auth-highlight-grid" aria-label={`${brand.name} helps you`}>
           {authHighlights.map((highlight) => {
             const Icon = highlight.icon;
