@@ -6,6 +6,7 @@ import mammoth from "mammoth";
 import { extractText } from "unpdf";
 import { z } from "zod";
 
+import { getOpenAIClient, getProfileIntakeModel } from "@/lib/ai/openai";
 import { extractProfileFactsFromText, type ProfileIntakeResult } from "@/lib/profile/profile-intake";
 import { createClient } from "@/lib/supabase/server";
 
@@ -14,10 +15,12 @@ const MAX_TXT_BYTES = 1_000_000;
 const MAX_PDF_BYTES = 15_000_000;
 const MAX_PDF_PAGES = 15;
 const MAX_DOCX_BYTES = 15_000_000;
+const MAX_IMAGE_BYTES = 10_000_000;
 const MAX_PROFILE_HTML_BYTES = 1_500_000;
 const MAX_PROFILE_TEXT_CHARS = 12_000;
 const FETCH_TIMEOUT_MS = 8000;
 const blockedHostnames = new Set(["localhost", "localhost.localdomain"]);
+const supportedOcrMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export const profileSourceExtractionRequestSchema = z.object({
   sourceId: z.string().uuid(),
@@ -47,7 +50,7 @@ export async function extractProfileSourceText({
   const { data: source, error: sourceError } = await supabase
     .from("profile_sources")
     .select(
-      "id, user_id, profile_id, source_type, source_url, storage_path, original_filename, extraction_status",
+      "id, user_id, profile_id, source_type, source_url, storage_path, original_filename, mime_type, extraction_status",
     )
     .eq("id", sourceId)
     .eq("user_id", user.id)
@@ -57,12 +60,12 @@ export async function extractProfileSourceText({
     throw new Error("SOURCE_NOT_FOUND");
   }
 
-  if (!["txt", "pdf", "docx", "link", "linkedin", "portfolio"].includes(source.source_type)) {
+  if (!["txt", "pdf", "docx", "image", "link", "linkedin", "portfolio"].includes(source.source_type)) {
     throw new Error("UNSUPPORTED_SOURCE_TYPE");
   }
 
   if (
-    ["txt", "pdf", "docx"].includes(source.source_type) &&
+    ["txt", "pdf", "docx", "image"].includes(source.source_type) &&
     (!source.storage_path || !source.storage_path.startsWith(`${user.id}/`))
   ) {
     throw new Error("INVALID_STORAGE_PATH");
@@ -86,6 +89,11 @@ export async function extractProfileSourceText({
           ? await extractDocxFromStorage(source.storage_path ?? "")
         : source.source_type === "txt"
           ? await extractTxtFromStorage(source.storage_path ?? "")
+        : source.source_type === "image"
+          ? await extractImageTextFromStorage({
+              mimeType: source.mime_type,
+              storagePath: source.storage_path ?? "",
+            })
           : await extractPublicProfilePage(source.source_url ?? "");
     const normalizedText = normalizeExtractedText(extractedText);
 
@@ -189,6 +197,67 @@ async function extractDocxFromStorage(storagePath: string) {
   return text;
 }
 
+async function extractImageTextFromStorage({
+  mimeType,
+  storagePath,
+}: {
+  mimeType: string | null;
+  storagePath: string;
+}) {
+  const normalizedMimeType = mimeType?.toLowerCase() ?? "";
+
+  if (!supportedOcrMimeTypes.has(normalizedMimeType)) {
+    throw new Error("IMAGE_OCR_UNSUPPORTED_MIME_TYPE");
+  }
+
+  const data = await downloadProfileSource(storagePath);
+
+  if (data.size > MAX_IMAGE_BYTES) {
+    throw new Error("IMAGE_OCR_FILE_TOO_LARGE");
+  }
+
+  const imageDataUrl = await blobToDataUrl(data, normalizedMimeType);
+  const response = await getOpenAIClient().responses.create({
+    model: getProfileIntakeModel(),
+    instructions:
+      "You are an OCR extraction service for a career profile builder. Extract only visible text from the image. Preserve headings, dates, employers, job titles, skills, credentials, and bullets when readable. Do not add facts, commentary, markdown fences, or explanations. If no career-relevant text is readable, return an empty string.",
+    input: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: "Extract the readable resume, credential, LinkedIn/profile, or career-history text from this image.",
+          },
+          {
+            type: "input_image",
+            image_url: imageDataUrl,
+            detail: "high",
+          },
+        ],
+      },
+    ],
+    max_output_tokens: 2200,
+    metadata: {
+      feature: "profile_source_ocr",
+      source_type: "image",
+    },
+    store: false,
+  });
+
+  if (response.error || response.incomplete_details) {
+    throw new Error("IMAGE_OCR_FAILED");
+  }
+
+  const text = response.output_text.trim();
+
+  if (text.length < 3) {
+    throw new Error("IMAGE_OCR_TEXT_EMPTY");
+  }
+
+  return text;
+}
+
 async function extractPublicProfilePage(sourceUrl: string) {
   assertSafeProfileUrl(sourceUrl);
 
@@ -279,6 +348,11 @@ function normalizeExtractedText(text: string) {
     .replace(/\n{4,}/g, "\n\n\n")
     .trim()
     .slice(0, MAX_PROFILE_TEXT_CHARS);
+}
+
+async function blobToDataUrl(data: Blob, mimeType: string) {
+  const buffer = Buffer.from(await data.arrayBuffer());
+  return `data:${mimeType};base64,${buffer.toString("base64")}`;
 }
 
 function assertSafeProfileUrl(value: string) {

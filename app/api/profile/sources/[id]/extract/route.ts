@@ -83,7 +83,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.unsupported_type",
-        message: "TXT, PDF, Word, and public profile link extraction are available now. Image OCR is next.",
+        message: "TXT, PDF, Word, supported images, and public profile link extraction are available now.",
         status: 422,
       };
     }
@@ -157,6 +157,42 @@ function toApiError(error: unknown) {
         code: "source.docx_text_empty",
         message: "I could not find readable text in that Word document.",
         status: 422,
+      };
+    }
+
+    if (error.message === "IMAGE_OCR_UNSUPPORTED_MIME_TYPE") {
+      return {
+        category: "validation",
+        code: "source.image_ocr_unsupported_mime_type",
+        message: "Image OCR currently supports JPG, PNG, and WebP files.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "IMAGE_OCR_FILE_TOO_LARGE") {
+      return {
+        category: "validation",
+        code: "source.image_ocr_file_too_large",
+        message: "Image OCR currently supports files up to 10 MB.",
+        status: 413,
+      };
+    }
+
+    if (error.message === "IMAGE_OCR_TEXT_EMPTY") {
+      return {
+        category: "validation",
+        code: "source.image_ocr_text_empty",
+        message: "I could not find readable text in that image.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "IMAGE_OCR_FAILED") {
+      return {
+        category: "server",
+        code: "source.image_ocr_failed",
+        message: "Image OCR is unavailable right now. The image is saved, and you can try again later.",
+        status: 502,
       };
     }
 

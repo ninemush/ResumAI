@@ -78,6 +78,21 @@ type ExtractProfileFactsFromTextParams = {
   inputLabel: string;
 };
 
+type ExistingProfileContext = {
+  facts: Array<{
+    fact_type: string;
+    fact_value: string;
+    user_confirmed: boolean;
+  }>;
+  profile: {
+    display_name: string | null;
+    headline: string | null;
+    summary: string | null;
+    target_direction: string | null;
+    target_level: string | null;
+  } | null;
+};
+
 export async function runProfileIntake({
   message,
 }: RunProfileIntakeParams): Promise<ProfileIntakeResult> {
@@ -178,10 +193,15 @@ export async function extractProfileFactsFromText({
   }
 
   const model = getProfileIntakeModel();
+  const existingContext = await readExistingProfileContext({
+    profileId,
+    userId: user.id,
+  });
   const response = await getOpenAIClient().responses.create({
     model,
     instructions: PROFILE_INTAKE_INSTRUCTIONS,
     input: buildProfileIntakeInput({
+      existingContext,
       label: inputLabel,
       text: normalizedText,
     }),
@@ -323,16 +343,30 @@ export async function extractProfileFactsFromText({
   }
 
   const parsed = profileIntakeResponseSchema.parse(JSON.parse(response.output_text));
-  const factRows = parsed.facts.map((fact) => ({
-    user_id: user.id,
-    profile_id: profileId,
-    fact_type: fact.type,
-    fact_value: fact.value,
-    origin,
-    source_ids: [sourceId],
-    confidence: fact.confidence,
-    user_confirmed: false,
-  }));
+  const existingFactKeys = new Set(
+    existingContext.facts.map((fact) => buildFactKey(fact.fact_type, fact.fact_value)),
+  );
+  const factRows = parsed.facts
+    .filter((fact) => {
+      const factKey = buildFactKey(fact.type, fact.value);
+
+      if (existingFactKeys.has(factKey)) {
+        return false;
+      }
+
+      existingFactKeys.add(factKey);
+      return true;
+    })
+    .map((fact) => ({
+      user_id: user.id,
+      profile_id: profileId,
+      fact_type: fact.type,
+      fact_value: fact.value,
+      origin,
+      source_ids: [sourceId],
+      confidence: fact.confidence,
+      user_confirmed: false,
+    }));
 
   if (factRows.length > 0) {
     const { error: factsError } = await supabase.from("profile_facts").insert(factRows);
@@ -359,13 +393,21 @@ export async function extractProfileFactsFromText({
 }
 
 function buildProfileIntakeInput({
+  existingContext,
   label,
   text,
 }: {
+  existingContext: ExistingProfileContext;
   label: string;
   text: string;
 }) {
+  const contextText = formatExistingProfileContext(existingContext);
+
   return `
+Existing profile context:
+${contextText}
+
+New source to ingest:
 ${label}:
 ${text}
 
@@ -373,9 +415,70 @@ Return structured JSON only. Keep the assistantMessage concise, calm, and useful
 Let the assistantMessage sound like a senior talent advisor: include a concrete
 hiring-screen, recruiter, ATS, keyword, positioning, or resume-quality
 observation when the input gives you enough evidence. Do not give generic praise.
+Use the existing profile context to improve continuity, avoid asking for details
+the user already gave, and avoid returning duplicate facts. If the new source
+corrects or sharpens existing context, reflect that in the draft cautiously.
 If useful, include a suggestedDirection, but make it tentative and ask for the
 user's acknowledgement before treating it as final.
 `.trim();
+}
+
+async function readExistingProfileContext({
+  profileId,
+  userId,
+}: {
+  profileId: string;
+  userId: string;
+}): Promise<ExistingProfileContext> {
+  const supabase = await createClient();
+  const [{ data: profile, error: profileError }, { data: facts, error: factsError }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("display_name, headline, summary, target_direction, target_level")
+        .eq("id", profileId)
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("profile_facts")
+        .select("fact_type, fact_value, user_confirmed")
+        .eq("profile_id", profileId)
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(80),
+    ]);
+
+  if (profileError || factsError) {
+    throw new Error("PROFILE_CONTEXT_READ_FAILED");
+  }
+
+  return {
+    facts: facts ?? [],
+    profile: profile ?? null,
+  };
+}
+
+function formatExistingProfileContext({ facts, profile }: ExistingProfileContext) {
+  const profileLines = [
+    profile?.display_name ? `Name: ${profile.display_name}` : null,
+    profile?.headline ? `Headline: ${profile.headline}` : null,
+    profile?.summary ? `Summary: ${profile.summary}` : null,
+    profile?.target_direction ? `Target direction: ${profile.target_direction}` : null,
+    profile?.target_level ? `Target level: ${profile.target_level}` : null,
+  ].filter(Boolean);
+  const factLines = facts
+    .slice(0, 40)
+    .map((fact) => `- ${fact.fact_type}: ${fact.fact_value}${fact.user_confirmed ? " (confirmed)" : ""}`);
+
+  if (profileLines.length === 0 && factLines.length === 0) {
+    return "No saved profile context yet.";
+  }
+
+  return [...profileLines, ...factLines].join("\n");
+}
+
+function buildFactKey(type: string, value: string) {
+  return `${type.trim().toLowerCase()}::${value.trim().replace(/\s+/g, " ").toLowerCase()}`;
 }
 
 async function saveProfileDraft({

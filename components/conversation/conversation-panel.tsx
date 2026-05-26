@@ -457,17 +457,17 @@ export function ConversationPanel({
       return source.error?.message ?? `I could not save ${file.name}.`;
     }
 
-    if (["txt", "pdf", "docx"].includes(sourceType)) {
+    if (["txt", "pdf", "docx", "image"].includes(sourceType)) {
       const extraction = await extractSource(source.source.id);
 
       if (!extraction.ok) {
         return `${file.name} was saved, but extraction needs attention: ${extraction.message}`;
       }
 
-      return `${file.name} was saved and ${extraction.savedFactCount} profile detail${extraction.savedFactCount === 1 ? "" : "s"} were captured.`;
+      return `${file.name} was saved, read, and ${extraction.savedFactCount} profile detail${extraction.savedFactCount === 1 ? "" : "s"} were captured.`;
     }
 
-    return `${file.name} was saved. Image OCR is next, so I have kept it as a source for now.`;
+    return `${file.name} was saved as a profile source.`;
   }
 
   async function createProfileSource({

@@ -728,6 +728,9 @@ function formatFailureReason(reason: string) {
     PDF_PAGE_LIMIT_EXCEEDED: "Too many pages for the current parser limit.",
     PDF_FILE_TOO_LARGE: "PDF exceeds the current parser size limit.",
     TEXT_FILE_TOO_LARGE: "Text file exceeds the current parser size limit.",
+    IMAGE_OCR_FILE_TOO_LARGE: "Image exceeds the current OCR size limit.",
+    IMAGE_OCR_TEXT_EMPTY: "No readable text found in the image.",
+    IMAGE_OCR_UNSUPPORTED_MIME_TYPE: "OCR supports JPG, PNG, and WebP images.",
   };
 
   return friendlyMessages[reason] ?? "Extraction needs another attempt.";
