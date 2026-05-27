@@ -22,6 +22,7 @@ Read these before implementation:
 - `DEVELOPMENT_CONTRACT.md`
 - `ARCHITECTURE.md`
 - `PRODUCT_SCOPE.md`
+- `SETUP.md`
 - `IMPLEMENTATION_PLAN.md`
 - `DATA_MODEL.md`
 - `API_CONTRACTS.md`

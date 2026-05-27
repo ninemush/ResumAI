@@ -121,6 +121,7 @@ export function AuthPanel() {
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
+        scopes: provider === "azure" ? "email" : undefined,
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
