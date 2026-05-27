@@ -565,6 +565,7 @@ async function downloadProfileSource(storagePath: string) {
 
 function extractReadableProfileText(html: string) {
   const $ = cheerio.load(html);
+  const structuredProfileText = extractStructuredProfileText($);
 
   $("script, style, noscript, svg, iframe, nav, footer, header, form").remove();
 
@@ -580,12 +581,151 @@ function extractReadableProfileText(html: string) {
     .join("\n");
   const bodyText = $("main").text().trim() || $("body").text().trim();
 
-  return [title, description, headings, bodyText]
+  return [title, description, structuredProfileText, headings, bodyText]
     .filter(Boolean)
     .join("\n\n")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, MAX_PROFILE_TEXT_CHARS);
+}
+
+function extractStructuredProfileText($: cheerio.CheerioAPI) {
+  const sections: string[] = [];
+
+  $("script[type='application/ld+json']").each((_, element) => {
+    const raw = $(element).contents().text().trim();
+
+    if (!raw) {
+      return;
+    }
+
+    const parsed = parseJsonLd(raw);
+    const nodes = Array.isArray(parsed) ? parsed : [parsed];
+
+    for (const node of flattenJsonLdGraph(nodes)) {
+      const text = formatStructuredProfileNode(node);
+
+      if (text) {
+        sections.push(text);
+      }
+    }
+  });
+
+  return sections.slice(0, 8).join("\n");
+}
+
+function parseJsonLd(value: string): unknown[] {
+  try {
+    return [JSON.parse(value)];
+  } catch {
+    return value
+      .split(/\n(?=\s*\{)/)
+      .flatMap((chunk) => {
+        try {
+          return [JSON.parse(chunk)];
+        } catch {
+          return [];
+        }
+      });
+  }
+}
+
+function flattenJsonLdGraph(nodes: unknown[]): Record<string, unknown>[] {
+  const flattened: Record<string, unknown>[] = [];
+
+  for (const node of nodes) {
+    if (Array.isArray(node)) {
+      flattened.push(...flattenJsonLdGraph(node));
+      continue;
+    }
+
+    if (!isJsonRecord(node)) {
+      continue;
+    }
+
+    flattened.push(node);
+
+    const graph = node["@graph"];
+
+    if (Array.isArray(graph)) {
+      flattened.push(...flattenJsonLdGraph(graph));
+    }
+  }
+
+  return flattened;
+}
+
+function formatStructuredProfileNode(node: Record<string, unknown>) {
+  const type = readJsonLdType(node["@type"]);
+  const profileTypes = new Set(["person", "profilepage", "organization", "creativework"]);
+
+  if (type && !profileTypes.has(type.toLowerCase())) {
+    return "";
+  }
+
+  const fields = [
+    ["Name", readJsonString(node.name)],
+    ["Headline", readJsonString(node.jobTitle) || readJsonString(node.alternateName)],
+    ["Description", readJsonString(node.description)],
+    ["Organization", readJsonName(node.worksFor) || readJsonName(node.affiliation)],
+    ["Education", readJsonName(node.alumniOf)],
+    ["Location", readJsonName(node.address)],
+    ["Skills", readJsonStringList(node.knowsAbout)],
+    ["Same as", readJsonStringList(node.sameAs)],
+  ].filter(([, value]) => value);
+
+  if (fields.length === 0) {
+    return "";
+  }
+
+  return fields.map(([label, value]) => `${label}: ${value}`).join("\n");
+}
+
+function readJsonLdType(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.find((entry): entry is string => typeof entry === "string") ?? "";
+  }
+
+  return typeof value === "string" ? value : "";
+}
+
+function readJsonString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readJsonStringList(value: unknown) {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (!Array.isArray(value)) {
+    return "";
+  }
+
+  return value
+    .map((entry) => readJsonString(entry) || readJsonName(entry))
+    .filter(Boolean)
+    .join(", ");
+}
+
+function readJsonName(value: unknown): string {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(readJsonName).filter(Boolean).join(", ");
+  }
+
+  if (!isJsonRecord(value)) {
+    return "";
+  }
+
+  return readJsonString(value.name) || readJsonString(value.addressLocality);
+}
+
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizeExtractedText(text: string) {
