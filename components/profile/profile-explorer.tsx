@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Circle,
   Compass,
+  FileText,
   RefreshCw,
   Save,
   Sparkles,
@@ -632,6 +633,19 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
                     <p className="source-failure">{formatFailureReason(source.failure_reason)}</p>
                   ) : null}
                   <p>{formatSourceGuidance(source)}</p>
+                  {source.source_type === "linkedin" && source.extraction_status === "failed" ? (
+                    <div className="source-fallback" aria-label="LinkedIn import options">
+                      <FileText size={15} aria-hidden="true" />
+                      <div>
+                        <strong>Reliable LinkedIn import</strong>
+                        <p>
+                          Drag a LinkedIn PDF export, screenshots, or paste the About,
+                          Experience, Education, Skills, and Certifications sections into
+                          Pramania. Those become reviewable LinkedIn-sourced evidence.
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="source-actions">
                   <span className={`source-pill ${source.extraction_status}`}>
@@ -905,6 +919,9 @@ function formatFailureReason(reason: string) {
     IMAGE_OCR_FILE_TOO_LARGE: "Image exceeds the current OCR size limit.",
     IMAGE_OCR_TEXT_EMPTY: "No readable text found in the image.",
     IMAGE_OCR_UNSUPPORTED_MIME_TYPE: "OCR supports JPG, PNG, and WebP images.",
+    LINKEDIN_PUBLIC_PROFILE_BLOCKED:
+      "LinkedIn did not return readable public content to Pramania.",
+    PROFILE_LINK_TEXT_TOO_SHORT: "Not enough readable profile text found.",
   };
 
   return friendlyMessages[reason] ?? "Extraction needs another attempt.";
@@ -924,7 +941,7 @@ function formatSourceGuidance(source: ProfileOverview["recentSources"][number]) 
   }
 
   if (source.source_type === "linkedin" && source.extraction_status === "failed") {
-    return "LinkedIn may block public reads. Retry, paste profile text, or upload a PDF/screenshot export.";
+    return "Public URL attempted. If LinkedIn blocks server reading, use the reliable import path below.";
   }
 
   if (source.extraction_status === "failed") {

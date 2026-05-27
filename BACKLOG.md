@@ -38,6 +38,7 @@ This backlog captures approved direction that should be designed and implemented
 
 ## Support And Docs
 
+- Draft a solid privacy policy before public launch covering data collected, AI processing, source ingestion, OAuth identity data, generated documents, retention, deletion/export rights, subprocessors, cross-border processing, and support/admin access.
 - Create self-serve L0 support docs after core V1 workflows stabilize.
 - Add L1 autonomous support for platform issues with support-safe logs and escalation boundaries.
 - Escalate refunds, sensitive matters, legal/privacy/security issues, and unresolved support cases to L2 human support with full context.

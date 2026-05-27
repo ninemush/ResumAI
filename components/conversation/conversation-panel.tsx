@@ -968,11 +968,19 @@ function processSourceExplanationQuestion(text: string) {
 }
 
 function buildLinkedInBlockedMessage(reason: string) {
-  return `I saved the LinkedIn link, but LinkedIn did not return readable profile content to Pramania's server: ${reason} For a reliable import now, upload a LinkedIn PDF export, paste the About/Experience/Skills text, or drop screenshots. I can read those and turn them into profile evidence for your review.`;
+  return [
+    `I saved the LinkedIn link and tried the public read, but LinkedIn did not return readable profile content to Pramania's server: ${reason}`,
+    "This can happen even when the page looks public in your browser, because LinkedIn may return a sign-in wall or stripped page to server requests.",
+    "Best path now: drag in a LinkedIn PDF export, drop screenshots, or paste the About, Experience, Education, Skills, and Certifications sections here. I will treat that as LinkedIn-sourced profile evidence and show you what I captured before using it.",
+  ].join(" ");
 }
 
 function buildLinkedInExplanation() {
-  return "LinkedIn sign-in confirms identity, but it does not give Pramania your full profile history. LinkedIn's standard OpenID Connect sign-in only exposes lite identity fields like name, email, and profile picture, while detailed profile APIs are separate and restricted. Public profile pages also often return a sign-in wall or blocked response to servers even when they look visible in your browser. The reliable V1 path is: upload a LinkedIn PDF export, paste your About/Experience/Skills text, or drop screenshots. I can parse those immediately and show every extracted fact before it becomes trusted profile evidence.";
+  return [
+    "LinkedIn sign-in confirms identity, but it does not give Pramania your full profile history.",
+    "For V1, I will always try a public LinkedIn URL first. If LinkedIn returns readable public content, I can extract it. If LinkedIn returns a sign-in wall or stripped response to Pramania's server, I will not fake browser access or use scraping workarounds.",
+    "The reliable import path is still easy: upload a LinkedIn PDF export, paste your About/Experience/Skills text, or drop screenshots. I can parse those immediately and show every extracted fact before it becomes trusted profile evidence.",
+  ].join(" ");
 }
 
 function looksLikeExistingSourceRequest(text: string) {

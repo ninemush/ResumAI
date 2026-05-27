@@ -1481,6 +1481,35 @@ input:focus {
   color: var(--danger);
 }
 
+.source-fallback {
+  align-items: flex-start;
+  background: rgba(185, 155, 103, 0.08);
+  border: 1px solid rgba(185, 155, 103, 0.22);
+  border-radius: var(--pr-radius-sm);
+  color: var(--muted);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.source-fallback svg {
+  color: var(--gold);
+  margin-top: 2px;
+}
+
+.source-fallback strong {
+  color: var(--foreground);
+  display: block;
+  font-size: 0.82rem;
+}
+
+.source-fallback p {
+  font-size: 0.8rem;
+  margin-top: 3px;
+}
+
 .fit-review-grid {
   display: grid;
   gap: 8px;
