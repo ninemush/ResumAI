@@ -8,8 +8,13 @@ import {
   APPLICATION_MATERIALS_PROMPT_VERSION,
 } from "@/lib/ai/prompts/application-materials";
 import { getMaterialsModel, getOpenAIClient } from "@/lib/ai/openai";
+import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
 import { recordQuotaEvent } from "@/lib/quota/quota-events";
-import { resumeContentSchema } from "@/lib/resumes/resume-content";
+import {
+  parseResumeContent,
+  resumeContentSchema,
+  type ResumeContent,
+} from "@/lib/resumes/resume-content";
 import { createClient } from "@/lib/supabase/server";
 
 export const generateApplicationMaterialsSchema = z.object({
@@ -36,6 +41,7 @@ type ApplicationContext = {
   job_url: string;
   profile_id: string;
   job_ingestions: {
+    id: string;
     extracted_text: string | null;
     title: string | null;
     company: string | null;
@@ -64,7 +70,7 @@ export async function generateApplicationMaterials(
   const { data: application, error: applicationError } = await supabase
     .from("applications")
     .select(
-      "id, company_name, job_title, job_url, profile_id, job_ingestions(extracted_text, title, company)",
+      "id, company_name, job_title, job_url, profile_id, job_ingestions(id, extracted_text, title, company)",
     )
     .eq("id", parsed.applicationId)
     .eq("user_id", user.id)
@@ -108,6 +114,18 @@ export async function generateApplicationMaterials(
     throw new Error("PROFILE_CONTEXT_TOO_THIN");
   }
 
+  const [masterResume, fitContext] = await Promise.all([
+    readLatestMasterResume({
+      profileId: context.profile_id,
+      userId: user.id,
+    }),
+    readUserFitContext(user.id),
+  ]);
+  const fitAnalysis = analyzeJobFit({
+    jobText: context.job_ingestions.extracted_text,
+    masterResume,
+    profileFacts: fitContext.profileFacts,
+  });
   const model = getMaterialsModel();
   const response = await getOpenAIClient().responses.create({
     model,
@@ -115,12 +133,16 @@ export async function generateApplicationMaterials(
     input: buildMaterialsInput({
       application: context,
       facts: facts ?? [],
+      fitAnalysis,
+      masterResume,
       profile,
     }),
     max_output_tokens: 1800,
     metadata: {
       application_id: context.id,
       feature: "application_materials",
+      fit_recommendation: fitAnalysis.recommendation,
+      fit_score: fitAnalysis.score?.toString() ?? "unknown",
       prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
     },
     safety_identifier: hashUserId(user.id),
@@ -229,6 +251,8 @@ export async function generateApplicationMaterials(
       model,
       prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
       resume_id: resume.id,
+      fit_recommendation: fitAnalysis.recommendation,
+      fit_score: fitAnalysis.score,
     },
     resourceId: context.id,
     resourceType: "application_materials",
@@ -246,6 +270,8 @@ export async function generateApplicationMaterials(
 function buildMaterialsInput({
   application,
   facts,
+  fitAnalysis,
+  masterResume,
   profile,
 }: {
   application: ApplicationContext;
@@ -255,6 +281,8 @@ function buildMaterialsInput({
     fact_value: string;
     user_confirmed: boolean;
   }[];
+  fitAnalysis: JobFitAnalysis;
+  masterResume: ResumeContent | null;
   profile: {
     display_name: string | null;
     headline: string | null;
@@ -279,6 +307,18 @@ Profile draft:
 Profile facts:
 ${facts.map((fact) => `- [${fact.fact_type}${fact.user_confirmed ? ", confirmed" : ""}] ${fact.fact_value}`).join("\n")}
 
+Master resume context:
+${formatMasterResume(masterResume)}
+
+Job fit analysis:
+- Score: ${fitAnalysis.score ?? "Unknown"}
+- Recommendation: ${fitAnalysis.recommendation}
+- Summary: ${fitAnalysis.summary}
+- Matched keywords: ${fitAnalysis.matchedKeywords.join(", ") || "None"}
+- Missing keywords/gaps: ${fitAnalysis.missingKeywords.join(", ") || "None"}
+- Risks: ${fitAnalysis.risks.join(" | ") || "None"}
+- Questions to resolve: ${fitAnalysis.questions.join(" | ") || "None"}
+
 Job post text:
 ${application.job_ingestions?.extracted_text?.slice(0, 14000)}
 
@@ -287,10 +327,62 @@ Return:
 - resume.summary: concise professional summary.
 - resume.skills: high-signal ATS skills that are supported by profile evidence.
 - resume.experienceBullets: rewritten bullets that align evidence to the role.
-- resume.keywordGaps: important job keywords or proof points missing from the profile.
-- resume.reviewerNotes: candid recruiter-style notes about fit, risk, and what to verify.
+- resume.keywordGaps: important job keywords or proof points missing from the
+  confirmed profile/master resume evidence. Do not hide gaps.
+- resume.reviewerNotes: candid recruiter-style notes about fit, unsupported
+  claims to avoid, risk, and what the user should verify before export.
 - coverLetter: concise, credible cover letter in the user's implied professional voice.
 `.trim();
+}
+
+async function readLatestMasterResume({
+  profileId,
+  userId,
+}: {
+  profileId: string;
+  userId: string;
+}) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("generated_resumes")
+    .select("content_json")
+    .eq("profile_id", profileId)
+    .eq("user_id", userId)
+    .eq("resume_type", "master")
+    .is("application_id", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error("MASTER_RESUME_READ_FAILED");
+  }
+
+  if (!data?.content_json) {
+    return null;
+  }
+
+  try {
+    return parseResumeContent(data.content_json);
+  } catch {
+    return null;
+  }
+}
+
+function formatMasterResume(masterResume: ResumeContent | null) {
+  if (!masterResume) {
+    return "No master resume draft exists yet.";
+  }
+
+  return [
+    `- Headline: ${masterResume.headline}`,
+    `- Summary: ${masterResume.summary}`,
+    `- Skills: ${masterResume.skills.join(", ")}`,
+    "- Experience bullets:",
+    ...masterResume.experienceBullets.map((bullet) => `  - ${bullet}`),
+    "- Existing gaps/notes:",
+    ...[...masterResume.keywordGaps, ...masterResume.reviewerNotes].map((note) => `  - ${note}`),
+  ].join("\n");
 }
 
 function normalizeApplicationContext(application: RawApplicationContext): ApplicationContext {

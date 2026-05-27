@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileText, Save, WandSparkles } from "lucide-react";
+import { AlertTriangle, Download, FileText, Save, ShieldCheck, WandSparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
@@ -35,6 +35,11 @@ type MaterialReview = {
     status: string;
     updatedAt: string;
   } | null;
+  exportReadiness: {
+    canExport: boolean;
+    status: "exported" | "missing_materials" | "ready_to_export";
+    warnings: string[];
+  };
   resume: {
     content: ResumeContent;
     id: string;
@@ -294,14 +299,38 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
               </button>
               <button
                 className="secondary-action"
-                disabled={!activeReview.resume || !activeReview.coverLetter || exportingApplicationId === activeReview.application.id}
+                disabled={!activeReview.exportReadiness.canExport || exportingApplicationId === activeReview.application.id}
                 onClick={exportPdfs}
+                title={
+                  activeReview.exportReadiness.canExport
+                    ? "Export validated resume and cover-letter PDFs"
+                    : "Generate both resume and cover-letter materials before exporting"
+                }
                 type="button"
               >
                 <Download size={15} aria-hidden="true" />
                 {exportingApplicationId === activeReview.application.id ? "Exporting..." : "Export PDFs"}
               </button>
             </div>
+          </div>
+
+          <div className={`material-readiness ${activeReview.exportReadiness.status}`}>
+            <strong>
+              <ShieldCheck size={15} aria-hidden="true" />
+              {formatExportStatus(activeReview.exportReadiness.status)}
+            </strong>
+            {activeReview.exportReadiness.warnings.length > 0 ? (
+              <ul>
+                {activeReview.exportReadiness.warnings.map((warning) => (
+                  <li key={warning}>
+                    <AlertTriangle size={14} aria-hidden="true" />
+                    {warning}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>Materials are ready for PDF export.</p>
+            )}
           </div>
 
           {!resumeDraft || !activeReview.coverLetter ? (
@@ -354,7 +383,7 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
                 />
               </label>
               <label>
-                Keyword gaps
+                Keyword gaps to verify
                 <textarea
                   rows={5}
                   value={resumeDraft.keywordGaps.join("\n")}
@@ -367,7 +396,7 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
                 />
               </label>
               <label>
-                Reviewer notes
+                Reviewer notes and risk checks
                 <textarea
                   rows={5}
                   value={resumeDraft.reviewerNotes.join("\n")}
@@ -412,6 +441,16 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
 
 function formatStatus(status: string) {
   return applicationStatuses.find((item) => item.value === status)?.label ?? status.replaceAll("_", " ");
+}
+
+function formatExportStatus(status: MaterialReview["exportReadiness"]["status"]) {
+  const labels: Record<MaterialReview["exportReadiness"]["status"], string> = {
+    exported: "PDFs exported",
+    missing_materials: "Materials incomplete",
+    ready_to_export: "Ready for validated export",
+  };
+
+  return labels[status];
 }
 
 function splitLines(value: string) {

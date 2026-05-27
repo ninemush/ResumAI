@@ -210,6 +210,15 @@ function toApiError(error: unknown) {
       };
     }
 
+    if (error.message === "MASTER_RESUME_READ_FAILED") {
+      return {
+        category: "server",
+        code: "resume.master_read_failed",
+        message: "I could not read the master resume context for this generation.",
+        status: 500,
+      };
+    }
+
     if (error.message === "QUOTA_EVENT_RECORD_FAILED") {
       return {
         category: "server",

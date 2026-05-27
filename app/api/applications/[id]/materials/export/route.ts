@@ -87,6 +87,15 @@ function toApiError(error: unknown) {
         status: 422,
       };
     }
+
+    if (error.message === "PDF_UPLOAD_FAILED" || error.message === "PDF_METADATA_UPDATE_FAILED") {
+      return {
+        category: "server",
+        code: "application.pdf_storage_failed",
+        message: "The PDFs were built but could not be stored securely. Try exporting again.",
+        status: 500,
+      };
+    }
   }
 
   return {

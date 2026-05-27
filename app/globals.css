@@ -1611,6 +1611,55 @@ input:focus {
   justify-content: flex-end;
 }
 
+.material-readiness {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.material-readiness strong {
+  align-items: center;
+  color: var(--foreground);
+  display: flex;
+  gap: 8px;
+}
+
+.material-readiness.exported strong,
+.material-readiness.ready_to_export strong {
+  color: var(--sage-strong);
+}
+
+.material-readiness.missing_materials strong {
+  color: var(--danger);
+}
+
+.material-readiness ul {
+  display: grid;
+  gap: 7px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.material-readiness li,
+.material-readiness p {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.84rem;
+  gap: 7px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.material-readiness li svg {
+  color: var(--gold);
+  flex: 0 0 auto;
+}
+
 .materials-editor-grid {
   display: grid;
   gap: 14px;
