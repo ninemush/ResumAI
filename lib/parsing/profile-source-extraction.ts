@@ -2,6 +2,7 @@ import "server-only";
 
 import { isIP } from "node:net";
 import * as cheerio from "cheerio";
+import JSZip from "jszip";
 import mammoth from "mammoth";
 import { extractText } from "unpdf";
 import { z } from "zod";
@@ -16,6 +17,8 @@ const MAX_PDF_BYTES = 15_000_000;
 const MAX_PDF_PAGES = 15;
 const MAX_DOCX_BYTES = 15_000_000;
 const MAX_IMAGE_BYTES = 10_000_000;
+const MAX_LINKEDIN_ARCHIVE_BYTES = 25_000_000;
+const MAX_LINKEDIN_ARCHIVE_FILES = 30;
 const MAX_PROFILE_HTML_BYTES = 1_500_000;
 const MAX_PROFILE_TEXT_CHARS = 12_000;
 const FETCH_TIMEOUT_MS = 8000;
@@ -72,8 +75,20 @@ export async function extractProfileSourceText({
     throw new Error("INVALID_STORAGE_PATH");
   }
 
-  if (["link", "linkedin", "portfolio"].includes(source.source_type) && !source.source_url) {
+  if (
+    source.source_type === "linkedin" &&
+    source.storage_path &&
+    !source.storage_path.startsWith(`${user.id}/`)
+  ) {
+    throw new Error("INVALID_STORAGE_PATH");
+  }
+
+  if (["link", "portfolio"].includes(source.source_type) && !source.source_url) {
     throw new Error("URL_REQUIRED");
+  }
+
+  if (source.source_type === "linkedin" && !source.source_url && !source.storage_path) {
+    throw new Error("LINKEDIN_SOURCE_REQUIRED");
   }
 
   if (source.extraction_status === "processing") {
@@ -94,6 +109,11 @@ export async function extractProfileSourceText({
           ? await extractImageTextFromStorage({
               mimeType: source.mime_type,
               storagePath: source.storage_path ?? "",
+            })
+        : source.source_type === "linkedin" && source.storage_path
+          ? await extractLinkedInArchiveFromStorage({
+              filename: source.original_filename,
+              storagePath: source.storage_path,
             })
           : await extractPublicProfilePage(source.source_url ?? "");
     const normalizedText = normalizeExtractedText(extractedText);
@@ -279,6 +299,197 @@ async function extractImageTextFromStorage({
   }
 
   throw new Error(lastFailureCode);
+}
+
+async function extractLinkedInArchiveFromStorage({
+  filename,
+  storagePath,
+}: {
+  filename: string | null;
+  storagePath: string;
+}) {
+  const data = await downloadProfileSource(storagePath);
+
+  if (data.size > MAX_LINKEDIN_ARCHIVE_BYTES) {
+    throw new Error("LINKEDIN_ARCHIVE_FILE_TOO_LARGE");
+  }
+
+  const extension = filename?.split(".").pop()?.toLowerCase();
+  const buffer = Buffer.from(await data.arrayBuffer());
+
+  if (extension === "zip") {
+    return extractLinkedInZipText(buffer);
+  }
+
+  if (extension === "csv") {
+    return formatLinkedInCsvText(filename ?? "LinkedIn profile export", buffer.toString("utf8"));
+  }
+
+  throw new Error("LINKEDIN_ARCHIVE_UNSUPPORTED_FILE");
+}
+
+async function extractLinkedInZipText(buffer: Buffer) {
+  let archive: JSZip;
+
+  try {
+    archive = await JSZip.loadAsync(buffer);
+  } catch {
+    throw new Error("LINKEDIN_ARCHIVE_INVALID_ZIP");
+  }
+
+  const candidateFiles = Object.values(archive.files)
+    .filter((file) => !file.dir && isLinkedInProfileArchiveFile(file.name))
+    .slice(0, MAX_LINKEDIN_ARCHIVE_FILES);
+
+  if (candidateFiles.length === 0) {
+    throw new Error("LINKEDIN_ARCHIVE_NO_PROFILE_FILES");
+  }
+
+  const sections: string[] = [];
+
+  for (const file of candidateFiles) {
+    const text = await file.async("string");
+    const formatted = safeFormatLinkedInCsvText(file.name, text);
+
+    if (formatted) {
+      sections.push(formatted);
+    }
+  }
+
+  const combined = sections.join("\n\n").trim();
+
+  if (combined.length < 3) {
+    throw new Error("LINKEDIN_ARCHIVE_TEXT_EMPTY");
+  }
+
+  return combined;
+}
+
+function safeFormatLinkedInCsvText(filename: string, csvText: string) {
+  try {
+    return formatLinkedInCsvText(filename, csvText);
+  } catch (error) {
+    if (error instanceof Error && error.message === "LINKEDIN_ARCHIVE_TEXT_EMPTY") {
+      return "";
+    }
+
+    throw error;
+  }
+}
+
+function isLinkedInProfileArchiveFile(filename: string) {
+  const basename = filename.split("/").pop()?.toLowerCase() ?? "";
+  const allowedFiles = new Set([
+    "certifications.csv",
+    "courses.csv",
+    "education.csv",
+    "honors.csv",
+    "languages.csv",
+    "organizations.csv",
+    "patents.csv",
+    "positions.csv",
+    "profile.csv",
+    "projects.csv",
+    "publications.csv",
+    "skills.csv",
+    "test scores.csv",
+    "volunteer experiences.csv",
+  ]);
+
+  return allowedFiles.has(basename);
+}
+
+function formatLinkedInCsvText(filename: string, csvText: string) {
+  const rows = parseCsv(csvText).filter((row) => row.some((cell) => cell.trim().length > 0));
+
+  if (rows.length < 2) {
+    throw new Error("LINKEDIN_ARCHIVE_TEXT_EMPTY");
+  }
+
+  const [headers, ...dataRows] = rows;
+  const title = filename
+    .split("/")
+    .pop()
+    ?.replace(/\.csv$/i, "")
+    .replace(/[-_]+/g, " ")
+    .trim();
+
+  const formattedRows = dataRows
+    .slice(0, 100)
+    .map((row) => formatLinkedInCsvRow(headers, row))
+    .filter(Boolean);
+
+  if (formattedRows.length === 0) {
+    throw new Error("LINKEDIN_ARCHIVE_TEXT_EMPTY");
+  }
+
+  return [`LinkedIn ${title ?? "profile export"}`, ...formattedRows].join("\n");
+}
+
+function formatLinkedInCsvRow(headers: string[], row: string[]) {
+  const fields = headers
+    .map((header, index) => ({
+      header: header.trim(),
+      value: row[index]?.trim() ?? "",
+    }))
+    .filter(({ header, value }) => header && value);
+
+  if (fields.length === 0) {
+    return "";
+  }
+
+  return fields.map(({ header, value }) => `${header}: ${value}`).join("; ");
+}
+
+function parseCsv(value: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const nextChar = value[index + 1];
+
+    if (char === '"' && inQuotes && nextChar === '"') {
+      field += '"';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      row.push(field);
+      field = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && nextChar === "\n") {
+        index += 1;
+      }
+
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      continue;
+    }
+
+    field += char;
+  }
+
+  row.push(field);
+
+  if (row.some((cell) => cell.length > 0)) {
+    rows.push(row);
+  }
+
+  return rows;
 }
 
 async function extractPublicProfilePage(sourceUrl: string) {

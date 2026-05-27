@@ -348,6 +348,12 @@ function formatFailureReason(reason: string) {
     IMAGE_OCR_PROVIDER_UNAVAILABLE: "OCR provider could not be reached after retrying.",
     IMAGE_OCR_TEXT_EMPTY: "OCR retried but found no readable text in the image.",
     IMAGE_OCR_UNSUPPORTED_MIME_TYPE: "OCR supports JPG, PNG, and WebP images.",
+    LINKEDIN_ARCHIVE_FILE_TOO_LARGE: "LinkedIn archive exceeds the current 25 MB parser limit.",
+    LINKEDIN_ARCHIVE_INVALID_ZIP: "This does not look like a valid LinkedIn archive ZIP.",
+    LINKEDIN_ARCHIVE_NO_PROFILE_FILES:
+      "No LinkedIn profile CSV files found. Upload Profile.csv, Positions.csv, Skills.csv, or Education.csv.",
+    LINKEDIN_ARCHIVE_TEXT_EMPTY: "No readable profile rows found in that LinkedIn export.",
+    LINKEDIN_ARCHIVE_UNSUPPORTED_FILE: "LinkedIn archive import supports ZIP and CSV files.",
     LINKEDIN_PUBLIC_PROFILE_BLOCKED:
       "LinkedIn did not return readable public content to Pramania.",
     PDF_FILE_TOO_LARGE: "PDF exceeds the current parser size limit.",

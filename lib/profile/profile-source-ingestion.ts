@@ -144,8 +144,12 @@ function validateSourceShape(input: ProfileSourceRequest) {
     throw new Error("TEXT_REQUIRED");
   }
 
-  if (["link", "linkedin", "portfolio"].includes(input.sourceType) && !input.sourceUrl) {
+  if (["link", "portfolio"].includes(input.sourceType) && !input.sourceUrl) {
     throw new Error("URL_REQUIRED");
+  }
+
+  if (input.sourceType === "linkedin" && !input.sourceUrl && !input.storagePath) {
+    throw new Error("LINKEDIN_SOURCE_REQUIRED");
   }
 
   if (["pdf", "docx", "txt", "image"].includes(input.sourceType) && !input.storagePath) {

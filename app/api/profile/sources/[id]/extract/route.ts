@@ -97,6 +97,15 @@ function toApiError(error: unknown) {
       };
     }
 
+    if (error.message === "LINKEDIN_SOURCE_REQUIRED") {
+      return {
+        category: "validation",
+        code: "source.linkedin_source_required",
+        message: "LinkedIn sources need a profile URL or an uploaded LinkedIn export.",
+        status: 400,
+      };
+    }
+
     if (error.message === "SOURCE_ALREADY_PROCESSING") {
       return {
         category: "conflict",
@@ -250,12 +259,71 @@ function toApiError(error: unknown) {
         status: 422,
       };
     }
+
+    if (error.message.startsWith("LINKEDIN_ARCHIVE_")) {
+      const errorDetails = getLinkedInArchiveApiError(error.message);
+
+      return {
+        ...errorDetails,
+      };
+    }
   }
 
   return {
     category: "server",
     code: "source.extraction_failed",
     message: "Unable to extract that source right now.",
+    status: 500,
+  };
+}
+
+function getLinkedInArchiveApiError(code: string) {
+  const errors: Record<
+    string,
+    {
+      category: string;
+      code: string;
+      message: string;
+      status: number;
+    }
+  > = {
+    LINKEDIN_ARCHIVE_FILE_TOO_LARGE: {
+      category: "validation",
+      code: "source.linkedin_archive_file_too_large",
+      message: "LinkedIn archive extraction currently supports files up to 25 MB.",
+      status: 413,
+    },
+    LINKEDIN_ARCHIVE_INVALID_ZIP: {
+      category: "validation",
+      code: "source.linkedin_archive_invalid_zip",
+      message: "That file does not look like a valid LinkedIn archive ZIP.",
+      status: 422,
+    },
+    LINKEDIN_ARCHIVE_NO_PROFILE_FILES: {
+      category: "validation",
+      code: "source.linkedin_archive_no_profile_files",
+      message:
+        "I could not find LinkedIn profile CSV files in that archive. Try the profile PDF export or upload Positions.csv, Profile.csv, Skills.csv, or Education.csv.",
+      status: 422,
+    },
+    LINKEDIN_ARCHIVE_TEXT_EMPTY: {
+      category: "validation",
+      code: "source.linkedin_archive_text_empty",
+      message: "I could not find readable profile rows in that LinkedIn export.",
+      status: 422,
+    },
+    LINKEDIN_ARCHIVE_UNSUPPORTED_FILE: {
+      category: "validation",
+      code: "source.linkedin_archive_unsupported_file",
+      message: "LinkedIn archive import supports ZIP and CSV files.",
+      status: 422,
+    },
+  };
+
+  return errors[code] ?? {
+    category: "server",
+    code: "source.linkedin_archive_failed",
+    message: "Unable to extract that LinkedIn archive right now.",
     status: 500,
   };
 }

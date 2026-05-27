@@ -107,7 +107,7 @@ const PROFILE_SOURCE_BUCKET = "profile-sources";
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 const welcomeMessage = (name: string | null) =>
   `Hi${name ? `, ${name}` : ""}. I'm ${brand.name}. Tell me your target role, or drop a resume/link and I will help shape your profile.`;
-const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image">([
+const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image" | "linkedin">([
   ["application/pdf", "pdf"],
   [
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -115,6 +115,10 @@ const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image">([
   ],
   ["application/msword", "docx"],
   ["text/plain", "txt"],
+  ["text/csv", "linkedin"],
+  ["application/csv", "linkedin"],
+  ["application/zip", "linkedin"],
+  ["application/x-zip-compressed", "linkedin"],
   ["image/jpeg", "image"],
   ["image/png", "image"],
   ["image/webp", "image"],
@@ -764,7 +768,7 @@ export function ConversationPanel({
       return source.error?.message ?? `I could not save ${file.name}.`;
     }
 
-    if (["txt", "pdf", "docx", "image"].includes(sourceType)) {
+    if (["txt", "pdf", "docx", "image", "linkedin"].includes(sourceType)) {
       const extraction = await extractSource(source.source.id);
 
       if (!extraction.ok) {
@@ -976,7 +980,7 @@ export function ConversationPanel({
         />
         <input
           ref={fileInputRef}
-          accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.webp,.heic,.heif"
+          accept=".pdf,.doc,.docx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp,.heic,.heif"
           className="sr-only"
           disabled={isSubmitting}
           multiple
@@ -1395,6 +1399,10 @@ function buildFileExtractionFailureMessage({
     return `${fileName} was saved as a Word source, but I could not extract readable text yet: ${message} You can retry from Knowledgebase or paste the resume text here.`;
   }
 
+  if (sourceType === "linkedin") {
+    return `${fileName} was saved as a LinkedIn export source, but I could not extract profile data yet: ${message} LinkedIn archive ZIPs and profile CSV files work best. You can retry from Knowledgebase or drop the LinkedIn PDF export instead.`;
+  }
+
   return `${fileName} was saved as a source, but I could not extract readable text yet: ${message} You can retry from Knowledgebase or paste the important text here.`;
 }
 
@@ -1780,6 +1788,7 @@ function inferFileSourceType(file: File) {
   if (extension === "pdf") return "pdf";
   if (extension === "doc" || extension === "docx") return "docx";
   if (extension === "txt") return "txt";
+  if (extension === "zip" || extension === "csv") return "linkedin";
   if (["jpg", "jpeg", "png", "webp", "heic", "heif"].includes(extension ?? "")) {
     return "image";
   }

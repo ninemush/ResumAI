@@ -138,6 +138,14 @@ function toApiError(error: unknown) {
       };
     }
 
+    if (error.message === "LINKEDIN_SOURCE_REQUIRED") {
+      return {
+        code: "source.linkedin_source_required",
+        message: "LinkedIn sources need a profile URL or an uploaded LinkedIn export.",
+        status: 400,
+      };
+    }
+
     if (error.message.endsWith("_REQUIRED")) {
       return {
         code: `source.${error.message.toLowerCase()}`,
