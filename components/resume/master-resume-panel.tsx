@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, FileText, Save, WandSparkles } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, FileText, Save, WandSparkles } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -20,6 +20,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
     overview.latestResume?.content ?? null,
   );
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -74,6 +75,30 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
       router.refresh();
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function exportResumePdf() {
+    setIsExporting(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/resume/master/export", {
+        method: "POST",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to export the master resume PDF.");
+        return;
+      }
+
+      setCurrentOverview(payload.overview);
+      setDraft(payload.overview.latestResume?.content ?? draft);
+      setMessage("Exported a validated master resume PDF.");
+      router.refresh();
+    } finally {
+      setIsExporting(false);
     }
   }
 
@@ -139,6 +164,28 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
             <Save size={15} aria-hidden="true" />
             {isSaving ? "Saving..." : "Save draft"}
           </button>
+          <button
+            className="secondary-action"
+            disabled={!draft || isExporting}
+            onClick={exportResumePdf}
+            title="Export a validated ATS-friendly PDF from the current master resume"
+            type="button"
+          >
+            <Download size={15} aria-hidden="true" />
+            {isExporting ? "Exporting..." : "Export PDF"}
+          </button>
+          {currentOverview.latestResume?.pdfDownloadUrl ? (
+            <a
+              className="secondary-action"
+              href={currentOverview.latestResume.pdfDownloadUrl}
+              rel="noreferrer"
+              target="_blank"
+              title="Open the latest exported master resume PDF"
+            >
+              <FileText size={15} aria-hidden="true" />
+              Open PDF
+            </a>
+          ) : null}
         </div>
       </section>
 

@@ -7,3 +7,11 @@ test("requires authentication before generating a master resume", async ({ reque
   expect(response.status()).toBe(401);
   expect(payload.error.code).toBe("auth.required");
 });
+
+test("requires authentication before exporting a master resume PDF", async ({ request }) => {
+  const response = await request.post("/api/resume/master/export");
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});

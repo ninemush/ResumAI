@@ -1,8 +1,11 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import type { PDFFont, PDFPage, RGB } from "pdf-lib";
 import { z } from "zod";
 
+import { validateGeneratedPdf } from "@/lib/applications/pdf-validation";
 import { getMaterialsModel, getOpenAIClient } from "@/lib/ai/openai";
 import { brand } from "@/lib/brand";
 import { recordQuotaEvent } from "@/lib/quota/quota-events";
@@ -14,6 +17,8 @@ import {
 import { createClient } from "@/lib/supabase/server";
 
 export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v1";
+const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
+const PDF_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
 export const generateMasterResumeSchema = z.object({
   instruction: z.string().trim().min(3).max(500).optional(),
@@ -42,6 +47,7 @@ type ResumeRow = {
   content_json: unknown;
   id: string;
   model: string | null;
+  pdf_storage_path: string | null;
   prompt_version: string | null;
   status: string;
   updated_at: string;
@@ -54,6 +60,7 @@ export type MasterResumeOverview = {
     content: ResumeContent;
     id: string;
     model: string | null;
+    pdfDownloadUrl: string | null;
     promptVersion: string | null;
     status: string;
     updatedAt: string;
@@ -100,7 +107,7 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
         .limit(80),
       supabase
         .from("generated_resumes")
-        .select("id, content_json, status, prompt_version, model, updated_at")
+        .select("id, content_json, pdf_storage_path, status, prompt_version, model, updated_at")
         .eq("profile_id", profile.id)
         .eq("user_id", userId)
         .eq("resume_type", "master")
@@ -293,6 +300,83 @@ export async function updateMasterResume(
   return getMasterResumeOverview(userId);
 }
 
+export async function exportMasterResumePdf(): Promise<MasterResumeOverview> {
+  const { supabase, userId } = await getAuthenticatedContext();
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, display_name, target_direction, target_level")
+    .eq("user_id", userId)
+    .single();
+
+  if (profileError || !profile) {
+    throw new Error("PROFILE_NOT_FOUND");
+  }
+
+  const { data: latestResume, error: resumeReadError } = await supabase
+    .from("generated_resumes")
+    .select("id, content_json")
+    .eq("profile_id", profile.id)
+    .eq("user_id", userId)
+    .eq("resume_type", "master")
+    .is("application_id", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (resumeReadError) {
+    throw new Error("MASTER_RESUME_READ_FAILED");
+  }
+
+  if (!latestResume) {
+    throw new Error("MASTER_RESUME_NOT_FOUND");
+  }
+
+  const resume = parseResumeContent(latestResume.content_json);
+  const pdfBytes = await buildMasterResumePdf({
+    profile: {
+      displayName: profile.display_name,
+      targetDirection: profile.target_direction,
+      targetLevel: profile.target_level,
+    },
+    resume,
+  });
+  const validation = await validateGeneratedPdf({
+    bytes: pdfBytes,
+    requiredPhrases: [resume.headline, resume.summary],
+  });
+
+  if (!validation.valid) {
+    throw new Error("PDF_VALIDATION_FAILED");
+  }
+
+  const pdfPath = `${userId}/master/${latestResume.id}-master-resume.pdf`;
+  const { error: uploadError } = await supabase.storage
+    .from(GENERATED_ARTIFACT_BUCKET)
+    .upload(pdfPath, pdfBytes, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+  if (uploadError) {
+    throw new Error("PDF_UPLOAD_FAILED");
+  }
+
+  const { error: updateError } = await supabase
+    .from("generated_resumes")
+    .update({
+      pdf_storage_path: pdfPath,
+      status: "ready",
+    })
+    .eq("id", latestResume.id)
+    .eq("user_id", userId);
+
+  if (updateError) {
+    throw new Error("PDF_METADATA_UPDATE_FAILED");
+  }
+
+  return getMasterResumeOverview(userId);
+}
+
 async function getAuthenticatedContext() {
   const supabase = await createClient();
   const {
@@ -340,7 +424,7 @@ async function readMasterResumeContext(userId: string) {
   };
 }
 
-function buildOverview({
+async function buildOverview({
   confirmedFacts,
   latestResume,
   profile,
@@ -358,6 +442,7 @@ function buildOverview({
           content: parseResumeContent(latestResume.content_json),
           id: latestResume.id,
           model: latestResume.model,
+          pdfDownloadUrl: await createSignedPdfUrl(latestResume.pdf_storage_path),
           promptVersion: latestResume.prompt_version,
           status: latestResume.status,
           updatedAt: latestResume.updated_at,
@@ -463,6 +548,241 @@ ${instruction ?? "No extra instruction."}
 
 Return structured JSON only.
 `.trim();
+}
+
+async function createSignedPdfUrl(path: string | null) {
+  if (!path) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage
+    .from(GENERATED_ARTIFACT_BUCKET)
+    .createSignedUrl(path, PDF_SIGNED_URL_TTL_SECONDS);
+
+  if (error || !data?.signedUrl) {
+    return null;
+  }
+
+  return data.signedUrl;
+}
+
+async function buildMasterResumePdf({
+  profile,
+  resume,
+}: {
+  profile: {
+    displayName: string | null;
+    targetDirection: string | null;
+    targetLevel: string | null;
+  };
+  resume: ResumeContent;
+}) {
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const document = createPdfLayout({ bold, pdf, regular });
+
+  drawTextBlock(document, profile.displayName ?? resume.headline, {
+    font: bold,
+    size: 18,
+  });
+
+  if (profile.displayName) {
+    drawTextBlock(document, resume.headline, {
+      color: rgb(0.42, 0.33, 0.24),
+      font: regular,
+      size: 11,
+    });
+  }
+
+  const targetLine = [profile.targetDirection, profile.targetLevel].filter(Boolean).join(" | ");
+
+  if (targetLine) {
+    drawTextBlock(document, targetLine, {
+      color: rgb(0.42, 0.33, 0.24),
+      font: regular,
+      size: 9,
+    });
+  }
+
+  addVerticalSpace(document, 12);
+  drawSection(document, "Professional Summary", [resume.summary], regular, bold);
+  drawSection(document, "Core Skills", [resume.skills.join(", ")], regular, bold);
+  drawSection(
+    document,
+    "Experience Highlights",
+    resume.experienceBullets.map((bullet) => `- ${bullet}`),
+    regular,
+    bold,
+  );
+
+  if (resume.keywordGaps.length > 0 || resume.reviewerNotes.length > 0) {
+    drawSection(
+      document,
+      "Review Before Use",
+      [
+        ...resume.keywordGaps.map((gap) => `Gap: ${gap}`),
+        ...resume.reviewerNotes.map((note) => `Note: ${note}`),
+      ],
+      regular,
+      bold,
+    );
+  }
+
+  return pdf.save();
+}
+
+function drawSection(
+  document: PdfLayout,
+  title: string,
+  lines: string[],
+  regular: PDFFont,
+  bold: PDFFont,
+) {
+  drawTextBlock(document, title, { font: bold, size: 12 });
+  addVerticalSpace(document, 4);
+
+  for (const line of lines) {
+    drawTextBlock(document, line, { font: regular, size: 10 });
+    addVerticalSpace(document, 4);
+  }
+
+  addVerticalSpace(document, 10);
+}
+
+function drawTextBlock(
+  document: PdfLayout,
+  text: string,
+  {
+    color = rgb(0.05, 0.09, 0.16),
+    font,
+    size,
+    x = 54,
+  }: {
+    color?: RGB;
+    font: PDFFont;
+    size: number;
+    x?: number;
+  },
+) {
+  const lines = wrapText(text, font, size, 504);
+
+  for (const line of lines) {
+    ensureSpace(document, size + 5);
+
+    document.page.drawText(line, {
+      color,
+      font,
+      size,
+      x,
+      y: document.cursorY,
+    });
+    document.cursorY -= size + 5;
+  }
+}
+
+type PdfLayout = {
+  bold: PDFFont;
+  cursorY: number;
+  page: PDFPage;
+  pdf: PDFDocument;
+  regular: PDFFont;
+};
+
+function createPdfLayout({
+  bold,
+  pdf,
+  regular,
+}: {
+  bold: PDFFont;
+  pdf: PDFDocument;
+  regular: PDFFont;
+}): PdfLayout {
+  return {
+    bold,
+    cursorY: 740,
+    page: pdf.addPage([612, 792]),
+    pdf,
+    regular,
+  };
+}
+
+function addVerticalSpace(document: PdfLayout, space: number) {
+  ensureSpace(document, space);
+  document.cursorY -= space;
+}
+
+function ensureSpace(document: PdfLayout, requiredHeight: number) {
+  if (document.cursorY - requiredHeight >= 54) {
+    return;
+  }
+
+  document.page = document.pdf.addPage([612, 792]);
+  document.cursorY = 740;
+}
+
+function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
+  return text
+    .split("\n")
+    .flatMap((paragraph) => {
+      const words = paragraph
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .flatMap((word) => splitLongWord(word, font, size, maxWidth));
+      const lines: string[] = [];
+      let currentLine = "";
+
+      for (const word of words) {
+        const candidate = currentLine ? `${currentLine} ${word}` : word;
+
+        if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+          currentLine = candidate;
+          continue;
+        }
+
+        if (currentLine) {
+          lines.push(currentLine);
+        }
+        currentLine = word;
+      }
+
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+
+      return lines.length > 0 ? lines : [""];
+    });
+}
+
+function splitLongWord(word: string, font: PDFFont, size: number, maxWidth: number) {
+  if (font.widthOfTextAtSize(word, size) <= maxWidth) {
+    return [word];
+  }
+
+  const segments: string[] = [];
+  let segment = "";
+
+  for (const character of word) {
+    const candidate = `${segment}${character}`;
+
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+      segment = candidate;
+      continue;
+    }
+
+    if (segment) {
+      segments.push(segment);
+    }
+    segment = character;
+  }
+
+  if (segment) {
+    segments.push(segment);
+  }
+
+  return segments;
 }
 
 function hashUserId(userId: string) {

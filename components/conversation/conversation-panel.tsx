@@ -270,6 +270,23 @@ export function ConversationPanel({
   }
 
   async function processResumeAction(text: string) {
+    if (looksLikeMasterResumeExportRequest(text)) {
+      const response = await fetch("/api/resume/master/export", {
+        method: "POST",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        return payload.error?.message ?? "I could not export the master resume PDF yet.";
+      }
+
+      const downloadUrl = payload.overview?.latestResume?.pdfDownloadUrl;
+
+      return downloadUrl
+        ? `Exported a validated master resume PDF. You can open it from Resume Studio or here: ${downloadUrl}`
+        : "Exported a validated master resume PDF. Open Resume Studio to download it.";
+    }
+
     if (!looksLikeMasterResumeRequest(text)) {
       return null;
     }
@@ -1048,7 +1065,7 @@ function inferProcessingMode(text: string): ProcessingMode {
     return "source";
   }
 
-  if (looksLikeMasterResumeRequest(text)) {
+  if (looksLikeMasterResumeRequest(text) || looksLikeMasterResumeExportRequest(text)) {
     return "resume";
   }
 
@@ -1630,6 +1647,15 @@ function looksLikeMasterResumeRequest(text: string) {
     /\b(master resume|base resume|core resume)\b/.test(normalized) ||
     /\b(generate|create|draft|build|make)\b.*\b(resume|cv)\b/.test(normalized) ||
     /\b(resume|cv)\b.*\b(generate|create|draft|build|make)\b/.test(normalized)
+  );
+}
+
+function looksLikeMasterResumeExportRequest(text: string) {
+  const normalized = text.toLowerCase();
+
+  return (
+    /\b(export|download|make|create|generate)\b.*\b(master resume|base resume|core resume|resume)\b.*\b(pdf)\b/.test(normalized) ||
+    /\b(pdf)\b.*\b(master resume|base resume|core resume|resume)\b/.test(normalized)
   );
 }
 
