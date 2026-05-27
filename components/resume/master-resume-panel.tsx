@@ -125,14 +125,14 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
         <div className="draft-chips">
           <span>{profileOverview.profile?.targetDirection ?? "Target direction open"}</span>
           <span>{profileOverview.profile?.targetLevel ?? "Level open"}</span>
-          <span>{profileOverview.confirmedFactCount} trusted detail{profileOverview.confirmedFactCount === 1 ? "" : "s"}</span>
+          <span>{profileOverview.factCount} profile signal{profileOverview.factCount === 1 ? "" : "s"}</span>
         </div>
       </section>
 
       <section className="resume-readiness-panel" aria-label="Master resume readiness">
         <div>
           <span>{currentOverview.confirmedFactCount}</span>
-          <strong>Confirmed proof points</strong>
+          <strong>Profile proof points</strong>
           <p>{currentOverview.readinessNote}</p>
         </div>
         <div className="resume-readiness-actions">
@@ -142,8 +142,8 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
             onClick={generateResume}
             title={
               currentOverview.canGenerate
-                ? "Generate a master resume from confirmed evidence"
-                : "Confirm profile evidence before generating"
+                ? "Generate a master resume from profile evidence"
+                : "Add profile evidence before generating"
             }
             type="button"
           >
@@ -307,7 +307,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
           <div>
             <h2>No master resume yet</h2>
             <p>
-              Confirm profile facts first, then generate a draft here. Pramania will keep
+              Add profile evidence first, then generate a draft here. Pramania will keep
               unsupported claims out and call out evidence gaps before you tailor for jobs.
             </p>
           </div>

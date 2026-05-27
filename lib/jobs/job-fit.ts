@@ -208,7 +208,6 @@ function extractCandidateKeywords({
       ]
     : [];
   const factTerms = profileFacts
-    .filter((fact) => fact.user_confirmed || ["skill", "credential", "industry"].includes(fact.fact_type))
     .flatMap((fact) => [fact.fact_value]);
 
   return uniqueKeywords([...resumeTerms, ...factTerms].flatMap(extractTerms)).slice(0, 60);
@@ -265,7 +264,7 @@ function readRecommendation({
   profileFacts: ProfileFact[];
   score: number;
 }): JobFitAnalysis["recommendation"] {
-  if (profileFacts.filter((fact) => fact.user_confirmed).length < 3) {
+  if (profileFacts.length < 3) {
     return "needs_profile";
   }
 
@@ -289,8 +288,8 @@ function readFitRisks({
 }) {
   const risks: string[] = [];
 
-  if (profileFacts.filter((fact) => fact.user_confirmed).length < 3) {
-    risks.push("The profile has too few confirmed proof points for a confident fit call.");
+  if (profileFacts.length < 3) {
+    risks.push("The profile has too few proof points for a confident fit call.");
   }
 
   if (!masterResume) {

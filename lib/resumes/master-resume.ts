@@ -91,7 +91,7 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
     return buildEmptyOverview({
       confirmedFactCount: 0,
       latestResume: null,
-      missingEvidence: ["Add profile evidence", "Confirm proof points", "Choose a target direction"],
+      missingEvidence: ["Add profile evidence", "Choose a target direction"],
     });
   }
 
@@ -102,7 +102,6 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
         .select("fact_type, fact_value, confidence")
         .eq("profile_id", profile.id)
         .eq("user_id", userId)
-        .eq("user_confirmed", true)
         .order("confidence", { ascending: false })
         .limit(80),
       supabase
@@ -245,7 +244,7 @@ export async function generateMasterResume(
   return {
     overview: await getMasterResumeOverview(userId),
     resumeId: generatedResume.id,
-    summary: `Generated a master resume draft from ${confirmedFacts.length} confirmed profile detail${confirmedFacts.length === 1 ? "" : "s"}.`,
+    summary: `Generated a master resume draft from ${confirmedFacts.length} profile signal${confirmedFacts.length === 1 ? "" : "s"}.`,
   };
 }
 
@@ -406,12 +405,11 @@ async function readMasterResumeContext(userId: string) {
   }
 
   const { data: confirmedFacts, error: factsError } = await supabase
-    .from("profile_facts")
-    .select("fact_type, fact_value, confidence")
-    .eq("profile_id", profile.id)
-    .eq("user_id", userId)
-    .eq("user_confirmed", true)
-    .order("confidence", { ascending: false })
+        .from("profile_facts")
+        .select("fact_type, fact_value, confidence")
+        .eq("profile_id", profile.id)
+        .eq("user_id", userId)
+        .order("confidence", { ascending: false })
     .limit(80);
 
   if (factsError) {
@@ -469,8 +467,8 @@ function buildEmptyOverview({
     latestResume,
     missingEvidence,
     readinessNote: canGenerate
-      ? "Enough confirmed evidence to draft an ATS-friendly master resume."
-      : "Confirm more profile evidence before generating a trustworthy master resume.",
+      ? "Enough profile evidence to draft an ATS-friendly master resume."
+      : "Add more profile evidence before generating a trustworthy master resume.",
   };
 }
 
@@ -485,15 +483,15 @@ function readMissingEvidence({
   const missing: string[] = [];
 
   if (confirmedFacts.length < 3) {
-    missing.push("At least 3 confirmed proof points");
+    missing.push("At least 3 proof points");
   }
 
   if (!types.has("experience") && !types.has("project")) {
-    missing.push("Confirmed work experience or project evidence");
+    missing.push("Work experience or project evidence");
   }
 
   if (!types.has("skill")) {
-    missing.push("Confirmed skills");
+    missing.push("Skills");
   }
 
   if (profile && !profile.target_direction) {
@@ -507,7 +505,7 @@ function buildMasterResumeInstructions() {
   return `
 You are ${brand.name}'s senior resume strategist.
 
-Create an ATS-friendly master resume draft using only confirmed profile facts
+Create an ATS-friendly master resume draft using only captured profile facts
 and profile direction supplied in the input. Do not invent employers, dates,
 credentials, metrics, tools, titles, education, awards, or outcomes.
 
@@ -540,7 +538,7 @@ Profile:
 - Target direction: ${profile.target_direction ?? "Not provided"}
 - Target level: ${profile.target_level ?? "Not provided"}
 
-Confirmed evidence:
+Profile evidence:
 ${confirmedFacts.map((fact) => `- ${fact.fact_type}: ${fact.fact_value}`).join("\n")}
 
 User refinement instruction:

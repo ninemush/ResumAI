@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, FileText, RefreshCw, Save, Trash2 } from "lucide-react";
+import { FileText, RefreshCw } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -14,16 +14,9 @@ type KnowledgebasePanelProps = {
 
 export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
   const router = useRouter();
-  const hasFacts = overview.factCount > 0;
+  const sourceSummary = readSourceSummary(overview);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [factDrafts, setFactDrafts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      Object.values(overview.factsByType)
-        .flat()
-        .map((fact) => [fact.id, fact.fact_value]),
-    ),
-  );
 
   async function retrySourceExtraction(sourceId: string) {
     setPendingId(sourceId);
@@ -43,84 +36,9 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
       const savedFactCount = payload.intake?.savedFactCount ?? 0;
       setMessage(
         savedFactCount > 0
-          ? `Source read. Saved ${savedFactCount} profile detail${savedFactCount === 1 ? "" : "s"} for review.`
-          : "Source read. I did not find new profile details this time.",
+          ? `Source read. Pramania found ${savedFactCount} useful signal${savedFactCount === 1 ? "" : "s"} for your profile.`
+          : "Source read. I did not find new profile signal this time.",
       );
-      router.refresh();
-    } finally {
-      setPendingId(null);
-    }
-  }
-
-  async function confirmFact(factId: string) {
-    setPendingId(factId);
-    setMessage(null);
-
-    try {
-      const response = await fetch(`/api/profile/facts/${factId}/confirm`, {
-        method: "POST",
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to confirm that detail.");
-        return;
-      }
-
-      setMessage("Confirmed. I will treat that as trusted profile evidence.");
-      router.refresh();
-    } finally {
-      setPendingId(null);
-    }
-  }
-
-  async function updateFact(factId: string) {
-    const value = factDrafts[factId]?.trim();
-
-    if (!value) {
-      setMessage("Add a profile detail before saving it.");
-      return;
-    }
-
-    setPendingId(factId);
-    setMessage(null);
-
-    try {
-      const response = await fetch(`/api/profile/facts/${factId}/confirm`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value }),
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to save that detail.");
-        return;
-      }
-
-      setMessage("Saved that profile detail.");
-      router.refresh();
-    } finally {
-      setPendingId(null);
-    }
-  }
-
-  async function dismissFact(factId: string) {
-    setPendingId(factId);
-    setMessage(null);
-
-    try {
-      const response = await fetch(`/api/profile/facts/${factId}/confirm`, {
-        method: "DELETE",
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to remove that detail.");
-        return;
-      }
-
-      setMessage("Removed that profile detail.");
       router.refresh();
     } finally {
       setPendingId(null);
@@ -131,14 +49,32 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
     <main className="profile-pane" aria-labelledby="knowledgebase-title">
       <div className="pane-heading">
         <p className="eyebrow">Knowledgebase</p>
-        <h1 id="knowledgebase-title">Sources and profile evidence</h1>
+        <h1 id="knowledgebase-title">Source library</h1>
         <p>
-          This is the audit-friendly wiki of what you gave {brand.name}, what was read,
-          and the profile evidence that came from it.
+          This is the audit-friendly record of what you gave {brand.name}, what was
+          read successfully, and what still needs a retry.
         </p>
       </div>
 
       {message ? <p className="system-note success">{message}</p> : null}
+
+      <section className="cockpit-panel source-summary-panel" aria-label="Source summary">
+        <div>
+          <span>Total sources</span>
+          <strong>{sourceSummary.total}</strong>
+          <p>Files, links, notes, and screenshots you have shared.</p>
+        </div>
+        <div>
+          <span>Read successfully</span>
+          <strong>{sourceSummary.succeeded}</strong>
+          <p>Sources already turned into profile signal.</p>
+        </div>
+        <div>
+          <span>Needs attention</span>
+          <strong>{sourceSummary.failed + sourceSummary.pending}</strong>
+          <p>Retryable sources or items waiting to be read.</p>
+        </div>
+      </section>
 
       <section className="sources-panel" aria-label="Profile sources">
         <div className="section-heading">
@@ -224,90 +160,33 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
         )}
       </section>
 
-      <section className="facts-panel" aria-label="Captured profile evidence">
+      <section className="sources-panel" aria-label="How sources are used">
         <div className="section-heading">
-          <p className="eyebrow">Profile evidence</p>
-          <h2>Curated details</h2>
+          <p className="eyebrow">How this helps</p>
+          <h2>Grounded career memory</h2>
         </div>
-        {hasFacts ? (
-          <>
-            <p className="evidence-note">
-              You do not need to confirm every detail you personally provided. Edit or
-              remove anything that is wrong; confirm only the details Pramania inferred
-              or that you want treated as high-trust evidence for resume generation.
-            </p>
-            <div className="fact-groups">
-              {Object.entries(overview.factsByType).map(([type, facts]) => (
-                <article className="fact-group" key={type}>
-                  <h3>{type}</h3>
-                  <ul>
-                    {facts.map((fact) => (
-                      <li key={fact.id}>
-                        <textarea
-                          aria-label={`Edit ${type} detail`}
-                          disabled={pendingId === fact.id}
-                          onChange={(event) =>
-                            setFactDrafts((currentDrafts) => ({
-                              ...currentDrafts,
-                              [fact.id]: event.target.value,
-                            }))
-                          }
-                          rows={3}
-                          value={factDrafts[fact.id] ?? fact.fact_value}
-                        />
-                        <div className="fact-review-actions">
-                          {fact.user_confirmed ? (
-                            <span className="fact-confirmed-label">
-                              <CheckCircle2 size={15} aria-hidden="true" />
-                              Trusted
-                            </span>
-                          ) : (
-                            <button
-                              className="fact-confirm-button"
-                              disabled={pendingId === fact.id}
-                              onClick={() => confirmFact(fact.id)}
-                              type="button"
-                            >
-                              {pendingId === fact.id ? "Saving..." : "Trust this"}
-                            </button>
-                          )}
-                          <button
-                            className="fact-confirm-button"
-                            disabled={
-                              pendingId === fact.id ||
-                              (factDrafts[fact.id] ?? fact.fact_value).trim() === fact.fact_value
-                            }
-                            onClick={() => updateFact(fact.id)}
-                            type="button"
-                          >
-                            <Save size={14} aria-hidden="true" />
-                            Save edit
-                          </button>
-                          <button
-                            className="fact-delete-button"
-                            disabled={pendingId === fact.id}
-                            onClick={() => dismissFact(fact.id)}
-                            title="Remove this captured detail"
-                            type="button"
-                          >
-                            <Trash2 size={14} aria-hidden="true" />
-                            Remove
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="empty-state">
-            Profile evidence will appear here after Pramania reads a source or career note.
-          </p>
-        )}
+        <p className="evidence-note">
+          {brand.name} uses these sources to build your profile, draft your master
+          resume, assess role fit, and create application materials. You should not
+          have to manage individual extracted details here; profile edits belong in
+          the Profile cockpit or the conversation.
+        </p>
       </section>
     </main>
+  );
+}
+
+function readSourceSummary(overview: ProfileOverview) {
+  return overview.recentSources.reduce(
+    (summary, source) => ({
+      failed: summary.failed + (source.extraction_status === "failed" ? 1 : 0),
+      pending:
+        summary.pending +
+        (["pending", "processing"].includes(source.extraction_status) ? 1 : 0),
+      succeeded: summary.succeeded + (source.extraction_status === "succeeded" ? 1 : 0),
+      total: summary.total + 1,
+    }),
+    { failed: 0, pending: 0, succeeded: 0, total: 0 },
   );
 }
 

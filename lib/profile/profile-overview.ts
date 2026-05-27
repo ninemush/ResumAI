@@ -87,7 +87,6 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
       roleRecommendations: [],
       sourceCount: 0,
       milestones: buildProfileMilestones({
-        confirmedFactCount: 0,
         factCount: 0,
         hasHeadline: false,
         hasSummary: false,
@@ -177,7 +176,6 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     roleRecommendations: roleRecommendations ?? [],
     sourceCount: sourceCount ?? 0,
     milestones: buildProfileMilestones({
-      confirmedFactCount,
       factCount: profileFacts.length,
       hasHeadline,
       hasSummary,
@@ -187,7 +185,6 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     }),
     readinessScore: calculateReadinessScore({
       factCount: profileFacts.length,
-      confirmedFactCount,
       hasHeadline,
       hasSummary,
       hasTargetDirection,
@@ -231,7 +228,6 @@ async function createProfileSourceUrl(
 }
 
 function buildProfileMilestones({
-  confirmedFactCount,
   factCount,
   hasHeadline,
   hasSummary,
@@ -239,7 +235,6 @@ function buildProfileMilestones({
   hasTargetLevel,
   sourceCount,
 }: {
-  confirmedFactCount: number;
   factCount: number;
   hasHeadline: boolean;
   hasSummary: boolean;
@@ -271,8 +266,8 @@ function buildProfileMilestones({
       label: "Direction",
     },
     {
-      complete: confirmedFactCount >= 3,
-      detail: `${confirmedFactCount} confirmed proof point${confirmedFactCount === 1 ? "" : "s"}`,
+      complete: factCount >= 8,
+      detail: `${factCount} proof point${factCount === 1 ? "" : "s"} captured`,
       key: "proof",
       label: "Proof",
     },
@@ -287,20 +282,17 @@ function buildProfileMilestones({
 
 function calculateReadinessScore({
   factCount,
-  confirmedFactCount,
   hasHeadline,
   hasSummary,
   hasTargetDirection,
 }: {
   factCount: number;
-  confirmedFactCount: number;
   hasHeadline: boolean;
   hasSummary: boolean;
   hasTargetDirection: boolean;
 }) {
   const score =
-    Math.min(factCount, 12) * 4 +
-    Math.min(confirmedFactCount, 8) * 3 +
+    Math.min(factCount, 12) * 6 +
     (hasHeadline ? 12 : 0) +
     (hasSummary ? 12 : 0) +
     (hasTargetDirection ? 16 : 0);

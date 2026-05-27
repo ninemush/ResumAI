@@ -52,9 +52,7 @@ export function ProfileExplorer({
     "Add a resume, LinkedIn profile, portfolio, or a few notes to shape your direction.";
   const hasFacts = overview.factCount > 0;
   const profileGaps = readProfileGaps(overview);
-  const pendingProfileApprovals = countPendingProfileApprovals(overview);
   const pendingReviewCount =
-    pendingProfileApprovals +
     applicationOverview.summary.needsReview +
     jobOverview.summary.readyForReview;
   const nextMove = readNextMove({
@@ -238,8 +236,8 @@ export function ProfileExplorer({
         </div>
         <p>
           {hasFacts
-            ? `${overview.factCount} profile details captured from ${overview.sourceCount} source${overview.sourceCount === 1 ? "" : "s"}. ${overview.confirmedFactCount} detail${overview.confirmedFactCount === 1 ? "" : "s"} confirmed.`
-            : "Share a resume, LinkedIn or portfolio link, or a quick work-history note in the AI agent. Confirmed evidence will appear here as the profile takes shape."}
+            ? `${overview.factCount} useful signal${overview.factCount === 1 ? "" : "s"} captured from ${overview.sourceCount} source${overview.sourceCount === 1 ? "" : "s"}.`
+            : "Share a resume, LinkedIn or portfolio link, or a quick work-history note in the AI agent. Profile signal will appear as Pramania reads your sources."}
         </p>
       </section>
 
@@ -296,9 +294,9 @@ export function ProfileExplorer({
 
       <section className="cockpit-panel" aria-label="Career cockpit">
         <CockpitMetric
-          detail="Confirmed profile evidence improves recommendations and generated materials."
+          detail="Profile readiness improves as Pramania reads stronger sources and your direction becomes clearer."
           label="Readiness"
-          onClick={() => onNavigate("knowledgebase")}
+          onClick={() => onNavigate("resume")}
           value={`${overview.readinessScore}%`}
         />
         <CockpitMetric
@@ -320,9 +318,9 @@ export function ProfileExplorer({
           value={jobOverview.summary.identified}
         />
         <CockpitMetric
-          detail={`${pendingReviewCount} item${pendingReviewCount === 1 ? "" : "s"} need your confirmation, review, or approval before ${brand.name} treats them as trusted.`}
+          detail={`${pendingReviewCount} job or application item${pendingReviewCount === 1 ? "" : "s"} need a decision or next action.`}
           label="Needs review"
-          onClick={() => onNavigate("knowledgebase")}
+          onClick={() => onNavigate(pendingReviewCount > 0 ? "applications" : "jobs")}
           value={pendingReviewCount}
         />
         <div className="stage-progress-card">
@@ -527,8 +525,8 @@ function readProfileGaps(overview: ProfileOverview) {
     gaps.push("Target level");
   }
 
-  if (overview.confirmedFactCount === 0) {
-    gaps.push("Confirmed proof points");
+  if (overview.factCount < 3) {
+    gaps.push("Stronger proof points");
   }
 
   if (overview.sourceCount === 0) {
@@ -536,17 +534,6 @@ function readProfileGaps(overview: ProfileOverview) {
   }
 
   return gaps.slice(0, 4);
-}
-
-function countPendingProfileApprovals(overview: ProfileOverview) {
-  const unconfirmedFacts = Object.values(overview.factsByType)
-    .flat()
-    .filter((fact) => !fact.user_confirmed).length;
-  const unacknowledgedRecommendations = overview.roleRecommendations.filter(
-    (recommendation) => !recommendation.user_acknowledged,
-  ).length;
-
-  return unconfirmedFacts + unacknowledgedRecommendations;
 }
 
 function readNextMove({
@@ -567,10 +554,10 @@ function readNextMove({
     };
   }
 
-  if (countPendingProfileApprovals(overview) > 0) {
+  if (overview.roleRecommendations.some((recommendation) => !recommendation.user_acknowledged)) {
     return {
-      title: "Confirm what is true",
-      body: `Review the captured details below and confirm the ones ${brand.name} should trust. This keeps recommendations and generated resumes grounded.`,
+      title: "Choose the working lane",
+      body: `Review the role paths ${brand.name} suggested and choose the direction that feels right. This keeps resume and application work focused.`,
     };
   }
 

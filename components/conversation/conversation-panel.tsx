@@ -278,7 +278,9 @@ export function ConversationPanel({
       summaries.push(await processUrl(url, text));
     }
 
-    if (shouldProcessProfileRemainder({ textWithoutUrls, urls })) {
+    const processedActionUrl = summaries.length > 0 && urls.length > 0;
+
+    if (!processedActionUrl && shouldProcessProfileRemainder({ textWithoutUrls, urls })) {
       summaries.push(await processProfileText(textWithoutUrls));
     }
 
@@ -472,7 +474,7 @@ export function ConversationPanel({
     setStatus(
       payload.inScope === false || savedFactCount === 0
         ? null
-        : `Saved ${savedFactCount} profile detail${savedFactCount === 1 ? "" : "s"}.`,
+        : `Found ${savedFactCount} useful profile signal${savedFactCount === 1 ? "" : "s"}.`,
     );
 
     return payload.assistantMessage as string;
@@ -496,57 +498,7 @@ export function ConversationPanel({
       return profilePatch.reply;
     }
 
-    const factAction = inferFactAction(text, profileOverview);
-
-    if (!factAction) {
-      return null;
-    }
-
-    if (factAction.kind === "confirm_all") {
-      const facts = Object.values(profileOverview.factsByType)
-        .flat()
-        .filter((fact) => !fact.user_confirmed);
-
-      if (facts.length === 0) {
-        return "There are no inferred profile details waiting for trust review right now.";
-      }
-
-      const responses = await Promise.all(
-        facts.map((fact) =>
-          fetch(`/api/profile/facts/${fact.id}/confirm`, {
-            method: "POST",
-          }),
-        ),
-      );
-
-      if (responses.some((response) => !response.ok)) {
-        return "I could not trust every pending profile detail cleanly. Open Knowledgebase to review the remaining items, or ask me to trust one exact detail.";
-      }
-
-      return `Trusted ${facts.length} profile detail${facts.length === 1 ? "" : "s"}. I will use them as stronger evidence for profile and resume generation.`;
-    }
-
-    if (factAction.matches.length === 0) {
-      return `I could not find a saved profile detail matching "${factAction.query}". You can paste the exact wording, or add the corrected detail as a new note.`;
-    }
-
-    if (factAction.matches.length > 1) {
-      return `I found more than one matching profile detail for "${factAction.query}". To keep the record clean, paste the exact detail you want me to ${factAction.kind === "delete" ? "remove" : "trust"}.`;
-    }
-
-    const fact = factAction.matches[0];
-    const response = await fetch(`/api/profile/facts/${fact.id}/confirm`, {
-      method: factAction.kind === "delete" ? "DELETE" : "POST",
-    });
-    const payload = await response.json();
-
-    if (!response.ok) {
-      return payload.error?.message ?? "I could not update that profile detail yet.";
-    }
-
-    return factAction.kind === "delete"
-      ? `Removed that profile detail: ${fact.fact_value}`
-      : `Trusted that profile detail: ${fact.fact_value}`;
+    return null;
   }
 
   async function processExistingSourceAction(text: string) {
@@ -1099,7 +1051,7 @@ function inferProcessingMode(text: string): ProcessingMode {
     return "job";
   }
 
-  if (inferProfilePatch(text) || looksLikeFactAction(text)) {
+  if (inferProfilePatch(text)) {
     return "profile";
   }
 
@@ -1137,8 +1089,8 @@ function formatSourceIntakeReply({
 }) {
   const savedSummary =
     savedFactCount > 0
-      ? `${label}. I saved ${savedFactCount} profile detail${savedFactCount === 1 ? "" : "s"}.`
-      : `${label}. I did not find any new profile details to save yet.`;
+      ? `${label}. I found ${savedFactCount} useful profile signal${savedFactCount === 1 ? "" : "s"}.`
+      : `${label}. I did not find new profile signal to add yet.`;
   const advisorRead = assistantMessage?.trim();
   const direction = suggestedDirection?.trim()
     ? `Working direction: ${suggestedDirection.trim()}`
@@ -1231,63 +1183,6 @@ function inferProfilePatch(text: string) {
   return null;
 }
 
-function inferFactAction(text: string, profileOverview: ProfileOverview) {
-  const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
-
-  if (/\b(trust|confirm|approve)\b.*\b(all|everything|all details|all profile details)\b/.test(normalized)) {
-    return {
-      kind: "confirm_all" as const,
-      matches: [],
-      query: "",
-    };
-  }
-
-  const deleteQuery = extractProfileFieldValue(text, [
-    "remove profile detail",
-    "delete profile detail",
-    "remove the detail",
-    "delete the detail",
-    "remove this detail",
-    "delete this detail",
-  ]);
-
-  if (deleteQuery) {
-    return {
-      kind: "delete" as const,
-      matches: findMatchingFacts(profileOverview, deleteQuery),
-      query: deleteQuery,
-    };
-  }
-
-  const confirmQuery = extractProfileFieldValue(text, [
-    "trust profile detail",
-    "confirm profile detail",
-    "approve profile detail",
-    "trust the detail",
-    "confirm the detail",
-    "approve the detail",
-  ]);
-
-  if (confirmQuery) {
-    return {
-      kind: "confirm" as const,
-      matches: findMatchingFacts(profileOverview, confirmQuery),
-      query: confirmQuery,
-    };
-  }
-
-  return null;
-}
-
-function looksLikeFactAction(text: string) {
-  const normalized = text.toLowerCase();
-
-  return (
-    /\b(trust|confirm|approve)\b.*\b(profile detail|detail|all details|everything)\b/.test(normalized) ||
-    /\b(remove|delete)\b.*\b(profile detail|detail)\b/.test(normalized)
-  );
-}
-
 function extractProfileFieldValue(text: string, phrases: string[]) {
   const normalized = text.replace(/\s+/g, " ").trim();
   const lower = normalized.toLowerCase();
@@ -1309,22 +1204,6 @@ function extractProfileFieldValue(text: string, phrases: string[]) {
   }
 
   return value;
-}
-
-function findMatchingFacts(profileOverview: ProfileOverview, query: string) {
-  const normalizedQuery = normalizeFactSearch(query);
-
-  if (normalizedQuery.length < 3) {
-    return [];
-  }
-
-  return Object.values(profileOverview.factsByType)
-    .flat()
-    .filter((fact) => normalizeFactSearch(fact.fact_value).includes(normalizedQuery));
-}
-
-function normalizeFactSearch(value: string) {
-  return value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
 }
 
 function inferRequestedSourceType(text: string) {
@@ -1533,7 +1412,7 @@ function formatJobIntakeReply(job: {
   const fit = job.fitAnalysis;
 
   if (!fit || fit.score === null || fit.score === undefined) {
-    return `I saved ${roleLabel}. I need more confirmed profile evidence before I can give you a useful fit read.`;
+    return `I saved ${roleLabel}. I need more profile evidence before I can give you a useful fit read.`;
   }
 
   const gaps = fit.missingKeywords?.length
@@ -1625,7 +1504,7 @@ function buildProfileGapPrompt(profileOverview: ProfileOverview) {
 
   if (!profileOverview.profile.summary) missing.push("a sharp profile summary");
   if (!profileOverview.profile.targetDirection) missing.push("target role direction");
-  if (profileOverview.confirmedFactCount === 0) missing.push("confirmed proof points");
+  if (profileOverview.factCount < 3) missing.push("stronger proof points");
 
   if (missing.length === 0) {
     return null;
