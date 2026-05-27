@@ -331,7 +331,9 @@ export function ConversationPanel({
         return payload.error?.message ?? "I could not generate those materials yet.";
       }
 
-      return `${payload.summary} I saved them to this application record so we can review and refine them next.`;
+      const exportSummary = await exportApplicationMaterials(application.id);
+
+      return `${payload.summary} ${exportSummary}`;
     }
 
     const inferredStatus = inferApplicationStatus(text);
@@ -391,9 +393,44 @@ export function ConversationPanel({
       return payload.error?.message ?? "I could not log that application yet.";
     }
 
+    const applicationId = payload.application?.id;
+    const materialSummary = applicationId
+      ? await generateAndExportApplicationMaterials(applicationId)
+      : "Next, we should generate targeted materials before marking it applied.";
+
     return payload.created
-      ? `Logged ${payload.application?.jobTitle ?? "that role"} at ${payload.application?.companyName ?? "the company"} as an application. Next, we should generate targeted materials before marking it applied.`
-      : `That application is already logged. Next, we should review status or generate targeted materials.`;
+      ? `Logged ${payload.application?.jobTitle ?? "that role"} at ${payload.application?.companyName ?? "the company"} as an application. ${materialSummary}`
+      : `That application is already logged. ${materialSummary}`;
+  }
+
+  async function generateAndExportApplicationMaterials(applicationId: string) {
+    const response = await fetch(`/api/applications/${applicationId}/materials`, {
+      method: "POST",
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      return payload.error?.message ?? "I could not generate targeted materials yet.";
+    }
+
+    const exportSummary = await exportApplicationMaterials(applicationId);
+
+    return `${payload.summary} ${exportSummary}`;
+  }
+
+  async function exportApplicationMaterials(applicationId: string) {
+    const response = await fetch(`/api/applications/${applicationId}/materials/export`, {
+      method: "POST",
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      return payload.error?.message ?? "The editable materials are saved, but PDF export needs another attempt from Applications.";
+    }
+
+    return payload.review?.exportReadiness?.status === "exported"
+      ? "I also exported validated PDFs and saved them in Applications and Artifacts."
+      : "The editable materials are saved; Applications will show what still needs export.";
   }
 
   async function processProfileText(text: string) {

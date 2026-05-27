@@ -37,15 +37,51 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         return;
       }
 
+      const applicationId = payload.application?.id;
+
+      if (!applicationId) {
+        setMessage(
+          payload.created
+            ? "Application logged. Next we should generate targeted materials."
+            : "That application was already logged.",
+        );
+        router.refresh();
+        return;
+      }
+
+      const materialResult = await generateAndExportMaterials(applicationId);
+
       setMessage(
         payload.created
-          ? "Application logged. Next we should generate targeted materials."
-          : "That application was already logged.",
+          ? `Application logged. ${materialResult}`
+          : `That application was already logged. ${materialResult}`,
       );
       router.refresh();
     } finally {
       setPendingJobId(null);
     }
+  }
+
+  async function generateAndExportMaterials(applicationId: string) {
+    const materialResponse = await fetch(`/api/applications/${applicationId}/materials`, {
+      method: "POST",
+    });
+    const materialPayload = await materialResponse.json();
+
+    if (!materialResponse.ok) {
+      return materialPayload.error?.message ?? "Targeted materials could not be generated yet.";
+    }
+
+    const exportResponse = await fetch(`/api/applications/${applicationId}/materials/export`, {
+      method: "POST",
+    });
+    const exportPayload = await exportResponse.json();
+
+    if (!exportResponse.ok) {
+      return `${materialPayload.summary ?? "Targeted materials generated."} ${exportPayload.error?.message ?? "PDF export needs another attempt from Applications."}`;
+    }
+
+    return `${materialPayload.summary ?? "Targeted materials generated."} Validated PDFs are ready in Applications and Artifacts.`;
   }
 
   async function updateReviewStatus(jobId: string, reviewStatus: "accepted" | "rejected") {
@@ -173,11 +209,11 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                   className="secondary-action"
                   disabled={pendingJobId === job.id}
                   onClick={() => logApplication(job.id)}
-                  title="Log this job as an application before generating tailored materials"
+                  title="Log this job, generate targeted materials, and export validated PDFs when possible"
                   type="button"
                 >
                   <Sparkles size={15} aria-hidden="true" />
-                  {pendingJobId === job.id ? "Logging..." : "Apply"}
+                  {pendingJobId === job.id ? "Working..." : "Apply"}
                 </button>
               </>
             ) : null}

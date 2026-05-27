@@ -50,6 +50,7 @@ export type RecentProfileSource = {
   id: string;
   source_type: string;
   source_url: string | null;
+  storage_path: string | null;
   original_filename: string | null;
   extraction_status: string;
   failure_reason: string | null;
@@ -125,7 +126,7 @@ export async function getRecentProfileSources(limit = 12): Promise<RecentProfile
   const { data, error } = await supabase
     .from("profile_sources")
     .select(
-      "id, source_type, source_url, original_filename, extraction_status, failure_reason, created_at",
+      "id, source_type, source_url, storage_path, original_filename, extraction_status, failure_reason, created_at",
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })

@@ -15,6 +15,8 @@ type ProfileSource = {
   id: string;
   source_type: string;
   source_url: string | null;
+  storage_path: string | null;
+  previewUrl: string | null;
   original_filename: string | null;
   extraction_status: string;
   failure_reason: string | null;
@@ -118,7 +120,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
       supabase
         .from("profile_sources")
         .select(
-          "id, source_type, source_url, original_filename, extraction_status, failure_reason, created_at",
+          "id, source_type, source_url, storage_path, original_filename, extraction_status, failure_reason, created_at",
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
@@ -150,6 +152,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
   );
   const confirmedFactCount = profileFacts.filter((fact) => fact.user_confirmed).length;
   const photoUrl = await createProfilePhotoUrl(supabase, profile.photo_storage_path);
+  const recentSourcesWithPreviews = await addSourcePreviewUrls(supabase, recentSources ?? []);
   const hasHeadline = Boolean(profile.headline);
   const hasSummary = Boolean(profile.summary);
   const hasTargetDirection = Boolean(profile.target_direction);
@@ -170,7 +173,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     factsByType,
     factCount: profileFacts.length,
     confirmedFactCount,
-    recentSources: recentSources ?? [],
+    recentSources: recentSourcesWithPreviews,
     roleRecommendations: roleRecommendations ?? [],
     sourceCount: sourceCount ?? 0,
     milestones: buildProfileMilestones({
@@ -191,6 +194,40 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     }),
     tierName: readTierName(tierAssignments),
   };
+}
+
+async function addSourcePreviewUrls(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sources: Omit<ProfileSource, "previewUrl">[],
+) {
+  return Promise.all(
+    sources.map(async (source) => ({
+      ...source,
+      previewUrl:
+        source.source_type === "image"
+          ? await createProfileSourceUrl(supabase, source.storage_path)
+          : null,
+    })),
+  );
+}
+
+async function createProfileSourceUrl(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  storagePath: string | null,
+) {
+  if (!storagePath) {
+    return null;
+  }
+
+  const { data, error } = await supabase.storage
+    .from("profile-sources")
+    .createSignedUrl(storagePath, 60 * 10);
+
+  if (error) {
+    return null;
+  }
+
+  return data.signedUrl;
 }
 
 function buildProfileMilestones({

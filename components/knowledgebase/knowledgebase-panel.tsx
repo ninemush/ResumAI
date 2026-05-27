@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, FileText, RefreshCw, Save, Trash2 } from "lucide-react";
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -148,26 +149,51 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
           <div className="source-list">
             {overview.recentSources.map((source) => (
               <article className="source-row" key={source.id}>
-                <div>
-                  <h3>{source.original_filename ?? formatSourceUrl(source.source_url)}</h3>
-                  <p>{formatSourceType(source.source_type)}</p>
-                  {source.failure_reason ? (
-                    <p className="source-failure">{formatFailureReason(source.failure_reason)}</p>
+                <div className="source-main">
+                  {source.previewUrl ? (
+                    <Image
+                      alt={source.original_filename ?? "Uploaded screenshot source"}
+                      className="source-preview-image"
+                      height={120}
+                      src={source.previewUrl}
+                      unoptimized
+                      width={180}
+                    />
                   ) : null}
-                  <p>{formatSourceGuidance(source)}</p>
-                  {source.source_type === "linkedin" && source.extraction_status === "failed" ? (
-                    <div className="source-fallback" aria-label="LinkedIn import options">
-                      <FileText size={15} aria-hidden="true" />
-                      <div>
-                        <strong>Reliable LinkedIn import</strong>
-                        <p>
-                          Drag a LinkedIn PDF export, screenshots, or paste the About,
-                          Experience, Education, Skills, and Certifications sections into
-                          Pramania. Those become reviewable LinkedIn-sourced evidence.
-                        </p>
+                  <div>
+                    <h3>{source.original_filename ?? formatSourceUrl(source.source_url)}</h3>
+                    <p>{formatSourceType(source.source_type)}</p>
+                    {source.failure_reason ? (
+                      <p className="source-failure">{formatFailureReason(source.failure_reason)}</p>
+                    ) : null}
+                    <p>{formatSourceGuidance(source)}</p>
+                    {source.source_type === "image" && source.extraction_status === "failed" ? (
+                      <div className="source-fallback" aria-label="Image OCR import options">
+                        <FileText size={15} aria-hidden="true" />
+                        <div>
+                          <strong>What this means</strong>
+                          <p>
+                            The screenshot is saved, but OCR did not return usable text.
+                            Retry once, or paste the visible text into Pramania and it will
+                            be treated as evidence from this source.
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ) : null}
+                    ) : null}
+                    {source.source_type === "linkedin" && source.extraction_status === "failed" ? (
+                      <div className="source-fallback" aria-label="LinkedIn import options">
+                        <FileText size={15} aria-hidden="true" />
+                        <div>
+                          <strong>Reliable LinkedIn import</strong>
+                          <p>
+                            Drag a LinkedIn PDF export, screenshots, or paste the About,
+                            Experience, Education, Skills, and Certifications sections into
+                            Pramania. Those become reviewable LinkedIn-sourced evidence.
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="source-actions">
                   <span className={`source-pill ${source.extraction_status}`}>
@@ -311,9 +337,9 @@ function formatSourceUrl(sourceUrl: string | null) {
 function formatFailureReason(reason: string) {
   const friendlyMessages: Record<string, string> = {
     DOCX_TEXT_EMPTY: "No readable text found.",
-    IMAGE_OCR_FAILED: "Image OCR is unavailable right now. The image is saved.",
+    IMAGE_OCR_FAILED: "OCR request failed. The image is saved and can be retried.",
     IMAGE_OCR_FILE_TOO_LARGE: "Image exceeds the current OCR size limit.",
-    IMAGE_OCR_TEXT_EMPTY: "No readable text found in the image.",
+    IMAGE_OCR_TEXT_EMPTY: "OCR ran but found no readable text in the image.",
     IMAGE_OCR_UNSUPPORTED_MIME_TYPE: "OCR supports JPG, PNG, and WebP images.",
     LINKEDIN_PUBLIC_PROFILE_BLOCKED:
       "LinkedIn did not return readable public content to Pramania.",
