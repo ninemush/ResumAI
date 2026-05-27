@@ -24,3 +24,26 @@ test("requires authentication before saving conversation messages", async ({ req
   expect(response.status()).toBe(401);
   expect(payload.error).toBe("Sign in is required.");
 });
+
+test("requires authentication before creating profile sources", async ({ request }) => {
+  const response = await request.post("/api/profile/sources", {
+    data: {
+      sourceType: "natural_language",
+      text: "I managed enterprise renewals and customer escalations.",
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});
+
+test("requires authentication before extracting profile sources", async ({ request }) => {
+  const response = await request.post(
+    "/api/profile/sources/00000000-0000-4000-8000-000000000000/extract",
+  );
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});

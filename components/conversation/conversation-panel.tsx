@@ -619,8 +619,8 @@ export function ConversationPanel({
     >
       <div className="conversation-header">
         <div>
-          <p className="eyebrow">AI agent</p>
-          <h2 id="conversation-title">Talent advisor</h2>
+          <p className="eyebrow">Career advisor</p>
+          <h2 id="conversation-title">{brand.name}</h2>
         </div>
         <Sparkles size={20} aria-hidden="true" />
       </div>
