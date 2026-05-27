@@ -96,6 +96,15 @@ type ExistingProfileContext = {
 export async function runProfileIntake({
   message,
 }: RunProfileIntakeParams): Promise<ProfileIntakeResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
   const scopeCheck = checkProfileIntakeScope(message);
 
   if (!scopeCheck.inScope) {
@@ -124,15 +133,6 @@ export async function runProfileIntake({
       promptVersion: PROFILE_INTAKE_PROMPT_VERSION,
       model: "scope-gate",
     };
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("AUTH_REQUIRED");
   }
 
   const { data: profile, error: profileError } = await supabase

@@ -691,6 +691,7 @@ export function ConversationPanel({
           accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.webp,.heic,.heif"
           className="sr-only"
           disabled={isSubmitting}
+          multiple
           onChange={(event) => {
             if (event.target.files) {
               handleFiles(event.target.files);
@@ -863,7 +864,7 @@ function buildApplicationFollowUpPrompt(applicationOverview: ApplicationOverview
   const application = followUpApplications[0];
   const roleLabel = [application.jobTitle, application.companyName].filter(Boolean).join(" at ");
 
-  return `You have ${followUpApplications.length} application${followUpApplications.length === 1 ? "" : "s"} that may need a status check. Did you hear back on ${roleLabel}? Reply with the outcome and I will help update the right record once status updates are enabled.`;
+  return `You have ${followUpApplications.length} application${followUpApplications.length === 1 ? "" : "s"} that may need a status check. Did you hear back on ${roleLabel}? Reply with the outcome and I will update the right record carefully.`;
 }
 
 function buildProfileGapPrompt(profileOverview: ProfileOverview) {
