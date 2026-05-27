@@ -48,6 +48,16 @@ type SourceCreateResponse = {
   };
 };
 
+type RecentProfileSource = ProfileOverview["recentSources"][number];
+
+type SourceListResponse = {
+  ok: boolean;
+  sources?: RecentProfileSource[];
+  error?: {
+    message?: string;
+  };
+};
+
 type SourceExtractionResult =
   | {
       assistantMessage: string | null;
@@ -394,7 +404,9 @@ export function ConversationPanel({
       return null;
     }
 
-    const matchingSources = profileOverview.recentSources.filter((source) =>
+    const latestSources = await readLatestSources();
+    const sourcesToSearch = latestSources ?? profileOverview.recentSources;
+    const matchingSources = sourcesToSearch.filter((source) =>
       requestedSourceType === "linkedin"
         ? source.source_type === "linkedin"
         : ["link", "linkedin", "portfolio"].includes(source.source_type),
@@ -403,8 +415,8 @@ export function ConversationPanel({
 
     if (!source) {
       return requestedSourceType === "linkedin"
-        ? "I do not see a saved LinkedIn profile link in your recent sources yet. Paste the LinkedIn URL here and I will save it, then try to read what is publicly available."
-        : "I do not see a saved profile link in your recent sources yet. Paste the link here and I will save it, then try to read what is publicly available.";
+        ? "I do not see a saved LinkedIn profile link yet. Paste the LinkedIn URL here, or drop a PDF/screenshots from LinkedIn, and I will turn the readable parts into profile evidence."
+        : "I do not see a saved profile link yet. Paste the link here and I will save it, then try to read what is publicly available.";
     }
 
     if (source.extraction_status === "processing") {
@@ -623,7 +635,11 @@ export function ConversationPanel({
       const extraction = await extractSource(source.source.id);
 
       if (!extraction.ok) {
-      return `${file.name} was saved as a source. I could not read the image text yet: ${extraction.message} You can retry from Knowledgebase, or paste the important text from the screenshot here and I will fold it into your profile.`;
+        return buildFileExtractionFailureMessage({
+          fileName: file.name,
+          message: extraction.message,
+          sourceType,
+        });
       }
 
       return formatSourceIntakeReply({
@@ -685,6 +701,23 @@ export function ConversationPanel({
       savedFactCount: payload.intake?.savedFactCount ?? 0,
       suggestedDirection: payload.intake?.suggestedDirection ?? null,
     };
+  }
+
+  async function readLatestSources() {
+    try {
+      const response = await fetch("/api/profile/sources", {
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as SourceListResponse;
+
+      if (!response.ok || !payload.ok) {
+        return null;
+      }
+
+      return payload.sources ?? [];
+    } catch {
+      return null;
+    }
   }
 
   function appendAssistantMessage(text: string, persist = false) {
@@ -864,36 +897,50 @@ function getProcessingMessage(mode: ProcessingMode, step: number) {
       "Checking the application record before I touch anything...",
       "Matching this to the right role so the update stays precise...",
       "Looking at the application history with a recruiter's eye...",
+      "Checking the status language so we do not blur applied, interview, and outcome stages...",
+      "Keeping this tied to the right company and role...",
       "Almost there. I'm keeping the audit trail and status clean.",
     ],
     file: [
       "Reading the file and looking for hiring signal...",
       "Pulling out roles, scope, skills, credentials, and proof points...",
       "Separating useful evidence from formatting noise...",
+      "Checking whether this is resume text, profile text, or screenshot text...",
+      "Looking for the details a recruiter would actually screen for...",
+      "Keeping the source attached so you can see where each detail came from...",
       "Almost there. I'm shaping this into profile evidence you can review.",
     ],
     job: [
       "Reading the job post and filtering out page noise...",
       "Looking for role requirements, seniority signals, and keywords...",
       "Comparing the post against what we know about your profile...",
+      "Checking the fit read for unknowns instead of pretending certainty...",
+      "Pulling out the parts that matter for resume targeting...",
       "Almost there. I'm turning the job page into a useful fit read.",
     ],
     profile: [
       "Reading this with a hiring lens...",
       "Looking for experience, scope, outcomes, skills, and useful gaps...",
       "Keeping this grounded in what you actually said...",
+      "Translating this into evidence without inventing anything...",
+      "Checking how this strengthens your positioning and resume story...",
+      "Looking for the clearest next question, not a long interrogation...",
       "Almost there. I'm turning this into profile evidence and a useful next step.",
     ],
     resume: [
       "Reviewing your profile evidence before drafting resume language...",
       "Checking for ATS signal without making it sound generic...",
       "Keeping unsupported claims out and preserving your voice...",
+      "Looking for sharper outcomes, cleaner verbs, and less filler...",
+      "Checking whether the draft reads like a human with real scope...",
       "Almost there. I'm shaping this into something you can review.",
     ],
     source: [
       "Finding the source you already shared...",
       "Checking whether that link can be read directly...",
       "Looking for public profile evidence we can safely use...",
+      "Refreshing your latest sources so I do not miss something you just added...",
+      "If the page blocks server access, I will tell you plainly and keep the source saved...",
       "Almost there. If the source is blocked, I'll tell you plainly and give the next best path.",
     ],
     voice: [
@@ -1010,6 +1057,30 @@ function buildLinkedInExplanation() {
     "For V1, I will always try a public LinkedIn URL first. If LinkedIn returns readable public content, I can extract it. If LinkedIn returns a sign-in wall or stripped response to Pramania's server, I will not fake browser access or use scraping workarounds.",
     "The reliable import path is still easy: upload a LinkedIn PDF export, paste your About/Experience/Skills text, or drop screenshots. I can parse those immediately and show every extracted fact before it becomes trusted profile evidence.",
   ].join(" ");
+}
+
+function buildFileExtractionFailureMessage({
+  fileName,
+  message,
+  sourceType,
+}: {
+  fileName: string;
+  message: string;
+  sourceType: string;
+}) {
+  if (sourceType === "image") {
+    return `${fileName} was saved as an image source, but I could not read the visible text yet: ${message} You can retry from Knowledgebase, paste the key text here, or drop a clearer screenshot and I will fold it into your profile evidence.`;
+  }
+
+  if (sourceType === "pdf") {
+    return `${fileName} was saved as a PDF source, but I could not extract usable text yet: ${message} If it is a scanned PDF, drop screenshots or paste the important sections and I will treat them as source evidence.`;
+  }
+
+  if (sourceType === "docx") {
+    return `${fileName} was saved as a Word source, but I could not extract readable text yet: ${message} You can retry from Knowledgebase or paste the resume text here.`;
+  }
+
+  return `${fileName} was saved as a source, but I could not extract readable text yet: ${message} You can retry from Knowledgebase or paste the important text here.`;
 }
 
 function looksLikeExistingSourceRequest(text: string) {

@@ -1,9 +1,52 @@
 import { NextResponse } from "next/server";
 
 import {
+  getRecentProfileSources,
   ingestProfileSource,
   profileSourceRequestSchema,
 } from "@/lib/profile/profile-source-ingestion";
+
+export async function GET() {
+  const requestId = crypto.randomUUID();
+
+  try {
+    const sources = await getRecentProfileSources();
+
+    return NextResponse.json({
+      ok: true,
+      requestId,
+      sources,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
+      return NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: {
+            category: "auth",
+            code: "auth.required",
+            message: "Please sign in before reading profile sources.",
+          },
+        },
+        { status: 401 },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "server",
+          code: "source.read_failed",
+          message: "Unable to read profile sources right now.",
+        },
+      },
+      { status: 500 },
+    );
+  }
+}
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();

@@ -46,6 +46,16 @@ export type ProfileSourceIngestionResult = {
   sourceType: z.infer<typeof profileSourceTypeSchema>;
 };
 
+export type RecentProfileSource = {
+  id: string;
+  source_type: string;
+  source_url: string | null;
+  original_filename: string | null;
+  extraction_status: string;
+  failure_reason: string | null;
+  created_at: string;
+};
+
 export async function ingestProfileSource(
   input: ProfileSourceRequest,
 ): Promise<ProfileSourceIngestionResult> {
@@ -100,6 +110,32 @@ export async function ingestProfileSource(
     extractionStatus: source.extraction_status,
     sourceType: source.source_type,
   };
+}
+
+export async function getRecentProfileSources(limit = 12): Promise<RecentProfileSource[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const { data, error } = await supabase
+    .from("profile_sources")
+    .select(
+      "id, source_type, source_url, original_filename, extraction_status, failure_reason, created_at",
+    )
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 25));
+
+  if (error) {
+    throw new Error("PROFILE_SOURCES_READ_FAILED");
+  }
+
+  return data ?? [];
 }
 
 function validateSourceShape(input: ProfileSourceRequest) {

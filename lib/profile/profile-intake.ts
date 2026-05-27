@@ -369,7 +369,7 @@ export async function extractProfileFactsFromText({
       origin,
       source_ids: [sourceId],
       confidence: fact.confidence,
-      user_confirmed: false,
+      user_confirmed: origin === "user_provided",
     }));
 
   if (factRows.length > 0) {
