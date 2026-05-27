@@ -260,6 +260,7 @@ async function extractImageTextFromStorage({
 
 async function extractPublicProfilePage(sourceUrl: string) {
   assertSafeProfileUrl(sourceUrl);
+  const isLinkedInProfile = isLinkedInUrl(sourceUrl);
 
   const response = await fetch(sourceUrl, {
     headers: {
@@ -271,6 +272,10 @@ async function extractPublicProfilePage(sourceUrl: string) {
   });
 
   if (!response.ok) {
+    if (isLinkedInProfile) {
+      throw new Error("LINKEDIN_PUBLIC_PROFILE_BLOCKED");
+    }
+
     throw new Error("PROFILE_LINK_FETCH_FAILED");
   }
 
@@ -296,7 +301,15 @@ async function extractPublicProfilePage(sourceUrl: string) {
 
   const text = extractReadableProfileText(html);
 
+  if (isLinkedInProfile && looksLikeLinkedInAuthWall(text)) {
+    throw new Error("LINKEDIN_PUBLIC_PROFILE_BLOCKED");
+  }
+
   if (text.length < 80) {
+    if (isLinkedInProfile) {
+      throw new Error("LINKEDIN_PUBLIC_PROFILE_BLOCKED");
+    }
+
     throw new Error("PROFILE_LINK_TEXT_TOO_SHORT");
   }
 
@@ -370,6 +383,24 @@ function assertSafeProfileUrl(value: string) {
   if (isPrivateIp(hostname)) {
     throw new Error("PROFILE_LINK_BLOCKED");
   }
+}
+
+function isLinkedInUrl(value: string) {
+  const hostname = new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+  return hostname === "linkedin.com" || hostname.endsWith(".linkedin.com");
+}
+
+function looksLikeLinkedInAuthWall(text: string) {
+  const normalized = text.toLowerCase();
+
+  return [
+    "sign in to linkedin",
+    "join linkedin",
+    "linkedin login",
+    "authwall",
+    "sign up to see",
+    "people you may know",
+  ].some((phrase) => normalized.includes(phrase));
 }
 
 function isPrivateIp(hostname: string) {

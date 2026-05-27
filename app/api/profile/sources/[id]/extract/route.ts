@@ -240,6 +240,16 @@ function toApiError(error: unknown) {
         status: 422,
       };
     }
+
+    if (error.message === "LINKEDIN_PUBLIC_PROFILE_BLOCKED") {
+      return {
+        category: "validation",
+        code: "source.linkedin_public_profile_blocked",
+        message:
+          "LinkedIn did not return readable profile content to the server. Use a LinkedIn PDF export, screenshot, or pasted profile text for reliable enrichment.",
+        status: 422,
+      };
+    }
   }
 
   return {

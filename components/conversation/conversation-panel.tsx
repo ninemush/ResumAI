@@ -223,6 +223,13 @@ export function ConversationPanel({
         router.refresh();
         return;
       }
+
+      const sourceExplanation = processSourceExplanationQuestion(text);
+
+      if (sourceExplanation) {
+        appendAssistantMessage(sourceExplanation, true);
+        return;
+      }
     }
 
     for (const url of urls) {
@@ -408,7 +415,7 @@ export function ConversationPanel({
 
     if (!extraction.ok) {
       return source.source_type === "linkedin"
-        ? `I found your saved LinkedIn link, but I could not read the public page directly: ${extraction.message} LinkedIn often blocks unauthenticated profile extraction, so the reliable path is to paste profile text, upload a PDF export/screenshot, or use an authenticated LinkedIn import once we add that consent flow.`
+        ? buildLinkedInBlockedMessage(extraction.message)
         : `I found ${formatSourceReference(source)}, but I could not read it directly: ${extraction.message}`;
     }
 
@@ -460,7 +467,7 @@ export function ConversationPanel({
 
     if (!extraction.ok) {
       return sourceType === "linkedin"
-        ? `I saved that LinkedIn profile link. I could not read the public page directly yet: ${extraction.message} Authenticated import will come through a separate consent step.`
+        ? buildLinkedInBlockedMessage(extraction.message)
         : `I saved that profile link, but I could not read it directly yet: ${extraction.message}`;
     }
 
@@ -941,6 +948,31 @@ function inferRequestedSourceType(text: string) {
   }
 
   return null;
+}
+
+function processSourceExplanationQuestion(text: string) {
+  const normalized = text.toLowerCase();
+
+  if (
+    !/\b(why|what happened|could not|couldn't|cant|can't|failed|not working)\b/.test(normalized) ||
+    !/\b(linkedin|public profile|profile link|external profile|profile)\b/.test(normalized)
+  ) {
+    return null;
+  }
+
+  if (normalized.includes("linkedin")) {
+    return buildLinkedInExplanation();
+  }
+
+  return "I could not read that profile link because the page did not return enough readable career content to Pramania's server. Some sites render content only in a browser, block automated server requests, require sign-in, or hide profile sections from public HTML. The reliable V1 path is to paste the profile text, upload a PDF/DOCX export, or drop a screenshot so I can extract it and show you the evidence before trusting it.";
+}
+
+function buildLinkedInBlockedMessage(reason: string) {
+  return `I saved the LinkedIn link, but LinkedIn did not return readable profile content to Pramania's server: ${reason} For a reliable import now, upload a LinkedIn PDF export, paste the About/Experience/Skills text, or drop screenshots. I can read those and turn them into profile evidence for your review.`;
+}
+
+function buildLinkedInExplanation() {
+  return "LinkedIn sign-in confirms identity, but it does not give Pramania your full profile history. LinkedIn's standard OpenID Connect sign-in only exposes lite identity fields like name, email, and profile picture, while detailed profile APIs are separate and restricted. Public profile pages also often return a sign-in wall or blocked response to servers even when they look visible in your browser. The reliable V1 path is: upload a LinkedIn PDF export, paste your About/Experience/Skills text, or drop screenshots. I can parse those immediately and show every extracted fact before it becomes trusted profile evidence.";
 }
 
 function looksLikeExistingSourceRequest(text: string) {

@@ -116,6 +116,23 @@ Authentication -> Sign In / Providers -> LinkedIn (OIDC)
 
 7. Enable LinkedIn (OIDC) and enter the client ID and secret.
 
+LinkedIn sign-in is identity authentication, not full profile import. Standard
+LinkedIn OIDC can provide lite identity fields such as name, email, and profile
+picture after consent. It does not reliably provide full work history,
+experience, skills, recommendations, or profile sections.
+
+For V1 profile enrichment, the reliable LinkedIn source paths are:
+
+- Upload a LinkedIn PDF export.
+- Paste the About, Experience, Education, Licenses, and Skills text into
+  Pramania.
+- Drop screenshots of the profile sections for OCR.
+- Paste a public LinkedIn URL as a convenience source, with a clear fallback if
+  LinkedIn returns a sign-in wall or blocked server response.
+
+Do not build session-cookie scraping or browser automation against LinkedIn
+without a separate legal/security review and explicit user consent design.
+
 ### Verification
 
 After both providers are enabled:
@@ -132,4 +149,3 @@ Authentication -> Users
 ```
 
 Confirm the new users/identities were created and have an email address.
-
