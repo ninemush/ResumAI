@@ -79,6 +79,10 @@ type ExtractProfileFactsFromTextParams = {
 };
 
 type ExistingProfileContext = {
+  conversation: Array<{
+    speaker: string;
+    text: string;
+  }>;
   facts: Array<{
     fact_type: string;
     fact_value: string;
@@ -401,7 +405,7 @@ function buildProfileIntakeInput({
   label: string;
   text: string;
 }) {
-  const contextText = formatExistingProfileContext(existingContext);
+  const contextText = formatExistingProfileContext(existingContext, text);
 
   return `
 Existing profile context:
@@ -418,6 +422,8 @@ observation when the input gives you enough evidence. Do not give generic praise
 Use the existing profile context to improve continuity, avoid asking for details
 the user already gave, and avoid returning duplicate facts. If the new source
 corrects or sharpens existing context, reflect that in the draft cautiously.
+Use recent conversation context only as continuity support. Treat the new source
+as the current user intent.
 If useful, include a suggestedDirection, but make it tentative and ask for the
 user's acknowledgement before treating it as final.
 `.trim();
@@ -431,7 +437,11 @@ async function readExistingProfileContext({
   userId: string;
 }): Promise<ExistingProfileContext> {
   const supabase = await createClient();
-  const [{ data: profile, error: profileError }, { data: facts, error: factsError }] =
+  const [
+    { data: profile, error: profileError },
+    { data: facts, error: factsError },
+    { data: conversation, error: conversationError },
+  ] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -446,19 +456,34 @@ async function readExistingProfileContext({
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(80),
+      supabase
+        .from("conversation_messages")
+        .select("speaker, message_text, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(20),
     ]);
 
-  if (profileError || factsError) {
+  if (profileError || factsError || conversationError) {
     throw new Error("PROFILE_CONTEXT_READ_FAILED");
   }
 
   return {
+    conversation: (conversation ?? [])
+      .reverse()
+      .map((message) => ({
+        speaker: message.speaker,
+        text: message.message_text,
+      })),
     facts: facts ?? [],
     profile: profile ?? null,
   };
 }
 
-function formatExistingProfileContext({ facts, profile }: ExistingProfileContext) {
+function formatExistingProfileContext(
+  { conversation, facts, profile }: ExistingProfileContext,
+  currentText: string,
+) {
   const profileLines = [
     profile?.display_name ? `Name: ${profile.display_name}` : null,
     profile?.headline ? `Headline: ${profile.headline}` : null,
@@ -469,12 +494,25 @@ function formatExistingProfileContext({ facts, profile }: ExistingProfileContext
   const factLines = facts
     .slice(0, 40)
     .map((fact) => `- ${fact.fact_type}: ${fact.fact_value}${fact.user_confirmed ? " (confirmed)" : ""}`);
+  const currentTextKey = normalizeContextLine(currentText);
+  const conversationLines = conversation
+    .filter((message) => normalizeContextLine(message.text) !== currentTextKey)
+    .slice(-12)
+    .map((message) => `- ${message.speaker}: ${message.text}`);
 
-  if (profileLines.length === 0 && factLines.length === 0) {
+  if (profileLines.length === 0 && factLines.length === 0 && conversationLines.length === 0) {
     return "No saved profile context yet.";
   }
 
-  return [...profileLines, ...factLines].join("\n");
+  return [
+    ...profileLines,
+    factLines.length > 0 ? "Saved profile facts:" : null,
+    ...factLines,
+    conversationLines.length > 0 ? "Recent conversation:" : null,
+    ...conversationLines,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function buildFactKey(type: string, value: string) {
@@ -556,6 +594,10 @@ async function saveProfileDraft({
 function normalizeOptionalText(value: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function normalizeContextLine(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function hashUserId(userId: string) {
