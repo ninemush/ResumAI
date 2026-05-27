@@ -178,21 +178,21 @@ function toApiError(error: unknown) {
       };
     }
 
-    if (error.message === "IMAGE_OCR_TEXT_EMPTY") {
-      return {
-        category: "validation",
-        code: "source.image_ocr_text_empty",
-        message: "I could not find readable text in that image.",
-        status: 422,
-      };
-    }
+    if (
+      [
+        "IMAGE_OCR_TEXT_EMPTY",
+        "IMAGE_OCR_PROVIDER_ERROR",
+        "IMAGE_OCR_INCOMPLETE_RESPONSE",
+        "IMAGE_OCR_PROVIDER_REJECTED_IMAGE",
+        "IMAGE_OCR_PROVIDER_TEMPORARY_FAILURE",
+        "IMAGE_OCR_PROVIDER_UNAVAILABLE",
+        "IMAGE_OCR_PROVIDER_AUTH_FAILED",
+      ].includes(error.message)
+    ) {
+      const errorDetails = getImageOcrApiError(error.message);
 
-    if (error.message === "IMAGE_OCR_FAILED") {
       return {
-        category: "server",
-        code: "source.image_ocr_failed",
-        message: "Image OCR is unavailable right now. The image is saved, and you can try again later.",
-        status: 502,
+        ...errorDetails,
       };
     }
 
@@ -257,5 +257,69 @@ function toApiError(error: unknown) {
     code: "source.extraction_failed",
     message: "Unable to extract that source right now.",
     status: 500,
+  };
+}
+
+function getImageOcrApiError(code: string) {
+  const errors: Record<
+    string,
+    {
+      category: string;
+      code: string;
+      message: string;
+      status: number;
+    }
+  > = {
+    IMAGE_OCR_TEXT_EMPTY: {
+      category: "validation",
+      code: "source.image_ocr_text_empty",
+      message:
+        "I retried OCR but could not find readable career text in that image. The image is saved.",
+      status: 422,
+    },
+    IMAGE_OCR_PROVIDER_ERROR: {
+      category: "server",
+      code: "source.image_ocr_provider_error",
+      message: "OCR returned a provider error after retrying. The image is saved.",
+      status: 502,
+    },
+    IMAGE_OCR_INCOMPLETE_RESPONSE: {
+      category: "server",
+      code: "source.image_ocr_incomplete_response",
+      message: "OCR returned an incomplete response after retrying. The image is saved.",
+      status: 502,
+    },
+    IMAGE_OCR_PROVIDER_REJECTED_IMAGE: {
+      category: "validation",
+      code: "source.image_ocr_provider_rejected_image",
+      message:
+        "OCR could not process this image format/content after retrying. The image is saved.",
+      status: 422,
+    },
+    IMAGE_OCR_PROVIDER_TEMPORARY_FAILURE: {
+      category: "server",
+      code: "source.image_ocr_provider_temporary_failure",
+      message: "OCR is temporarily unavailable after retrying. The image is saved.",
+      status: 502,
+    },
+    IMAGE_OCR_PROVIDER_UNAVAILABLE: {
+      category: "server",
+      code: "source.image_ocr_provider_unavailable",
+      message: "OCR could not be reached after retrying. The image is saved.",
+      status: 502,
+    },
+    IMAGE_OCR_PROVIDER_AUTH_FAILED: {
+      category: "server",
+      code: "source.image_ocr_provider_auth_failed",
+      message: "OCR is not configured correctly. The image is saved.",
+      status: 500,
+    },
+  };
+
+  return errors[code] ?? {
+    category: "server",
+    code: "source.image_ocr_failed",
+    message: "Image OCR is unavailable right now. The image is saved.",
+    status: 502,
   };
 }

@@ -19,6 +19,7 @@ const MAX_IMAGE_BYTES = 10_000_000;
 const MAX_PROFILE_HTML_BYTES = 1_500_000;
 const MAX_PROFILE_TEXT_CHARS = 12_000;
 const FETCH_TIMEOUT_MS = 8000;
+const IMAGE_OCR_MAX_ATTEMPTS = 3;
 const blockedHostnames = new Set(["localhost", "localhost.localdomain"]);
 const supportedOcrMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -217,49 +218,67 @@ async function extractImageTextFromStorage({
   }
 
   const imageDataUrl = await blobToDataUrl(data, normalizedMimeType);
-  const response = await getOpenAIClient()
-    .responses.create({
-      model: getProfileIntakeModel(),
-      instructions:
-        "You are an OCR extraction service for a career profile builder. Extract only visible text from the image. Preserve headings, dates, employers, job titles, skills, credentials, and bullets when readable. Do not add facts, commentary, markdown fences, or explanations. If no career-relevant text is readable, return an empty string.",
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: "Extract the readable resume, credential, LinkedIn/profile, or career-history text from this image.",
-            },
-            {
-              type: "input_image",
-              image_url: imageDataUrl,
-              detail: "high",
-            },
-          ],
+  let lastFailureCode = "IMAGE_OCR_FAILED";
+
+  for (let attempt = 1; attempt <= IMAGE_OCR_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await getOpenAIClient().responses.create({
+        model: getProfileIntakeModel(),
+        instructions:
+          "You are an OCR extraction service for a career profile builder. Extract only visible text from the image. Preserve headings, dates, employers, job titles, skills, credentials, and bullets when readable. Do not add facts, commentary, markdown fences, or explanations. If no career-relevant text is readable, return an empty string.",
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: "Extract the readable resume, credential, LinkedIn/profile, or career-history text from this image.",
+              },
+              {
+                type: "input_image",
+                image_url: imageDataUrl,
+                detail: "high",
+              },
+            ],
+          },
+        ],
+        max_output_tokens: 2200,
+        metadata: {
+          feature: "profile_source_ocr",
+          source_type: "image",
+          attempt: String(attempt),
         },
-      ],
-      max_output_tokens: 2200,
-      metadata: {
-        feature: "profile_source_ocr",
-        source_type: "image",
-      },
-      store: false,
-    })
-    .catch(() => {
-      throw new Error("IMAGE_OCR_FAILED");
-    });
+        store: false,
+      });
 
-  if (response.error || response.incomplete_details) {
-    throw new Error("IMAGE_OCR_FAILED");
+      if (response.error) {
+        lastFailureCode = "IMAGE_OCR_PROVIDER_ERROR";
+        logOcrAttemptFailure({ attempt, code: lastFailureCode });
+        continue;
+      }
+
+      if (response.incomplete_details) {
+        lastFailureCode = "IMAGE_OCR_INCOMPLETE_RESPONSE";
+        logOcrAttemptFailure({ attempt, code: lastFailureCode });
+        continue;
+      }
+
+      const text = response.output_text.trim();
+
+      if (text.length < 3) {
+        lastFailureCode = "IMAGE_OCR_TEXT_EMPTY";
+        logOcrAttemptFailure({ attempt, code: lastFailureCode });
+        continue;
+      }
+
+      return text;
+    } catch (error) {
+      lastFailureCode = toOcrProviderFailureCode(error);
+      logOcrAttemptFailure({ attempt, code: lastFailureCode });
+    }
   }
 
-  const text = response.output_text.trim();
-
-  if (text.length < 3) {
-    throw new Error("IMAGE_OCR_TEXT_EMPTY");
-  }
-
-  return text;
+  throw new Error(lastFailureCode);
 }
 
 async function extractPublicProfilePage(sourceUrl: string) {
@@ -451,6 +470,38 @@ function buildInputLabel({
   }
 
   return `${sourceType.toUpperCase()} file${filename ? ` (${filename})` : ""}`;
+}
+
+function toOcrProviderFailureCode(error: unknown) {
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? Number((error as { status?: unknown }).status)
+      : null;
+
+  if (status === 401 || status === 403) {
+    return "IMAGE_OCR_PROVIDER_AUTH_FAILED";
+  }
+
+  if (status === 400 || status === 422) {
+    return "IMAGE_OCR_PROVIDER_REJECTED_IMAGE";
+  }
+
+  if (status === 408 || status === 409 || status === 429 || (status !== null && status >= 500)) {
+    return "IMAGE_OCR_PROVIDER_TEMPORARY_FAILURE";
+  }
+
+  return "IMAGE_OCR_PROVIDER_UNAVAILABLE";
+}
+
+function logOcrAttemptFailure({ attempt, code }: { attempt: number; code: string }) {
+  console.warn(
+    JSON.stringify({
+      event: "profile_source_ocr_attempt_failed",
+      attempt,
+      maxAttempts: IMAGE_OCR_MAX_ATTEMPTS,
+      code,
+    }),
+  );
 }
 
 async function updateSourceStatus(

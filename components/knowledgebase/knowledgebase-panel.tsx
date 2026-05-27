@@ -173,9 +173,9 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
                         <div>
                           <strong>What this means</strong>
                           <p>
-                            The screenshot is saved, but OCR did not return usable text.
-                            Retry once, or paste the visible text into Pramania and it will
-                            be treated as evidence from this source.
+                            The screenshot is saved. OCR now retries automatically before
+                            marking it failed. Use Retry for a fresh attempt, or paste the
+                            visible text into Pramania if the screenshot itself is hard to read.
                           </p>
                         </div>
                       </div>
@@ -186,9 +186,10 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
                         <div>
                           <strong>Reliable LinkedIn import</strong>
                           <p>
-                            Drag a LinkedIn PDF export, screenshots, or paste the About,
-                            Experience, Education, Skills, and Certifications sections into
-                            Pramania. Those become reviewable LinkedIn-sourced evidence.
+                            On desktop LinkedIn, open your profile, choose Resources or
+                            More, select Save to PDF, then drag the PDF into Pramania.
+                            For a fuller import, use Settings & Privacy {" -> "}Data privacy
+                            {" -> "}Get a copy of your data and upload the archive files.
                           </p>
                         </div>
                       </div>
@@ -339,7 +340,13 @@ function formatFailureReason(reason: string) {
     DOCX_TEXT_EMPTY: "No readable text found.",
     IMAGE_OCR_FAILED: "OCR request failed. The image is saved and can be retried.",
     IMAGE_OCR_FILE_TOO_LARGE: "Image exceeds the current OCR size limit.",
-    IMAGE_OCR_TEXT_EMPTY: "OCR ran but found no readable text in the image.",
+    IMAGE_OCR_INCOMPLETE_RESPONSE: "OCR returned an incomplete response after retrying.",
+    IMAGE_OCR_PROVIDER_AUTH_FAILED: "OCR provider configuration needs attention.",
+    IMAGE_OCR_PROVIDER_ERROR: "OCR provider returned an error after retrying.",
+    IMAGE_OCR_PROVIDER_REJECTED_IMAGE: "OCR could not process this image content.",
+    IMAGE_OCR_PROVIDER_TEMPORARY_FAILURE: "OCR provider was temporarily unavailable after retrying.",
+    IMAGE_OCR_PROVIDER_UNAVAILABLE: "OCR provider could not be reached after retrying.",
+    IMAGE_OCR_TEXT_EMPTY: "OCR retried but found no readable text in the image.",
     IMAGE_OCR_UNSUPPORTED_MIME_TYPE: "OCR supports JPG, PNG, and WebP images.",
     LINKEDIN_PUBLIC_PROFILE_BLOCKED:
       "LinkedIn did not return readable public content to Pramania.",
@@ -367,11 +374,11 @@ function formatSourceGuidance(source: ProfileOverview["recentSources"][number]) 
   }
 
   if (source.source_type === "linkedin" && source.extraction_status === "failed") {
-    return "Public URL attempted. If LinkedIn blocks server reading, use the reliable import path below.";
+    return "Public URL attempted. If LinkedIn blocks server reading, use the PDF or archive path below.";
   }
 
   if (source.source_type === "image" && source.extraction_status === "failed") {
-    return "Saved as an image source. Retry OCR, or paste the key text into Pramania.";
+    return "Saved as an image source. OCR retries are bounded; use Retry or paste the key text.";
   }
 
   if (source.extraction_status === "failed") {
