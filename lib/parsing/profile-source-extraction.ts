@@ -217,33 +217,37 @@ async function extractImageTextFromStorage({
   }
 
   const imageDataUrl = await blobToDataUrl(data, normalizedMimeType);
-  const response = await getOpenAIClient().responses.create({
-    model: getProfileIntakeModel(),
-    instructions:
-      "You are an OCR extraction service for a career profile builder. Extract only visible text from the image. Preserve headings, dates, employers, job titles, skills, credentials, and bullets when readable. Do not add facts, commentary, markdown fences, or explanations. If no career-relevant text is readable, return an empty string.",
-    input: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: "Extract the readable resume, credential, LinkedIn/profile, or career-history text from this image.",
-          },
-          {
-            type: "input_image",
-            image_url: imageDataUrl,
-            detail: "high",
-          },
-        ],
+  const response = await getOpenAIClient()
+    .responses.create({
+      model: getProfileIntakeModel(),
+      instructions:
+        "You are an OCR extraction service for a career profile builder. Extract only visible text from the image. Preserve headings, dates, employers, job titles, skills, credentials, and bullets when readable. Do not add facts, commentary, markdown fences, or explanations. If no career-relevant text is readable, return an empty string.",
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "Extract the readable resume, credential, LinkedIn/profile, or career-history text from this image.",
+            },
+            {
+              type: "input_image",
+              image_url: imageDataUrl,
+              detail: "high",
+            },
+          ],
+        },
+      ],
+      max_output_tokens: 2200,
+      metadata: {
+        feature: "profile_source_ocr",
+        source_type: "image",
       },
-    ],
-    max_output_tokens: 2200,
-    metadata: {
-      feature: "profile_source_ocr",
-      source_type: "image",
-    },
-    store: false,
-  });
+      store: false,
+    })
+    .catch(() => {
+      throw new Error("IMAGE_OCR_FAILED");
+    });
 
   if (response.error || response.incomplete_details) {
     throw new Error("IMAGE_OCR_FAILED");

@@ -5,6 +5,7 @@ This backlog captures approved direction that should be designed and implemented
 ## Core App Cockpit And Measurement
 
 - Expand the profile cockpit with application funnel metrics: jobs identified, jobs awaiting review, applications drafted, applied, no reply, interviewing, rejected, selected, and withdrawn.
+- Make cockpit metrics clickable so every summary number opens the underlying records and the same command path can later be triggered from chat or voice.
 - Store normalized application stage events so cohort analysis can answer where users succeed or drop off.
 - Add user-base analytics for interview rate, rejection rate, selection rate, time-to-response, and conversion by tier, role family, resume version, and source type.
 - Keep all analytics privacy-safe, aggregated by default, and never expose one user's private data to another user.
@@ -14,6 +15,7 @@ This backlog captures approved direction that should be designed and implemented
 - Make Pramania the primary interaction surface for links, files, and natural-language profile notes.
 - Harden ingestion for PDF, DOC, DOCX, TXT, image/OCR, LinkedIn public links, portfolio links, and profile pages.
 - Add clear source capability/status indicators so users know what was read, what failed, and what needs permission or a different file.
+- Maintain a dedicated Knowledgebase/wiki for source material, extraction status, timestamps, and curated profile evidence instead of burying sources in the profile cockpit.
 - Add authenticated LinkedIn and job-site integrations only after separate provider terms, privacy, and security review.
 
 ## Navigation And UX Polish
@@ -25,10 +27,18 @@ This backlog captures approved direction that should be designed and implemented
 
 ## Resume And Artifact Quality
 
-- Build a resume studio that generates ATS-first layouts from confirmed profile evidence.
+- Merge profile/resume creation into a polished studio that shows a resume-like document surface, supports direct edits, and can also be controlled through chat.
+- Support focused master resume variants by role family or target role before job-specific tailoring.
 - Validate generated PDFs for readable text, required content presence, page fit, and no clipped content before marking them ready.
 - Support photo-compatible resume formats separately from ATS-first exports.
 - Track resume and cover-letter versions used per application for audit and outcome analysis.
+
+## Jobs And Applications
+
+- Build a down-selected jobs workspace from Pramania-scanned active job boards after legal/provider review and user filter design.
+- Let users accept/reject recommended jobs, inspect the job description, open the source link, and see why the role may be right, unknown, or risky.
+- When the user chooses to apply, generate and persist DOCX/PDF application artifacts with version numbers and timestamps, then create/update the application record.
+- Keep the jobs list intentionally small and filterable so recommendations do not become overwhelming.
 
 ## Auth And Identity
 
@@ -39,6 +49,7 @@ This backlog captures approved direction that should be designed and implemented
 ## Support And Docs
 
 - Draft a solid privacy policy before public launch covering data collected, AI processing, source ingestion, OAuth identity data, generated documents, retention, deletion/export rights, subprocessors, cross-border processing, and support/admin access.
+- Decide V1 support implementation: lightweight in-app ticket tables first, with optional integration later if volume or workflow demands it.
 - Create self-serve L0 support docs after core V1 workflows stabilize.
 - Add L1 autonomous support for platform issues with support-safe logs and escalation boundaries.
 - Escalate refunds, sensitive matters, legal/privacy/security issues, and unresolved support cases to L2 human support with full context.

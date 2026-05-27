@@ -126,29 +126,32 @@ export function MasterResumePanel({ overview }: MasterResumePanelProps) {
 
       {message ? <p className="system-note success">{message}</p> : null}
 
-      {currentOverview.missingEvidence.length > 0 ? (
-        <section className="resume-gap-panel" aria-label="Master resume gaps">
+      {(currentOverview.missingEvidence.length > 0 || draft?.keywordGaps.length || draft?.reviewerNotes.length) ? (
+        <section className="resume-gap-panel priority-review-panel" aria-label="Master resume review priorities">
           <div className="section-heading">
-            <p className="eyebrow">Before generation</p>
-            <h2>Evidence still needed</h2>
+            <p className="eyebrow">Review first</p>
+            <h2>Gaps and reviewer notes</h2>
           </div>
-          <ul>
+          <div className="resume-review-grid">
             {currentOverview.missingEvidence.map((gap) => (
-              <li key={gap}>
-                <AlertCircle size={15} aria-hidden="true" />
-                {gap}
-              </li>
+              <ReviewItem key={gap} severity="critical" text={gap} />
             ))}
-          </ul>
+            {draft?.keywordGaps.map((gap) => (
+              <ReviewItem key={gap} severity="important" text={gap} />
+            ))}
+            {draft?.reviewerNotes.map((note) => (
+              <ReviewItem key={note} severity="informational" text={note} />
+            ))}
+          </div>
         </section>
       ) : null}
 
       {draft ? (
-        <section className="materials-review master-resume-editor" aria-label="Master resume editor">
+        <section className="materials-review master-resume-editor resume-studio-surface" aria-label="Master resume editor">
           <div className="materials-review-header">
             <div>
               <p className="eyebrow">Draft</p>
-              <h2>{draft.headline}</h2>
+              <h2>ATS master resume</h2>
             </div>
             <span className="resume-status-pill">
               <CheckCircle2 size={15} aria-hidden="true" />
@@ -156,50 +159,57 @@ export function MasterResumePanel({ overview }: MasterResumePanelProps) {
             </span>
           </div>
 
-          <div className="materials-editor-grid">
-            <label>
-              Resume headline
+          <div className="resume-document-preview" aria-label="Resume preview">
+            <header>
               <input
+                aria-label="Resume headline"
                 onChange={(event) => setDraft({ ...draft, headline: event.target.value })}
                 value={draft.headline}
               />
-            </label>
-            <label>
-              Resume summary
+            </header>
+            <section>
+              <h3>Professional Summary</h3>
               <textarea
+                aria-label="Resume summary"
                 onChange={(event) => setDraft({ ...draft, summary: event.target.value })}
-                rows={5}
+                rows={Math.max(4, Math.ceil(draft.summary.length / 110))}
                 value={draft.summary}
               />
-            </label>
-            <label>
-              Skills
+            </section>
+            <section>
+              <h3>Core Skills</h3>
               <textarea
+                aria-label="Skills"
                 onChange={(event) =>
                   setDraft({
                     ...draft,
                     skills: splitLines(event.target.value),
                   })
                 }
-                rows={5}
-                value={draft.skills.join("\n")}
+                rows={Math.max(3, Math.ceil(draft.skills.join(", ").length / 110))}
+                value={draft.skills.join(", ")}
               />
-            </label>
-            <label>
-              Experience bullets
+            </section>
+            <section>
+              <h3>Experience Highlights</h3>
               <textarea
+                aria-label="Experience bullets"
                 onChange={(event) =>
                   setDraft({
                     ...draft,
                     experienceBullets: splitLines(event.target.value),
                   })
                 }
-                rows={9}
-                value={draft.experienceBullets.join("\n")}
+                rows={Math.max(8, draft.experienceBullets.length + 2)}
+                value={draft.experienceBullets.map((bullet) => `- ${bullet}`).join("\n")}
               />
-            </label>
+            </section>
+          </div>
+
+          <details className="resume-advanced-editor">
+            <summary>Edit gap and reviewer fields</summary>
             <label>
-              Gaps to resolve
+              Keyword gaps
               <textarea
                 onChange={(event) =>
                   setDraft({
@@ -224,7 +234,7 @@ export function MasterResumePanel({ overview }: MasterResumePanelProps) {
                 value={draft.reviewerNotes.join("\n")}
               />
             </label>
-          </div>
+          </details>
         </section>
       ) : (
         <section className="resume-empty-panel" aria-label="No master resume yet">
@@ -242,9 +252,27 @@ export function MasterResumePanel({ overview }: MasterResumePanelProps) {
   );
 }
 
+function ReviewItem({
+  severity,
+  text,
+}: {
+  severity: "critical" | "important" | "informational";
+  text: string;
+}) {
+  return (
+    <article className={`review-item ${severity}`}>
+      <span>{severity}</span>
+      <p>
+        <AlertCircle size={15} aria-hidden="true" />
+        {text}
+      </p>
+    </article>
+  );
+}
+
 function splitLines(value: string) {
   return value
-    .split("\n")
+    .split(/\n|,/)
     .map((line) => line.trim().replace(/^-+\s*/, ""))
     .filter(Boolean);
 }

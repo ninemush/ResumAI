@@ -9,6 +9,7 @@ import { SideNav } from "@/components/app-shell/side-nav";
 import { ApplicationPanel } from "@/components/applications/application-panel";
 import { ConversationPanel } from "@/components/conversation/conversation-panel";
 import { JobIngestionPanel } from "@/components/jobs/job-ingestion-panel";
+import { KnowledgebasePanel } from "@/components/knowledgebase/knowledgebase-panel";
 import { ProfileExplorer } from "@/components/profile/profile-explorer";
 import { MasterResumePanel } from "@/components/resume/master-resume-panel";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
@@ -141,6 +142,11 @@ export function WorkspaceLayout({
           jobOverview,
           masterResumeOverview,
           ownerMetrics,
+          onSelectView: (activeView) =>
+            setLayout((currentLayout) => ({
+              ...currentLayout,
+              activeView,
+            })),
           profileOverview,
         })}
       </div>
@@ -171,6 +177,7 @@ function renderWorkspaceView({
   jobOverview,
   masterResumeOverview,
   ownerMetrics,
+  onSelectView,
   profileOverview,
 }: {
   activeView: AppView;
@@ -178,6 +185,7 @@ function renderWorkspaceView({
   jobOverview: JobOverview;
   masterResumeOverview: MasterResumeOverview;
   ownerMetrics: OwnerMetrics | null;
+  onSelectView: (view: AppView) => void;
   profileOverview: ProfileOverview;
 }) {
   if (activeView === "owner") {
@@ -204,6 +212,10 @@ function renderWorkspaceView({
     return <MasterResumePanel overview={masterResumeOverview} />;
   }
 
+  if (activeView === "knowledgebase") {
+    return <KnowledgebasePanel overview={profileOverview} />;
+  }
+
   if (activeView === "artifacts") {
     return (
       <WorkspacePlaceholder
@@ -224,10 +236,21 @@ function renderWorkspaceView({
     );
   }
 
+  if (activeView === "support") {
+    return (
+      <WorkspacePlaceholder
+        eyebrow="Support"
+        title="Help and cases"
+        body="V1 will start with a simple support case flow and internal docs. We will avoid promising an autonomous support agent until the core product workflows are stable."
+      />
+    );
+  }
+
   return (
     <ProfileExplorer
       applicationOverview={applicationOverview}
       jobOverview={jobOverview}
+      onNavigate={onSelectView}
       overview={profileOverview}
     />
   );

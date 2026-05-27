@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Mic, Paperclip, SendHorizontal, Sparkles } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
@@ -19,6 +20,8 @@ type ConversationPanelProps = {
 };
 
 type ConversationMessage = {
+  attachmentPreviewUrl?: string;
+  attachmentType?: "image";
   id?: string;
   speaker: "assistant" | "user" | "system";
   text: string;
@@ -187,7 +190,9 @@ export function ConversationPanel({
     try {
       await processMessage(trimmedMessage);
     } catch {
-      setError("I could not process that yet. Try a shorter note, a public job link, or a resume file.");
+      setError(
+        "I could not save that note cleanly yet. I still understood the direction; try sending it again, or add a little more context so I can attach it to the right part of your profile.",
+      );
     } finally {
       setIsSubmitting(false);
       setProcessingStep(0);
@@ -365,7 +370,10 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
-      throw new Error(payload.error ?? "PROFILE_INTAKE_FAILED");
+      return (
+        payload.error ??
+        "I understood the guidance, but I could not save it to your profile yet. Try again with one sentence about where this should apply."
+      );
     }
 
     const savedFactCount = payload.savedFactCount ?? 0;
@@ -494,8 +502,11 @@ export function ConversationPanel({
     setIsSubmitting(true);
     appendUserMessage(
       fileList.length === 1
-        ? `Dropped ${fileList[0].name}`
+        ? `Dropped ${formatDroppedFileName(fileList[0])}`
         : `Dropped ${fileList.length} files`,
+      fileList.length === 1 && fileList[0].type.startsWith("image/")
+        ? URL.createObjectURL(fileList[0])
+        : undefined,
     );
     persistConversationMessage(
       "user",
@@ -612,7 +623,7 @@ export function ConversationPanel({
       const extraction = await extractSource(source.source.id);
 
       if (!extraction.ok) {
-        return `${file.name} was saved, but extraction needs attention: ${extraction.message}`;
+      return `${file.name} was saved as a source. I could not read the image text yet: ${extraction.message} You can retry from Knowledgebase, or paste the important text from the screenshot here and I will fold it into your profile.`;
       }
 
       return formatSourceIntakeReply({
@@ -683,8 +694,16 @@ export function ConversationPanel({
     }
   }
 
-  function appendUserMessage(text: string) {
-    setMessages((current) => [...current, { speaker: "user", text }]);
+  function appendUserMessage(text: string, attachmentPreviewUrl?: string) {
+    setMessages((current) => [
+      ...current,
+      {
+        attachmentPreviewUrl,
+        attachmentType: attachmentPreviewUrl ? "image" : undefined,
+        speaker: "user",
+        text,
+      },
+    ]);
   }
 
   return (
@@ -730,6 +749,16 @@ export function ConversationPanel({
             key={item.id ?? `${item.text}-${index}`}
           >
             <strong>{item.speaker === "user" ? "You" : brand.name}</strong>
+            {item.attachmentType === "image" && item.attachmentPreviewUrl ? (
+              <Image
+                alt={item.text}
+                className="message-image-preview"
+                height={260}
+                unoptimized
+                width={420}
+                src={item.attachmentPreviewUrl}
+              />
+            ) : null}
             <p>{item.text}</p>
           </div>
         ))}
@@ -1011,6 +1040,14 @@ function formatSourceTypeForPrompt(sourceType: string) {
   if (sourceType === "portfolio") return "portfolio";
   if (sourceType === "link") return "profile link";
   return sourceType;
+}
+
+function formatDroppedFileName(file: File) {
+  if (file.type.startsWith("image/")) {
+    return `screenshot/image: ${file.name}`;
+  }
+
+  return file.name;
 }
 
 function formatJobIntakeReply(job: {

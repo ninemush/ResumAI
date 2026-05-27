@@ -7,11 +7,8 @@ import {
   CheckCircle2,
   Circle,
   Compass,
-  FileText,
-  RefreshCw,
   Save,
   Sparkles,
-  Trash2,
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -25,6 +22,7 @@ import { createClient } from "@/lib/supabase/browser";
 type ProfileExplorerProps = {
   applicationOverview: ApplicationOverview;
   jobOverview: JobOverview;
+  onNavigate: (view: "applications" | "jobs" | "knowledgebase" | "resume") => void;
   overview: ProfileOverview;
 };
 
@@ -41,7 +39,12 @@ const PROFILE_PHOTO_BUCKET = "profile-photos";
 const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
 const acceptedProfilePhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-export function ProfileExplorer({ applicationOverview, jobOverview, overview }: ProfileExplorerProps) {
+export function ProfileExplorer({
+  applicationOverview,
+  jobOverview,
+  onNavigate,
+  overview,
+}: ProfileExplorerProps) {
   const router = useRouter();
   const profileName = overview.profile?.displayName ?? "Career profile";
   const headline =
@@ -70,13 +73,6 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
   });
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [factDrafts, setFactDrafts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      Object.values(overview.factsByType)
-        .flat()
-        .map((fact) => [fact.id, fact.fact_value]),
-    ),
-  );
 
   async function saveDraft() {
     setPendingId("profile");
@@ -166,108 +162,6 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
 
       setDraft((currentDraft) => ({ ...currentDraft, photoStoragePath: storagePath }));
       setMessage("Profile photo saved. ATS-first resumes will still exclude it unless you choose a photo-compatible format.");
-      router.refresh();
-    } finally {
-      setPendingId(null);
-    }
-  }
-
-  async function confirmFact(factId: string) {
-    setPendingId(factId);
-    setMessage(null);
-
-    try {
-      const response = await fetch(`/api/profile/facts/${factId}/confirm`, {
-        method: "POST",
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to confirm that detail.");
-        return;
-      }
-
-      setMessage("Confirmed. I will treat that as trusted profile evidence.");
-      router.refresh();
-    } finally {
-      setPendingId(null);
-    }
-  }
-
-  async function updateFact(factId: string) {
-    const value = factDrafts[factId]?.trim();
-
-    if (!value) {
-      setMessage("Add a profile detail before saving it.");
-      return;
-    }
-
-    setPendingId(factId);
-    setMessage(null);
-
-    try {
-      const response = await fetch(`/api/profile/facts/${factId}/confirm`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value }),
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to save that detail.");
-        return;
-      }
-
-      setMessage("Saved and confirmed that profile detail.");
-      router.refresh();
-    } finally {
-      setPendingId(null);
-    }
-  }
-
-  async function dismissFact(factId: string) {
-    setPendingId(factId);
-    setMessage(null);
-
-    try {
-      const response = await fetch(`/api/profile/facts/${factId}/confirm`, {
-        method: "DELETE",
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to remove that detail.");
-        return;
-      }
-
-      setMessage("Removed that profile detail from trusted review.");
-      router.refresh();
-    } finally {
-      setPendingId(null);
-    }
-  }
-
-  async function retrySourceExtraction(sourceId: string) {
-    setPendingId(sourceId);
-    setMessage(null);
-
-    try {
-      const response = await fetch(`/api/profile/sources/${sourceId}/extract`, {
-        method: "POST",
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to retry that source.");
-        return;
-      }
-
-      const savedFactCount = payload.intake?.savedFactCount ?? 0;
-      setMessage(
-        savedFactCount > 0
-          ? `Source read. Saved ${savedFactCount} profile detail${savedFactCount === 1 ? "" : "s"} for review.`
-          : "Source read. I did not find new profile details this time.",
-      );
       router.refresh();
     } finally {
       setPendingId(null);
@@ -404,26 +298,31 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
         <CockpitMetric
           detail="Confirmed profile evidence improves recommendations and generated materials."
           label="Readiness"
+          onClick={() => onNavigate("knowledgebase")}
           value={`${overview.readinessScore}%`}
         />
         <CockpitMetric
           detail={`${applicationOverview.summary.needsReview} application${applicationOverview.summary.needsReview === 1 ? "" : "s"} still need a decision or next action.`}
           label="Applications"
+          onClick={() => onNavigate("applications")}
           value={applicationOverview.summary.total}
         />
         <CockpitMetric
           detail="Use this to keep follow-up conversations precise."
           label="Interviewing"
+          onClick={() => onNavigate("applications")}
           value={applicationOverview.summary.interviewing}
         />
         <CockpitMetric
           detail={`${jobOverview.summary.readyForReview} readable job post${jobOverview.summary.readyForReview === 1 ? "" : "s"} ready for fit review.`}
           label="Jobs to review"
+          onClick={() => onNavigate("jobs")}
           value={jobOverview.summary.identified}
         />
         <CockpitMetric
           detail={`${pendingReviewCount} item${pendingReviewCount === 1 ? "" : "s"} need your confirmation, review, or approval before ${brand.name} treats them as trusted.`}
           label="Needs review"
+          onClick={() => onNavigate("knowledgebase")}
           value={pendingReviewCount}
         />
         <div className="stage-progress-card">
@@ -460,6 +359,32 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
       </section>
 
       {message ? <p className="system-note success">{message}</p> : null}
+
+      {overview.profile?.summary ||
+      overview.profile?.targetDirection ||
+      overview.profile?.targetLevel ? (
+        <section className="profile-draft-panel" aria-label="Profile draft">
+          <div className="section-heading">
+            <p className="eyebrow">Current read</p>
+            <h2>How I would position you</h2>
+          </div>
+          {overview.profile?.summary ? <p>{overview.profile.summary}</p> : null}
+          <div className="draft-chips" aria-label="Draft direction">
+            {overview.profile?.targetDirection ? (
+              <span>
+                <Compass size={15} aria-hidden="true" />
+                {overview.profile.targetDirection}
+              </span>
+            ) : null}
+            {overview.profile?.targetLevel ? (
+              <span>
+                <Sparkles size={15} aria-hidden="true" />
+                {overview.profile.targetLevel}
+              </span>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       <section className="profile-editor-panel" aria-label="Profile direction editor">
         <div className="section-heading">
@@ -520,47 +445,6 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
         </button>
       </section>
 
-      <section className="profile-summary-grid" aria-label="Profile summary">
-        <div>
-          <span>Tier</span>
-          <strong>{overview.tierName ?? "No active tier"}</strong>
-        </div>
-        <div>
-          <span>Status</span>
-          <strong>{formatProfileStatus(overview.profile?.status)}</strong>
-        </div>
-        <div>
-          <span>Target</span>
-          <strong>{overview.profile?.targetDirection ?? "Still calibrating"}</strong>
-        </div>
-      </section>
-
-      {overview.profile?.summary ||
-      overview.profile?.targetDirection ||
-      overview.profile?.targetLevel ? (
-        <section className="profile-draft-panel" aria-label="Profile draft">
-          <div className="section-heading">
-            <p className="eyebrow">Current read</p>
-            <h2>How I would position you</h2>
-          </div>
-          {overview.profile?.summary ? <p>{overview.profile.summary}</p> : null}
-          <div className="draft-chips" aria-label="Draft direction">
-            {overview.profile?.targetDirection ? (
-              <span>
-                <Compass size={15} aria-hidden="true" />
-                {overview.profile.targetDirection}
-              </span>
-            ) : null}
-            {overview.profile?.targetLevel ? (
-              <span>
-                <Sparkles size={15} aria-hidden="true" />
-                {overview.profile.targetLevel}
-              </span>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-
       {overview.roleRecommendations.length > 0 ? (
         <section className="roles-panel" aria-label="Role recommendations">
           <div className="section-heading">
@@ -616,135 +500,6 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
           </div>
         </section>
       ) : null}
-
-      {overview.recentSources.length > 0 ? (
-        <section className="sources-panel" aria-label="Recent profile sources">
-          <div className="section-heading">
-            <p className="eyebrow">Recent sources</p>
-            <h2>What you have added</h2>
-          </div>
-          <div className="source-list">
-            {overview.recentSources.map((source) => (
-              <article className="source-row" key={source.id}>
-                <div>
-                  <h3>{source.original_filename ?? formatSourceUrl(source.source_url)}</h3>
-                  <p>{formatSourceType(source.source_type)}</p>
-                  {source.failure_reason ? (
-                    <p className="source-failure">{formatFailureReason(source.failure_reason)}</p>
-                  ) : null}
-                  <p>{formatSourceGuidance(source)}</p>
-                  {source.source_type === "linkedin" && source.extraction_status === "failed" ? (
-                    <div className="source-fallback" aria-label="LinkedIn import options">
-                      <FileText size={15} aria-hidden="true" />
-                      <div>
-                        <strong>Reliable LinkedIn import</strong>
-                        <p>
-                          Drag a LinkedIn PDF export, screenshots, or paste the About,
-                          Experience, Education, Skills, and Certifications sections into
-                          Pramania. Those become reviewable LinkedIn-sourced evidence.
-                        </p>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="source-actions">
-                  <span className={`source-pill ${source.extraction_status}`}>
-                    {source.extraction_status.replace("_", " ")}
-                  </span>
-                  {["failed", "pending"].includes(source.extraction_status) ? (
-                    <button
-                      className="secondary-action compact-action"
-                      disabled={pendingId === source.id}
-                      onClick={() => retrySourceExtraction(source.id)}
-                      title="Retry source extraction"
-                      type="button"
-                    >
-                      <RefreshCw size={14} aria-hidden="true" />
-                      {pendingId === source.id ? "Retrying..." : "Retry"}
-                    </button>
-                  ) : null}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="facts-panel" aria-label="Captured profile facts">
-        <div className="section-heading">
-          <p className="eyebrow">Captured details</p>
-          <h2>What {brand.name} knows so far</h2>
-        </div>
-        {hasFacts ? (
-          <div className="fact-groups">
-            {Object.entries(overview.factsByType).map(([type, facts]) => (
-              <article className="fact-group" key={type}>
-                <h3>{type}</h3>
-                <ul>
-                  {facts.map((fact) => (
-                    <li key={fact.id}>
-                      <textarea
-                        aria-label={`Edit ${type} detail`}
-                        disabled={pendingId === fact.id}
-                        onChange={(event) =>
-                          setFactDrafts((currentDrafts) => ({
-                            ...currentDrafts,
-                            [fact.id]: event.target.value,
-                          }))
-                        }
-                        rows={3}
-                        value={factDrafts[fact.id] ?? fact.fact_value}
-                      />
-                      <div className="fact-review-actions">
-                        {fact.user_confirmed ? (
-                          <span className="fact-confirmed-label">
-                            <CheckCircle2 size={15} aria-hidden="true" />
-                            Confirmed
-                          </span>
-                        ) : (
-                          <button
-                            className="fact-confirm-button"
-                            disabled={pendingId === fact.id}
-                            onClick={() => confirmFact(fact.id)}
-                            type="button"
-                          >
-                            {pendingId === fact.id ? "Saving..." : "Confirm"}
-                          </button>
-                        )}
-                        <button
-                          className="fact-confirm-button"
-                          disabled={
-                            pendingId === fact.id ||
-                            (factDrafts[fact.id] ?? fact.fact_value).trim() === fact.fact_value
-                          }
-                          onClick={() => updateFact(fact.id)}
-                          type="button"
-                        >
-                          Save edit
-                        </button>
-                        <button
-                          className="fact-delete-button"
-                          disabled={pendingId === fact.id}
-                          onClick={() => dismissFact(fact.id)}
-                          title="Remove this captured detail"
-                          type="button"
-                        >
-                          <Trash2 size={14} aria-hidden="true" />
-                          Remove
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="empty-state">
-            Confirmed profile evidence will appear here after you share a source or note.
-          </p>
-        )}
-      </section>
     </main>
   );
 }
@@ -849,18 +604,20 @@ function readNextMove({
 function CockpitMetric({
   detail,
   label,
+  onClick,
   value,
 }: {
   detail: string;
   label: string;
+  onClick: () => void;
   value: number | string;
 }) {
   return (
-    <article className="cockpit-metric" title={detail}>
+    <button className="cockpit-metric" onClick={onClick} title={detail} type="button">
       <span>{label}</span>
       <strong>{value}</strong>
       <p>{detail}</p>
-    </article>
+    </button>
   );
 }
 
@@ -870,85 +627,6 @@ function formatList(items: string[]) {
   }
 
   return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
-}
-
-function formatProfileStatus(status: string | undefined) {
-  const statusLabels: Record<string, string> = {
-    draft: "Taking shape",
-    profile_ready: "Ready to tailor",
-    needs_review: "Needs your review",
-  };
-
-  if (!status) {
-    return "Taking shape";
-  }
-
-  return statusLabels[status] ?? status.replaceAll("_", " ");
-}
-
-function formatSourceType(sourceType: string) {
-  if (sourceType === "docx") return "Word document";
-  if (sourceType === "pdf") return "PDF";
-  if (sourceType === "txt") return "Text file";
-  if (sourceType === "linkedin") return "LinkedIn profile";
-  if (sourceType === "portfolio") return "Portfolio link";
-
-  return sourceType
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function formatSourceUrl(sourceUrl: string | null) {
-  if (!sourceUrl) return "Profile source";
-
-  try {
-    return new URL(sourceUrl).hostname.replace(/^www\./, "");
-  } catch {
-    return "Profile link";
-  }
-}
-
-function formatFailureReason(reason: string) {
-  const friendlyMessages: Record<string, string> = {
-    DOCX_TEXT_EMPTY: "No readable text found.",
-    PDF_TEXT_EMPTY: "No selectable text found. OCR will be needed.",
-    PDF_PAGE_LIMIT_EXCEEDED: "Too many pages for the current parser limit.",
-    PDF_FILE_TOO_LARGE: "PDF exceeds the current parser size limit.",
-    TEXT_FILE_TOO_LARGE: "Text file exceeds the current parser size limit.",
-    IMAGE_OCR_FILE_TOO_LARGE: "Image exceeds the current OCR size limit.",
-    IMAGE_OCR_TEXT_EMPTY: "No readable text found in the image.",
-    IMAGE_OCR_UNSUPPORTED_MIME_TYPE: "OCR supports JPG, PNG, and WebP images.",
-    LINKEDIN_PUBLIC_PROFILE_BLOCKED:
-      "LinkedIn did not return readable public content to Pramania.",
-    PROFILE_LINK_TEXT_TOO_SHORT: "Not enough readable profile text found.",
-  };
-
-  return friendlyMessages[reason] ?? "Extraction needs another attempt.";
-}
-
-function formatSourceGuidance(source: ProfileOverview["recentSources"][number]) {
-  if (source.extraction_status === "succeeded") {
-    return "Read into your profile evidence.";
-  }
-
-  if (source.extraction_status === "processing") {
-    return "Currently being read. This can take a moment for larger files.";
-  }
-
-  if (source.extraction_status === "pending") {
-    return "Saved, but not read yet. Retry when you are ready.";
-  }
-
-  if (source.source_type === "linkedin" && source.extraction_status === "failed") {
-    return "Public URL attempted. If LinkedIn blocks server reading, use the reliable import path below.";
-  }
-
-  if (source.extraction_status === "failed") {
-    return "Saved, but extraction failed. Retry or provide the content another way.";
-  }
-
-  return "Saved as profile source.";
 }
 
 function readImageExtension(mimeType: string) {

@@ -803,6 +803,18 @@ input:focus {
   padding: 16px;
 }
 
+.cockpit-metric {
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cockpit-metric:hover {
+  border-color: rgba(185, 155, 103, 0.42);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-1px);
+}
+
 .next-action-panel {
   align-items: center;
   background: rgba(236, 230, 218, 0.42);
@@ -1187,6 +1199,151 @@ input:focus {
 
 .master-resume-editor {
   margin-top: 0;
+}
+
+.priority-review-panel {
+  background: rgba(236, 230, 218, 0.34);
+}
+
+.resume-review-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.review-item {
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+}
+
+.review-item span {
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.review-item.critical span {
+  color: var(--danger);
+}
+
+.review-item.important span {
+  color: var(--gold);
+}
+
+.review-item.informational span {
+  color: var(--sage-strong);
+}
+
+.review-item p {
+  align-items: center;
+  color: var(--ink-soft);
+  display: flex;
+  gap: 8px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.resume-studio-surface {
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.resume-document-preview {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  box-shadow: 0 18px 55px rgba(20, 30, 45, 0.08);
+  display: grid;
+  gap: 18px;
+  margin-inline: auto;
+  max-width: 860px;
+  padding: clamp(22px, 4vw, 44px);
+  width: 100%;
+}
+
+.resume-document-preview header input {
+  border: 0;
+  border-bottom: 2px solid var(--line);
+  border-radius: 0;
+  color: var(--foreground);
+  font-family: var(--font-pr-brand), Georgia, serif;
+  font-size: clamp(1.7rem, 3vw, 2.45rem);
+  font-weight: 650;
+  padding: 0 0 12px;
+  width: 100%;
+}
+
+.resume-document-preview section {
+  display: grid;
+  gap: 8px;
+}
+
+.resume-document-preview h3 {
+  border-bottom: 1px solid var(--line);
+  color: var(--foreground);
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  margin: 0;
+  padding-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.resume-document-preview textarea {
+  background: transparent;
+  border: 0;
+  color: var(--ink-soft);
+  font: inherit;
+  line-height: 1.58;
+  min-height: 0;
+  padding: 0;
+  resize: vertical;
+  width: 100%;
+}
+
+.resume-advanced-editor {
+  background: rgba(255, 250, 243, 0.74);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.resume-advanced-editor summary {
+  color: var(--sage-strong);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.resume-advanced-editor label {
+  color: var(--sage-strong);
+  display: grid;
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.74rem;
+  font-weight: 800;
+  gap: 7px;
+  letter-spacing: 0.1em;
+  margin-top: 12px;
+  text-transform: uppercase;
+}
+
+.resume-advanced-editor textarea {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  color: var(--foreground);
+  font: inherit;
+  font-family: var(--font-pr-sans), system-ui, sans-serif;
+  letter-spacing: 0;
+  line-height: 1.5;
+  padding: 11px 12px;
+  resize: vertical;
+  text-transform: none;
 }
 
 .profile-milestone-list {
@@ -1767,6 +1924,12 @@ input:focus {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.evidence-note {
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
+}
+
 .fact-group {
   background: var(--panel-strong);
   border: 1px solid var(--line);
@@ -1942,6 +2105,16 @@ input:focus {
 .assistant-message p,
 .user-message p {
   margin: 7px 0 0;
+}
+
+.message-image-preview {
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  display: block;
+  margin-block: 10px;
+  max-height: 260px;
+  max-width: min(100%, 420px);
+  object-fit: contain;
 }
 
 .assistant-message strong,
