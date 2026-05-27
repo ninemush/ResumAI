@@ -1,6 +1,7 @@
 import { WorkspaceLayout } from "@/components/app-shell/workspace-layout";
 import { getOwnerMetrics } from "@/lib/admin/owner-metrics";
 import { getApplicationOverview } from "@/lib/applications/application-overview";
+import { getArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import type { WorkspaceSession } from "@/lib/commands/session";
 import { getConversationMessages } from "@/lib/conversation/conversation-messages";
 import { getJobOverview } from "@/lib/jobs/job-overview";
@@ -17,6 +18,7 @@ export async function WorkspaceShell({ session }: WorkspaceShellProps) {
     jobOverview,
     conversationMessages,
     applicationOverview,
+    artifactOverview,
     masterResumeOverview,
     ownerMetrics,
   ] = await Promise.all([
@@ -24,6 +26,7 @@ export async function WorkspaceShell({ session }: WorkspaceShellProps) {
     getJobOverview(session.user.id),
     getConversationMessages(session.user.id),
     getApplicationOverview(session.user.id),
+    getArtifactOverview(session.user.id),
     getMasterResumeOverview(session.user.id),
     session.admin.roles.length > 0 ? getOwnerMetrics() : Promise.resolve(null),
   ]);
@@ -31,6 +34,7 @@ export async function WorkspaceShell({ session }: WorkspaceShellProps) {
   return (
     <WorkspaceLayout
       applicationOverview={applicationOverview}
+      artifactOverview={artifactOverview}
       conversationMessages={conversationMessages}
       jobOverview={jobOverview}
       masterResumeOverview={masterResumeOverview}

@@ -241,6 +241,23 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
               {application.latestCoverLetterExcerpt ? (
                 <p>Cover letter: {application.latestCoverLetterExcerpt}</p>
               ) : null}
+              <div className="application-timeline" aria-label="Application status history">
+                <strong>Lifecycle</strong>
+                {application.statusEvents.length > 0 ? (
+                  application.statusEvents.map((event) => (
+                    <span key={`${event.createdAt}-${event.newStatus}`}>
+                      {formatStatus(event.previousStatus ?? "draft")} {"->"}{" "}
+                      {formatStatus(event.newStatus)}
+                      <em>{formatDate(event.createdAt)} via {event.source}</em>
+                    </span>
+                  ))
+                ) : (
+                  <span>
+                    {formatStatus(application.status)}
+                    <em>Current status</em>
+                  </span>
+                )}
+              </div>
             </div>
             <select
               aria-label={`Update ${application.companyName} application status`}
@@ -451,6 +468,13 @@ function formatExportStatus(status: MaterialReview["exportReadiness"]["status"])
   };
 
   return labels[status];
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function splitLines(value: string) {

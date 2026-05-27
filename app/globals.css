@@ -1515,6 +1515,51 @@ input:focus {
   gap: 10px;
 }
 
+.artifact-list {
+  display: grid;
+  gap: 10px;
+}
+
+.artifact-row {
+  align-items: center;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  padding: 14px;
+}
+
+.artifact-icon {
+  align-items: center;
+  background: var(--pr-mist-beige);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  color: var(--sage-strong);
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.artifact-row h3,
+.artifact-row p {
+  margin: 0;
+}
+
+.artifact-row h3 {
+  color: var(--foreground);
+  font-size: 0.98rem;
+}
+
+.artifact-row p {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  margin-top: 3px;
+}
+
 .role-list {
   display: grid;
   gap: 12px;
@@ -1608,7 +1653,55 @@ input:focus {
 }
 
 .job-row:has(.secondary-action) {
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.job-review-row {
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) repeat(6, auto);
+}
+
+.job-description-preview {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.job-description-preview strong {
+  color: var(--foreground);
+  display: block;
+  font-size: 0.82rem;
+  margin-bottom: 6px;
+}
+
+.application-timeline {
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 10px;
+}
+
+.application-timeline strong {
+  color: var(--foreground);
+  font-size: 0.82rem;
+}
+
+.application-timeline span {
+  color: var(--ink-soft);
+  display: grid;
+  font-size: 0.82rem;
+  gap: 2px;
+}
+
+.application-timeline em {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-style: normal;
 }
 
 .source-row h3,

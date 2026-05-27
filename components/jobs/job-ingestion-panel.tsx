@@ -13,6 +13,7 @@ type JobIngestionPanelProps = {
 export function JobIngestionPanel({ overview, showEmptyState = false }: JobIngestionPanelProps) {
   const router = useRouter();
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   if (overview.recentJobs.length === 0 && !showEmptyState) {
@@ -47,6 +48,34 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
     }
   }
 
+  async function updateReviewStatus(jobId: string, reviewStatus: "accepted" | "rejected") {
+    setPendingJobId(jobId);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/review-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewStatus }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to update that job.");
+        return;
+      }
+
+      setMessage(
+        reviewStatus === "accepted"
+          ? "Saved as a role worth pursuing."
+          : "Removed from the active review lane.",
+      );
+      router.refresh();
+    } finally {
+      setPendingJobId(null);
+    }
+  }
+
   return (
     <section className="jobs-panel" aria-label="Recent job posts">
       <div className="section-heading">
@@ -62,10 +91,11 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
           </p>
         ) : null}
         {overview.recentJobs.map((job) => (
-          <article className="job-row" key={job.id}>
+          <article className="job-row job-review-row" key={job.id}>
             <div>
               <h3>{job.title ?? formatJobUrl(job.job_url)}</h3>
               <p>{job.company ?? formatJobUrl(job.resolved_url ?? job.job_url)}</p>
+              <p>Review status: {formatReviewStatus(job.review_status)}</p>
               {job.fitSnapshot.score !== null ? (
                 <p>
                   Fit review: {job.fitAnalysis.summary}
@@ -94,27 +124,78 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
               {job.failure_reason ? (
                 <p className="source-failure">{formatFailureReason(job.failure_reason)}</p>
               ) : null}
+              {expandedJobId === job.id ? (
+                <div className="job-description-preview">
+                  <strong>Job description excerpt</strong>
+                  <p>{job.extracted_text?.slice(0, 1400) ?? "No readable job text available."}</p>
+                </div>
+              ) : null}
             </div>
             <span className={`source-pill ${job.ingestion_status}`}>
               {job.ingestion_status.replace("_", " ")}
             </span>
+            <button
+              className="secondary-action"
+              onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
+              type="button"
+            >
+              {expandedJobId === job.id ? "Hide JD" : "View JD"}
+            </button>
+            <a
+              className="secondary-action"
+              href={job.resolved_url ?? job.job_url}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Open
+            </a>
             {job.ingestion_status === "succeeded" ? (
-              <button
-                className="secondary-action"
-                disabled={pendingJobId === job.id}
-                onClick={() => logApplication(job.id)}
-                title="Log this job as an application before generating tailored materials"
-                type="button"
-              >
-                <Sparkles size={15} aria-hidden="true" />
-                {pendingJobId === job.id ? "Logging..." : "Proceed"}
-              </button>
+              <>
+                <button
+                  className="secondary-action"
+                  disabled={pendingJobId === job.id}
+                  onClick={() => updateReviewStatus(job.id, "rejected")}
+                  title="Remove this role from active review"
+                  type="button"
+                >
+                  Reject
+                </button>
+                <button
+                  className="secondary-action"
+                  disabled={pendingJobId === job.id}
+                  onClick={() => updateReviewStatus(job.id, "accepted")}
+                  title="Keep this role as worth pursuing"
+                  type="button"
+                >
+                  Accept
+                </button>
+                <button
+                  className="secondary-action"
+                  disabled={pendingJobId === job.id}
+                  onClick={() => logApplication(job.id)}
+                  title="Log this job as an application before generating tailored materials"
+                  type="button"
+                >
+                  <Sparkles size={15} aria-hidden="true" />
+                  {pendingJobId === job.id ? "Logging..." : "Apply"}
+                </button>
+              </>
             ) : null}
           </article>
         ))}
       </div>
     </section>
   );
+}
+
+function formatReviewStatus(status: string) {
+  const labels: Record<string, string> = {
+    accepted: "accepted",
+    needs_review: "needs review",
+    rejected: "rejected",
+  };
+
+  return labels[status] ?? "needs review";
 }
 
 function FitBucket({

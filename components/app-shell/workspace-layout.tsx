@@ -7,12 +7,14 @@ import { OwnerConsole } from "@/components/admin/owner-console";
 import type { AppView } from "@/components/app-shell/side-nav";
 import { SideNav } from "@/components/app-shell/side-nav";
 import { ApplicationPanel } from "@/components/applications/application-panel";
+import { ArtifactsPanel } from "@/components/artifacts/artifacts-panel";
 import { ConversationPanel } from "@/components/conversation/conversation-panel";
 import { JobIngestionPanel } from "@/components/jobs/job-ingestion-panel";
 import { KnowledgebasePanel } from "@/components/knowledgebase/knowledgebase-panel";
 import { ProfileExplorer } from "@/components/profile/profile-explorer";
 import { MasterResumePanel } from "@/components/resume/master-resume-panel";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
 import type { WorkspaceSession } from "@/lib/commands/session";
 import type { ConversationMessage } from "@/lib/conversation/conversation-messages";
@@ -30,6 +32,7 @@ const MAX_CONVERSATION_WIDTH = 540;
 
 type WorkspaceLayoutProps = {
   applicationOverview: ApplicationOverview;
+  artifactOverview: ArtifactOverview;
   conversationMessages: ConversationMessage[];
   jobOverview: JobOverview;
   masterResumeOverview: MasterResumeOverview;
@@ -47,6 +50,7 @@ type WorkspaceLayoutState = {
 
 export function WorkspaceLayout({
   applicationOverview,
+  artifactOverview,
   conversationMessages,
   jobOverview,
   masterResumeOverview,
@@ -139,6 +143,7 @@ export function WorkspaceLayout({
         {renderWorkspaceView({
           activeView: layout.activeView,
           applicationOverview,
+          artifactOverview,
           jobOverview,
           masterResumeOverview,
           ownerMetrics,
@@ -174,6 +179,7 @@ export function WorkspaceLayout({
 function renderWorkspaceView({
   activeView,
   applicationOverview,
+  artifactOverview,
   jobOverview,
   masterResumeOverview,
   ownerMetrics,
@@ -182,6 +188,7 @@ function renderWorkspaceView({
 }: {
   activeView: AppView;
   applicationOverview: ApplicationOverview;
+  artifactOverview: ArtifactOverview;
   jobOverview: JobOverview;
   masterResumeOverview: MasterResumeOverview;
   ownerMetrics: OwnerMetrics | null;
@@ -209,7 +216,12 @@ function renderWorkspaceView({
   }
 
   if (activeView === "resume") {
-    return <MasterResumePanel overview={masterResumeOverview} />;
+    return (
+      <MasterResumePanel
+        overview={masterResumeOverview}
+        profileOverview={profileOverview}
+      />
+    );
   }
 
   if (activeView === "knowledgebase") {
@@ -217,13 +229,7 @@ function renderWorkspaceView({
   }
 
   if (activeView === "artifacts") {
-    return (
-      <WorkspacePlaceholder
-        eyebrow="Artifacts"
-        title="Generated materials"
-        body="Targeted resumes, cover letters, and validated PDFs will collect here after you log an application and generate materials."
-      />
-    );
+    return <ArtifactsPanel overview={artifactOverview} />;
   }
 
   if (activeView === "settings") {

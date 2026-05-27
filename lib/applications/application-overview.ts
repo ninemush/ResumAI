@@ -12,6 +12,12 @@ export type ApplicationOverview = {
     latestCoverLetterStatus: string | null;
     latestResumeHeadline: string | null;
     latestResumeStatus: string | null;
+    statusEvents: {
+      createdAt: string;
+      newStatus: string;
+      previousStatus: string | null;
+      source: string;
+    }[];
     status: string;
     createdAt: string;
     updatedAt: string;
@@ -54,7 +60,7 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
   }
 
   const applicationIds = (data ?? []).map((application) => application.id);
-  const [resumeArtifacts, coverLetterArtifacts] =
+  const [resumeArtifacts, coverLetterArtifacts, statusEvents] =
     applicationIds.length > 0
       ? await Promise.all([
           readLatestResumeArtifacts({
@@ -63,10 +69,14 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
           readLatestCoverLetterArtifacts({
             applicationIds,
           }),
+          readApplicationStatusEvents({
+            applicationIds,
+          }),
         ])
       : [
           new Map<string, { headline: string | null; status: string }>(),
           new Map<string, { excerpt: string | null; status: string }>(),
+          new Map<string, ApplicationOverview["recentApplications"][number]["statusEvents"]>(),
         ];
 
   const recentApplications = (data ?? []).map((application) => ({
@@ -78,6 +88,7 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
     latestCoverLetterStatus: coverLetterArtifacts.get(application.id)?.status ?? null,
     latestResumeHeadline: resumeArtifacts.get(application.id)?.headline ?? null,
     latestResumeStatus: resumeArtifacts.get(application.id)?.status ?? null,
+    statusEvents: statusEvents.get(application.id) ?? [],
     status: application.status,
     createdAt: application.created_at,
     updatedAt: application.updated_at,
@@ -90,6 +101,36 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
     ).length,
     summary: summarizeApplications(recentApplications),
   };
+}
+
+async function readApplicationStatusEvents({ applicationIds }: { applicationIds: string[] }) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("application_status_events")
+    .select("application_id, previous_status, new_status, source, created_at")
+    .in("application_id", applicationIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error("APPLICATION_STATUS_EVENTS_READ_FAILED");
+  }
+
+  return (data ?? []).reduce<
+    Map<string, ApplicationOverview["recentApplications"][number]["statusEvents"]>
+  >((events, event) => {
+    const applicationEvents = events.get(event.application_id) ?? [];
+    if (applicationEvents.length < 4) {
+      applicationEvents.push({
+        createdAt: event.created_at,
+        newStatus: event.new_status,
+        previousStatus: event.previous_status,
+        source: event.source,
+      });
+      events.set(event.application_id, applicationEvents);
+    }
+
+    return events;
+  }, new Map());
 }
 
 function summarizeApplications(applications: { status: string }[]) {

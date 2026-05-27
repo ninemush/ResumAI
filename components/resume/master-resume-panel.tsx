@@ -6,12 +6,14 @@ import { useRouter } from "next/navigation";
 
 import type { ResumeContent } from "@/lib/resumes/resume-content";
 import type { MasterResumeOverview } from "@/lib/resumes/master-resume";
+import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
 type MasterResumePanelProps = {
   overview: MasterResumeOverview;
+  profileOverview: ProfileOverview;
 };
 
-export function MasterResumePanel({ overview }: MasterResumePanelProps) {
+export function MasterResumePanel({ overview, profileOverview }: MasterResumePanelProps) {
   const router = useRouter();
   const [currentOverview, setCurrentOverview] = useState(overview);
   const [draft, setDraft] = useState<ResumeContent | null>(
@@ -78,13 +80,29 @@ export function MasterResumePanel({ overview }: MasterResumePanelProps) {
   return (
     <main className="profile-pane" aria-labelledby="resume-studio-title">
       <div className="pane-heading">
-        <p className="eyebrow">Resume studio</p>
-        <h1 id="resume-studio-title">Master resume</h1>
+        <p className="eyebrow">Profile & resume studio</p>
+        <h1 id="resume-studio-title">Master profile and resume</h1>
         <p>
-          Build a reusable ATS-friendly resume from confirmed profile evidence. Keep this
-          grounded, then tailor from it for specific roles.
+          Build a reusable ATS-friendly master resume from your profile evidence, then
+          create sharper role-focused variants from the same trusted context.
         </p>
       </div>
+
+      <section className="profile-draft-panel" aria-label="Working profile snapshot">
+        <div className="section-heading">
+          <p className="eyebrow">Current profile read</p>
+          <h2>{profileOverview.profile?.headline ?? "Still calibrating"}</h2>
+        </div>
+        <p>
+          {profileOverview.profile?.summary ??
+            "Pramania needs a little more signal before it can write a strong positioning read."}
+        </p>
+        <div className="draft-chips">
+          <span>{profileOverview.profile?.targetDirection ?? "Target direction open"}</span>
+          <span>{profileOverview.profile?.targetLevel ?? "Level open"}</span>
+          <span>{profileOverview.confirmedFactCount} trusted detail{profileOverview.confirmedFactCount === 1 ? "" : "s"}</span>
+        </div>
+      </section>
 
       <section className="resume-readiness-panel" aria-label="Master resume readiness">
         <div>
@@ -108,7 +126,7 @@ export function MasterResumePanel({ overview }: MasterResumePanelProps) {
             {isGenerating
               ? "Generating..."
               : currentOverview.latestResume
-                ? "Regenerate"
+                ? "Generate role-focused variant"
                 : "Generate master resume"}
           </button>
           <button

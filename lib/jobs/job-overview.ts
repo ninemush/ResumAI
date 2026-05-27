@@ -13,6 +13,7 @@ export type JobOverview = {
     extracted_text: string | null;
     ingestion_status: string;
     failure_reason: string | null;
+    review_status: string;
     created_at: string;
     fitSnapshot: {
       matchedKeywords: string[];
@@ -34,7 +35,7 @@ export async function getJobOverview(userId: string): Promise<JobOverview> {
     supabase
       .from("job_ingestions")
       .select(
-        "id, job_url, resolved_url, title, company, extracted_text, ingestion_status, failure_reason, created_at",
+        "id, job_url, resolved_url, title, company, extracted_text, ingestion_status, failure_reason, review_status, created_at",
       )
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
@@ -52,6 +53,7 @@ export async function getJobOverview(userId: string): Promise<JobOverview> {
 
       return {
         ...job,
+        review_status: "review_status" in job ? String(job.review_status) : "needs_review",
         fitAnalysis,
         fitSnapshot: {
           matchedKeywords: fitAnalysis.matchedKeywords,
@@ -63,7 +65,11 @@ export async function getJobOverview(userId: string): Promise<JobOverview> {
     summary: {
       identified: jobs?.length ?? 0,
       readyForReview:
-        jobs?.filter((job) => job.ingestion_status === "succeeded").length ?? 0,
+        jobs?.filter(
+          (job) =>
+            job.ingestion_status === "succeeded" &&
+            (!("review_status" in job) || job.review_status === "needs_review"),
+        ).length ?? 0,
       failed: jobs?.filter((job) => job.ingestion_status === "failed").length ?? 0,
     },
   };
