@@ -46,6 +46,18 @@ test("requires authentication before reading profile sources", async ({ request 
   expect(payload.error.code).toBe("auth.required");
 });
 
+test("requires authentication before updating profile fields", async ({ request }) => {
+  const response = await request.patch("/api/profile", {
+    data: {
+      targetDirection: "Product leadership",
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});
+
 test("requires authentication before extracting profile sources", async ({ request }) => {
   const response = await request.post(
     "/api/profile/sources/00000000-0000-4000-8000-000000000000/extract",

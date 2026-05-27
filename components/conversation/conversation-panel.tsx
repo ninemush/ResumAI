@@ -215,6 +215,14 @@ export function ConversationPanel({
     const summaries: string[] = [];
 
     if (urls.length === 0) {
+      const profileEditAction = await processProfileEditAction(text);
+
+      if (profileEditAction) {
+        appendAssistantMessage(profileEditAction, true);
+        router.refresh();
+        return;
+      }
+
       const resumeAction = await processResumeAction(text);
 
       if (resumeAction) {
@@ -395,6 +403,77 @@ export function ConversationPanel({
     );
 
     return payload.assistantMessage as string;
+  }
+
+  async function processProfileEditAction(text: string) {
+    const profilePatch = inferProfilePatch(text);
+
+    if (profilePatch) {
+      const response = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profilePatch.patch),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        return payload.error?.message ?? "I could not update that profile field yet.";
+      }
+
+      return profilePatch.reply;
+    }
+
+    const factAction = inferFactAction(text, profileOverview);
+
+    if (!factAction) {
+      return null;
+    }
+
+    if (factAction.kind === "confirm_all") {
+      const facts = Object.values(profileOverview.factsByType)
+        .flat()
+        .filter((fact) => !fact.user_confirmed);
+
+      if (facts.length === 0) {
+        return "There are no inferred profile details waiting for trust review right now.";
+      }
+
+      const responses = await Promise.all(
+        facts.map((fact) =>
+          fetch(`/api/profile/facts/${fact.id}/confirm`, {
+            method: "POST",
+          }),
+        ),
+      );
+
+      if (responses.some((response) => !response.ok)) {
+        return "I could not trust every pending profile detail cleanly. Open Knowledgebase to review the remaining items, or ask me to trust one exact detail.";
+      }
+
+      return `Trusted ${facts.length} profile detail${facts.length === 1 ? "" : "s"}. I will use them as stronger evidence for profile and resume generation.`;
+    }
+
+    if (factAction.matches.length === 0) {
+      return `I could not find a saved profile detail matching "${factAction.query}". You can paste the exact wording, or add the corrected detail as a new note.`;
+    }
+
+    if (factAction.matches.length > 1) {
+      return `I found more than one matching profile detail for "${factAction.query}". To keep the record clean, paste the exact detail you want me to ${factAction.kind === "delete" ? "remove" : "trust"}.`;
+    }
+
+    const fact = factAction.matches[0];
+    const response = await fetch(`/api/profile/facts/${fact.id}/confirm`, {
+      method: factAction.kind === "delete" ? "DELETE" : "POST",
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      return payload.error?.message ?? "I could not update that profile detail yet.";
+    }
+
+    return factAction.kind === "delete"
+      ? `Removed that profile detail: ${fact.fact_value}`
+      : `Trusted that profile detail: ${fact.fact_value}`;
   }
 
   async function processExistingSourceAction(text: string) {
@@ -961,6 +1040,10 @@ function inferProcessingMode(text: string): ProcessingMode {
     return "job";
   }
 
+  if (inferProfilePatch(text) || looksLikeFactAction(text)) {
+    return "profile";
+  }
+
   if (looksLikeExistingSourceRequest(text) || inferRequestedSourceType(text)) {
     return "source";
   }
@@ -1006,6 +1089,183 @@ function formatSourceIntakeReply({
   return [savedSummary, advisorRead, direction, nextQuestion ? `Next question: ${nextQuestion}` : null]
     .filter(Boolean)
     .join(" ");
+}
+
+function inferProfilePatch(text: string) {
+  const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
+  const targetDirection = extractProfileFieldValue(text, [
+    "set my target direction to",
+    "set target direction to",
+    "target direction is",
+    "my target direction is",
+    "set my target role to",
+    "target role is",
+    "my target role is",
+    "i want to target",
+    "i am targeting",
+  ]);
+
+  if (targetDirection) {
+    return {
+      patch: { targetDirection },
+      reply: `Set your working target direction to ${targetDirection}. I will use that as the lane when shaping profile and resume guidance.`,
+    };
+  }
+
+  const targetLevel = extractProfileFieldValue(text, [
+    "set my target level to",
+    "set target level to",
+    "target level is",
+    "my target level is",
+    "set my seniority to",
+    "my seniority is",
+  ]);
+
+  if (targetLevel) {
+    return {
+      patch: { targetLevel },
+      reply: `Set your working target level to ${targetLevel}. I will keep screening and resume language calibrated to that level.`,
+    };
+  }
+
+  const headline = extractProfileFieldValue(text, [
+    "set my headline to",
+    "set headline to",
+    "my headline should be",
+    "update my headline to",
+  ]);
+
+  if (headline) {
+    return {
+      patch: { headline },
+      reply: "Updated your profile headline. I will use that positioning as a starting point, and we can keep sharpening it as more evidence comes in.",
+    };
+  }
+
+  const summary = extractProfileFieldValue(text, [
+    "set my summary to",
+    "set summary to",
+    "my summary should be",
+    "update my summary to",
+  ]);
+
+  if (summary) {
+    return {
+      patch: { summary },
+      reply: "Updated your profile summary. I will treat it as your working read, not a final resume claim until the evidence supports it.",
+    };
+  }
+
+  const displayName = extractProfileFieldValue(text, [
+    "set my name to",
+    "my name is",
+    "update my name to",
+  ]);
+
+  if (displayName && !/\b(role|title|company|team|target)\b/.test(normalized)) {
+    return {
+      patch: { displayName },
+      reply: `Updated your profile name to ${displayName}.`,
+    };
+  }
+
+  return null;
+}
+
+function inferFactAction(text: string, profileOverview: ProfileOverview) {
+  const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
+
+  if (/\b(trust|confirm|approve)\b.*\b(all|everything|all details|all profile details)\b/.test(normalized)) {
+    return {
+      kind: "confirm_all" as const,
+      matches: [],
+      query: "",
+    };
+  }
+
+  const deleteQuery = extractProfileFieldValue(text, [
+    "remove profile detail",
+    "delete profile detail",
+    "remove the detail",
+    "delete the detail",
+    "remove this detail",
+    "delete this detail",
+  ]);
+
+  if (deleteQuery) {
+    return {
+      kind: "delete" as const,
+      matches: findMatchingFacts(profileOverview, deleteQuery),
+      query: deleteQuery,
+    };
+  }
+
+  const confirmQuery = extractProfileFieldValue(text, [
+    "trust profile detail",
+    "confirm profile detail",
+    "approve profile detail",
+    "trust the detail",
+    "confirm the detail",
+    "approve the detail",
+  ]);
+
+  if (confirmQuery) {
+    return {
+      kind: "confirm" as const,
+      matches: findMatchingFacts(profileOverview, confirmQuery),
+      query: confirmQuery,
+    };
+  }
+
+  return null;
+}
+
+function looksLikeFactAction(text: string) {
+  const normalized = text.toLowerCase();
+
+  return (
+    /\b(trust|confirm|approve)\b.*\b(profile detail|detail|all details|everything)\b/.test(normalized) ||
+    /\b(remove|delete)\b.*\b(profile detail|detail)\b/.test(normalized)
+  );
+}
+
+function extractProfileFieldValue(text: string, phrases: string[]) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const lower = normalized.toLowerCase();
+  const matchedPhrase = phrases.find((phrase) => lower.includes(phrase));
+
+  if (!matchedPhrase) {
+    return null;
+  }
+
+  const startIndex = lower.indexOf(matchedPhrase) + matchedPhrase.length;
+  const value = normalized
+    .slice(startIndex)
+    .replace(/^[:\s"']+/, "")
+    .replace(/["'.\s]+$/g, "")
+    .trim();
+
+  if (value.length < 2 || value.length > 900) {
+    return null;
+  }
+
+  return value;
+}
+
+function findMatchingFacts(profileOverview: ProfileOverview, query: string) {
+  const normalizedQuery = normalizeFactSearch(query);
+
+  if (normalizedQuery.length < 3) {
+    return [];
+  }
+
+  return Object.values(profileOverview.factsByType)
+    .flat()
+    .filter((fact) => normalizeFactSearch(fact.fact_value).includes(normalizedQuery));
+}
+
+function normalizeFactSearch(value: string) {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
 }
 
 function inferRequestedSourceType(text: string) {
