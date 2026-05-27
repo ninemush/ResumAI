@@ -20,6 +20,8 @@ const profileFactTypeSchema = z.enum([
   "other",
 ]);
 
+const PROFILE_INTAKE_MAX_ATTEMPTS = 3;
+
 export const profileIntakeRequestSchema = z.object({
   message: z.string().trim().min(3).max(4000),
 });
@@ -34,7 +36,7 @@ const profileIntakeResponseSchema = z.object({
         confidence: z.number().min(0).max(1),
       }),
     )
-    .max(12),
+    .max(24),
   followUpQuestions: z.array(z.string().min(1).max(220)).max(3),
   profileDraft: z.object({
     displayName: z.string().max(120).nullable(),
@@ -55,7 +57,7 @@ const profileIntakeResponseSchema = z.object({
         confidence: z.number().min(0).max(1),
       }),
     )
-    .max(3),
+    .max(4),
   suggestedDirection: z.string().max(500).nullable(),
 });
 
@@ -201,152 +203,13 @@ export async function extractProfileFactsFromText({
     profileId,
     userId: user.id,
   });
-  const response = await getOpenAIClient().responses.create({
+  const parsed = await runProfileIntakeModel({
+    existingContext,
+    inputLabel,
     model,
-    instructions: PROFILE_INTAKE_INSTRUCTIONS,
-    input: buildProfileIntakeInput({
-      existingContext,
-      label: inputLabel,
-      text: normalizedText,
-    }),
-    max_output_tokens: 1100,
-    metadata: {
-      prompt_version: PROFILE_INTAKE_PROMPT_VERSION,
-      feature: "profile_intake",
-    },
-    safety_identifier: hashUserId(user.id),
-    store: false,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "profile_intake_result",
-        strict: true,
-        schema: {
-          type: "object",
-          additionalProperties: false,
-          required: [
-            "assistantMessage",
-            "facts",
-            "followUpQuestions",
-            "profileDraft",
-            "roleRecommendations",
-            "suggestedDirection",
-          ],
-          properties: {
-            assistantMessage: { type: "string" },
-            facts: {
-              type: "array",
-              maxItems: 12,
-              items: {
-                type: "object",
-                additionalProperties: false,
-                required: ["type", "value", "confidence"],
-                properties: {
-                  type: {
-                    type: "string",
-                    enum: profileFactTypeSchema.options,
-                  },
-                  value: { type: "string" },
-                  confidence: {
-                    type: "number",
-                    minimum: 0,
-                    maximum: 1,
-                  },
-                },
-              },
-            },
-            followUpQuestions: {
-              type: "array",
-              maxItems: 3,
-              items: { type: "string" },
-            },
-            profileDraft: {
-              type: "object",
-              additionalProperties: false,
-              required: [
-                "displayName",
-                "headline",
-                "summary",
-                "targetDirection",
-                "targetLevel",
-              ],
-              properties: {
-                displayName: {
-                  anyOf: [{ type: "string" }, { type: "null" }],
-                },
-                headline: {
-                  anyOf: [{ type: "string" }, { type: "null" }],
-                },
-                summary: {
-                  anyOf: [{ type: "string" }, { type: "null" }],
-                },
-                targetDirection: {
-                  anyOf: [{ type: "string" }, { type: "null" }],
-                },
-                targetLevel: {
-                  anyOf: [{ type: "string" }, { type: "null" }],
-                },
-              },
-            },
-            roleRecommendations: {
-              type: "array",
-              maxItems: 3,
-              items: {
-                type: "object",
-                additionalProperties: false,
-                required: [
-                  "roleFamily",
-                  "roleTitles",
-                  "seniorityLevel",
-                  "rationale",
-                  "assumptions",
-                  "openQuestions",
-                  "confidence",
-                ],
-                properties: {
-                  roleFamily: { type: "string" },
-                  roleTitles: {
-                    type: "array",
-                    maxItems: 5,
-                    items: { type: "string" },
-                  },
-                  seniorityLevel: {
-                    anyOf: [{ type: "string" }, { type: "null" }],
-                  },
-                  rationale: { type: "string" },
-                  assumptions: {
-                    type: "array",
-                    maxItems: 4,
-                    items: { type: "string" },
-                  },
-                  openQuestions: {
-                    type: "array",
-                    maxItems: 4,
-                    items: { type: "string" },
-                  },
-                  confidence: {
-                    type: "number",
-                    minimum: 0,
-                    maximum: 1,
-                  },
-                },
-              },
-            },
-            suggestedDirection: {
-              anyOf: [{ type: "string" }, { type: "null" }],
-            },
-          },
-        },
-      },
-      verbosity: "medium",
-    },
+    normalizedText,
+    userId: user.id,
   });
-
-  if (response.error || response.incomplete_details) {
-    throw new Error("AI_PROFILE_INTAKE_FAILED");
-  }
-
-  const parsed = profileIntakeResponseSchema.parse(JSON.parse(response.output_text));
   const existingFactKeys = new Set(
     existingContext.facts.map((fact) => buildFactKey(fact.fact_type, fact.fact_value)),
   );
@@ -427,6 +290,187 @@ as the current user intent.
 If useful, include a suggestedDirection, but make it tentative and ask for the
 user's acknowledgement before treating it as final.
 `.trim();
+}
+
+async function runProfileIntakeModel({
+  existingContext,
+  inputLabel,
+  model,
+  normalizedText,
+  userId,
+}: {
+  existingContext: ExistingProfileContext;
+  inputLabel: string;
+  model: string;
+  normalizedText: string;
+  userId: string;
+}) {
+  let lastFailureCode = "AI_PROFILE_INTAKE_FAILED";
+
+  for (let attempt = 1; attempt <= PROFILE_INTAKE_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await getOpenAIClient().responses.create({
+        model,
+        instructions: PROFILE_INTAKE_INSTRUCTIONS,
+        input: buildProfileIntakeInput({
+          existingContext,
+          label: inputLabel,
+          text: normalizedText,
+        }),
+        max_output_tokens: 3500,
+        metadata: {
+          prompt_version: PROFILE_INTAKE_PROMPT_VERSION,
+          feature: "profile_intake",
+          attempt: String(attempt),
+        },
+        safety_identifier: hashUserId(userId),
+        store: false,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "profile_intake_result",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "assistantMessage",
+                "facts",
+                "followUpQuestions",
+                "profileDraft",
+                "roleRecommendations",
+                "suggestedDirection",
+              ],
+              properties: {
+                assistantMessage: { type: "string" },
+                facts: {
+                  type: "array",
+                  maxItems: 24,
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["type", "value", "confidence"],
+                    properties: {
+                      type: {
+                        type: "string",
+                        enum: profileFactTypeSchema.options,
+                      },
+                      value: { type: "string" },
+                      confidence: {
+                        type: "number",
+                        minimum: 0,
+                        maximum: 1,
+                      },
+                    },
+                  },
+                },
+                followUpQuestions: {
+                  type: "array",
+                  maxItems: 3,
+                  items: { type: "string" },
+                },
+                profileDraft: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: [
+                    "displayName",
+                    "headline",
+                    "summary",
+                    "targetDirection",
+                    "targetLevel",
+                  ],
+                  properties: {
+                    displayName: {
+                      anyOf: [{ type: "string" }, { type: "null" }],
+                    },
+                    headline: {
+                      anyOf: [{ type: "string" }, { type: "null" }],
+                    },
+                    summary: {
+                      anyOf: [{ type: "string" }, { type: "null" }],
+                    },
+                    targetDirection: {
+                      anyOf: [{ type: "string" }, { type: "null" }],
+                    },
+                    targetLevel: {
+                      anyOf: [{ type: "string" }, { type: "null" }],
+                    },
+                  },
+                },
+                roleRecommendations: {
+                  type: "array",
+                  maxItems: 4,
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: [
+                      "roleFamily",
+                      "roleTitles",
+                      "seniorityLevel",
+                      "rationale",
+                      "assumptions",
+                      "openQuestions",
+                      "confidence",
+                    ],
+                    properties: {
+                      roleFamily: { type: "string" },
+                      roleTitles: {
+                        type: "array",
+                        maxItems: 5,
+                        items: { type: "string" },
+                      },
+                      seniorityLevel: {
+                        anyOf: [{ type: "string" }, { type: "null" }],
+                      },
+                      rationale: { type: "string" },
+                      assumptions: {
+                        type: "array",
+                        maxItems: 4,
+                        items: { type: "string" },
+                      },
+                      openQuestions: {
+                        type: "array",
+                        maxItems: 4,
+                        items: { type: "string" },
+                      },
+                      confidence: {
+                        type: "number",
+                        minimum: 0,
+                        maximum: 1,
+                      },
+                    },
+                  },
+                },
+                suggestedDirection: {
+                  anyOf: [{ type: "string" }, { type: "null" }],
+                },
+              },
+            },
+          },
+          verbosity: "medium",
+        },
+      });
+
+      if (response.error) {
+        lastFailureCode = "AI_PROFILE_INTAKE_PROVIDER_ERROR";
+        logProfileIntakeAttemptFailure({ attempt, code: lastFailureCode });
+        continue;
+      }
+
+      if (response.incomplete_details) {
+        lastFailureCode = "AI_PROFILE_INTAKE_INCOMPLETE_RESPONSE";
+        logProfileIntakeAttemptFailure({ attempt, code: lastFailureCode });
+        continue;
+      }
+
+      return profileIntakeResponseSchema.parse(JSON.parse(response.output_text));
+    } catch (error) {
+      lastFailureCode = toProfileIntakeFailureCode(error);
+      logProfileIntakeAttemptFailure({ attempt, code: lastFailureCode });
+    }
+  }
+
+  throw new Error(lastFailureCode);
 }
 
 async function readExistingProfileContext({
@@ -517,6 +561,42 @@ function formatExistingProfileContext(
 
 function buildFactKey(type: string, value: string) {
   return `${type.trim().toLowerCase()}::${value.trim().replace(/\s+/g, " ").toLowerCase()}`;
+}
+
+function toProfileIntakeFailureCode(error: unknown) {
+  if (error instanceof SyntaxError || error instanceof z.ZodError) {
+    return "AI_PROFILE_INTAKE_SCHEMA_FAILED";
+  }
+
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? Number((error as { status?: unknown }).status)
+      : null;
+
+  if (status === 401 || status === 403) {
+    return "AI_PROFILE_INTAKE_PROVIDER_AUTH_FAILED";
+  }
+
+  if (status === 400 || status === 422) {
+    return "AI_PROFILE_INTAKE_PROVIDER_REJECTED_INPUT";
+  }
+
+  if (status === 408 || status === 409 || status === 429 || (status !== null && status >= 500)) {
+    return "AI_PROFILE_INTAKE_PROVIDER_TEMPORARY_FAILURE";
+  }
+
+  return "AI_PROFILE_INTAKE_PROVIDER_UNAVAILABLE";
+}
+
+function logProfileIntakeAttemptFailure({ attempt, code }: { attempt: number; code: string }) {
+  console.warn(
+    JSON.stringify({
+      event: "profile_intake_attempt_failed",
+      attempt,
+      maxAttempts: PROFILE_INTAKE_MAX_ATTEMPTS,
+      code,
+    }),
+  );
 }
 
 async function saveProfileDraft({

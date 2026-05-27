@@ -23,6 +23,7 @@ const MAX_PROFILE_HTML_BYTES = 1_500_000;
 const MAX_PROFILE_TEXT_CHARS = 12_000;
 const FETCH_TIMEOUT_MS = 8000;
 const IMAGE_OCR_MAX_ATTEMPTS = 3;
+const PDF_TEXT_MAX_ATTEMPTS = 3;
 const PDF_AI_MAX_ATTEMPTS = 2;
 const blockedHostnames = new Set(["localhost", "localhost.localdomain"]);
 const supportedOcrMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -140,17 +141,32 @@ export async function extractProfileSourceText({
       throw new Error("SOURCE_UPDATE_FAILED");
     }
 
-    const intake = await extractProfileFactsFromText({
-      profileId: source.profile_id,
-      sourceId: source.id,
-      text: normalizedText,
-      origin: "imported",
-      inputLabel: buildInputLabel({
-        filename: source.original_filename,
-        sourceType: source.source_type,
-        sourceUrl: source.source_url,
-      }),
+    let intake: ProfileIntakeResult;
+    const inputLabel = buildInputLabel({
+      filename: source.original_filename,
+      sourceType: source.source_type,
+      sourceUrl: source.source_url,
     });
+
+    try {
+      intake = await extractProfileFactsFromText({
+        profileId: source.profile_id,
+        sourceId: source.id,
+        text: normalizedText,
+        origin: "imported",
+        inputLabel,
+      });
+    } catch (error) {
+      logSourceAnalysisFailure({
+        code: error instanceof Error ? error.message : "UNKNOWN_PROFILE_ANALYSIS_ERROR",
+        sourceId: source.id,
+        sourceType: source.source_type,
+      });
+      intake = buildProfileAnalysisFallback({
+        code: error instanceof Error ? error.message : "UNKNOWN_PROFILE_ANALYSIS_ERROR",
+        inputLabel,
+      });
+    }
 
     return {
       source: {
@@ -196,27 +212,34 @@ async function extractPdfFromStorage({
 
   const buffer = Buffer.from(await data.arrayBuffer());
 
-  try {
-    const result = await extractText(new Uint8Array(buffer), { mergePages: false });
+  for (let attempt = 1; attempt <= PDF_TEXT_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await extractText(new Uint8Array(buffer), { mergePages: false });
 
-    if (result.totalPages > MAX_PDF_PAGES) {
-      throw new Error("PDF_PAGE_LIMIT_EXCEEDED");
+      if (result.totalPages > MAX_PDF_PAGES) {
+        throw new Error("PDF_PAGE_LIMIT_EXCEEDED");
+      }
+
+      const text = result.text.join("\n\n").trim();
+
+      if (text.length >= 3) {
+        return text;
+      }
+
+      logPdfTextAttemptFailure({ attempt, code: "PDF_TEXT_EMPTY" });
+    } catch (error) {
+      if (error instanceof Error && error.message === "PDF_PAGE_LIMIT_EXCEEDED") {
+        throw error;
+      }
+
+      logPdfTextAttemptFailure({
+        attempt,
+        code: error instanceof Error ? error.message : "PDF_TEXT_EXTRACTION_FAILED",
+      });
     }
-
-    const text = result.text.join("\n\n").trim();
-
-    if (text.length >= 3) {
-      return text;
-    }
-
-    logPdfExtractionFallback("PDF_TEXT_EMPTY");
-  } catch (error) {
-    if (error instanceof Error && error.message === "PDF_PAGE_LIMIT_EXCEEDED") {
-      throw error;
-    }
-
-    logPdfExtractionFallback("PDF_TEXT_EXTRACTION_FAILED");
   }
+
+  logPdfExtractionFallback("PDF_TEXT_EXTRACTION_FAILED");
 
   return extractPdfTextWithModel({
     buffer,
@@ -918,6 +941,52 @@ function buildInputLabel({
   return `${sourceType.toUpperCase()} file${filename ? ` (${filename})` : ""}`;
 }
 
+function buildProfileAnalysisFallback({
+  code,
+  inputLabel,
+}: {
+  code: string;
+  inputLabel: string;
+}): ProfileIntakeResult {
+  return {
+    assistantMessage: `I read and saved the text from ${inputLabel}, but profile analysis did not complete after retrying. The source text is preserved, and I can try the profile analysis again without asking you to re-upload it. Root cause: ${code}.`,
+    facts: [],
+    followUpQuestions: [],
+    inScope: true,
+    model: getProfileIntakeModel(),
+    profileDraft: {
+      displayName: null,
+      headline: null,
+      summary: null,
+      targetDirection: null,
+      targetLevel: null,
+    },
+    promptVersion: "profile-analysis-fallback",
+    roleRecommendations: [],
+    savedFactCount: 0,
+    suggestedDirection: null,
+  };
+}
+
+function logSourceAnalysisFailure({
+  code,
+  sourceId,
+  sourceType,
+}: {
+  code: string;
+  sourceId: string;
+  sourceType: string;
+}) {
+  console.warn(
+    JSON.stringify({
+      event: "profile_source_analysis_failed",
+      sourceId,
+      sourceType,
+      code,
+    }),
+  );
+}
+
 function toOcrProviderFailureCode(error: unknown) {
   const status =
     typeof error === "object" && error !== null && "status" in error
@@ -964,6 +1033,17 @@ function logPdfExtractionFallback(code: string) {
   console.warn(
     JSON.stringify({
       event: "profile_source_pdf_parser_fallback",
+      code,
+    }),
+  );
+}
+
+function logPdfTextAttemptFailure({ attempt, code }: { attempt: number; code: string }) {
+  console.warn(
+    JSON.stringify({
+      event: "profile_source_pdf_text_attempt_failed",
+      attempt,
+      maxAttempts: PDF_TEXT_MAX_ATTEMPTS,
       code,
     }),
   );
