@@ -23,6 +23,7 @@ const MAX_PROFILE_HTML_BYTES = 1_500_000;
 const MAX_PROFILE_TEXT_CHARS = 12_000;
 const FETCH_TIMEOUT_MS = 8000;
 const IMAGE_OCR_MAX_ATTEMPTS = 3;
+const PDF_AI_MAX_ATTEMPTS = 2;
 const blockedHostnames = new Set(["localhost", "localhost.localdomain"]);
 const supportedOcrMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -100,7 +101,10 @@ export async function extractProfileSourceText({
   try {
     const extractedText =
       source.source_type === "pdf"
-        ? await extractPdfFromStorage(source.storage_path ?? "")
+        ? await extractPdfFromStorage({
+            filename: source.original_filename,
+            storagePath: source.storage_path ?? "",
+          })
         : source.source_type === "docx"
           ? await extractDocxFromStorage(source.storage_path ?? "")
         : source.source_type === "txt"
@@ -177,27 +181,47 @@ async function extractTxtFromStorage(storagePath: string) {
   return data.text();
 }
 
-async function extractPdfFromStorage(storagePath: string) {
+async function extractPdfFromStorage({
+  filename,
+  storagePath,
+}: {
+  filename: string | null;
+  storagePath: string;
+}) {
   const data = await downloadProfileSource(storagePath);
 
   if (data.size > MAX_PDF_BYTES) {
     throw new Error("PDF_FILE_TOO_LARGE");
   }
 
-  const buffer = new Uint8Array(await data.arrayBuffer());
-  const result = await extractText(buffer, { mergePages: false });
+  const buffer = Buffer.from(await data.arrayBuffer());
 
-  if (result.totalPages > MAX_PDF_PAGES) {
-    throw new Error("PDF_PAGE_LIMIT_EXCEEDED");
+  try {
+    const result = await extractText(new Uint8Array(buffer), { mergePages: false });
+
+    if (result.totalPages > MAX_PDF_PAGES) {
+      throw new Error("PDF_PAGE_LIMIT_EXCEEDED");
+    }
+
+    const text = result.text.join("\n\n").trim();
+
+    if (text.length >= 3) {
+      return text;
+    }
+
+    logPdfExtractionFallback("PDF_TEXT_EMPTY");
+  } catch (error) {
+    if (error instanceof Error && error.message === "PDF_PAGE_LIMIT_EXCEEDED") {
+      throw error;
+    }
+
+    logPdfExtractionFallback("PDF_TEXT_EXTRACTION_FAILED");
   }
 
-  const text = result.text.join("\n\n").trim();
-
-  if (text.length < 3) {
-    throw new Error("PDF_TEXT_EMPTY");
-  }
-
-  return text;
+  return extractPdfTextWithModel({
+    buffer,
+    filename: filename ?? "profile.pdf",
+  });
 }
 
 async function extractDocxFromStorage(storagePath: string) {
@@ -216,6 +240,77 @@ async function extractDocxFromStorage(storagePath: string) {
   }
 
   return text;
+}
+
+async function extractPdfTextWithModel({
+  buffer,
+  filename,
+}: {
+  buffer: Buffer;
+  filename: string;
+}) {
+  const fileData = `data:application/pdf;base64,${buffer.toString("base64")}`;
+  let lastFailureCode = "PDF_AI_EXTRACT_FAILED";
+
+  for (let attempt = 1; attempt <= PDF_AI_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await getOpenAIClient().responses.create({
+        model: getProfileIntakeModel(),
+        instructions:
+          "You are a PDF text extraction service for a career profile builder. Extract only text that is visible in the PDF. Preserve headings, dates, employers, job titles, skills, credentials, education, certifications, projects, and bullets when readable. Do not add facts, commentary, markdown fences, summaries, or explanations. If no career-relevant text is readable, return an empty string.",
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_file",
+                filename,
+                file_data: fileData,
+              },
+              {
+                type: "input_text",
+                text: "Extract the readable resume, LinkedIn profile, credential, or career-history text from this PDF.",
+              },
+            ],
+          },
+        ],
+        max_output_tokens: 6000,
+        metadata: {
+          feature: "profile_source_pdf_ai_extraction",
+          source_type: "pdf",
+          attempt: String(attempt),
+        },
+        store: false,
+      });
+
+      if (response.error) {
+        lastFailureCode = "PDF_AI_PROVIDER_ERROR";
+        logPdfAiAttemptFailure({ attempt, code: lastFailureCode });
+        continue;
+      }
+
+      if (response.incomplete_details) {
+        lastFailureCode = "PDF_AI_INCOMPLETE_RESPONSE";
+        logPdfAiAttemptFailure({ attempt, code: lastFailureCode });
+        continue;
+      }
+
+      const text = response.output_text.trim();
+
+      if (text.length < 3) {
+        lastFailureCode = "PDF_TEXT_EMPTY";
+        logPdfAiAttemptFailure({ attempt, code: lastFailureCode });
+        continue;
+      }
+
+      return text;
+    } catch (error) {
+      lastFailureCode = toPdfAiProviderFailureCode(error);
+      logPdfAiAttemptFailure({ attempt, code: lastFailureCode });
+    }
+  }
+
+  throw new Error(lastFailureCode);
 }
 
 async function extractImageTextFromStorage({
@@ -842,6 +937,47 @@ function toOcrProviderFailureCode(error: unknown) {
   }
 
   return "IMAGE_OCR_PROVIDER_UNAVAILABLE";
+}
+
+function toPdfAiProviderFailureCode(error: unknown) {
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? Number((error as { status?: unknown }).status)
+      : null;
+
+  if (status === 401 || status === 403) {
+    return "PDF_AI_PROVIDER_AUTH_FAILED";
+  }
+
+  if (status === 400 || status === 422) {
+    return "PDF_AI_PROVIDER_REJECTED_FILE";
+  }
+
+  if (status === 408 || status === 409 || status === 429 || (status !== null && status >= 500)) {
+    return "PDF_AI_PROVIDER_TEMPORARY_FAILURE";
+  }
+
+  return "PDF_AI_PROVIDER_UNAVAILABLE";
+}
+
+function logPdfExtractionFallback(code: string) {
+  console.warn(
+    JSON.stringify({
+      event: "profile_source_pdf_parser_fallback",
+      code,
+    }),
+  );
+}
+
+function logPdfAiAttemptFailure({ attempt, code }: { attempt: number; code: string }) {
+  console.warn(
+    JSON.stringify({
+      event: "profile_source_pdf_ai_attempt_failed",
+      attempt,
+      maxAttempts: PDF_AI_MAX_ATTEMPTS,
+      code,
+    }),
+  );
 }
 
 function logOcrAttemptFailure({ attempt, code }: { attempt: number; code: string }) {

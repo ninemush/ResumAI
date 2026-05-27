@@ -356,9 +356,17 @@ function formatFailureReason(reason: string) {
     LINKEDIN_ARCHIVE_UNSUPPORTED_FILE: "LinkedIn archive import supports ZIP and CSV files.",
     LINKEDIN_PUBLIC_PROFILE_BLOCKED:
       "LinkedIn did not return readable public content to Pramania.",
+    PDF_AI_EXTRACT_FAILED: "PDF vision extraction failed after retrying.",
+    PDF_AI_INCOMPLETE_RESPONSE: "PDF vision extraction returned an incomplete response.",
+    PDF_AI_PROVIDER_AUTH_FAILED: "PDF extraction provider configuration needs attention.",
+    PDF_AI_PROVIDER_ERROR: "PDF vision extraction provider returned an error.",
+    PDF_AI_PROVIDER_REJECTED_FILE: "PDF vision extraction could not process this file.",
+    PDF_AI_PROVIDER_TEMPORARY_FAILURE: "PDF vision extraction was temporarily unavailable.",
+    PDF_AI_PROVIDER_UNAVAILABLE: "PDF vision extraction could not be reached.",
     PDF_FILE_TOO_LARGE: "PDF exceeds the current parser size limit.",
     PDF_PAGE_LIMIT_EXCEEDED: "Too many pages for the current parser limit.",
-    PDF_TEXT_EMPTY: "No selectable text found. OCR will be needed.",
+    PDF_TEXT_EMPTY: "No readable career text found after parser and PDF vision extraction.",
+    PDF_TEXT_EXTRACTION_FAILED: "The PDF parser could not read this file.",
     PROFILE_LINK_TEXT_TOO_SHORT: "Not enough readable profile text found.",
     TEXT_FILE_TOO_LARGE: "Text file exceeds the current parser size limit.",
   };

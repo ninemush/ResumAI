@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Mic, Paperclip, SendHorizontal, Sparkles } from "lucide-react";
+import {
+  FileArchive,
+  FileText,
+  FileType,
+  ImageIcon,
+  Loader2,
+  Mic,
+  Paperclip,
+  SendHorizontal,
+  Sparkles,
+} from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
@@ -20,11 +30,16 @@ type ConversationPanelProps = {
 };
 
 type ConversationMessage = {
-  attachmentPreviewUrl?: string;
-  attachmentType?: "image";
+  attachment?: MessageAttachment;
   id?: string;
   speaker: "assistant" | "user" | "system";
   text: string;
+};
+
+type MessageAttachment = {
+  name: string;
+  previewUrl?: string;
+  type: "archive" | "document" | "image" | "pdf" | "text";
 };
 
 type ProcessingMode =
@@ -650,12 +665,8 @@ export function ConversationPanel({
     setProcessingStep(0);
     setIsSubmitting(true);
     appendUserMessage(
-      fileList.length === 1
-        ? `Dropped ${formatDroppedFileName(fileList[0])}`
-        : `Dropped ${fileList.length} files`,
-      fileList.length === 1 && fileList[0].type.startsWith("image/")
-        ? URL.createObjectURL(fileList[0])
-        : undefined,
+      fileList.length === 1 ? "Dropped a file" : `Dropped ${fileList.length} files`,
+      fileList.length === 1 ? buildMessageAttachment(fileList[0]) : undefined,
     );
     persistConversationMessage(
       "user",
@@ -864,12 +875,11 @@ export function ConversationPanel({
     }
   }
 
-  function appendUserMessage(text: string, attachmentPreviewUrl?: string) {
+  function appendUserMessage(text: string, attachment?: MessageAttachment) {
     setMessages((current) => [
       ...current,
       {
-        attachmentPreviewUrl,
-        attachmentType: attachmentPreviewUrl ? "image" : undefined,
+        attachment,
         speaker: "user",
         text,
       },
@@ -919,16 +929,7 @@ export function ConversationPanel({
             key={item.id ?? `${item.text}-${index}`}
           >
             <strong>{item.speaker === "user" ? "You" : brand.name}</strong>
-            {item.attachmentType === "image" && item.attachmentPreviewUrl ? (
-              <Image
-                alt={item.text}
-                className="message-image-preview"
-                height={260}
-                unoptimized
-                width={420}
-                src={item.attachmentPreviewUrl}
-              />
-            ) : null}
+            {item.attachment ? <MessageAttachmentPreview attachment={item.attachment} /> : null}
             <p>{item.text}</p>
           </div>
         ))}
@@ -1436,12 +1437,80 @@ function formatSourceTypeForPrompt(sourceType: string) {
   return sourceType;
 }
 
-function formatDroppedFileName(file: File) {
-  if (file.type.startsWith("image/")) {
-    return `screenshot/image: ${file.name}`;
-  }
+function MessageAttachmentPreview({ attachment }: { attachment: MessageAttachment }) {
+  const icon = getAttachmentIcon(attachment.type);
 
-  return file.name;
+  return (
+    <div className="message-attachment-card">
+      {attachment.type === "image" && attachment.previewUrl ? (
+        <Image
+          alt={attachment.name}
+          className="message-image-preview"
+          height={220}
+          unoptimized
+          width={340}
+          src={attachment.previewUrl}
+        />
+      ) : attachment.type === "pdf" && attachment.previewUrl ? (
+        <object
+          aria-label={`Preview of ${attachment.name}`}
+          className="message-pdf-preview"
+          data={attachment.previewUrl}
+          type="application/pdf"
+        >
+          <FileText size={24} aria-hidden="true" />
+        </object>
+      ) : (
+        <span className="message-file-thumb" aria-hidden="true">
+          {icon}
+        </span>
+      )}
+      <span className="message-attachment-meta">
+        <span>{attachment.name}</span>
+        <small>{formatAttachmentType(attachment.type)}</small>
+      </span>
+    </div>
+  );
+}
+
+function getAttachmentIcon(type: MessageAttachment["type"]) {
+  if (type === "archive") return <FileArchive size={22} aria-hidden="true" />;
+  if (type === "document") return <FileType size={22} aria-hidden="true" />;
+  if (type === "image") return <ImageIcon size={22} aria-hidden="true" />;
+  return <FileText size={22} aria-hidden="true" />;
+}
+
+function formatAttachmentType(type: MessageAttachment["type"]) {
+  const labels: Record<MessageAttachment["type"], string> = {
+    archive: "LinkedIn archive",
+    document: "Document",
+    image: "Image",
+    pdf: "PDF",
+    text: "Text file",
+  };
+
+  return labels[type];
+}
+
+function buildMessageAttachment(file: File): MessageAttachment {
+  const sourceType = inferFileSourceType(file);
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  const canPreview = file.type.startsWith("image/") || extension === "pdf";
+
+  return {
+    name: file.name,
+    previewUrl: canPreview ? URL.createObjectURL(file) : undefined,
+    type:
+      extension === "zip" || extension === "csv"
+        ? "archive"
+        : sourceType === "image"
+          ? "image"
+        : sourceType === "pdf"
+          ? "pdf"
+        : sourceType === "txt"
+          ? "text"
+          : "document",
+  };
 }
 
 function formatJobIntakeReply(job: {

@@ -2249,6 +2249,71 @@ input:focus {
   object-fit: contain;
 }
 
+.message-attachment-card {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.54);
+  border: 1px solid rgba(185, 155, 103, 0.34);
+  border-radius: 12px;
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 8px;
+}
+
+.message-file-thumb {
+  align-items: center;
+  aspect-ratio: 1;
+  background: rgba(236, 230, 218, 0.76);
+  border: 1px solid rgba(185, 155, 103, 0.3);
+  border-radius: 10px;
+  color: var(--ink);
+  display: inline-flex;
+  flex: 0 0 44px;
+  justify-content: center;
+}
+
+.message-pdf-preview {
+  background: rgba(236, 230, 218, 0.76);
+  border: 1px solid rgba(185, 155, 103, 0.3);
+  border-radius: 10px;
+  display: block;
+  flex: 0 0 76px;
+  height: 92px;
+  overflow: hidden;
+}
+
+.message-attachment-card .message-image-preview {
+  flex: 0 0 86px;
+  height: 76px;
+  margin: 0;
+  max-height: 76px;
+  max-width: 86px;
+  width: 86px;
+}
+
+.message-attachment-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.message-attachment-meta span {
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-attachment-meta small {
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+}
+
 .assistant-message strong,
 .user-message strong {
   display: block;

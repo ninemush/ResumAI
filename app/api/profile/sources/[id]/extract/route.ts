@@ -146,8 +146,27 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.pdf_text_empty",
-        message: "I could not find selectable text in that PDF. It may need OCR, which is coming next.",
+        message: "I tried text extraction and PDF vision extraction, but could not find readable career text in that PDF.",
         status: 422,
+      };
+    }
+
+    if (
+      [
+        "PDF_TEXT_EXTRACTION_FAILED",
+        "PDF_AI_EXTRACT_FAILED",
+        "PDF_AI_PROVIDER_ERROR",
+        "PDF_AI_INCOMPLETE_RESPONSE",
+        "PDF_AI_PROVIDER_REJECTED_FILE",
+        "PDF_AI_PROVIDER_TEMPORARY_FAILURE",
+        "PDF_AI_PROVIDER_UNAVAILABLE",
+        "PDF_AI_PROVIDER_AUTH_FAILED",
+      ].includes(error.message)
+    ) {
+      const errorDetails = getPdfExtractionApiError(error.message);
+
+      return {
+        ...errorDetails,
       };
     }
 
@@ -273,6 +292,74 @@ function toApiError(error: unknown) {
     category: "server",
     code: "source.extraction_failed",
     message: "Unable to extract that source right now.",
+    status: 500,
+  };
+}
+
+function getPdfExtractionApiError(code: string) {
+  const errors: Record<
+    string,
+    {
+      category: string;
+      code: string;
+      message: string;
+      status: number;
+    }
+  > = {
+    PDF_TEXT_EXTRACTION_FAILED: {
+      category: "server",
+      code: "source.pdf_text_extraction_failed",
+      message: "The PDF parser could not read this file, and fallback extraction did not complete.",
+      status: 502,
+    },
+    PDF_AI_EXTRACT_FAILED: {
+      category: "server",
+      code: "source.pdf_ai_extract_failed",
+      message: "PDF vision extraction failed after retrying. The PDF is saved.",
+      status: 502,
+    },
+    PDF_AI_PROVIDER_ERROR: {
+      category: "server",
+      code: "source.pdf_ai_provider_error",
+      message: "PDF vision extraction returned a provider error after retrying. The PDF is saved.",
+      status: 502,
+    },
+    PDF_AI_INCOMPLETE_RESPONSE: {
+      category: "server",
+      code: "source.pdf_ai_incomplete_response",
+      message: "PDF vision extraction returned an incomplete response after retrying. The PDF is saved.",
+      status: 502,
+    },
+    PDF_AI_PROVIDER_REJECTED_FILE: {
+      category: "validation",
+      code: "source.pdf_ai_provider_rejected_file",
+      message: "PDF vision extraction could not process this file. The PDF is saved.",
+      status: 422,
+    },
+    PDF_AI_PROVIDER_TEMPORARY_FAILURE: {
+      category: "server",
+      code: "source.pdf_ai_provider_temporary_failure",
+      message: "PDF vision extraction is temporarily unavailable after retrying. The PDF is saved.",
+      status: 502,
+    },
+    PDF_AI_PROVIDER_UNAVAILABLE: {
+      category: "server",
+      code: "source.pdf_ai_provider_unavailable",
+      message: "PDF vision extraction could not be reached after retrying. The PDF is saved.",
+      status: 502,
+    },
+    PDF_AI_PROVIDER_AUTH_FAILED: {
+      category: "server",
+      code: "source.pdf_ai_provider_auth_failed",
+      message: "PDF vision extraction is not configured correctly. The PDF is saved.",
+      status: 500,
+    },
+  };
+
+  return errors[code] ?? {
+    category: "server",
+    code: "source.pdf_extraction_failed",
+    message: "Unable to extract that PDF right now. The PDF is saved.",
     status: 500,
   };
 }
