@@ -24,6 +24,15 @@ type ConversationMessage = {
   text: string;
 };
 
+type ProcessingMode =
+  | "application"
+  | "file"
+  | "job"
+  | "profile"
+  | "resume"
+  | "source"
+  | "voice";
+
 type SourceCreateResponse = {
   ok: boolean;
   source?: {
@@ -128,6 +137,8 @@ export function ConversationPanel({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>("profile");
+  const [processingStep, setProcessingStep] = useState(0);
 
   useEffect(() => {
     const messageList = messageListRef.current;
@@ -144,6 +155,18 @@ export function ConversationPanel({
     };
   }, []);
 
+  useEffect(() => {
+    if (!isSubmitting) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setProcessingStep((currentStep) => currentStep + 1);
+    }, 3200);
+
+    return () => window.clearInterval(interval);
+  }, [isSubmitting]);
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedMessage = message.trim();
@@ -155,6 +178,8 @@ export function ConversationPanel({
     setMessage("");
     setStatus(null);
     setError(null);
+    setProcessingMode(inferProcessingMode(trimmedMessage));
+    setProcessingStep(0);
     setIsSubmitting(true);
     appendUserMessage(trimmedMessage);
     persistConversationMessage("user", trimmedMessage);
@@ -165,6 +190,7 @@ export function ConversationPanel({
       setError("I could not process that yet. Try a shorter note, a public job link, or a resume file.");
     } finally {
       setIsSubmitting(false);
+      setProcessingStep(0);
     }
   }
 
@@ -186,6 +212,14 @@ export function ConversationPanel({
 
       if (applicationAction) {
         appendAssistantMessage(applicationAction, true);
+        router.refresh();
+        return;
+      }
+
+      const existingSourceAction = await processExistingSourceAction(text);
+
+      if (existingSourceAction) {
+        appendAssistantMessage(existingSourceAction, true);
         router.refresh();
         return;
       }
@@ -338,6 +372,55 @@ export function ConversationPanel({
     return payload.assistantMessage as string;
   }
 
+  async function processExistingSourceAction(text: string) {
+    const requestedSourceType = inferRequestedSourceType(text);
+
+    if (!requestedSourceType) {
+      return null;
+    }
+
+    const matchingSources = profileOverview.recentSources.filter((source) =>
+      requestedSourceType === "linkedin"
+        ? source.source_type === "linkedin"
+        : ["link", "linkedin", "portfolio"].includes(source.source_type),
+    );
+    const source = matchingSources[0];
+
+    if (!source) {
+      return requestedSourceType === "linkedin"
+        ? "I do not see a saved LinkedIn profile link in your recent sources yet. Paste the LinkedIn URL here and I will save it, then try to read what is publicly available."
+        : "I do not see a saved profile link in your recent sources yet. Paste the link here and I will save it, then try to read what is publicly available.";
+    }
+
+    if (source.extraction_status === "processing") {
+      return `I found ${formatSourceReference(source)} and it is already being processed. Give me a moment, then refresh or ask me again.`;
+    }
+
+    if (source.extraction_status === "succeeded") {
+      const profileResponse = await processProfileText(
+        `Use the profile evidence already saved from my ${formatSourceTypeForPrompt(source.source_type)} source to identify what is useful for my profile and what is still missing. Keep this grounded in saved profile context.`,
+      );
+
+      return `I found ${formatSourceReference(source)} and it has already been read into your profile evidence. ${profileResponse}`;
+    }
+
+    const extraction = await extractSource(source.id);
+
+    if (!extraction.ok) {
+      return source.source_type === "linkedin"
+        ? `I found your saved LinkedIn link, but I could not read the public page directly: ${extraction.message} LinkedIn often blocks unauthenticated profile extraction, so the reliable path is to paste profile text, upload a PDF export/screenshot, or use an authenticated LinkedIn import once we add that consent flow.`
+        : `I found ${formatSourceReference(source)}, but I could not read it directly: ${extraction.message}`;
+    }
+
+    return formatSourceIntakeReply({
+      assistantMessage: extraction.assistantMessage,
+      followUpQuestions: extraction.followUpQuestions,
+      label: `I found and read ${formatSourceReference(source)}`,
+      savedFactCount: extraction.savedFactCount,
+      suggestedDirection: extraction.suggestedDirection,
+    });
+  }
+
   async function processUrl(url: string, fullMessage: string) {
     if (looksLikeJobUrl(url, fullMessage)) {
       const response = await fetch("/api/jobs/ingest", {
@@ -399,6 +482,8 @@ export function ConversationPanel({
 
     setError(null);
     setStatus(null);
+    setProcessingMode("file");
+    setProcessingStep(0);
     setIsSubmitting(true);
     appendUserMessage(
       fileList.length === 1
@@ -425,6 +510,7 @@ export function ConversationPanel({
       setError("I could not finish reading that file. Try again, or paste the most important text directly.");
     } finally {
       setIsSubmitting(false);
+      setProcessingStep(0);
     }
   }
 
@@ -643,7 +729,7 @@ export function ConversationPanel({
         {isSubmitting ? (
           <div className="assistant-message pending-message" aria-live="polite">
             <strong>{brand.name}</strong>
-            <p>Reading this with a hiring lens...</p>
+            <p>{getProcessingMessage(processingMode, processingStep)}</p>
           </div>
         ) : null}
         {isDragActive ? <div className="drop-hint">Drop it here.</div> : null}
@@ -736,6 +822,81 @@ function buildInitialMessages(
   ];
 }
 
+function getProcessingMessage(mode: ProcessingMode, step: number) {
+  const messages: Record<ProcessingMode, string[]> = {
+    application: [
+      "Checking the application record before I touch anything...",
+      "Matching this to the right role so the update stays precise...",
+      "Looking at the application history with a recruiter's eye...",
+      "Almost there. I'm keeping the audit trail and status clean.",
+    ],
+    file: [
+      "Reading the file and looking for hiring signal...",
+      "Pulling out roles, scope, skills, credentials, and proof points...",
+      "Separating useful evidence from formatting noise...",
+      "Almost there. I'm shaping this into profile evidence you can review.",
+    ],
+    job: [
+      "Reading the job post and filtering out page noise...",
+      "Looking for role requirements, seniority signals, and keywords...",
+      "Comparing the post against what we know about your profile...",
+      "Almost there. I'm turning the job page into a useful fit read.",
+    ],
+    profile: [
+      "Reading this with a hiring lens...",
+      "Looking for experience, scope, outcomes, skills, and useful gaps...",
+      "Keeping this grounded in what you actually said...",
+      "Almost there. I'm turning this into profile evidence and a useful next step.",
+    ],
+    resume: [
+      "Reviewing your profile evidence before drafting resume language...",
+      "Checking for ATS signal without making it sound generic...",
+      "Keeping unsupported claims out and preserving your voice...",
+      "Almost there. I'm shaping this into something you can review.",
+    ],
+    source: [
+      "Finding the source you already shared...",
+      "Checking whether that link can be read directly...",
+      "Looking for public profile evidence we can safely use...",
+      "Almost there. If the source is blocked, I'll tell you plainly and give the next best path.",
+    ],
+    voice: [
+      "Listening. I'll place the transcript in the box so you can steer it...",
+      "Catching the words first. You stay in control before anything is sent.",
+      "Almost there. You can edit the transcript before I use it.",
+    ],
+  };
+  const modeMessages = messages[mode];
+
+  return modeMessages[step % modeMessages.length];
+}
+
+function inferProcessingMode(text: string): ProcessingMode {
+  const urls = extractUrls(text);
+
+  if (urls.some((url) => looksLikeJobUrl(url, text))) {
+    return "job";
+  }
+
+  if (looksLikeExistingSourceRequest(text) || inferRequestedSourceType(text)) {
+    return "source";
+  }
+
+  if (looksLikeMasterResumeRequest(text)) {
+    return "resume";
+  }
+
+  if (
+    looksLikeMaterialGenerationRequest(text) ||
+    looksLikeApplicationLogRequest(text) ||
+    inferApplicationStatus(text)
+  ) {
+    return "application";
+  }
+
+  return "profile";
+}
+
 function formatSourceIntakeReply({
   assistantMessage,
   followUpQuestions,
@@ -762,6 +923,54 @@ function formatSourceIntakeReply({
   return [savedSummary, advisorRead, direction, nextQuestion ? `Next question: ${nextQuestion}` : null]
     .filter(Boolean)
     .join(" ");
+}
+
+function inferRequestedSourceType(text: string) {
+  const normalized = text.toLowerCase();
+
+  if (!looksLikeExistingSourceRequest(normalized)) {
+    return null;
+  }
+
+  if (/\blinkedin\b/.test(normalized)) {
+    return "linkedin";
+  }
+
+  if (/\b(link|url|website|portfolio|profile page|source)\b/.test(normalized)) {
+    return "profile_link";
+  }
+
+  return null;
+}
+
+function looksLikeExistingSourceRequest(text: string) {
+  const normalized = text.toLowerCase();
+
+  return (
+    /\b(use|read|access|check|pull|extract|ingest|enrich)\b/.test(normalized) &&
+    /\b(gave|shared|saved|provided|already|previous|earlier|linkedin|profile link|source)\b/.test(
+      normalized,
+    )
+  );
+}
+
+function formatSourceReference(source: ProfileOverview["recentSources"][number]) {
+  if (source.source_type === "linkedin") {
+    return "your saved LinkedIn profile link";
+  }
+
+  if (source.original_filename) {
+    return source.original_filename;
+  }
+
+  return source.source_url ? formatJobUrl(source.source_url) : "your saved profile source";
+}
+
+function formatSourceTypeForPrompt(sourceType: string) {
+  if (sourceType === "linkedin") return "LinkedIn";
+  if (sourceType === "portfolio") return "portfolio";
+  if (sourceType === "link") return "profile link";
+  return sourceType;
 }
 
 function formatJobIntakeReply(job: {
