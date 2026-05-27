@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { confirmProfileFact, confirmProfileFactSchema } from "@/lib/profile/profile-commands";
+import {
+  confirmProfileFact,
+  confirmProfileFactSchema,
+  deleteProfileFact,
+  updateProfileFact,
+  updateProfileFactSchema,
+} from "@/lib/profile/profile-commands";
 
 type RouteContext = {
   params: Promise<{
@@ -30,6 +36,112 @@ export async function POST(_request: Request, context: RouteContext) {
 
   try {
     const fact = await confirmProfileFact(parsed.data);
+
+    return NextResponse.json({
+      ok: true,
+      requestId,
+      fact,
+    });
+  } catch (error) {
+    const { category, code, message, status } = toApiError(error);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: { category, code, message },
+      },
+      { status },
+    );
+  }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  const requestId = crypto.randomUUID();
+  const params = await context.params;
+  let body: unknown;
+
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "validation",
+          code: "request.invalid_json",
+          message: "Invalid JSON body.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const parsed = updateProfileFactSchema.safeParse({
+    ...(typeof body === "object" && body ? body : {}),
+    factId: params.id,
+  });
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "validation",
+          code: "profile_fact.invalid_update",
+          message: "Use a valid profile detail before saving.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const fact = await updateProfileFact(parsed.data);
+
+    return NextResponse.json({
+      ok: true,
+      requestId,
+      fact,
+    });
+  } catch (error) {
+    const { category, code, message, status } = toApiError(error);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: { category, code, message },
+      },
+      { status },
+    );
+  }
+}
+
+export async function DELETE(_request: Request, context: RouteContext) {
+  const requestId = crypto.randomUUID();
+  const params = await context.params;
+  const parsed = confirmProfileFactSchema.safeParse({ factId: params.id });
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "validation",
+          code: "profile_fact.invalid_id",
+          message: "Choose a valid profile detail.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const fact = await deleteProfileFact(parsed.data);
 
     return NextResponse.json({
       ok: true,

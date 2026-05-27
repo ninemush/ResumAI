@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import type { CSSProperties } from "react";
-import { Camera, CheckCircle2, Circle, Compass, Save, Sparkles } from "lucide-react";
+import {
+  Camera,
+  CheckCircle2,
+  Circle,
+  Compass,
+  RefreshCw,
+  Save,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
@@ -60,6 +69,13 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
   });
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [factDrafts, setFactDrafts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      Object.values(overview.factsByType)
+        .flat()
+        .map((fact) => [fact.id, fact.fact_value]),
+    ),
+  );
 
   async function saveDraft() {
     setPendingId("profile");
@@ -171,6 +187,86 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
       }
 
       setMessage("Confirmed. I will treat that as trusted profile evidence.");
+      router.refresh();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function updateFact(factId: string) {
+    const value = factDrafts[factId]?.trim();
+
+    if (!value) {
+      setMessage("Add a profile detail before saving it.");
+      return;
+    }
+
+    setPendingId(factId);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/profile/facts/${factId}/confirm`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to save that detail.");
+        return;
+      }
+
+      setMessage("Saved and confirmed that profile detail.");
+      router.refresh();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function dismissFact(factId: string) {
+    setPendingId(factId);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/profile/facts/${factId}/confirm`, {
+        method: "DELETE",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to remove that detail.");
+        return;
+      }
+
+      setMessage("Removed that profile detail from trusted review.");
+      router.refresh();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function retrySourceExtraction(sourceId: string) {
+    setPendingId(sourceId);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/profile/sources/${sourceId}/extract`, {
+        method: "POST",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to retry that source.");
+        return;
+      }
+
+      const savedFactCount = payload.intake?.savedFactCount ?? 0;
+      setMessage(
+        savedFactCount > 0
+          ? `Source read. Saved ${savedFactCount} profile detail${savedFactCount === 1 ? "" : "s"} for review.`
+          : "Source read. I did not find new profile details this time.",
+      );
       router.refresh();
     } finally {
       setPendingId(null);
@@ -535,10 +631,25 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
                   {source.failure_reason ? (
                     <p className="source-failure">{formatFailureReason(source.failure_reason)}</p>
                   ) : null}
+                  <p>{formatSourceGuidance(source)}</p>
                 </div>
-                <span className={`source-pill ${source.extraction_status}`}>
-                  {source.extraction_status.replace("_", " ")}
-                </span>
+                <div className="source-actions">
+                  <span className={`source-pill ${source.extraction_status}`}>
+                    {source.extraction_status.replace("_", " ")}
+                  </span>
+                  {["failed", "pending"].includes(source.extraction_status) ? (
+                    <button
+                      className="secondary-action compact-action"
+                      disabled={pendingId === source.id}
+                      onClick={() => retrySourceExtraction(source.id)}
+                      title="Retry source extraction"
+                      type="button"
+                    >
+                      <RefreshCw size={14} aria-hidden="true" />
+                      {pendingId === source.id ? "Retrying..." : "Retry"}
+                    </button>
+                  ) : null}
+                </div>
               </article>
             ))}
           </div>
@@ -558,19 +669,56 @@ export function ProfileExplorer({ applicationOverview, jobOverview, overview }: 
                 <ul>
                   {facts.map((fact) => (
                     <li key={fact.id}>
-                      <span>{fact.fact_value}</span>
-                      {fact.user_confirmed ? (
-                        <CheckCircle2 size={16} aria-label="Confirmed" />
-                      ) : (
+                      <textarea
+                        aria-label={`Edit ${type} detail`}
+                        disabled={pendingId === fact.id}
+                        onChange={(event) =>
+                          setFactDrafts((currentDrafts) => ({
+                            ...currentDrafts,
+                            [fact.id]: event.target.value,
+                          }))
+                        }
+                        rows={3}
+                        value={factDrafts[fact.id] ?? fact.fact_value}
+                      />
+                      <div className="fact-review-actions">
+                        {fact.user_confirmed ? (
+                          <span className="fact-confirmed-label">
+                            <CheckCircle2 size={15} aria-hidden="true" />
+                            Confirmed
+                          </span>
+                        ) : (
+                          <button
+                            className="fact-confirm-button"
+                            disabled={pendingId === fact.id}
+                            onClick={() => confirmFact(fact.id)}
+                            type="button"
+                          >
+                            {pendingId === fact.id ? "Saving..." : "Confirm"}
+                          </button>
+                        )}
                         <button
                           className="fact-confirm-button"
-                          disabled={pendingId === fact.id}
-                          onClick={() => confirmFact(fact.id)}
+                          disabled={
+                            pendingId === fact.id ||
+                            (factDrafts[fact.id] ?? fact.fact_value).trim() === fact.fact_value
+                          }
+                          onClick={() => updateFact(fact.id)}
                           type="button"
                         >
-                          {pendingId === fact.id ? "Saving..." : "Confirm"}
+                          Save edit
                         </button>
-                      )}
+                        <button
+                          className="fact-delete-button"
+                          disabled={pendingId === fact.id}
+                          onClick={() => dismissFact(fact.id)}
+                          title="Remove this captured detail"
+                          type="button"
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                          Remove
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -760,6 +908,30 @@ function formatFailureReason(reason: string) {
   };
 
   return friendlyMessages[reason] ?? "Extraction needs another attempt.";
+}
+
+function formatSourceGuidance(source: ProfileOverview["recentSources"][number]) {
+  if (source.extraction_status === "succeeded") {
+    return "Read into your profile evidence.";
+  }
+
+  if (source.extraction_status === "processing") {
+    return "Currently being read. This can take a moment for larger files.";
+  }
+
+  if (source.extraction_status === "pending") {
+    return "Saved, but not read yet. Retry when you are ready.";
+  }
+
+  if (source.source_type === "linkedin" && source.extraction_status === "failed") {
+    return "LinkedIn may block public reads. Retry, paste profile text, or upload a PDF/screenshot export.";
+  }
+
+  if (source.extraction_status === "failed") {
+    return "Saved, but extraction failed. Retry or provide the content another way.";
+  }
+
+  return "Saved as profile source.";
 }
 
 function readImageExtension(mimeType: string) {

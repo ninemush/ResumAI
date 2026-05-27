@@ -17,6 +17,10 @@ export const confirmProfileFactSchema = z.object({
   factId: z.string().uuid(),
 });
 
+export const updateProfileFactSchema = confirmProfileFactSchema.extend({
+  value: z.string().trim().min(2).max(500),
+});
+
 export const acknowledgeRoleRecommendationSchema = z.object({
   recommendationId: z.string().uuid(),
 });
@@ -95,6 +99,62 @@ export async function confirmProfileFact(input: z.input<typeof confirmProfileFac
       origin: "confirmed",
       user_confirmed: true,
     })
+    .eq("id", parsed.factId)
+    .eq("user_id", user.id)
+    .select("id")
+    .single();
+
+  if (error || !fact) {
+    throw new Error("PROFILE_FACT_NOT_FOUND");
+  }
+
+  return { id: fact.id };
+}
+
+export async function updateProfileFact(input: z.input<typeof updateProfileFactSchema>) {
+  const parsed = updateProfileFactSchema.parse(input);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const { data: fact, error } = await supabase
+    .from("profile_facts")
+    .update({
+      fact_value: parsed.value,
+      origin: "confirmed",
+      user_confirmed: true,
+    })
+    .eq("id", parsed.factId)
+    .eq("user_id", user.id)
+    .select("id")
+    .single();
+
+  if (error || !fact) {
+    throw new Error("PROFILE_FACT_NOT_FOUND");
+  }
+
+  return { id: fact.id };
+}
+
+export async function deleteProfileFact(input: z.input<typeof confirmProfileFactSchema>) {
+  const parsed = confirmProfileFactSchema.parse(input);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const { data: fact, error } = await supabase
+    .from("profile_facts")
+    .delete()
     .eq("id", parsed.factId)
     .eq("user_id", user.id)
     .select("id")

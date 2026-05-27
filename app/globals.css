@@ -1438,6 +1438,18 @@ input:focus {
   padding: 14px;
 }
 
+.source-actions {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.compact-action {
+  min-height: 32px;
+  padding-inline: 10px;
+}
+
 .job-row:has(.secondary-action) {
   grid-template-columns: minmax(0, 1fr) auto auto auto;
 }
@@ -1747,25 +1759,57 @@ input:focus {
 }
 
 .fact-group li {
-  align-items: start;
   color: var(--ink-soft);
   display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
   line-height: 1.45;
 }
 
-.fact-confirm-button {
+.fact-group textarea {
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  color: var(--foreground);
+  font: inherit;
+  line-height: 1.45;
+  min-width: 0;
+  padding: 10px;
+  resize: vertical;
+}
+
+.fact-review-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.fact-confirm-button,
+.fact-delete-button,
+.fact-confirmed-label {
+  align-items: center;
   background: transparent;
   border: 1px solid rgba(185, 155, 103, 0.32);
   border-radius: var(--pr-radius-pill);
   color: var(--sage-strong);
+  display: inline-flex;
   font-size: 0.72rem;
   font-weight: 800;
+  gap: 5px;
   padding: 5px 8px;
 }
 
-.fact-confirm-button:hover {
+.fact-delete-button {
+  border-color: rgba(159, 63, 54, 0.24);
+  color: var(--danger);
+}
+
+.fact-confirmed-label {
+  background: rgba(185, 155, 103, 0.12);
+}
+
+.fact-confirm-button:hover,
+.fact-delete-button:hover {
   background: rgba(185, 155, 103, 0.1);
 }
 
