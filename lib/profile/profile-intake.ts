@@ -801,9 +801,15 @@ function buildDeterministicProfileIntakeResult({
   const compactSummary = truncateText(summary || header.headline || "", 900);
   const targetDirection = deriveTargetDirection(normalizedText);
   const targetLevel = deriveTargetLevel(normalizedText);
+  const assistantMessage = buildDeterministicIntakeMessage({
+    inputLabel,
+    normalizedText,
+    targetDirection,
+    factCount: Math.min(facts.length, 24),
+  });
 
   return {
-    assistantMessage: `I read ${inputLabel} and captured ${Math.min(facts.length, 24)} useful profile signal(s), including positioning, skills, experience themes, impact evidence, and education where available. The strongest read is ${targetDirection.toLowerCase()}; next I would sharpen scope, measurable outcomes, and the value story behind the strongest roles.`,
+    assistantMessage,
     facts: facts.slice(0, 24),
     followUpQuestions: [
       "Which role lane should I optimize for first based on this profile?",
@@ -836,6 +842,36 @@ function buildDeterministicProfileIntakeResult({
     ],
     suggestedDirection: targetDirection,
   };
+}
+
+function buildDeterministicIntakeMessage({
+  inputLabel,
+  normalizedText,
+  targetDirection,
+  factCount,
+}: {
+  inputLabel: string;
+  normalizedText: string;
+  targetDirection: string;
+  factCount: number;
+}) {
+  const isUserMessage = /user message|natural language|typed note/i.test(inputLabel);
+
+  if (isUserMessage && /gtm|go-to-market|revops|revenue operations|sales ops|sales operations/i.test(normalizedText)) {
+    return "Good, that gives us a clear lane: GTM operations and strategy. To position you well, we should prove how you improved the revenue operating system: planning cadence, pipeline quality, forecast accuracy, territory or capacity planning, tooling, executive reporting, and cross-functional execution. Which of those have you owned directly?";
+  }
+
+  if (isUserMessage && /target|role|land|looking|interested|want/i.test(normalizedText)) {
+    return `Good, ${targetDirection.toLowerCase()} is a useful starting point. Next we need evidence: the scope you owned, the teams or stakeholders involved, the operating problem you solved, and the measurable outcome. What is the strongest example we should build from first?`;
+  }
+
+  if (isUserMessage) {
+    return "That helps. I’m adding this to your profile direction. To make it strong enough for recruiters and ATS screens, let’s attach evidence to it: what role, scope, tools, stakeholders, and outcome should we connect to this?";
+  }
+
+  const detail = factCount > 0 ? `I pulled out ${factCount} profile signal${factCount === 1 ? "" : "s"}` : "I found usable profile evidence";
+
+  return `${detail} from ${inputLabel}. The current positioning read is ${targetDirection.toLowerCase()}. Before we turn this into resume language, I would verify the strongest metrics, scope, and role focus so the profile feels precise rather than generic.`;
 }
 
 function buildAdvisorFallbackResult({
@@ -1112,8 +1148,16 @@ function deriveTargetDirection(text: string) {
     return "Enterprise transformation, AI automation, professional services/GTM leadership, and board advisory";
   }
 
-  if (/professional services|gtm|customer success/i.test(text)) {
-    return "Professional services, GTM operations, and customer success leadership";
+  if (/gtm|go-to-market|revops|revenue operations|sales ops|sales operations/i.test(text)) {
+    return "GTM operations and strategy";
+  }
+
+  if (/professional services/i.test(text)) {
+    return "Professional services leadership";
+  }
+
+  if (/customer success/i.test(text)) {
+    return "Customer success leadership";
   }
 
   return "Career direction to be refined from imported profile evidence";
@@ -1141,12 +1185,30 @@ function deriveRoleTitles(text: string) {
     ];
   }
 
-  if (/professional services|gtm|customer success/i.test(text)) {
+  if (/gtm|go-to-market|revops|revenue operations|sales ops|sales operations/i.test(text)) {
+    return [
+      "Head of GTM Operations",
+      "GTM Strategy Lead",
+      "Revenue Operations Leader",
+      "Sales Operations Strategy Leader",
+    ];
+  }
+
+  if (/professional services/i.test(text)) {
     return [
       "VP Professional Services",
-      "Head of GTM Operations",
-      "Customer Success Executive",
       "Services Transformation Leader",
+      "Professional Services Operations Leader",
+      "Client Delivery Executive",
+    ];
+  }
+
+  if (/customer success/i.test(text)) {
+    return [
+      "Customer Success Executive",
+      "Customer Operations Leader",
+      "Post-Sales Strategy Leader",
+      "Customer Experience Transformation Leader",
     ];
   }
 

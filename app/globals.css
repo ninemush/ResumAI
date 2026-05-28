@@ -2769,6 +2769,13 @@ input:focus {
     flex-direction: column;
   }
 
+  .workspace-shell {
+    height: auto;
+    min-height: 100svh;
+    overflow: visible;
+    width: 100%;
+  }
+
   .auth-topbar {
     align-items: stretch;
     padding: 14px 18px 0;
@@ -2877,8 +2884,15 @@ input:focus {
   }
 
   .side-nav {
+    background: rgba(251, 249, 244, 0.96);
     border-width: 0 0 1px;
+    min-height: auto;
+    order: 1;
+    overflow: visible;
     padding: 18px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
   }
 
   .side-nav.collapsed {
@@ -2923,8 +2937,56 @@ input:focus {
     width: 100%;
   }
 
+  .conversation-pane {
+    background: var(--background);
+    border-width: 0 0 1px;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: calc(100svh - 104px);
+    min-height: 520px;
+    order: 2;
+    overflow: hidden;
+    padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+    position: relative;
+    z-index: 2;
+  }
+
+  .workspace-main {
+    min-height: auto;
+    order: 3;
+    padding: 18px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .profile-pane {
+    padding: 0;
+  }
+
+  .conversation-header {
+    min-height: 44px;
+  }
+
   .message-list {
-    max-height: min(58svh, 620px);
+    max-height: none;
+    overflow-y: auto;
+    padding-bottom: 12px;
+  }
+
+  .message-list::before {
+    margin-top: auto;
+  }
+
+  .assistant-message,
+  .user-message,
+  .system-note {
+    font-size: 0.92rem;
+    max-width: 100%;
+  }
+
+  .chat-input {
+    background: rgba(251, 249, 244, 0.98);
+    box-shadow: 0 -10px 24px rgba(14, 25, 43, 0.04);
   }
 
   .readiness-panel,
