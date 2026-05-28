@@ -13,6 +13,7 @@ import { JobIngestionPanel } from "@/components/jobs/job-ingestion-panel";
 import { KnowledgebasePanel } from "@/components/knowledgebase/knowledgebase-panel";
 import { ProfileExplorer } from "@/components/profile/profile-explorer";
 import { MasterResumePanel } from "@/components/resume/master-resume-panel";
+import { SettingsPanel } from "@/components/settings/settings-panel";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
@@ -153,6 +154,7 @@ export function WorkspaceLayout({
               activeView,
             })),
           profileOverview,
+          session,
         })}
       </div>
 
@@ -185,6 +187,7 @@ function renderWorkspaceView({
   ownerMetrics,
   onSelectView,
   profileOverview,
+  session,
 }: {
   activeView: AppView;
   applicationOverview: ApplicationOverview;
@@ -194,6 +197,7 @@ function renderWorkspaceView({
   ownerMetrics: OwnerMetrics | null;
   onSelectView: (view: AppView) => void;
   profileOverview: ProfileOverview;
+  session: WorkspaceSession;
 }) {
   if (activeView === "owner") {
     return ownerMetrics ? (
@@ -234,10 +238,11 @@ function renderWorkspaceView({
 
   if (activeView === "settings") {
     return (
-      <WorkspacePlaceholder
-        eyebrow="Settings"
-        title="Workspace settings"
-        body="Account, privacy, data export, and notification controls will live here before public launch."
+      <SettingsPanel
+        applicationOverview={applicationOverview}
+        artifactOverview={artifactOverview}
+        profileOverview={profileOverview}
+        session={session}
       />
     );
   }

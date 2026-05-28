@@ -55,6 +55,41 @@ const ignoredTerms = new Set([
   "years",
 ]);
 
+const fitSignalGroups = [
+  {
+    label: "AI and automation",
+    terms: ["ai", "artificial intelligence", "automation", "machine learning", "ml", "genai", "workflow"],
+  },
+  {
+    label: "Transformation and change",
+    terms: ["transformation", "change", "operating model", "modernization", "turnaround", "strategy"],
+  },
+  {
+    label: "Operations and delivery",
+    terms: ["operations", "delivery", "service delivery", "process", "efficiency", "capacity", "program"],
+  },
+  {
+    label: "GTM and commercial",
+    terms: ["gtm", "go-to-market", "sales", "revenue", "pipeline", "growth", "commercial", "pricing"],
+  },
+  {
+    label: "Customer and services",
+    terms: ["customer", "client", "professional services", "success", "retention", "adoption", "service"],
+  },
+  {
+    label: "Technology and data",
+    terms: ["data", "analytics", "cloud", "platform", "api", "integration", "architecture", "technology"],
+  },
+  {
+    label: "Risk and governance",
+    terms: ["risk", "governance", "compliance", "security", "controls", "audit", "regulatory"],
+  },
+  {
+    label: "Executive leadership",
+    terms: ["executive", "leadership", "stakeholder", "board", "vp", "director", "head", "global", "regional"],
+  },
+];
+
 export async function analyzeJobFitForJobId(
   input: z.input<typeof jobFitRequestSchema>,
 ): Promise<JobFitAnalysis> {
@@ -143,21 +178,33 @@ export function analyzeJobFit({
 
   const candidateKeywords = extractCandidateKeywords({ masterResume, profileFacts });
   const jobKeywords = extractJobKeywords(jobText);
+  const candidateText = buildCandidateText({ masterResume, profileFacts });
+  const candidateSignalGroups = readSignalGroups(candidateText);
+  const jobSignalGroups = readSignalGroups(jobText);
 
   if (candidateKeywords.length === 0) {
     return buildEmptyFit("Add or confirm profile evidence before Pramania can judge role fit.");
   }
 
-  const normalizedCandidateTerms = new Set(candidateKeywords.map(normalizeKeyword));
+  const normalizedCandidateTerms = candidateKeywords.map(normalizeKeyword);
   const matchedKeywords = jobKeywords
-    .filter((keyword) => normalizedCandidateTerms.has(normalizeKeyword(keyword)))
+    .filter((keyword) => matchesAnyCandidateKeyword(keyword, normalizedCandidateTerms))
     .slice(0, 10);
   const missingKeywords = jobKeywords
-    .filter((keyword) => !normalizedCandidateTerms.has(normalizeKeyword(keyword)))
+    .filter((keyword) => !matchesAnyCandidateKeyword(keyword, normalizedCandidateTerms))
     .slice(0, 10);
-  const score = Math.round((matchedKeywords.length / Math.max(jobKeywords.length, 1)) * 100);
+  const keywordScore = Math.round((matchedKeywords.length / Math.max(jobKeywords.length, 1)) * 100);
+  const signalScore = Math.round(
+    (candidateSignalGroups.filter((signal) => jobSignalGroups.includes(signal)).length /
+      Math.max(jobSignalGroups.length, 1)) *
+      100,
+  );
+  const score = Math.max(
+    keywordScore,
+    Math.round(keywordScore * 0.45 + signalScore * 0.55),
+  );
   const senioritySignals = readSenioritySignals(jobText);
-  const recommendation = readRecommendation({ profileFacts, score });
+  const recommendation = readRecommendation({ profileFacts, score, signalScore });
   const risks = readFitRisks({
     jobKeywords,
     masterResume,
@@ -165,7 +212,11 @@ export function analyzeJobFit({
     profileFacts,
     score,
   });
-  const questions = readFitQuestions({ missingKeywords, senioritySignals });
+  const questions = readFitQuestions({
+    missingKeywords,
+    senioritySignals,
+    signalGaps: jobSignalGroups.filter((signal) => !candidateSignalGroups.includes(signal)),
+  });
 
   return {
     matchedKeywords,
@@ -175,7 +226,12 @@ export function analyzeJobFit({
     risks,
     score,
     senioritySignals,
-    summary: buildFitSummary({ matchedKeywords, recommendation, score }),
+    summary: buildFitSummary({
+      matchedKeywords,
+      recommendation,
+      score,
+      signalMatches: candidateSignalGroups.filter((signal) => jobSignalGroups.includes(signal)),
+    }),
   };
 }
 
@@ -211,6 +267,24 @@ function extractCandidateKeywords({
     .flatMap((fact) => [fact.fact_value]);
 
   return uniqueKeywords([...resumeTerms, ...factTerms].flatMap(extractTerms)).slice(0, 60);
+}
+
+function buildCandidateText({
+  masterResume,
+  profileFacts,
+}: {
+  masterResume: ResumeContent | null;
+  profileFacts: ProfileFact[];
+}) {
+  return [
+    masterResume?.headline,
+    masterResume?.summary,
+    ...(masterResume?.skills ?? []),
+    ...(masterResume?.experienceBullets ?? []),
+    ...profileFacts.map((fact) => fact.fact_value),
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function extractJobKeywords(jobText: string) {
@@ -260,14 +334,17 @@ function extractTerms(text: string) {
 function readRecommendation({
   profileFacts,
   score,
+  signalScore,
 }: {
   profileFacts: ProfileFact[];
   score: number;
+  signalScore: number;
 }): JobFitAnalysis["recommendation"] {
   if (profileFacts.length < 3) {
     return "needs_profile";
   }
 
+  if (signalScore >= 65 && score >= 35) return "strong_match";
   if (score >= 55) return "strong_match";
   if (score >= 28) return "possible_match";
   return "weak_match";
@@ -310,11 +387,17 @@ function readFitRisks({
 function readFitQuestions({
   missingKeywords,
   senioritySignals,
+  signalGaps,
 }: {
   missingKeywords: string[];
   senioritySignals: string[];
+  signalGaps: string[];
 }) {
   const questions: string[] = [];
+
+  if (signalGaps.length > 0) {
+    questions.push(`Can we substantiate ${signalGaps.slice(0, 2).join(" and ")} with real examples?`);
+  }
 
   if (missingKeywords.length > 0) {
     questions.push(`Do you have credible examples involving ${missingKeywords.slice(0, 3).join(", ")}?`);
@@ -350,10 +433,12 @@ function buildFitSummary({
   matchedKeywords,
   recommendation,
   score,
+  signalMatches,
 }: {
   matchedKeywords: string[];
   recommendation: JobFitAnalysis["recommendation"];
   score: number;
+  signalMatches: string[];
 }) {
   const label = {
     needs_profile: "needs more profile evidence",
@@ -361,12 +446,53 @@ function buildFitSummary({
     strong_match: "looks promising",
     weak_match: "looks like a stretch right now",
   }[recommendation];
+  const signalText =
+    signalMatches.length > 0
+      ? ` Stronger alignment themes: ${signalMatches.slice(0, 3).join(", ")}.`
+      : "";
   const matchText =
     matchedKeywords.length > 0
       ? ` Matched signals include ${matchedKeywords.slice(0, 4).join(", ")}.`
       : "";
 
-  return `Fit is ${score}% and ${label}.${matchText}`;
+  return `Fit is ${score}% and ${label}.${signalText}${matchText}`;
+}
+
+function readSignalGroups(text: string) {
+  const normalized = normalizeKeyword(text);
+
+  return fitSignalGroups
+    .filter((group) => group.terms.some((term) => normalized.includes(normalizeKeyword(term))))
+    .map((group) => group.label);
+}
+
+function matchesAnyCandidateKeyword(keyword: string, normalizedCandidateTerms: string[]) {
+  const normalizedKeyword = normalizeKeyword(keyword);
+
+  return normalizedCandidateTerms.some((candidateTerm) => {
+    if (candidateTerm === normalizedKeyword) {
+      return true;
+    }
+
+    if (candidateTerm.length >= 6 && normalizedKeyword.includes(candidateTerm)) {
+      return true;
+    }
+
+    if (normalizedKeyword.length >= 6 && candidateTerm.includes(normalizedKeyword)) {
+      return true;
+    }
+
+    return significantTokens(normalizedKeyword).some((token) =>
+      significantTokens(candidateTerm).includes(token),
+    );
+  });
+}
+
+function significantTokens(value: string) {
+  return value
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 5 && !ignoredTerms.has(token));
 }
 
 function uniqueKeywords(values: string[]) {

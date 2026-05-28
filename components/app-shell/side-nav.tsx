@@ -2,7 +2,6 @@
 
 import {
   BriefcaseBusiness,
-  CircleHelp,
   FileText,
   Layers3,
   Library,
@@ -35,10 +34,9 @@ const primaryItems = [
   { label: "Profile & Resume", icon: FileText, view: "resume" },
   { label: "Jobs", icon: BriefcaseBusiness, view: "jobs" },
   { label: "Applications", icon: BriefcaseBusiness, view: "applications" },
-  { label: "Knowledgebase", icon: Library, view: "knowledgebase" },
+  { label: "Sources", icon: Library, view: "knowledgebase" },
   { label: "Artifacts", icon: Layers3, view: "artifacts" },
   { label: "Settings", icon: Settings, view: "settings" },
-  { label: "Support", icon: CircleHelp, view: "support" },
 ] satisfies { label: string; icon: LucideIcon; view: AppView }[];
 
 type SideNavProps = {

@@ -51,7 +51,7 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
   return (
     <main className="profile-pane" aria-labelledby="knowledgebase-title">
       <div className="pane-heading">
-        <p className="eyebrow">Knowledgebase</p>
+        <p className="eyebrow">Sources</p>
         <h1 id="knowledgebase-title">Source library</h1>
         <p>
           This is the audit-friendly record of what you gave {brand.name}, what was

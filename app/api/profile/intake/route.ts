@@ -32,8 +32,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Sign in is required." }, { status: 401 });
     }
 
+    console.warn(
+      JSON.stringify({
+        event: "profile_intake_route_failed",
+        code: error instanceof Error ? error.message : "UNKNOWN_PROFILE_INTAKE_ERROR",
+      }),
+    );
+
     return NextResponse.json(
-      { error: "Profile intake is unavailable right now. Please try again." },
+      {
+        error:
+          "I could not save that to your profile cleanly yet. The note is still useful: try sending it as a shorter role, achievement, metric, or target-role statement and I will attach it to the right part of your profile.",
+      },
       { status: 500 },
     );
   }

@@ -1046,6 +1046,53 @@ input:focus {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.settings-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-card {
+  align-items: flex-start;
+  background: rgba(255, 250, 243, 0.72);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 18px;
+}
+
+.settings-card svg {
+  color: var(--sage-strong);
+  margin-top: 2px;
+}
+
+.settings-card span {
+  color: var(--sage-strong);
+  display: block;
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.settings-card strong {
+  color: var(--foreground);
+  display: block;
+  font-size: 1.02rem;
+  margin-bottom: 6px;
+}
+
+.settings-card p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
 .owner-detail-panel {
   display: grid;
   gap: 14px;
@@ -2889,6 +2936,7 @@ input:focus {
   .proof-theme-list,
   .resume-readiness-panel,
   .owner-detail-grid,
+  .settings-grid,
   .owner-metric-grid,
   .fit-review-grid,
   .profile-editor-grid,
