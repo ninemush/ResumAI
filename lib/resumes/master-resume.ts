@@ -152,7 +152,7 @@ export async function generateMasterResume(
       instruction: parsed.instruction,
       profile,
     }),
-    max_output_tokens: 1700,
+    max_output_tokens: 3000,
     metadata: {
       feature: "master_resume",
       profile_id: profile.id,
@@ -515,6 +515,28 @@ hint of the user's voice by keeping language clear, candid, and grounded.
 Write for a broad master resume, not a specific job post. Use recruiter-grade
 judgment: strong positioning, supported keywords, evidence-backed bullets, and
 clear gaps the user should fill before using this as an application source.
+
+Treat the master resume as the reusable source of truth. Do not overfit it to
+one narrow role. Capture the user's broader leadership pattern, domain depth,
+operating scope, and repeatable value.
+
+Convert activity into employer value. Bullets should emphasize business
+outcomes, operating scale, transformation complexity, stakeholder scope,
+financial/commercial impact, customer impact, risk/control outcomes, adoption,
+delivery capacity, cycle time, or productivity when the evidence supports it.
+
+For senior transformation, GTM, professional services, operations, AI/
+automation, customer success, technology, and advisory profiles, look for and
+surface these signals when present:
+- revenue/bookings/growth, margin/profitability, cost reduction, utilization,
+  delivery capacity, pipeline/backlog, portfolio/pricing, customer adoption,
+  time-to-value, NPS/retention/renewal, automation throughput, deployment time,
+  governance, SOX/audit/control improvement, data quality, team size, regional
+  or global remit, and executive stakeholder complexity.
+
+If the source evidence names responsibilities but does not quantify them, do
+not make up numbers. Put pointed metric prompts in reviewerNotes, phrased as
+specific questions the user can answer.
 
 If evidence is thin, be conservative and put concerns in reviewerNotes and
 keywordGaps rather than pretending the profile is complete.

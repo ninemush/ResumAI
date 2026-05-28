@@ -123,7 +123,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-        .limit(5),
+        .limit(20),
       supabase
         .from("role_recommendations")
         .select(
@@ -200,10 +200,9 @@ async function addSourcePreviewUrls(
   return Promise.all(
     sources.map(async (source) => ({
       ...source,
-      previewUrl:
-        source.source_type === "image"
-          ? await createProfileSourceUrl(supabase, source.storage_path)
-          : null,
+      previewUrl: ["docx", "image", "pdf", "txt", "linkedin"].includes(source.source_type)
+        ? await createProfileSourceUrl(supabase, source.storage_path)
+        : null,
     })),
   );
 }

@@ -17,6 +17,9 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
   const sourceSummary = readSourceSummary(overview);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [activeSource, setActiveSource] = useState<ProfileOverview["recentSources"][number] | null>(
+    null,
+  );
 
   async function retrySourceExtraction(sourceId: string) {
     setPendingId(sourceId);
@@ -86,19 +89,11 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
             {overview.recentSources.map((source) => (
               <article className="source-row" key={source.id}>
                 <div className="source-main">
-                  {source.previewUrl ? (
-                    <Image
-                      alt={source.original_filename ?? "Uploaded screenshot source"}
-                      className="source-preview-image"
-                      height={120}
-                      src={source.previewUrl}
-                      unoptimized
-                      width={180}
-                    />
-                  ) : null}
+                  <SourcePreviewThumb source={source} onOpen={() => setActiveSource(source)} />
                   <div>
                     <h3>{source.original_filename ?? formatSourceUrl(source.source_url)}</h3>
                     <p>{formatSourceType(source.source_type)}</p>
+                    <p className="source-timestamp">{formatSourceTimestamp(source.created_at)}</p>
                     {source.failure_reason ? (
                       <p className="source-failure">{formatFailureReason(source.failure_reason)}</p>
                     ) : null}
@@ -181,7 +176,113 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
           the Profile cockpit or the conversation.
         </p>
       </section>
+
+      {activeSource ? (
+        <SourceViewer source={activeSource} onClose={() => setActiveSource(null)} />
+      ) : null}
     </main>
+  );
+}
+
+function SourcePreviewThumb({
+  onOpen,
+  source,
+}: {
+  onOpen: () => void;
+  source: ProfileOverview["recentSources"][number];
+}) {
+  if (!source.previewUrl) {
+    return (
+      <span className="source-file-thumb" aria-hidden="true">
+        <FileText size={24} />
+      </span>
+    );
+  }
+
+  if (source.source_type === "image") {
+    return (
+      <button className="source-preview-button" onClick={onOpen} type="button">
+        <Image
+          alt={source.original_filename ?? "Uploaded screenshot source"}
+          className="source-preview-image"
+          height={120}
+          src={source.previewUrl}
+          unoptimized
+          width={180}
+        />
+      </button>
+    );
+  }
+
+  return (
+    <button className="source-file-thumb interactive" onClick={onOpen} type="button">
+      <FileText size={24} aria-hidden="true" />
+      <span>{formatSourceType(source.source_type)}</span>
+    </button>
+  );
+}
+
+function SourceViewer({
+  onClose,
+  source,
+}: {
+  onClose: () => void;
+  source: ProfileOverview["recentSources"][number];
+}) {
+  return (
+    <div className="attachment-viewer-backdrop" role="presentation" onClick={onClose}>
+      <div
+        aria-label={`Preview ${source.original_filename ?? "profile source"}`}
+        aria-modal="true"
+        className="attachment-viewer"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <header>
+          <div>
+            <strong>{source.original_filename ?? formatSourceUrl(source.source_url)}</strong>
+            <span>{formatSourceType(source.source_type)} · {formatSourceTimestamp(source.created_at)}</span>
+          </div>
+          <button className="secondary-action compact-action" onClick={onClose} type="button">
+            Close
+          </button>
+        </header>
+        <div className="attachment-viewer-body">
+          {source.previewUrl && source.source_type === "image" ? (
+            <Image
+              alt={source.original_filename ?? "Uploaded source"}
+              className="attachment-viewer-image"
+              height={900}
+              src={source.previewUrl}
+              unoptimized
+              width={1200}
+            />
+          ) : source.previewUrl && source.source_type === "pdf" ? (
+            <object
+              aria-label={`Preview of ${source.original_filename ?? "PDF source"}`}
+              className="attachment-viewer-object"
+              data={source.previewUrl}
+              type="application/pdf"
+            >
+              <a href={source.previewUrl} rel="noreferrer" target="_blank">
+                Open PDF preview
+              </a>
+            </object>
+          ) : source.previewUrl ? (
+            <iframe
+              className="attachment-viewer-object"
+              src={source.previewUrl}
+              title={`Preview of ${source.original_filename ?? "source"}`}
+            />
+          ) : (
+            <div className="attachment-viewer-empty">
+              <FileText size={28} aria-hidden="true" />
+              <p>Preview is not available, but the source record is preserved.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -221,6 +322,21 @@ function formatSourceUrl(sourceUrl: string | null) {
   } catch {
     return "Profile link";
   }
+}
+
+function formatSourceTimestamp(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Time unavailable";
+  }
+
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  return `${new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date)}${timezone ? ` (${timezone})` : ""}`;
 }
 
 function formatFailureReason(reason: string) {

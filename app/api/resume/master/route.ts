@@ -136,7 +136,7 @@ function toApiError(error: unknown) {
       category: "validation",
       code: "resume.context_too_thin",
       message:
-        "Confirm a few profile proof points, skills, and a target direction before generating a trustworthy master resume.",
+        "Add a few profile proof points, skills, and a target direction before generating a trustworthy master resume.",
       status: 400,
     };
   }

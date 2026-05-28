@@ -171,6 +171,7 @@ export function ConversationPanel({
   const [isListening, setIsListening] = useState(false);
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("profile");
   const [processingStep, setProcessingStep] = useState(0);
+  const [activeAttachment, setActiveAttachment] = useState<MessageAttachment | null>(null);
 
   useEffect(() => {
     const messageList = messageListRef.current;
@@ -270,6 +271,13 @@ export function ConversationPanel({
 
       if (sourceExplanation) {
         appendAssistantMessage(sourceExplanation, true);
+        return;
+      }
+
+      const strategicGuidance = processStrategicProfileQuestion(text, profileOverview);
+
+      if (strategicGuidance) {
+        appendAssistantMessage(strategicGuidance, true);
         return;
       }
     }
@@ -881,7 +889,12 @@ export function ConversationPanel({
             key={item.id ?? `${item.text}-${index}`}
           >
             <strong>{item.speaker === "user" ? "You" : brand.name}</strong>
-            {item.attachment ? <MessageAttachmentPreview attachment={item.attachment} /> : null}
+            {item.attachment ? (
+              <MessageAttachmentPreview
+                attachment={item.attachment}
+                onOpen={() => setActiveAttachment(item.attachment ?? null)}
+              />
+            ) : null}
             <p>{item.text}</p>
           </div>
         ))}
@@ -953,6 +966,10 @@ export function ConversationPanel({
           )}
         </button>
       </form>
+
+      {activeAttachment ? (
+        <AttachmentViewer attachment={activeAttachment} onClose={() => setActiveAttachment(null)} />
+      ) : null}
     </aside>
   );
 }
@@ -1316,11 +1333,29 @@ function formatSourceTypeForPrompt(sourceType: string) {
   return sourceType;
 }
 
-function MessageAttachmentPreview({ attachment }: { attachment: MessageAttachment }) {
+function MessageAttachmentPreview({
+  attachment,
+  onOpen,
+}: {
+  attachment: MessageAttachment;
+  onOpen: () => void;
+}) {
   const icon = getAttachmentIcon(attachment.type);
 
   return (
-    <div className="message-attachment-card">
+    <div
+      className="message-attachment-card"
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      title={`Preview ${attachment.name}`}
+    >
       {attachment.type === "image" && attachment.previewUrl ? (
         <Image
           alt={attachment.name}
@@ -1348,6 +1383,70 @@ function MessageAttachmentPreview({ attachment }: { attachment: MessageAttachmen
         <span>{attachment.name}</span>
         <small>{formatAttachmentType(attachment.type)}</small>
       </span>
+    </div>
+  );
+}
+
+function AttachmentViewer({
+  attachment,
+  onClose,
+}: {
+  attachment: MessageAttachment;
+  onClose: () => void;
+}) {
+  return (
+    <div className="attachment-viewer-backdrop" role="presentation" onClick={onClose}>
+      <div
+        aria-label={`Preview ${attachment.name}`}
+        aria-modal="true"
+        className="attachment-viewer"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <header>
+          <div>
+            <strong>{attachment.name}</strong>
+            <span>{formatAttachmentType(attachment.type)}</span>
+          </div>
+          <button className="secondary-action compact-action" onClick={onClose} type="button">
+            Close
+          </button>
+        </header>
+        <div className="attachment-viewer-body">
+          {attachment.previewUrl && attachment.type === "image" ? (
+            <Image
+              alt={attachment.name}
+              className="attachment-viewer-image"
+              height={900}
+              src={attachment.previewUrl}
+              unoptimized
+              width={1200}
+            />
+          ) : attachment.previewUrl && attachment.type === "pdf" ? (
+            <object
+              aria-label={`Preview of ${attachment.name}`}
+              className="attachment-viewer-object"
+              data={attachment.previewUrl}
+              type="application/pdf"
+            >
+              <a href={attachment.previewUrl} rel="noreferrer" target="_blank">
+                Open PDF preview
+              </a>
+            </object>
+          ) : attachment.previewUrl ? (
+            <iframe
+              className="attachment-viewer-object"
+              src={attachment.previewUrl}
+              title={`Preview of ${attachment.name}`}
+            />
+          ) : (
+            <div className="attachment-viewer-empty">
+              {getAttachmentIcon(attachment.type)}
+              <p>Preview is not available for this file type yet, but the source is saved.</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1523,6 +1622,88 @@ function buildJobPrompt(jobOverview: JobOverview) {
   }
 
   return `Your recent job post${highFitJob.title ? ` for ${highFitJob.title}` : ""} looks like a stronger match based on the current keyword snapshot. We should review the fit before generating materials.`;
+}
+
+function processStrategicProfileQuestion(text: string, profileOverview: ProfileOverview) {
+  if (!looksLikeMetricsGuidanceRequest(text)) {
+    return null;
+  }
+
+  const context = readProfileStrategyContext(profileOverview);
+  const metricFamilies = readMetricFamilies(context);
+  const roleLens = context.targetDirection || context.headline || "your current target lane";
+
+  return [
+    `Yes. For ${roleLens}, the master resume should not just list responsibilities; it should prove operating scope and business value.`,
+    `The highest-value metrics to look for are: ${metricFamilies.join("; ")}.`,
+    "A useful way to mine this is to take each major role and ask: what got faster, cheaper, larger, safer, more predictable, more adopted, or more profitable because of your work?",
+    "For your profile, I would start with UiPath Services/GTM and GE transformation examples. Do any of these ring a bell: Services CAGR/bookings, margin or management profitability movement, delivery capacity, deployment time reduction, customer adoption/time-to-value, NPS or renewals, ERP consolidation cost/control impact, supplier-data scale, automation throughput, or SOX/control outcomes?",
+    "Give me even rough numbers or before/after ranges. I can help turn them into credible resume bullets without overstating them.",
+  ].join(" ");
+}
+
+function looksLikeMetricsGuidanceRequest(text: string) {
+  const normalized = text.toLowerCase();
+
+  return (
+    /\b(metric|metrics|quantify|quantifiable|measure|measurable|impact|business value|proof point|proof points)\b/.test(
+      normalized,
+    ) &&
+    /\b(help|would help|what|which|suggest|specific|pointed|expert|resume|profile|bullet|bullets)\b/.test(
+      normalized,
+    )
+  );
+}
+
+function readProfileStrategyContext(profileOverview: ProfileOverview) {
+  const allFacts = Object.values(profileOverview.factsByType).flat();
+  const factText = allFacts.map((fact) => fact.fact_value).join(" ").toLowerCase();
+
+  return {
+    factText,
+    headline: profileOverview.profile?.headline ?? null,
+    targetDirection: profileOverview.profile?.targetDirection ?? null,
+    targetLevel: profileOverview.profile?.targetLevel ?? null,
+  };
+}
+
+function readMetricFamilies(context: ReturnType<typeof readProfileStrategyContext>) {
+  const signals = `${context.headline ?? ""} ${context.targetDirection ?? ""} ${context.factText}`.toLowerCase();
+  const families = new Set<string>();
+
+  if (/\b(gtm|services|professional services|sales|portfolio|pricing|bookings|pipeline)\b/.test(signals)) {
+    families.add("GTM/services scale: bookings, revenue, CAGR, pipeline, backlog, attach rate, portfolio adoption, pricing discipline");
+  }
+
+  if (/\b(profit|margin|cost|efficiency|capacity|delivery)\b/.test(signals)) {
+    families.add("operating performance: margin, management profitability, cost takeout, delivery capacity, utilization, cycle time");
+  }
+
+  if (/\b(ai|automation|deployment|time-to-value|adoption|rpa)\b/.test(signals)) {
+    families.add("AI/automation value: deployment time, time-to-value, automation throughput, adoption, hours removed, error reduction");
+  }
+
+  if (/\b(customer|success|nps|renewal|retention|outcome)\b/.test(signals)) {
+    families.add("customer outcomes: NPS/CSAT, retention, renewals, expansion, adoption depth, success-story volume");
+  }
+
+  if (/\b(governance|sox|risk|control|audit|compliance|data)\b/.test(signals)) {
+    families.add("governance and risk: control defects reduced, audit readiness, SOX coverage, data quality, supplier-record scale");
+  }
+
+  if (/\b(global|regional|emea|mea|team|stakeholder|executive|board)\b/.test(signals)) {
+    families.add("leadership scope: regions covered, team size, executive stakeholders, operating cadence, board/advisory influence");
+  }
+
+  if (families.size === 0) {
+    return [
+      "scope: team size, budget, regions, customers, portfolio size, stakeholders",
+      "outcomes: revenue, cost, time saved, quality, risk reduction, adoption, customer impact",
+      "before/after movement: baseline, change delivered, timeframe, and how directly you influenced it",
+    ];
+  }
+
+  return Array.from(families).slice(0, 6);
 }
 
 function formatList(items: string[]) {
