@@ -236,15 +236,15 @@ export function ProfileExplorer({
         </div>
         <p>
           {hasFacts
-            ? `${overview.factCount} useful signal${overview.factCount === 1 ? "" : "s"} captured from ${overview.sourceCount} source${overview.sourceCount === 1 ? "" : "s"}.`
-            : "Share a resume, LinkedIn or portfolio link, or a quick work-history note in the AI agent. Profile signal will appear as Pramania reads your sources."}
+            ? "Pramania has enough background to start shaping your positioning. The next improvement is sharper outcomes and role focus."
+            : "Drop a resume, LinkedIn PDF, portfolio link, or quick career note in Pramania. I’ll turn it into a profile direction with as little effort from you as possible."}
         </p>
       </section>
 
       <section className="profile-build-panel" aria-label="Profile build progress">
         <div className="section-heading">
           <p className="eyebrow">Profile build</p>
-          <h2>What is ready, and what needs signal</h2>
+          <h2>What is ready, and what needs work</h2>
         </div>
         <div className="profile-milestone-list">
           {overview.milestones.map((milestone) => (
@@ -276,7 +276,7 @@ export function ProfileExplorer({
         <div className="next-action-support">
           {profileGaps.length > 0 ? (
             <>
-              <span>Missing high-value signal</span>
+              <span>Most useful next details</span>
               <div className="profile-gap-list">
                 {profileGaps.map((gap) => (
                   <strong key={gap}>{gap}</strong>
@@ -285,8 +285,8 @@ export function ProfileExplorer({
             </>
           ) : (
             <>
-              <span>Profile signal</span>
-              <strong>Enough to start tailoring</strong>
+              <span>Profile foundation</span>
+              <strong>Ready to improve the resume</strong>
             </>
           )}
         </div>

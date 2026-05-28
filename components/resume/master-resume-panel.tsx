@@ -120,19 +120,19 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
         </div>
         <p>
           {profileOverview.profile?.summary ??
-            "Pramania needs a little more signal before it can write a strong positioning read."}
+            "Pramania needs a little more background before it can write a strong positioning read."}
         </p>
         <div className="draft-chips">
           <span>{profileOverview.profile?.targetDirection ?? "Target direction open"}</span>
           <span>{profileOverview.profile?.targetLevel ?? "Level open"}</span>
-          <span>{profileOverview.factCount} profile signal{profileOverview.factCount === 1 ? "" : "s"}</span>
+          <span>{currentOverview.canGenerate ? "Resume-ready foundation" : "Needs more career context"}</span>
         </div>
       </section>
 
       <section className="resume-readiness-panel" aria-label="Master resume readiness">
         <div>
-          <span>{currentOverview.confirmedFactCount}</span>
-          <strong>Profile proof points</strong>
+          <span>{currentOverview.canGenerate ? "Ready" : "Needs work"}</span>
+          <strong>Master resume</strong>
           <p>{currentOverview.readinessNote}</p>
         </div>
         <div className="resume-readiness-actions">

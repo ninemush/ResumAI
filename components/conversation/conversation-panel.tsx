@@ -15,12 +15,14 @@ import {
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
+import type { AppView } from "@/components/app-shell/side-nav";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 import { createClient } from "@/lib/supabase/browser";
 
 type ConversationPanelProps = {
+  activeView: AppView;
   applicationOverview: ApplicationOverview;
   initialMessages: ConversationMessage[];
   jobOverview: JobOverview;
@@ -43,6 +45,7 @@ type MessageAttachment = {
 };
 
 type ProcessingMode =
+  | "advisor"
   | "application"
   | "file"
   | "job"
@@ -144,6 +147,7 @@ const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image" | "li
 ]);
 
 export function ConversationPanel({
+  activeView,
   applicationOverview,
   initialMessages,
   jobOverview,
@@ -173,6 +177,7 @@ export function ConversationPanel({
   const [isListening, setIsListening] = useState(false);
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("profile");
   const [processingStep, setProcessingStep] = useState(0);
+  const [processingIntent, setProcessingIntent] = useState("");
   const [activeAttachment, setActiveAttachment] = useState<MessageAttachment | null>(null);
 
   useEffect(() => {
@@ -214,6 +219,7 @@ export function ConversationPanel({
     setStatus(null);
     setError(null);
     setProcessingMode(inferProcessingMode(trimmedMessage));
+    setProcessingIntent(trimmedMessage);
     setProcessingStep(0);
     setIsSubmitting(true);
     appendUserMessage(trimmedMessage);
@@ -227,6 +233,7 @@ export function ConversationPanel({
       );
     } finally {
       setIsSubmitting(false);
+      setProcessingIntent("");
       setProcessingStep(0);
     }
   }
@@ -276,10 +283,8 @@ export function ConversationPanel({
         return;
       }
 
-      const strategicGuidance = processStrategicProfileQuestion(text, profileOverview);
-
-      if (strategicGuidance) {
-        appendAssistantMessage(strategicGuidance, true);
+      if (looksLikeAdvisorQuestion(text)) {
+        appendAssistantMessage(await processAdvisorQuestion(text), true);
         return;
       }
     }
@@ -291,7 +296,11 @@ export function ConversationPanel({
     const processedActionUrl = summaries.length > 0 && urls.length > 0;
 
     if (!processedActionUrl && shouldProcessProfileRemainder({ textWithoutUrls, urls })) {
-      summaries.push(await processProfileText(textWithoutUrls));
+      summaries.push(
+        looksLikeAdvisorQuestion(textWithoutUrls)
+          ? await processAdvisorQuestion(textWithoutUrls)
+          : await processProfileText(textWithoutUrls),
+      );
     }
 
     if (summaries.length > 0) {
@@ -480,13 +489,25 @@ export function ConversationPanel({
       );
     }
 
-    const savedFactCount = payload.savedFactCount ?? 0;
+    setStatus(null);
 
-    setStatus(
-      payload.inScope === false || savedFactCount === 0
-        ? null
-        : `Found ${savedFactCount} useful profile signal${savedFactCount === 1 ? "" : "s"}.`,
-    );
+    return payload.assistantMessage as string;
+  }
+
+  async function processAdvisorQuestion(text: string) {
+    const response = await fetch("/api/conversation/advisor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, surface: mapActiveViewToAdvisorSurface(activeView) }),
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      return (
+        payload.error?.message ??
+        "I could not complete the deeper advisor read right now, but I can still help if you share the role, resume point, or decision you want to work through."
+      );
+    }
 
     return payload.assistantMessage as string;
   }
@@ -554,6 +575,10 @@ export function ConversationPanel({
         : `I found ${formatSourceReference(source)}, but I could not read it directly: ${extraction.message}`;
     }
 
+    if (extraction.savedFactCount > 0) {
+      void refreshMasterResumeFromNewEvidence();
+    }
+
     return formatSourceIntakeReply({
       assistantMessage: extraction.assistantMessage,
       extractedFactCount: extraction.extractedFactCount,
@@ -607,6 +632,10 @@ export function ConversationPanel({
         : `I saved that profile link, but I could not read it directly yet: ${extraction.message}`;
     }
 
+    if (extraction.savedFactCount > 0) {
+      void refreshMasterResumeFromNewEvidence();
+    }
+
     return formatSourceIntakeReply({
       assistantMessage: extraction.assistantMessage,
       extractedFactCount: extraction.extractedFactCount,
@@ -627,6 +656,7 @@ export function ConversationPanel({
     setError(null);
     setStatus(null);
     setProcessingMode("file");
+    setProcessingIntent(fileList.map((file) => file.name).join(", "));
     setProcessingStep(0);
     setIsSubmitting(true);
     appendUserMessage(
@@ -653,6 +683,7 @@ export function ConversationPanel({
       setError("I could not finish reading that file. Try again, or paste the most important text directly.");
     } finally {
       setIsSubmitting(false);
+      setProcessingIntent("");
       setProcessingStep(0);
     }
   }
@@ -755,6 +786,10 @@ export function ConversationPanel({
         });
       }
 
+      if (extraction.savedFactCount > 0) {
+        void refreshMasterResumeFromNewEvidence();
+      }
+
       return formatSourceIntakeReply({
         assistantMessage: extraction.assistantMessage,
         extractedFactCount: extraction.extractedFactCount,
@@ -816,6 +851,37 @@ export function ConversationPanel({
       savedFactCount: payload.intake?.savedFactCount ?? 0,
       suggestedDirection: payload.intake?.suggestedDirection ?? null,
     };
+  }
+
+  async function refreshMasterResumeFromNewEvidence() {
+    setStatus("I’m refreshing your master resume draft with the new evidence.");
+
+    try {
+      const response = await fetch("/api/resume/master", {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify({
+          instruction:
+            "Refresh the master resume after newly ingested profile evidence. Keep it broad, evidence-based, ATS-friendly, and not overfit to one role.",
+        }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        if (payload.error?.code === "resume.context_too_thin") {
+          setStatus(null);
+          return;
+        }
+
+        setStatus("I updated the profile evidence. The master resume can be refreshed from Profile & Resume.");
+        return;
+      }
+
+      setStatus("I refreshed the master resume draft from the new source. Open Profile & Resume to review it.");
+      router.refresh();
+    } catch {
+      setStatus("I updated the profile evidence. The master resume refresh needs another attempt.");
+    }
   }
 
   async function readLatestSources() {
@@ -908,7 +974,7 @@ export function ConversationPanel({
         {isSubmitting ? (
           <div className="assistant-message pending-message" aria-live="polite">
             <strong>{brand.name}</strong>
-            <p>{getProcessingMessage(processingMode, processingStep)}</p>
+            <p>{getProcessingMessage(processingMode, processingStep, activeView, processingIntent)}</p>
           </div>
         ) : null}
         {isDragActive ? <div className="drop-hint">Drop it here.</div> : null}
@@ -1005,24 +1071,45 @@ function buildInitialMessages(
   ];
 }
 
-function getProcessingMessage(mode: ProcessingMode, step: number) {
+function getProcessingMessage(mode: ProcessingMode, step: number, activeView: AppView, intent: string) {
+  const surface = formatActiveViewForMessage(activeView);
+  const hasFileIntent = /\.(pdf|docx?|txt|png|jpe?g|webp|csv|zip)\b/i.test(intent);
   const messages: Record<ProcessingMode, string[]> = {
+    advisor: [
+      `Reading your question against what I know from your ${surface}.`,
+      "Checking the profile evidence before I answer, so this does not become generic advice.",
+      "Looking for the strongest career move, not just the next reply.",
+      "Pressure-testing the answer like a recruiter would: fit, proof, seniority, and risk.",
+      "Looking for the useful next question, not a long questionnaire.",
+      "Separating what we know from what we still need to prove.",
+      "Checking whether this is a master-profile question or a role-specific question.",
+      "Bringing the resume, profile, and recent conversation together.",
+      "Making the guidance practical enough that you can act on it.",
+      "Almost there. I’m shaping this as career advice, not a chatbot answer.",
+    ],
     application: [
       "Checking the application record before I touch anything...",
       "Matching this to the right role so the update stays precise...",
       "Looking at the application history with a recruiter's eye...",
       "Checking the status language so we do not blur applied, interview, and outcome stages...",
       "Keeping this tied to the right company and role...",
+      "Looking for the next useful action: follow-up, status update, or material refresh...",
+      "Checking whether this needs a precise update or a recommendation first...",
       "Almost there. I'm keeping the audit trail and status clean.",
     ],
     file: [
-      "Reading the file and looking for hiring signal...",
+      hasFileIntent
+        ? `Reading ${intent.split(",")[0]} and looking for hiring signal.`
+        : "Reading the file and looking for hiring signal...",
       "Pulling out roles, scope, skills, credentials, and proof points...",
       "Separating useful evidence from formatting noise...",
       "Checking whether this is resume text, profile text, or screenshot text...",
       "Looking for the details a recruiter would actually screen for...",
       "Keeping the source attached so you can see where each detail came from...",
-      "Almost there. I'm shaping this into profile evidence you can review.",
+      "Checking whether the master resume should change from this source...",
+      "Looking for seniority, scope, domain, and measurable outcomes...",
+      "Reading for what changed: stronger positioning, missing metrics, or useful keywords...",
+      "Almost there. I’m turning this into profile and resume direction.",
     ],
     job: [
       "Reading the job post and filtering out page noise...",
@@ -1030,15 +1117,21 @@ function getProcessingMessage(mode: ProcessingMode, step: number) {
       "Comparing the post against what we know about your profile...",
       "Checking the fit read for unknowns instead of pretending certainty...",
       "Pulling out the parts that matter for resume targeting...",
+      "Looking for what would make this application credible or risky...",
+      "Checking whether this is a role to pursue, park, or use for market learning...",
+      "Separating must-have requirements from nice-to-have noise...",
       "Almost there. I'm turning the job page into a useful fit read.",
     ],
     profile: [
-      "Reading this with a hiring lens...",
+      `Reading this with a hiring lens from the ${surface}.`,
       "Looking for experience, scope, outcomes, skills, and useful gaps...",
       "Keeping this grounded in what you actually said...",
       "Translating this into evidence without inventing anything...",
       "Checking how this strengthens your positioning and resume story...",
       "Looking for the clearest next question, not a long interrogation...",
+      "Checking whether this should update your profile, resume, or target direction...",
+      "Looking for the business value behind the activity.",
+      "Separating a useful career signal from a note that just needs context.",
       "Almost there. I'm turning this into profile evidence and a useful next step.",
     ],
     resume: [
@@ -1047,6 +1140,9 @@ function getProcessingMessage(mode: ProcessingMode, step: number) {
       "Keeping unsupported claims out and preserving your voice...",
       "Looking for sharper outcomes, cleaner verbs, and less filler...",
       "Checking whether the draft reads like a human with real scope...",
+      "Looking for where the master resume needs stronger proof or cleaner positioning...",
+      "Making sure this stays broad enough for a master resume, not one narrow job.",
+      "Checking the resume like a recruiter would scan it in the first minute.",
       "Almost there. I'm shaping this into something you can review.",
     ],
     source: [
@@ -1055,6 +1151,8 @@ function getProcessingMessage(mode: ProcessingMode, step: number) {
       "Looking for public profile evidence we can safely use...",
       "Refreshing your latest sources so I do not miss something you just added...",
       "If the page blocks server access, I will tell you plainly and keep the source saved...",
+      "Looking for the least-burden path: link first, file only when needed.",
+      "Checking whether this source can improve your master profile automatically...",
       "Almost there. If the source is blocked, I'll tell you plainly and give the next best path.",
     ],
     voice: [
@@ -1083,6 +1181,10 @@ function inferProcessingMode(text: string): ProcessingMode {
     return "source";
   }
 
+  if (looksLikeAdvisorQuestion(text)) {
+    return "advisor";
+  }
+
   if (looksLikeMasterResumeRequest(text) || looksLikeMasterResumeExportRequest(text)) {
     return "resume";
   }
@@ -1096,6 +1198,22 @@ function inferProcessingMode(text: string): ProcessingMode {
   }
 
   return "profile";
+}
+
+function formatActiveViewForMessage(activeView: AppView) {
+  const labels: Partial<Record<AppView, string>> = {
+    applications: "applications tracker",
+    artifacts: "artifact library",
+    jobs: "jobs area",
+    knowledgebase: "sources area",
+    owner: "owner console",
+    profile: "profile cockpit",
+    resume: "profile and resume studio",
+    settings: "settings area",
+    support: "support area",
+  };
+
+  return labels[activeView] ?? "workspace";
 }
 
 function formatSourceIntakeReply({
@@ -1113,21 +1231,17 @@ function formatSourceIntakeReply({
   savedFactCount: number;
   suggestedDirection: string | null;
 }) {
-  const savedSummary =
-    savedFactCount > 0
-      ? `${label}. I found ${savedFactCount} useful profile signal${savedFactCount === 1 ? "" : "s"}.`
-      : extractedFactCount > 0
-        ? `${label}. I found ${extractedFactCount} useful profile signal${
-            extractedFactCount === 1 ? "" : "s"
-          } that already matched your saved profile.`
-      : `${label}. I did not find new profile signal to add yet.`;
   const advisorRead = assistantMessage?.trim();
   const direction = suggestedDirection?.trim()
-    ? `Working direction: ${suggestedDirection.trim()}`
+    ? `My current read: ${suggestedDirection.trim()}`
     : null;
   const nextQuestion = followUpQuestions.find((question) => question.trim().length > 0);
+  const sourceRead =
+    savedFactCount > 0 || extractedFactCount > 0
+      ? `${label}. I updated the profile foundation from it.`
+      : `${label}. I saved it as source material, but I do not see anything new enough to change the profile yet.`;
 
-  return [savedSummary, advisorRead, direction, nextQuestion ? `Next question: ${nextQuestion}` : null]
+  return [sourceRead, advisorRead, direction, nextQuestion]
     .filter(Boolean)
     .join(" ");
 }
@@ -1626,13 +1740,13 @@ function buildProfileGapPrompt(profileOverview: ProfileOverview) {
 
   if (!profileOverview.profile.summary) missing.push("a sharp profile summary");
   if (!profileOverview.profile.targetDirection) missing.push("target role direction");
-  if (profileOverview.factCount < 3) missing.push("stronger proof points");
+  if (profileOverview.factCount < 3) missing.push("stronger outcomes or role examples");
 
   if (missing.length === 0) {
     return null;
   }
 
-  return `Your profile has ${profileOverview.factCount} captured detail${profileOverview.factCount === 1 ? "" : "s"}, but it is still missing ${formatList(missing)}. Those are high-value screening signals.`;
+  return `Your profile is started, but it would become much more useful with ${formatList(missing)}. That is what will make the resume and role advice feel specific rather than generic.`;
 }
 
 function buildJobPrompt(jobOverview: JobOverview) {
@@ -1647,86 +1761,29 @@ function buildJobPrompt(jobOverview: JobOverview) {
   return `Your recent job post${highFitJob.title ? ` for ${highFitJob.title}` : ""} looks like a stronger match based on the current keyword snapshot. We should review the fit before generating materials.`;
 }
 
-function processStrategicProfileQuestion(text: string, profileOverview: ProfileOverview) {
-  if (!looksLikeMetricsGuidanceRequest(text)) {
-    return null;
-  }
-
-  const context = readProfileStrategyContext(profileOverview);
-  const metricFamilies = readMetricFamilies(context);
-  const roleLens = context.targetDirection || context.headline || "your current target lane";
-
-  return [
-    `Yes. For ${roleLens}, the master resume should not just list responsibilities; it should prove operating scope and business value.`,
-    `The highest-value metrics to look for are: ${metricFamilies.join("; ")}.`,
-    "A useful way to mine this is to take each major role and ask: what got faster, cheaper, larger, safer, more predictable, more adopted, or more profitable because of your work?",
-    "For your profile, I would start with UiPath Services/GTM and GE transformation examples. Do any of these ring a bell: Services CAGR/bookings, margin or management profitability movement, delivery capacity, deployment time reduction, customer adoption/time-to-value, NPS or renewals, ERP consolidation cost/control impact, supplier-data scale, automation throughput, or SOX/control outcomes?",
-    "Give me even rough numbers or before/after ranges. I can help turn them into credible resume bullets without overstating them.",
-  ].join(" ");
-}
-
-function looksLikeMetricsGuidanceRequest(text: string) {
+function looksLikeAdvisorQuestion(text: string) {
   const normalized = text.toLowerCase();
 
   return (
-    /\b(metric|metrics|quantify|quantifiable|measure|measurable|impact|business value|proof point|proof points)\b/.test(
-      normalized,
-    ) &&
-    /\b(help|would help|what|which|suggest|specific|pointed|expert|resume|profile|bullet|bullets)\b/.test(
+    normalized.includes("?") ||
+    /\b(advice|advise|recommend|recommendation|what should|should i|shouldn't you|shouldnt you|tell me|based on what you know|what do you think|where do i fit|what roles|which roles|what metrics|quantify|quantifiable|business value|proof point|proof points|how would you position|career advice)\b/.test(
       normalized,
     )
   );
 }
 
-function readProfileStrategyContext(profileOverview: ProfileOverview) {
-  const allFacts = Object.values(profileOverview.factsByType).flat();
-  const factText = allFacts.map((fact) => fact.fact_value).join(" ").toLowerCase();
-
-  return {
-    factText,
-    headline: profileOverview.profile?.headline ?? null,
-    targetDirection: profileOverview.profile?.targetDirection ?? null,
-    targetLevel: profileOverview.profile?.targetLevel ?? null,
+function mapActiveViewToAdvisorSurface(activeView: AppView) {
+  const surfaceMap: Partial<Record<AppView, string>> = {
+    applications: "applications",
+    artifacts: "artifacts",
+    jobs: "jobs",
+    knowledgebase: "sources",
+    profile: "profile",
+    resume: "resume",
+    settings: "settings",
   };
-}
 
-function readMetricFamilies(context: ReturnType<typeof readProfileStrategyContext>) {
-  const signals = `${context.headline ?? ""} ${context.targetDirection ?? ""} ${context.factText}`.toLowerCase();
-  const families = new Set<string>();
-
-  if (/\b(gtm|services|professional services|sales|portfolio|pricing|bookings|pipeline)\b/.test(signals)) {
-    families.add("GTM/services scale: bookings, revenue, CAGR, pipeline, backlog, attach rate, portfolio adoption, pricing discipline");
-  }
-
-  if (/\b(profit|margin|cost|efficiency|capacity|delivery)\b/.test(signals)) {
-    families.add("operating performance: margin, management profitability, cost takeout, delivery capacity, utilization, cycle time");
-  }
-
-  if (/\b(ai|automation|deployment|time-to-value|adoption|rpa)\b/.test(signals)) {
-    families.add("AI/automation value: deployment time, time-to-value, automation throughput, adoption, hours removed, error reduction");
-  }
-
-  if (/\b(customer|success|nps|renewal|retention|outcome)\b/.test(signals)) {
-    families.add("customer outcomes: NPS/CSAT, retention, renewals, expansion, adoption depth, success-story volume");
-  }
-
-  if (/\b(governance|sox|risk|control|audit|compliance|data)\b/.test(signals)) {
-    families.add("governance and risk: control defects reduced, audit readiness, SOX coverage, data quality, supplier-record scale");
-  }
-
-  if (/\b(global|regional|emea|mea|team|stakeholder|executive|board)\b/.test(signals)) {
-    families.add("leadership scope: regions covered, team size, executive stakeholders, operating cadence, board/advisory influence");
-  }
-
-  if (families.size === 0) {
-    return [
-      "scope: team size, budget, regions, customers, portfolio size, stakeholders",
-      "outcomes: revenue, cost, time saved, quality, risk reduction, adoption, customer impact",
-      "before/after movement: baseline, change delivered, timeframe, and how directly you influenced it",
-    ];
-  }
-
-  return Array.from(families).slice(0, 6);
+  return surfaceMap[activeView] ?? "unknown";
 }
 
 function formatList(items: string[]) {

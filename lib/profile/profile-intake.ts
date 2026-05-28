@@ -805,7 +805,6 @@ function buildDeterministicProfileIntakeResult({
     inputLabel,
     normalizedText,
     targetDirection,
-    factCount: Math.min(facts.length, 24),
   });
 
   return {
@@ -848,30 +847,22 @@ function buildDeterministicIntakeMessage({
   inputLabel,
   normalizedText,
   targetDirection,
-  factCount,
 }: {
   inputLabel: string;
   normalizedText: string;
   targetDirection: string;
-  factCount: number;
 }) {
   const isUserMessage = /user message|natural language|typed note/i.test(inputLabel);
 
-  if (isUserMessage && /gtm|go-to-market|revops|revenue operations|sales ops|sales operations/i.test(normalizedText)) {
-    return "Good, that gives us a clear lane: GTM operations and strategy. To position you well, we should prove how you improved the revenue operating system: planning cadence, pipeline quality, forecast accuracy, territory or capacity planning, tooling, executive reporting, and cross-functional execution. Which of those have you owned directly?";
-  }
-
   if (isUserMessage && /target|role|land|looking|interested|want/i.test(normalizedText)) {
-    return `Good, ${targetDirection.toLowerCase()} is a useful starting point. Next we need evidence: the scope you owned, the teams or stakeholders involved, the operating problem you solved, and the measurable outcome. What is the strongest example we should build from first?`;
+    return `Good, ${targetDirection.toLowerCase()} is a useful starting point. I’ll treat this as your working direction and look for the evidence that makes it credible: scope owned, stakeholders, operating problem, tools or methods, and measurable outcomes. What is the strongest example from your background that proves this lane?`;
   }
 
   if (isUserMessage) {
     return "That helps. I’m adding this to your profile direction. To make it strong enough for recruiters and ATS screens, let’s attach evidence to it: what role, scope, tools, stakeholders, and outcome should we connect to this?";
   }
 
-  const detail = factCount > 0 ? `I pulled out ${factCount} profile signal${factCount === 1 ? "" : "s"}` : "I found usable profile evidence";
-
-  return `${detail} from ${inputLabel}. The current positioning read is ${targetDirection.toLowerCase()}. Before we turn this into resume language, I would verify the strongest metrics, scope, and role focus so the profile feels precise rather than generic.`;
+  return `I read ${inputLabel} and updated the profile foundation. My current positioning read is ${targetDirection.toLowerCase()}. Before we turn this into resume language, I would verify the strongest metrics, scope, and role focus so the profile feels precise rather than generic.`;
 }
 
 function buildAdvisorFallbackResult({

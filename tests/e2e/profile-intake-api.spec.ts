@@ -25,6 +25,19 @@ test("requires authentication before saving conversation messages", async ({ req
   expect(payload.error).toBe("Sign in is required.");
 });
 
+test("requires authentication before using the contextual advisor", async ({ request }) => {
+  const response = await request.post("/api/conversation/advisor", {
+    data: {
+      message: "Based on what you know about me, what career advice would you give?",
+      surface: "profile",
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.message).toBe("Please sign in before asking Pramania to review your profile.");
+});
+
 test("requires authentication before creating profile sources", async ({ request }) => {
   const response = await request.post("/api/profile/sources", {
     data: {

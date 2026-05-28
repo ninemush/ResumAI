@@ -274,9 +274,9 @@ function buildProfileMilestones({
     },
     {
       complete: factCount >= 5,
-      detail: `${factCount} captured detail${factCount === 1 ? "" : "s"}`,
+      detail: factCount >= 5 ? "Enough background to draft from" : "Add role, scope, or achievement detail",
       key: "evidence",
-      label: "Evidence",
+      label: "Background",
     },
     {
       complete: hasTargetDirection && hasTargetLevel,
@@ -290,9 +290,9 @@ function buildProfileMilestones({
     },
     {
       complete: factCount >= 8,
-      detail: `${factCount} proof point${factCount === 1 ? "" : "s"} captured`,
+      detail: factCount >= 8 ? "Ready to sharpen resume bullets" : "Add outcomes, metrics, or scope",
       key: "proof",
-      label: "Proof",
+      label: "Impact",
     },
     {
       complete: hasHeadline && hasSummary,

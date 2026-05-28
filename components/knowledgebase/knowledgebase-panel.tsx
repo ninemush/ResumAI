@@ -39,8 +39,8 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
       const savedFactCount = payload.intake?.savedFactCount ?? 0;
       setMessage(
         savedFactCount > 0
-          ? `Source read. Pramania found ${savedFactCount} useful signal${savedFactCount === 1 ? "" : "s"} for your profile.`
-          : "Source read. I did not find new profile signal this time.",
+          ? "Source read. Pramania updated your profile foundation from it."
+          : "Source read. I did not see anything new enough to change your profile this time.",
       );
       router.refresh();
     } finally {
@@ -70,7 +70,7 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
         <div>
           <span>Read successfully</span>
           <strong>{sourceSummary.succeeded}</strong>
-          <p>Sources already turned into profile signal.</p>
+          <p>Sources already reflected in your profile foundation.</p>
         </div>
         <div>
           <span>Needs attention</span>

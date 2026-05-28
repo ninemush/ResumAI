@@ -253,7 +253,7 @@ export async function generateMasterResume(
   return {
     overview: await getMasterResumeOverview(userId),
     resumeId: generatedResume.id,
-    summary: `Generated a master resume draft from ${confirmedFacts.length} profile signal${confirmedFacts.length === 1 ? "" : "s"}.`,
+    summary: "Generated a master resume draft from your current career foundation.",
   };
 }
 
@@ -485,8 +485,8 @@ function buildEmptyOverview({
     latestResume,
     missingEvidence,
     readinessNote: canGenerate
-      ? "Enough profile evidence to draft an ATS-friendly master resume."
-      : "Add more profile evidence before generating a trustworthy master resume.",
+      ? "Ready to draft an ATS-friendly master resume from your current career foundation."
+      : "Add role scope, outcomes, skills, or target direction before generating a trustworthy master resume.",
   };
 }
 

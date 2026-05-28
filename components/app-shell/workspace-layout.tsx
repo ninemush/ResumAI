@@ -168,6 +168,7 @@ export function WorkspaceLayout({
 
       <ConversationPanel
         applicationOverview={applicationOverview}
+        activeView={layout.activeView}
         initialMessages={conversationMessages}
         jobOverview={jobOverview}
         profileOverview={profileOverview}
