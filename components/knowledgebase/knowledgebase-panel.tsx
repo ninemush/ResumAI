@@ -136,16 +136,25 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
                   <span className={`source-pill ${source.extraction_status}`}>
                     {source.extraction_status.replace("_", " ")}
                   </span>
-                  {["failed", "pending"].includes(source.extraction_status) ? (
+                  {source.extraction_status !== "processing" &&
+                  source.extraction_status !== "deleted" ? (
                     <button
                       className="secondary-action compact-action"
                       disabled={pendingId === source.id}
                       onClick={() => retrySourceExtraction(source.id)}
-                      title="Retry source extraction"
+                      title={
+                        source.extraction_status === "succeeded"
+                          ? "Reprocess preserved source text"
+                          : "Retry source extraction"
+                      }
                       type="button"
                     >
                       <RefreshCw size={14} aria-hidden="true" />
-                      {pendingId === source.id ? "Retrying..." : "Retry"}
+                      {pendingId === source.id
+                        ? "Working..."
+                        : source.extraction_status === "succeeded"
+                          ? "Reprocess"
+                          : "Retry"}
                     </button>
                   ) : null}
                 </div>
