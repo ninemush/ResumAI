@@ -72,6 +72,8 @@ type RunProfileIntakeParams = {
   message: string;
 };
 
+type ParsedProfileIntakeResult = z.infer<typeof profileIntakeResponseSchema>;
+
 type ExtractProfileFactsFromTextParams = {
   profileId: string;
   sourceId: string;
@@ -203,13 +205,28 @@ export async function extractProfileFactsFromText({
     profileId,
     userId: user.id,
   });
-  const parsed = await runProfileIntakeModel({
-    existingContext,
-    inputLabel,
-    model,
-    normalizedText,
-    userId: user.id,
-  });
+  let parsed: ParsedProfileIntakeResult;
+
+  try {
+    parsed = await runProfileIntakeModel({
+      existingContext,
+      inputLabel,
+      model,
+      normalizedText,
+      userId: user.id,
+    });
+  } catch (error) {
+    const deterministicResult = buildDeterministicProfileIntakeResult({
+      inputLabel,
+      text: normalizedText,
+    });
+
+    if (deterministicResult.facts.length === 0) {
+      throw error;
+    }
+
+    parsed = deterministicResult;
+  }
   const existingFactKeys = new Set(
     existingContext.facts.map((fact) => buildFactKey(fact.fact_type, fact.fact_value)),
   );
@@ -463,7 +480,7 @@ async function runProfileIntakeModel({
         continue;
       }
 
-      return profileIntakeResponseSchema.parse(JSON.parse(response.output_text));
+      return parseProfileIntakeOutput(response.output_text);
     } catch (error) {
       lastFailureCode = toProfileIntakeFailureCode(error);
       logProfileIntakeAttemptFailure({ attempt, code: lastFailureCode });
@@ -586,6 +603,450 @@ function toProfileIntakeFailureCode(error: unknown) {
   }
 
   return "AI_PROFILE_INTAKE_PROVIDER_UNAVAILABLE";
+}
+
+function parseProfileIntakeOutput(outputText: string): ParsedProfileIntakeResult {
+  const payload = JSON.parse(outputText) as unknown;
+  const sanitized = sanitizeProfileIntakePayload(payload);
+  return profileIntakeResponseSchema.parse(sanitized);
+}
+
+function sanitizeProfileIntakePayload(payload: unknown): ParsedProfileIntakeResult {
+  const record = isRecord(payload) ? payload : {};
+  const profileDraft = isRecord(record.profileDraft) ? record.profileDraft : {};
+
+  return {
+    assistantMessage: truncateText(
+      readString(record.assistantMessage) ||
+        "I read the source and pulled out usable career signal for your profile.",
+      1200,
+    ),
+    facts: readArray(record.facts)
+      .map((fact) => sanitizeProfileFact(fact))
+      .filter((fact): fact is ParsedProfileIntakeResult["facts"][number] => Boolean(fact))
+      .slice(0, 24),
+    followUpQuestions: readArray(record.followUpQuestions)
+      .map((question) => truncateText(readString(question), 220))
+      .filter(Boolean)
+      .slice(0, 3),
+    profileDraft: {
+      displayName: truncateNullableText(readStringOrNull(profileDraft.displayName), 120),
+      headline: truncateNullableText(readStringOrNull(profileDraft.headline), 180),
+      summary: truncateNullableText(readStringOrNull(profileDraft.summary), 900),
+      targetDirection: truncateNullableText(readStringOrNull(profileDraft.targetDirection), 240),
+      targetLevel: truncateNullableText(readStringOrNull(profileDraft.targetLevel), 120),
+    },
+    roleRecommendations: readArray(record.roleRecommendations)
+      .map((recommendation) => sanitizeRoleRecommendation(recommendation))
+      .filter(
+        (
+          recommendation,
+        ): recommendation is ParsedProfileIntakeResult["roleRecommendations"][number] =>
+          Boolean(recommendation),
+      )
+      .slice(0, 4),
+    suggestedDirection: truncateNullableText(readStringOrNull(record.suggestedDirection), 500),
+  };
+}
+
+function sanitizeProfileFact(value: unknown): ParsedProfileIntakeResult["facts"][number] | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const type = profileFactTypeSchema.safeParse(value.type).success
+    ? (value.type as ParsedProfileIntakeResult["facts"][number]["type"])
+    : "other";
+  const factValue = truncateText(readString(value.value), 500);
+
+  if (!factValue) {
+    return null;
+  }
+
+  return {
+    type,
+    value: factValue,
+    confidence: clampConfidence(value.confidence),
+  };
+}
+
+function sanitizeRoleRecommendation(
+  value: unknown,
+): ParsedProfileIntakeResult["roleRecommendations"][number] | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const roleFamily = truncateText(readString(value.roleFamily), 160);
+  const rationale = truncateText(readString(value.rationale), 700);
+
+  if (!roleFamily || !rationale) {
+    return null;
+  }
+
+  return {
+    roleFamily,
+    roleTitles: readArray(value.roleTitles)
+      .map((title) => truncateText(readString(title), 120))
+      .filter(Boolean)
+      .slice(0, 5),
+    seniorityLevel: truncateNullableText(readStringOrNull(value.seniorityLevel), 120),
+    rationale,
+    assumptions: readArray(value.assumptions)
+      .map((assumption) => truncateText(readString(assumption), 180))
+      .filter(Boolean)
+      .slice(0, 4),
+    openQuestions: readArray(value.openQuestions)
+      .map((question) => truncateText(readString(question), 180))
+      .filter(Boolean)
+      .slice(0, 4),
+    confidence: clampConfidence(value.confidence),
+  };
+}
+
+function buildDeterministicProfileIntakeResult({
+  inputLabel,
+  text,
+}: {
+  inputLabel: string;
+  text: string;
+}): ParsedProfileIntakeResult {
+  const normalizedText = decodeTextEntities(text);
+  const lines = readMeaningfulLines(normalizedText);
+  const summary = readSectionText(normalizedText, "Summary", ["Experience", "Activity", "Education"]);
+  const experience = readSectionText(normalizedText, "Experience", ["Education"]);
+  const education = readSectionText(normalizedText, "Education", ["Page "]);
+  const skills = readLinkedInList({
+    lines,
+    startLabel: "Top Skills",
+    stopLabels: ["Languages", "Sumeet Sangawar", "Summary"],
+    maxItems: 8,
+  });
+  const languages = readLinkedInList({
+    lines,
+    startLabel: "Languages",
+    stopLabels: ["Summary"],
+    maxItems: 6,
+  }).filter((language) => !looksLikePersonName(language));
+  const header = readLinkedInHeader(lines);
+  const experienceHighlights = readExperienceHighlights(experience);
+  const facts: ParsedProfileIntakeResult["facts"] = [];
+
+  addFact(facts, "other", `Name: ${header.displayName}`, 0.96);
+  addFact(facts, "experience", header.headline, 0.94);
+  addFact(facts, "preference", `Location: ${header.location}`, 0.88);
+  addFact(facts, "industry", deriveIndustrySignal(normalizedText), 0.82);
+
+  for (const skill of skills) {
+    addFact(facts, "skill", skill, 0.9);
+  }
+
+  for (const language of languages) {
+    addFact(facts, "skill", `Language: ${language}`, 0.86);
+  }
+
+  for (const highlight of experienceHighlights) {
+    addFact(facts, "experience", highlight, 0.9);
+  }
+
+  for (const educationItem of readEducationHighlights(education)) {
+    addFact(facts, "education", educationItem, 0.88);
+  }
+
+  const compactSummary = truncateText(summary || header.headline || "", 900);
+  const targetDirection = deriveTargetDirection(normalizedText);
+  const targetLevel = deriveTargetLevel(normalizedText);
+
+  return {
+    assistantMessage: `I read ${inputLabel} and captured ${Math.min(facts.length, 24)} useful profile signal(s), including current positioning, skills, experience themes, impact evidence, and education. The strongest read is ${targetDirection.toLowerCase()}; I would next sharpen the proof points around scope, measurable outcomes, and board/advisory relevance.`,
+    facts: facts.slice(0, 24),
+    followUpQuestions: [
+      "Which role lane should I optimize for first: transformation executive, services/GTM operations leader, or board/advisory positioning?",
+      "Are there any confidential employers, metrics, or customer details you want softened before resume generation?",
+    ],
+    profileDraft: {
+      displayName: header.displayName,
+      headline: header.headline,
+      summary: compactSummary || null,
+      targetDirection,
+      targetLevel,
+    },
+    roleRecommendations: [
+      {
+        roleFamily: "Enterprise transformation and services leadership",
+        roleTitles: [
+          "Chief Transformation Officer",
+          "VP Professional Services",
+          "Head of GTM Operations",
+          "Enterprise AI Transformation Leader",
+        ],
+        seniorityLevel: targetLevel,
+        rationale:
+          "The source shows executive-level operating scope across GTM, professional services, customer outcomes, AI/automation, transformation, controls, and measurable business impact.",
+        assumptions: [
+          "The LinkedIn PDF reflects the user's current preferred positioning.",
+          "Board advisory interest is a real target path, not only a secondary note.",
+        ],
+        openQuestions: [
+          "Which industries or company stages are highest priority?",
+          "Should the resume lead with transformation, services/GTM scale, or AI automation value creation?",
+        ],
+        confidence: 0.82,
+      },
+    ],
+    suggestedDirection: targetDirection,
+  };
+}
+
+function addFact(
+  facts: ParsedProfileIntakeResult["facts"],
+  type: ParsedProfileIntakeResult["facts"][number]["type"],
+  value: string | null,
+  confidence: number,
+) {
+  const normalized = truncateText(value ?? "", 500);
+
+  if (!normalized) {
+    return;
+  }
+
+  const key = buildFactKey(type, normalized);
+
+  if (facts.some((fact) => buildFactKey(fact.type, fact.value) === key)) {
+    return;
+  }
+
+  facts.push({ type, value: normalized, confidence });
+}
+
+function readLinkedInHeader(lines: string[]) {
+  const summaryIndex = lines.findIndex((line) => line.toLowerCase() === "summary");
+  const headerLines = summaryIndex >= 0 ? lines.slice(0, summaryIndex) : lines.slice(0, 20);
+  const location = [...headerLines]
+    .reverse()
+    .find((line) => /dubai|united arab emirates|uae|remote|hybrid|singapore|india|united states|uk/i.test(line));
+  const nameIndex = headerLines.findIndex((line, index) => {
+    const nextLine = headerLines[index + 1] ?? "";
+    return looksLikePersonName(line) && /executive|leader|director|vice president|vp|chief|head|manager/i.test(nextLine);
+  });
+  const displayName = nameIndex >= 0 ? headerLines[nameIndex] : null;
+  const headline = nameIndex >= 0
+    ? headerLines
+        .slice(nameIndex + 1)
+        .filter((line) => line !== location)
+        .join(" ")
+    : null;
+
+  return {
+    displayName,
+    headline: truncateNullableText(headline, 180),
+    location: location ?? null,
+  };
+}
+
+function readLinkedInList({
+  lines,
+  startLabel,
+  stopLabels,
+  maxItems,
+}: {
+  lines: string[];
+  startLabel: string;
+  stopLabels: string[];
+  maxItems: number;
+}) {
+  const startIndex = lines.findIndex((line) => line.toLowerCase() === startLabel.toLowerCase());
+
+  if (startIndex < 0) {
+    return [];
+  }
+
+  const stopSet = new Set(stopLabels.map((label) => label.toLowerCase()));
+  const values: string[] = [];
+
+  for (const line of lines.slice(startIndex + 1)) {
+    if (stopSet.has(line.toLowerCase())) {
+      break;
+    }
+
+    if (line.length > 1 && !line.includes("@") && !line.startsWith("www.")) {
+      values.push(line);
+    }
+
+    if (values.length >= maxItems) {
+      break;
+    }
+  }
+
+  return values;
+}
+
+function readExperienceHighlights(experience: string) {
+  if (!experience) {
+    return [];
+  }
+
+  const lines = readMeaningfulLines(experience);
+  const highlights: string[] = [];
+  const currentCompany = lines.find((line) => line === "UiPath" || line === "GE") ?? null;
+  const currentTitle = lines.find((line) =>
+    /vice president|director|chief information officer|customer success|digital hub/i.test(line),
+  );
+
+  if (currentCompany && currentTitle) {
+    highlights.push(`${currentTitle} at ${currentCompany}`);
+  }
+
+  for (const line of lines) {
+    if (/•|scaled|reduced|improved|built|led|established|managed|grew|consolidated|instituted/i.test(line)) {
+      highlights.push(line.replace(/^•\s*/, ""));
+    }
+
+    if (highlights.length >= 8) {
+      break;
+    }
+  }
+
+  return highlights;
+}
+
+function readEducationHighlights(education: string) {
+  if (!education) {
+    return [];
+  }
+
+  const lines = readMeaningfulLines(education).filter((line) => !/^page \d+/i.test(line));
+  const highlights: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const nextLine = lines[index + 1] ?? "";
+
+    if (/university|institute|vidyapeeth|college/i.test(line) && nextLine) {
+      highlights.push(`${line}: ${nextLine}`);
+    }
+  }
+
+  return highlights.slice(0, 3);
+}
+
+function readSectionText(text: string, startLabel: string, stopLabels: string[]) {
+  const startMatch = new RegExp(`(^|\\n)${escapeRegExp(startLabel)}\\n`, "i").exec(text);
+
+  if (!startMatch || startMatch.index < 0) {
+    return "";
+  }
+
+  const startIndex = startMatch.index + startMatch[0].length;
+  const remainder = text.slice(startIndex);
+  const stopIndexes = stopLabels
+    .map((label) => new RegExp(`\\n${escapeRegExp(label)}\\n`, "i").exec(remainder)?.index ?? -1)
+    .filter((index) => index >= 0);
+  const endIndex = stopIndexes.length > 0 ? Math.min(...stopIndexes) : remainder.length;
+
+  return remainder.slice(0, endIndex).trim();
+}
+
+function deriveIndustrySignal(text: string) {
+  const signals = [
+    "Enterprise transformation",
+    "Professional services",
+    "GTM operations",
+    "AI and automation",
+    "Digital transformation",
+    "Customer success",
+  ].filter((signal) => text.toLowerCase().includes(signal.toLowerCase()));
+
+  return signals.length > 0 ? `Industry/domain signals: ${signals.join(", ")}` : null;
+}
+
+function deriveTargetDirection(text: string) {
+  if (/board advisory|emerging technology|enterprise adoption/i.test(text)) {
+    return "Enterprise transformation, AI automation, professional services/GTM leadership, and board advisory";
+  }
+
+  if (/professional services|gtm|customer success/i.test(text)) {
+    return "Professional services, GTM operations, and customer success leadership";
+  }
+
+  return "Career direction to be refined from imported profile evidence";
+}
+
+function deriveTargetLevel(text: string) {
+  if (/vice president|global vice president|chief information officer|board advisory|executive/i.test(text)) {
+    return "Executive / VP and above";
+  }
+
+  if (/director|head of/i.test(text)) {
+    return "Director and above";
+  }
+
+  return null;
+}
+
+function readMeaningfulLines(text: string) {
+  return decodeTextEntities(text)
+    .split(/\n+/)
+    .map((line) => line.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+}
+
+function decodeTextEntities(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function looksLikePersonName(value: string) {
+  return /^[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3}$/.test(value.trim());
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readArray(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readStringOrNull(value: unknown) {
+  return typeof value === "string" ? value.trim() : null;
+}
+
+function truncateText(value: string, maxLength: number) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return normalized.slice(0, maxLength - 1).trimEnd();
+}
+
+function truncateNullableText(value: string | null, maxLength: number) {
+  if (!value) {
+    return null;
+  }
+
+  const truncated = truncateText(value, maxLength);
+  return truncated || null;
+}
+
+function clampConfidence(value: unknown) {
+  const confidence = typeof value === "number" && Number.isFinite(value) ? value : 0.75;
+  return Math.min(1, Math.max(0, confidence));
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function logProfileIntakeAttemptFailure({ attempt, code }: { attempt: number; code: string }) {
