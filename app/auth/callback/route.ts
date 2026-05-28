@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { TERMS_VERSION } from "@/lib/legal/terms";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
         email: user.email ?? null,
         fullName: readAuthFullName(user.user_metadata),
         supabase,
+        terms: readTermsAcceptance(requestUrl, user.user_metadata),
         userId: user.id,
       });
     }
@@ -30,16 +32,18 @@ async function ensureProfileFromAuthMetadata({
   email,
   fullName,
   supabase,
+  terms,
   userId,
 }: {
   email: string | null;
   fullName: string | null;
   supabase: Awaited<ReturnType<typeof createClient>>;
+  terms: { acceptedAt: string | null; version: string | null };
   userId: string;
 }) {
   const { data: existingProfile } = await supabase
     .from("profiles")
-    .select("id, display_name")
+    .select("id, display_name, terms_accepted_at, terms_version")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -47,16 +51,23 @@ async function ensureProfileFromAuthMetadata({
     await supabase.from("profiles").insert({
       user_id: userId,
       display_name: fullName ?? email,
+      terms_accepted_at: terms.acceptedAt,
+      terms_version: terms.version,
     });
     return;
   }
 
-  if (!existingProfile.display_name && (fullName || email)) {
-    await supabase
-      .from("profiles")
-      .update({ display_name: fullName ?? email })
-      .eq("id", existingProfile.id)
-      .eq("user_id", userId);
+  const patch = {
+    display_name: !existingProfile.display_name && (fullName || email) ? fullName ?? email : undefined,
+    terms_accepted_at: !existingProfile.terms_accepted_at ? terms.acceptedAt : undefined,
+    terms_version: !existingProfile.terms_version ? terms.version : undefined,
+  };
+  const compactPatch = Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined),
+  );
+
+  if (Object.keys(compactPatch).length > 0) {
+    await supabase.from("profiles").update(compactPatch).eq("id", existingProfile.id).eq("user_id", userId);
   }
 }
 
@@ -65,4 +76,29 @@ function readAuthFullName(metadata: Record<string, unknown>) {
   const name = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
 
   return typeof name === "string" ? name.trim() : null;
+}
+
+function readTermsAcceptance(requestUrl: URL, metadata: Record<string, unknown>) {
+  const queryAccepted = requestUrl.searchParams.get("terms") === "accepted";
+  const queryAcceptedAt = requestUrl.searchParams.get("termsAcceptedAt");
+  const queryVersion = requestUrl.searchParams.get("termsVersion");
+  const metadataAcceptedAt =
+    typeof metadata.terms_accepted_at === "string" ? metadata.terms_accepted_at : null;
+  const metadataVersion = typeof metadata.terms_version === "string" ? metadata.terms_version : null;
+
+  if (queryAccepted) {
+    return {
+      acceptedAt: isValidIsoDate(queryAcceptedAt) ? queryAcceptedAt : new Date().toISOString(),
+      version: queryVersion || TERMS_VERSION,
+    };
+  }
+
+  return {
+    acceptedAt: isValidIsoDate(metadataAcceptedAt) ? metadataAcceptedAt : null,
+    version: metadataVersion,
+  };
+}
+
+function isValidIsoDate(value: string | null) {
+  return Boolean(value && !Number.isNaN(Date.parse(value)));
 }

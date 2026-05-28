@@ -394,6 +394,32 @@ input:focus {
   color: var(--danger);
 }
 
+.terms-consent {
+  align-items: start;
+  color: var(--muted);
+  display: grid;
+  font-size: 0.78rem;
+  font-weight: 500;
+  gap: 10px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  line-height: 1.45;
+}
+
+.terms-consent input {
+  accent-color: var(--pr-deep-ink);
+  min-height: 18px;
+  padding: 0;
+}
+
+.terms-consent a,
+.legal-back-link {
+  color: var(--foreground);
+  font-weight: 750;
+  text-decoration: underline;
+  text-decoration-color: rgba(185, 155, 103, 0.6);
+  text-underline-offset: 3px;
+}
+
 .primary-action {
   background: var(--pr-deep-ink);
   border-radius: var(--pr-radius-pill);
@@ -469,6 +495,112 @@ input:focus {
   justify-content: center;
   line-height: 1;
   width: 18px;
+}
+
+.legal-page {
+  background: var(--background);
+  min-height: 100svh;
+  padding: 48px 20px;
+}
+
+.legal-document {
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-md);
+  box-shadow: 0 18px 48px rgba(60, 47, 37, 0.08);
+  margin: 0 auto;
+  max-width: 900px;
+  padding: clamp(24px, 5vw, 56px);
+}
+
+.legal-document h1 {
+  font-family: var(--font-pr-brand), Georgia, serif;
+  font-size: clamp(2.4rem, 6vw, 4.8rem);
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 0.95;
+  margin: 12px 0 18px;
+}
+
+.legal-document h2 {
+  color: var(--foreground);
+  font-size: 1.08rem;
+  margin: 28px 0 8px;
+}
+
+.legal-document p {
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.75;
+  margin: 0 0 14px;
+}
+
+.legal-meta {
+  color: var(--pr-champagne-gold) !important;
+  font-weight: 700;
+}
+
+.terms-gate-page {
+  align-items: center;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(185, 155, 103, 0.12), transparent 32%),
+    var(--background);
+  display: grid;
+  min-height: 100svh;
+  padding: 24px;
+}
+
+.terms-gate-card {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-lg);
+  box-shadow: 0 22px 54px rgba(60, 47, 37, 0.12);
+  display: grid;
+  gap: 18px;
+  margin: 0 auto;
+  max-width: 640px;
+  padding: clamp(28px, 6vw, 54px);
+}
+
+.terms-gate-icon {
+  align-items: center;
+  background: var(--pr-soft-ivory);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--pr-champagne-gold);
+  display: inline-flex;
+  height: 48px;
+  justify-content: center;
+  width: 48px;
+}
+
+.terms-gate-card h1 {
+  color: var(--foreground);
+  font-family: var(--font-pr-brand), Georgia, serif;
+  font-size: clamp(2.2rem, 7vw, 4rem);
+  font-weight: 520;
+  letter-spacing: 0;
+  line-height: 0.98;
+  margin: 0;
+}
+
+.terms-gate-card p {
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.7;
+  margin: 0;
+}
+
+.terms-gate-consent {
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-md);
+  padding: 16px;
+}
+
+.terms-gate-action {
+  justify-self: start;
+  min-width: 240px;
 }
 
 .auth-section {

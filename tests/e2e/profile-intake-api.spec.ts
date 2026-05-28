@@ -71,6 +71,18 @@ test("requires authentication before updating profile fields", async ({ request 
   expect(payload.error.code).toBe("auth.required");
 });
 
+test("requires authentication before accepting terms", async ({ request }) => {
+  const response = await request.post("/api/legal/terms", {
+    data: {
+      version: "2026-05-28",
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});
+
 test("requires authentication before extracting profile sources", async ({ request }) => {
   const response = await request.post(
     "/api/profile/sources/00000000-0000-4000-8000-000000000000/extract",

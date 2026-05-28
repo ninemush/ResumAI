@@ -14,6 +14,7 @@ import type { Provider } from "@supabase/supabase-js";
 import Image from "next/image";
 
 import { brand } from "@/lib/brand";
+import { TERMS_VERSION } from "@/lib/legal/terms";
 import { createClient } from "@/lib/supabase/browser";
 
 type AuthMode = "sign-in" | "sign-up";
@@ -72,6 +73,7 @@ export function AuthPanel() {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,9 +82,16 @@ export function AuthPanel() {
     event.preventDefault();
     setError(null);
     setStatus(null);
+
+    if (mode === "sign-up" && !termsAccepted) {
+      setError("You need to accept the Terms and Conditions before creating an account.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     const supabase = createClient();
+    const termsAcceptedAt = new Date().toISOString();
     const result =
       mode === "sign-in"
         ? await supabase.auth.signInWithPassword({ email, password })
@@ -93,6 +102,8 @@ export function AuthPanel() {
               data: {
                 full_name: fullName,
                 name: fullName,
+                terms_accepted_at: termsAcceptedAt,
+                terms_version: TERMS_VERSION,
               },
             },
           });
@@ -105,7 +116,11 @@ export function AuthPanel() {
     }
 
     if (mode === "sign-up") {
-      await saveSignupProfileName(fullName);
+      await saveSignupProfileName({
+        fullName,
+        termsAcceptedAt,
+        termsVersion: TERMS_VERSION,
+      });
       setStatus("Account created. Check your inbox if email confirmation is enabled.");
     }
 
@@ -115,14 +130,28 @@ export function AuthPanel() {
   async function handleOAuthSignIn(provider: OAuthProviderId) {
     setError(null);
     setStatus(null);
+
+    if (mode === "sign-up" && !termsAccepted) {
+      setError("You need to accept the Terms and Conditions before creating an account.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     const supabase = createClient();
+    const redirectUrl = new URL("/auth/callback", window.location.origin);
+
+    if (mode === "sign-up") {
+      redirectUrl.searchParams.set("terms", "accepted");
+      redirectUrl.searchParams.set("termsVersion", TERMS_VERSION);
+      redirectUrl.searchParams.set("termsAcceptedAt", new Date().toISOString());
+    }
+
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         scopes: provider === "azure" ? "email" : undefined,
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: redirectUrl.toString(),
       },
     });
 
@@ -255,6 +284,24 @@ export function AuthPanel() {
           />
         </label>
 
+        {mode === "sign-up" ? (
+          <label className="terms-consent">
+            <input
+              checked={termsAccepted}
+              onChange={(event) => setTermsAccepted(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              I have read and agree to the{" "}
+              <a href="/terms" rel="noreferrer" target="_blank">
+                Terms and Conditions
+              </a>
+              . I understand I am responsible for reviewing and approving all
+              generated content before using it.
+            </span>
+          </label>
+        ) : null}
+
         {error ? <p className="form-message error">{error}</p> : null}
         {status ? <p className="form-message">{status}</p> : null}
 
@@ -327,18 +374,38 @@ export function AuthPanel() {
   );
 }
 
-async function saveSignupProfileName(fullName: string) {
+async function saveSignupProfileName({
+  fullName,
+  termsAcceptedAt,
+  termsVersion,
+}: {
+  fullName: string;
+  termsAcceptedAt: string;
+  termsVersion: string;
+}) {
   const normalizedName = fullName.trim();
 
-  if (!normalizedName) {
-    return;
-  }
-
-  await fetch("/api/profile", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ displayName: normalizedName }),
-  }).catch(() => undefined);
+  await Promise.all([
+    normalizedName
+      ? fetch("/api/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            displayName: normalizedName,
+          }),
+        }).catch(() => undefined)
+      : Promise.resolve(undefined),
+    termsAcceptedAt
+      ? fetch("/api/legal/terms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            acceptedAt: termsAcceptedAt,
+            version: termsVersion,
+          }),
+        }).catch(() => undefined)
+      : Promise.resolve(undefined),
+  ]);
 }
 
 function ProviderIcon({ icon }: { icon: (typeof oauthProviders)[number]["icon"] }) {

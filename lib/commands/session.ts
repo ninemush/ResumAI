@@ -10,6 +10,11 @@ export type WorkspaceSession = {
     isOwner: boolean;
     roles: string[];
   };
+  legal: {
+    requiresTermsAcceptance: boolean;
+    termsAcceptedAt: string | null;
+    termsVersion: string | null;
+  };
 };
 
 export async function getWorkspaceSession(): Promise<WorkspaceSession | null> {
@@ -29,13 +34,12 @@ export async function getWorkspaceSession(): Promise<WorkspaceSession | null> {
 
   const roles = adminRoles?.map(({ role }) => role) ?? [];
   const fullName = readFullName(user.user_metadata);
-
-  if (fullName) {
-    await seedProfileNameIfMissing({
-      fullName,
-      userId: user.id,
-    });
-  }
+  const terms = readTermsAcceptance(user.user_metadata);
+  const profileLegal = await seedProfileIdentityIfMissing({
+    fullName,
+    terms,
+    userId: user.id,
+  });
 
   return {
     user: {
@@ -47,40 +51,76 @@ export async function getWorkspaceSession(): Promise<WorkspaceSession | null> {
       isOwner: roles.includes("owner"),
       roles,
     },
+    legal: {
+      requiresTermsAcceptance: !profileLegal.termsAcceptedAt,
+      termsAcceptedAt: profileLegal.termsAcceptedAt,
+      termsVersion: profileLegal.termsVersion,
+    },
   };
 }
 
-async function seedProfileNameIfMissing({
+async function seedProfileIdentityIfMissing({
   fullName,
+  terms,
   userId,
 }: {
-  fullName: string;
+  fullName: string | null;
+  terms: { acceptedAt: string | null; version: string | null };
   userId: string;
 }) {
   const supabase = await createClient();
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, display_name")
+    .select("id, display_name, terms_accepted_at, terms_version")
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (profileError || profile?.display_name) {
-    return;
+  if (profileError) {
+    return {
+      termsAcceptedAt: null,
+      termsVersion: null,
+    };
   }
 
   if (profile) {
-    await supabase
-      .from("profiles")
-      .update({ display_name: fullName })
-      .eq("id", profile.id)
-      .eq("user_id", userId);
-    return;
+    const patch = {
+      display_name: !profile.display_name && fullName ? fullName : undefined,
+      terms_accepted_at: !profile.terms_accepted_at ? terms.acceptedAt : undefined,
+      terms_version: !profile.terms_version ? terms.version : undefined,
+    };
+    const compactPatch = Object.fromEntries(
+      Object.entries(patch).filter(([, value]) => value !== undefined),
+    );
+
+    if (Object.keys(compactPatch).length > 0) {
+      await supabase
+        .from("profiles")
+        .update(compactPatch)
+        .eq("id", profile.id)
+        .eq("user_id", userId);
+    }
+
+    return {
+      termsAcceptedAt: profile.terms_accepted_at ?? terms.acceptedAt,
+      termsVersion: profile.terms_version ?? terms.version,
+    };
   }
 
-  await supabase.from("profiles").insert({
-    user_id: userId,
-    display_name: fullName,
-  });
+  const { data: insertedProfile } = await supabase
+    .from("profiles")
+    .insert({
+      user_id: userId,
+      display_name: fullName,
+      terms_accepted_at: terms.acceptedAt,
+      terms_version: terms.version,
+    })
+    .select("terms_accepted_at, terms_version")
+    .maybeSingle();
+
+  return {
+    termsAcceptedAt: insertedProfile?.terms_accepted_at ?? terms.acceptedAt,
+    termsVersion: insertedProfile?.terms_version ?? terms.version,
+  };
 }
 
 function readFullName(metadata: Record<string, unknown> | null | undefined) {
@@ -104,4 +144,15 @@ function readFullName(metadata: Record<string, unknown> | null | undefined) {
   }
 
   return null;
+}
+
+function readTermsAcceptance(metadata: Record<string, unknown> | null | undefined) {
+  const acceptedAt =
+    typeof metadata?.terms_accepted_at === "string" ? metadata.terms_accepted_at : null;
+  const version = typeof metadata?.terms_version === "string" ? metadata.terms_version : null;
+
+  return {
+    acceptedAt: acceptedAt && !Number.isNaN(Date.parse(acceptedAt)) ? acceptedAt : null,
+    version,
+  };
 }
