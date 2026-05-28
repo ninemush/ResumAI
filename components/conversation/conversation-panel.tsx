@@ -309,11 +309,12 @@ export function ConversationPanel({
         return payload.error?.message ?? "I could not export the master resume PDF yet.";
       }
 
-      const downloadUrl = payload.overview?.latestResume?.pdfDownloadUrl;
+      const pdfUrl = payload.overview?.latestResume?.pdfDownloadUrl;
+      const docxUrl = payload.overview?.latestResume?.docxDownloadUrl;
 
-      return downloadUrl
-        ? `Exported a validated master resume PDF. You can open it from Resume Studio or here: ${downloadUrl}`
-        : "Exported a validated master resume PDF. Open Resume Studio to download it.";
+      return pdfUrl || docxUrl
+        ? `Exported validated master resume files. PDF: ${pdfUrl ?? "open Resume Studio"} DOCX: ${docxUrl ?? "open Resume Studio"}`
+        : "Exported validated master resume files. Open Resume Studio to download them.";
     }
 
     if (!looksLikeMasterResumeRequest(text)) {
@@ -454,11 +455,11 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
-      return payload.error?.message ?? "The editable materials are saved, but PDF export needs another attempt from Applications.";
+      return payload.error?.message ?? "The editable materials are saved, but export needs another attempt from Applications.";
     }
 
     return payload.review?.exportReadiness?.status === "exported"
-      ? "I also exported validated PDFs and saved them in Applications and Artifacts."
+      ? "I also exported validated PDF and DOCX files and saved them in Applications and Artifacts."
       : "The editable materials are saved; Applications will show what still needs export.";
   }
 
@@ -1514,22 +1515,32 @@ function formatJobIntakeReply(job: {
     return `I saved ${roleLabel}. I need more profile evidence before I can give you a useful fit read.`;
   }
 
+  const recommendation = formatFitRecommendation(fit.recommendation);
   const gaps = fit.missingKeywords?.length
-    ? `Potential gaps to verify: ${fit.missingKeywords.slice(0, 4).join(", ")}.`
+    ? `Before applying, I would verify evidence for ${fit.missingKeywords.slice(0, 4).join(", ")}.`
     : null;
-  const risk = fit.risks?.[0] ?? null;
-  const question =
-    fit.questions?.[0] ??
-    "Do you want to log this as an application and generate tailored materials?";
+  const risk = fit.risks?.length ? `Watch-outs: ${fit.risks.slice(0, 2).join(" ")}` : null;
+  const question = "Would you like me to log this as an application and create a tailored resume plus cover letter for review?";
 
   return [
-    `I read ${roleLabel}. ${fit.summary ?? `Fit is ${fit.score}%.`}`,
+    `I read ${roleLabel}. My recommendation: ${recommendation} ${fit.summary ?? `Fit is ${fit.score}%.`}`,
     gaps,
     risk,
     question,
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+function formatFitRecommendation(recommendation: string | undefined) {
+  const labels: Record<string, string> = {
+    needs_profile: "hold until we add stronger profile evidence.",
+    possible_match: "worth a closer look, but not a blind apply.",
+    strong_match: "pursue it, assuming the role scope matches what you want next.",
+    weak_match: "treat it as a stretch unless you can prove the missing signals.",
+  };
+
+  return labels[recommendation ?? ""] ?? "review carefully before applying.";
 }
 
 function buildSessionPrompt({

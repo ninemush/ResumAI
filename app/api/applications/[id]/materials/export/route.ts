@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { exportMaterialPdfs, materialReviewSchema } from "@/lib/applications/material-review";
+import { exportMaterialArtifacts, materialReviewSchema } from "@/lib/applications/material-review";
 
 type RouteContext = {
   params: Promise<{
@@ -29,7 +29,7 @@ export async function POST(_request: Request, context: RouteContext) {
   }
 
   try {
-    const review = await exportMaterialPdfs(parsed.data);
+    const review = await exportMaterialArtifacts(parsed.data);
 
     return NextResponse.json({
       ok: true,
@@ -74,7 +74,7 @@ function toApiError(error: unknown) {
       return {
         category: "not_found",
         code: "application.materials_not_found",
-        message: "Generate resume and cover-letter materials before exporting PDFs.",
+        message: "Generate resume and cover-letter materials before exporting files.",
         status: 404,
       };
     }
@@ -88,11 +88,16 @@ function toApiError(error: unknown) {
       };
     }
 
-    if (error.message === "PDF_UPLOAD_FAILED" || error.message === "PDF_METADATA_UPDATE_FAILED") {
+    if (
+      error.message === "PDF_UPLOAD_FAILED" ||
+      error.message === "PDF_METADATA_UPDATE_FAILED" ||
+      error.message === "ARTIFACT_UPLOAD_FAILED" ||
+      error.message === "ARTIFACT_METADATA_UPDATE_FAILED"
+    ) {
       return {
         category: "server",
-        code: "application.pdf_storage_failed",
-        message: "The PDFs were built but could not be stored securely. Try exporting again.",
+        code: "application.artifact_storage_failed",
+        message: "The files were built but could not be stored securely. Try exporting again.",
         status: 500,
       };
     }
@@ -100,8 +105,8 @@ function toApiError(error: unknown) {
 
   return {
     category: "server",
-    code: "application.pdf_export_failed",
-    message: "Unable to export PDFs right now.",
+    code: "application.artifact_export_failed",
+    message: "Unable to export files right now.",
     status: 500,
   };
 }

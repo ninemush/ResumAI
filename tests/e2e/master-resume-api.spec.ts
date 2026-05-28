@@ -8,7 +8,7 @@ test("requires authentication before generating a master resume", async ({ reque
   expect(payload.error.code).toBe("auth.required");
 });
 
-test("requires authentication before exporting a master resume PDF", async ({ request }) => {
+test("requires authentication before exporting master resume files", async ({ request }) => {
   const response = await request.post("/api/resume/master/export");
   const payload = await response.json();
 

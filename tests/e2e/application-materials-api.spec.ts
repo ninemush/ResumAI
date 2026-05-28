@@ -10,7 +10,7 @@ test("requires authentication before generating application materials", async ({
   expect(payload.error.code).toBe("auth.required");
 });
 
-test("requires authentication before exporting material PDFs", async ({ request }) => {
+test("requires authentication before exporting material files", async ({ request }) => {
   const response = await request.post(`/api/applications/${applicationId}/materials/export`);
   const payload = await response.json();
 

@@ -1,10 +1,13 @@
 import "server-only";
 
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import type { PDFFont, PDFPage, RGB } from "pdf-lib";
 import { z } from "zod";
 
-import { brand } from "@/lib/brand";
+import {
+  buildAtsResumeDocx,
+  buildAtsResumePdf,
+  buildCoverLetterDocx,
+  buildCoverLetterPdf,
+} from "@/lib/artifacts/ats-template";
 import { validateGeneratedPdf } from "@/lib/applications/pdf-validation";
 import {
   parseResumeContent,
@@ -35,6 +38,7 @@ export type MaterialReview = {
   };
   coverLetter: {
     content: string;
+    docxDownloadUrl: string | null;
     id: string;
     pdfDownloadUrl: string | null;
     status: string;
@@ -47,6 +51,7 @@ export type MaterialReview = {
   };
   resume: {
     content: ResumeContent;
+    docxDownloadUrl: string | null;
     id: string;
     pdfDownloadUrl: string | null;
     status: string;
@@ -70,6 +75,7 @@ export async function getMaterialReview(
     coverLetter: coverLetter
       ? {
           content: coverLetter.content,
+          docxDownloadUrl: await createSignedUrl(coverLetter.docx_storage_path),
           id: coverLetter.id,
           pdfDownloadUrl: await createSignedUrl(coverLetter.pdf_storage_path),
           status: coverLetter.status,
@@ -83,6 +89,7 @@ export async function getMaterialReview(
     resume: resume
       ? {
           content: parseResumeContent(resume.content_json),
+          docxDownloadUrl: await createSignedUrl(resume.docx_storage_path),
           id: resume.id,
           pdfDownloadUrl: await createSignedUrl(resume.pdf_storage_path),
           status: resume.status,
@@ -136,6 +143,7 @@ export async function updateMaterialReview(input: z.input<typeof updateMaterialR
           .from("generated_resumes")
           .update({
             content_json: parsed.resume,
+            docx_storage_path: null,
             pdf_storage_path: null,
             status: "ready",
           })
@@ -147,6 +155,7 @@ export async function updateMaterialReview(input: z.input<typeof updateMaterialR
           .from("generated_cover_letters")
           .update({
             content: parsed.coverLetter,
+            docx_storage_path: null,
             pdf_storage_path: null,
             status: "ready",
           })
@@ -162,7 +171,7 @@ export async function updateMaterialReview(input: z.input<typeof updateMaterialR
   return getMaterialReview({ applicationId: parsed.applicationId });
 }
 
-export async function exportMaterialPdfs(input: z.input<typeof materialReviewSchema>) {
+export async function exportMaterialArtifacts(input: z.input<typeof materialReviewSchema>) {
   const parsed = materialReviewSchema.parse(input);
   const { supabase, userId } = await getAuthenticatedContext();
   const application = await readApplication(parsed.applicationId, userId);
@@ -176,9 +185,12 @@ export async function exportMaterialPdfs(input: z.input<typeof materialReviewSch
   }
 
   const resumeContent = parseResumeContent(resume.content_json);
-  const [resumePdf, coverLetterPdf] = await Promise.all([
-    buildResumePdf({ application, resume: resumeContent }),
-    buildCoverLetterPdf({ application, coverLetter: coverLetter.content }),
+  const contextLine = `${application.companyName}${application.jobTitle ? ` | ${application.jobTitle}` : ""}`;
+  const [resumePdf, resumeDocx, coverLetterPdf, coverLetterDocx] = await Promise.all([
+    buildAtsResumePdf({ contextLine, resume: resumeContent }),
+    buildAtsResumeDocx({ contextLine, resume: resumeContent }),
+    buildCoverLetterPdf({ contextLine, coverLetter: coverLetter.content }),
+    buildCoverLetterDocx({ contextLine, coverLetter: coverLetter.content }),
   ]);
   const [resumeValidation, coverLetterValidation] = await Promise.all([
     validateGeneratedPdf({
@@ -196,40 +208,56 @@ export async function exportMaterialPdfs(input: z.input<typeof materialReviewSch
   }
 
   const resumePath = `${userId}/${application.id}/${resume.id}-resume.pdf`;
+  const resumeDocxPath = `${userId}/${application.id}/${resume.id}-resume.docx`;
   const coverLetterPath = `${userId}/${application.id}/${coverLetter.id}-cover-letter.pdf`;
+  const coverLetterDocxPath = `${userId}/${application.id}/${coverLetter.id}-cover-letter.docx`;
 
   await Promise.all([
-    uploadPdf(resumePath, resumePdf),
-    uploadPdf(coverLetterPath, coverLetterPdf),
+    uploadArtifact(resumePath, resumePdf, "application/pdf"),
+    uploadArtifact(
+      resumeDocxPath,
+      resumeDocx,
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ),
+    uploadArtifact(coverLetterPath, coverLetterPdf, "application/pdf"),
+    uploadArtifact(
+      coverLetterDocxPath,
+      coverLetterDocx,
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ),
   ]);
 
   const [{ error: resumeError }, { error: coverLetterError }] = await Promise.all([
     supabase
       .from("generated_resumes")
-      .update({ pdf_storage_path: resumePath, status: "ready" })
+      .update({ docx_storage_path: resumeDocxPath, pdf_storage_path: resumePath, status: "ready" })
       .eq("id", resume.id)
       .eq("user_id", userId),
     supabase
       .from("generated_cover_letters")
-      .update({ pdf_storage_path: coverLetterPath, status: "ready" })
+      .update({
+        docx_storage_path: coverLetterDocxPath,
+        pdf_storage_path: coverLetterPath,
+        status: "ready",
+      })
       .eq("id", coverLetter.id)
       .eq("user_id", userId),
   ]);
 
   if (resumeError || coverLetterError) {
-    throw new Error("PDF_METADATA_UPDATE_FAILED");
+    throw new Error("ARTIFACT_METADATA_UPDATE_FAILED");
   }
 
   return getMaterialReview({ applicationId: parsed.applicationId });
 
-  async function uploadPdf(path: string, bytes: Uint8Array) {
+  async function uploadArtifact(path: string, bytes: Uint8Array, contentType: string) {
     const { error } = await supabase.storage.from(GENERATED_ARTIFACT_BUCKET).upload(path, bytes, {
-      contentType: "application/pdf",
+      contentType,
       upsert: true,
     });
 
     if (error) {
-      throw new Error("PDF_UPLOAD_FAILED");
+      throw new Error("ARTIFACT_UPLOAD_FAILED");
     }
   }
 }
@@ -265,9 +293,19 @@ function buildExportReadiness({
     warnings.push("PDFs need export after the latest edits.");
   }
 
+  if (!resume.docx_storage_path || !coverLetter.docx_storage_path) {
+    warnings.push("DOCX files need export after the latest edits.");
+  }
+
   return {
     canExport: true,
-    status: resume.pdf_storage_path && coverLetter.pdf_storage_path ? "exported" : "ready_to_export",
+    status:
+      resume.pdf_storage_path &&
+      coverLetter.pdf_storage_path &&
+      resume.docx_storage_path &&
+      coverLetter.docx_storage_path
+        ? "exported"
+        : "ready_to_export",
     warnings,
   };
 }
@@ -314,7 +352,7 @@ async function readLatestResume(applicationId: string, userId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("generated_resumes")
-    .select("id, content_json, pdf_storage_path, status, updated_at")
+    .select("id, content_json, pdf_storage_path, docx_storage_path, status, updated_at")
     .eq("application_id", applicationId)
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
@@ -332,7 +370,7 @@ async function readLatestCoverLetter(applicationId: string, userId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("generated_cover_letters")
-    .select("id, content, pdf_storage_path, status, updated_at")
+    .select("id, content, pdf_storage_path, docx_storage_path, status, updated_at")
     .eq("application_id", applicationId)
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
@@ -344,232 +382,4 @@ async function readLatestCoverLetter(applicationId: string, userId: string) {
   }
 
   return data;
-}
-
-async function buildResumePdf({
-  application,
-  resume,
-}: {
-  application: MaterialReview["application"];
-  resume: ResumeContent;
-}) {
-  const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const document = createPdfLayout({ bold, pdf, regular });
-
-  drawTextBlock(document, resume.headline, { font: bold, size: 17 });
-  drawTextBlock(document, `${application.companyName}${application.jobTitle ? ` | ${application.jobTitle}` : ""}`, {
-    color: rgb(0.42, 0.33, 0.24),
-    font: regular,
-    size: 10,
-  });
-  addVerticalSpace(document, 12);
-  drawSection(document, "Summary", [resume.summary], regular, bold);
-  drawSection(document, "Skills", [resume.skills.join(", ")], regular, bold);
-  drawSection(
-    document,
-    "Targeted Experience Bullets",
-    resume.experienceBullets.map((bullet) => `- ${bullet}`),
-    regular,
-    bold,
-  );
-  drawSection(
-    document,
-    "Keyword Gaps To Verify",
-    resume.keywordGaps.map((gap) => `- ${gap}`),
-    regular,
-    bold,
-  );
-  drawSection(
-    document,
-    "Reviewer Notes",
-    resume.reviewerNotes.map((note) => `- ${note}`),
-    regular,
-    bold,
-  );
-
-  return pdf.save();
-}
-
-async function buildCoverLetterPdf({
-  application,
-  coverLetter,
-}: {
-  application: MaterialReview["application"];
-  coverLetter: string;
-}) {
-  const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const document = createPdfLayout({ bold, pdf, regular });
-
-  drawTextBlock(document, `${application.companyName}${application.jobTitle ? ` | ${application.jobTitle}` : ""}`, {
-    font: bold,
-    size: 16,
-  });
-  drawTextBlock(document, `Generated by ${brand.name} for review`, {
-    color: rgb(0.42, 0.33, 0.24),
-    font: regular,
-    size: 10,
-  });
-  addVerticalSpace(document, 28);
-  drawTextBlock(document, coverLetter, {
-    font: regular,
-    size: 11,
-  });
-
-  return pdf.save();
-}
-
-function drawSection(
-  document: PdfLayout,
-  title: string,
-  lines: string[],
-  regular: PDFFont,
-  bold: PDFFont,
-) {
-  drawTextBlock(document, title, { font: bold, size: 12 });
-  addVerticalSpace(document, 4);
-
-  for (const line of lines) {
-    drawTextBlock(document, line, { font: regular, size: 10 });
-    addVerticalSpace(document, 4);
-  }
-
-  addVerticalSpace(document, 10);
-}
-
-function drawTextBlock(
-  document: PdfLayout,
-  text: string,
-  {
-    color = rgb(0.05, 0.09, 0.16),
-    font,
-    size,
-    x = 54,
-  }: {
-    color?: RGB;
-    font: PDFFont;
-    size: number;
-    x?: number;
-  },
-) {
-  const lines = wrapText(text, font, size, 504);
-
-  for (const line of lines) {
-    ensureSpace(document, size + 5);
-
-    document.page.drawText(line, {
-      color,
-      font,
-      size,
-      x,
-      y: document.cursorY,
-    });
-    document.cursorY -= size + 5;
-  }
-}
-
-type PdfLayout = {
-  bold: PDFFont;
-  cursorY: number;
-  page: PDFPage;
-  pdf: PDFDocument;
-  regular: PDFFont;
-};
-
-function createPdfLayout({
-  bold,
-  pdf,
-  regular,
-}: {
-  bold: PDFFont;
-  pdf: PDFDocument;
-  regular: PDFFont;
-}): PdfLayout {
-  return {
-    bold,
-    cursorY: 740,
-    page: pdf.addPage([612, 792]),
-    pdf,
-    regular,
-  };
-}
-
-function addVerticalSpace(document: PdfLayout, space: number) {
-  ensureSpace(document, space);
-  document.cursorY -= space;
-}
-
-function ensureSpace(document: PdfLayout, requiredHeight: number) {
-  if (document.cursorY - requiredHeight >= 54) {
-    return;
-  }
-
-  document.page = document.pdf.addPage([612, 792]);
-  document.cursorY = 740;
-}
-
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
-  return text
-    .split("\n")
-    .flatMap((paragraph) => {
-      const words = paragraph
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean)
-        .flatMap((word) => splitLongWord(word, font, size, maxWidth));
-      const lines: string[] = [];
-      let currentLine = "";
-
-      for (const word of words) {
-        const candidate = currentLine ? `${currentLine} ${word}` : word;
-
-        if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-          currentLine = candidate;
-          continue;
-        }
-
-        if (currentLine) {
-          lines.push(currentLine);
-        }
-        currentLine = word;
-      }
-
-      if (currentLine) {
-        lines.push(currentLine);
-      }
-
-      return lines.length > 0 ? lines : [""];
-    });
-}
-
-function splitLongWord(word: string, font: PDFFont, size: number, maxWidth: number) {
-  if (font.widthOfTextAtSize(word, size) <= maxWidth) {
-    return [word];
-  }
-
-  const segments: string[] = [];
-  let segment = "";
-
-  for (const character of word) {
-    const candidate = `${segment}${character}`;
-
-    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-      segment = candidate;
-      continue;
-    }
-
-    if (segment) {
-      segments.push(segment);
-    }
-    segment = character;
-  }
-
-  if (segment) {
-    segments.push(segment);
-  }
-
-  return segments;
 }

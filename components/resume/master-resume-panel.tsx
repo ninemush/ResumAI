@@ -78,7 +78,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
     }
   }
 
-  async function exportResumePdf() {
+  async function exportResumeFiles() {
     setIsExporting(true);
     setMessage(null);
 
@@ -89,13 +89,13 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
       const payload = await response.json();
 
       if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to export the master resume PDF.");
+        setMessage(payload.error?.message ?? "Unable to export the master resume files.");
         return;
       }
 
       setCurrentOverview(payload.overview);
       setDraft(payload.overview.latestResume?.content ?? draft);
-      setMessage("Exported a validated master resume PDF.");
+      setMessage("Exported validated master resume PDF and DOCX files.");
       router.refresh();
     } finally {
       setIsExporting(false);
@@ -142,8 +142,8 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
             onClick={generateResume}
             title={
               currentOverview.canGenerate
-                ? "Generate a master resume from profile evidence"
-                : "Add profile evidence before generating"
+              ? "Generate a master resume from profile evidence"
+              : "Add profile evidence before generating"
             }
             type="button"
           >
@@ -151,7 +151,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
             {isGenerating
               ? "Generating..."
               : currentOverview.latestResume
-                ? "Generate role-focused variant"
+                ? "Regenerate master resume"
                 : "Generate master resume"}
           </button>
           <button
@@ -167,12 +167,12 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
           <button
             className="secondary-action"
             disabled={!draft || isExporting}
-            onClick={exportResumePdf}
-            title="Export a validated ATS-friendly PDF from the current master resume"
+            onClick={exportResumeFiles}
+            title="Export validated ATS-friendly PDF and DOCX files from the standard template"
             type="button"
           >
             <Download size={15} aria-hidden="true" />
-            {isExporting ? "Exporting..." : "Export PDF"}
+            {isExporting ? "Exporting..." : "Export PDF + DOCX"}
           </button>
           {currentOverview.latestResume?.pdfDownloadUrl ? (
             <a
@@ -184,6 +184,18 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
             >
               <FileText size={15} aria-hidden="true" />
               Open PDF
+            </a>
+          ) : null}
+          {currentOverview.latestResume?.docxDownloadUrl ? (
+            <a
+              className="secondary-action"
+              href={currentOverview.latestResume.docxDownloadUrl}
+              rel="noreferrer"
+              target="_blank"
+              title="Open the latest exported master resume DOCX"
+            >
+              <FileText size={15} aria-hidden="true" />
+              Open DOCX
             </a>
           ) : null}
         </div>

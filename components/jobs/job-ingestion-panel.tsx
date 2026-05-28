@@ -78,10 +78,10 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
     const exportPayload = await exportResponse.json();
 
     if (!exportResponse.ok) {
-      return `${materialPayload.summary ?? "Targeted materials generated."} ${exportPayload.error?.message ?? "PDF export needs another attempt from Applications."}`;
+      return `${materialPayload.summary ?? "Targeted materials generated."} ${exportPayload.error?.message ?? "Export needs another attempt from Applications."}`;
     }
 
-    return `${materialPayload.summary ?? "Targeted materials generated."} Validated PDFs are ready in Applications and Artifacts.`;
+    return `${materialPayload.summary ?? "Targeted materials generated."} Validated PDF and DOCX files are ready in Applications and Artifacts.`;
   }
 
   async function updateReviewStatus(jobId: string, reviewStatus: "accepted" | "rejected") {
@@ -209,7 +209,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                   className="secondary-action"
                   disabled={pendingJobId === job.id}
                   onClick={() => logApplication(job.id)}
-                  title="Log this job, generate targeted materials, and export validated PDFs when possible"
+                  title="Log this job, generate targeted materials, and export validated PDF/DOCX files when possible"
                   type="button"
                 >
                   <Sparkles size={15} aria-hidden="true" />

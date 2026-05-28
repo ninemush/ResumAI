@@ -88,7 +88,7 @@ npx vercel env ls
 - ATS-friendly master resume generation
 - Job URL validation against profile
 - Logged applications with quota tracking
-- Job-specific resume and cover letter PDFs
+- Job-specific resume and cover letter PDF/DOCX exports
 - Application status tracking
 - Owner/admin tier configuration
 - No auto-apply

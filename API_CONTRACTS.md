@@ -204,7 +204,7 @@ Controls:
 - Auth required.
 - Application ownership required.
 - AI output schema validation required.
-- Stores PDF artifacts in private user-scoped storage.
+- Stores PDF and DOCX artifacts in private user-scoped storage.
 
 ## `PATCH /api/applications/:id/status`
 

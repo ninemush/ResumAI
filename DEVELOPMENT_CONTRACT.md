@@ -23,7 +23,7 @@ V1 is limited to:
 - Job URL ingestion and validation against the user's profile.
 - Application logging when the user chooses to proceed with an application.
 - Job-specific ATS-friendly resume and cover letter generation.
-- Saving generated resume and cover letter artifacts for download as PDF.
+- Saving generated resume and cover letter artifacts for download as PDF and DOCX.
 - Application status tracking for no-reply, rejected, interview in progress, interviewed-not-selected, interviewed-selected, and similar outcomes.
 - Owner/admin console for configurable tiers and usage limits.
 - Owner/admin operating console for user, activity, feature usage, profile, resume, application, conversion, support, and system-health metrics.
@@ -228,7 +228,7 @@ Resume layout and export rules:
 - ATS-friendly resume output is the default format.
 - Profile photos must be optional and excluded from ATS-first resumes unless the user explicitly selects a format where a photo is appropriate.
 - If new resume screening formats or parser expectations emerge, the resume engine must adapt through versioned format definitions, not one-off layout hacks.
-- PDF generation must be validated before artifacts are marked ready.
+- PDF generation must be validated before artifacts are marked ready; DOCX exports must use the same standard ATS content template.
 - Validation must check that required sections are present, text is not cut off, content is extractable where ATS compatibility requires it, pages are within expected bounds, and generated files open successfully.
 - If PDF validation fails, the app must keep editable structured content, mark the export as failed or not ready, and explain the next safe recovery action.
 - Generated artifacts must never silently ship with clipped text, missing sections, unreadable content, or broken layout.

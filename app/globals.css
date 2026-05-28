@@ -1531,6 +1531,14 @@ input:focus {
   padding: 14px;
 }
 
+.artifact-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
 .artifact-icon {
   align-items: center;
   background: var(--pr-mist-beige);

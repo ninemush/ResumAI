@@ -30,6 +30,7 @@ type MaterialReview = {
   };
   coverLetter: {
     content: string;
+    docxDownloadUrl: string | null;
     id: string;
     pdfDownloadUrl: string | null;
     status: string;
@@ -42,6 +43,7 @@ type MaterialReview = {
   };
   resume: {
     content: ResumeContent;
+    docxDownloadUrl: string | null;
     id: string;
     pdfDownloadUrl: string | null;
     status: string;
@@ -173,14 +175,14 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
       setActiveReview(payload.review);
       setResumeDraft(payload.review.resume?.content ?? null);
       setCoverLetterDraft(payload.review.coverLetter?.content ?? "");
-      setMessage("Saved material edits. PDF exports were reset so the downloads match the latest content.");
+      setMessage("Saved material edits. Exports were reset so downloads match the latest content.");
       router.refresh();
     } finally {
       setSavingApplicationId(null);
     }
   }
 
-  async function exportPdfs() {
+  async function exportFiles() {
     if (!activeReview) {
       return;
     }
@@ -195,14 +197,14 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
       const payload = await response.json();
 
       if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to export PDFs.");
+        setMessage(payload.error?.message ?? "Unable to export files.");
         return;
       }
 
       setActiveReview(payload.review);
       setResumeDraft(payload.review.resume?.content ?? null);
       setCoverLetterDraft(payload.review.coverLetter?.content ?? "");
-      setMessage("PDFs exported and stored securely.");
+      setMessage("PDF and DOCX files exported and stored securely.");
       router.refresh();
     } finally {
       setExportingApplicationId(null);
@@ -317,16 +319,16 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
               <button
                 className="secondary-action"
                 disabled={!activeReview.exportReadiness.canExport || exportingApplicationId === activeReview.application.id}
-                onClick={exportPdfs}
+                onClick={exportFiles}
                 title={
                   activeReview.exportReadiness.canExport
-                    ? "Export validated resume and cover-letter PDFs"
+                    ? "Export validated resume and cover-letter PDF/DOCX files"
                     : "Generate both resume and cover-letter materials before exporting"
                 }
                 type="button"
               >
                 <Download size={15} aria-hidden="true" />
-                {exportingApplicationId === activeReview.application.id ? "Exporting..." : "Export PDFs"}
+                {exportingApplicationId === activeReview.application.id ? "Exporting..." : "Export files"}
               </button>
             </div>
           </div>
@@ -346,7 +348,7 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
                 ))}
               </ul>
             ) : (
-              <p>Materials are ready for PDF export.</p>
+              <p>Materials are ready for PDF and DOCX export.</p>
             )}
           </div>
 
@@ -436,16 +438,29 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
             </div>
           )}
 
-          {activeReview.resume?.pdfDownloadUrl || activeReview.coverLetter?.pdfDownloadUrl ? (
-            <div className="download-row" aria-label="PDF downloads">
+          {activeReview.resume?.pdfDownloadUrl ||
+          activeReview.resume?.docxDownloadUrl ||
+          activeReview.coverLetter?.pdfDownloadUrl ||
+          activeReview.coverLetter?.docxDownloadUrl ? (
+            <div className="download-row" aria-label="Material downloads">
               {activeReview.resume?.pdfDownloadUrl ? (
                 <a href={activeReview.resume.pdfDownloadUrl} rel="noreferrer" target="_blank">
                   Resume PDF
                 </a>
               ) : null}
+              {activeReview.resume?.docxDownloadUrl ? (
+                <a href={activeReview.resume.docxDownloadUrl} rel="noreferrer" target="_blank">
+                  Resume DOCX
+                </a>
+              ) : null}
               {activeReview.coverLetter?.pdfDownloadUrl ? (
                 <a href={activeReview.coverLetter.pdfDownloadUrl} rel="noreferrer" target="_blank">
                   Cover letter PDF
+                </a>
+              ) : null}
+              {activeReview.coverLetter?.docxDownloadUrl ? (
+                <a href={activeReview.coverLetter.docxDownloadUrl} rel="noreferrer" target="_blank">
+                  Cover letter DOCX
                 </a>
               ) : null}
             </div>
@@ -462,7 +477,7 @@ function formatStatus(status: string) {
 
 function formatExportStatus(status: MaterialReview["exportReadiness"]["status"]) {
   const labels: Record<MaterialReview["exportReadiness"]["status"], string> = {
-    exported: "PDFs exported",
+    exported: "Files exported",
     missing_materials: "Materials incomplete",
     ready_to_export: "Ready for validated export",
   };

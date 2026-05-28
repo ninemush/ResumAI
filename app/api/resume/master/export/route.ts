@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { exportMasterResumePdf } from "@/lib/resumes/master-resume";
+import { exportMasterResumeArtifacts } from "@/lib/resumes/master-resume";
 
 export async function POST() {
   const requestId = crypto.randomUUID();
 
   try {
-    const overview = await exportMasterResumePdf();
+    const overview = await exportMasterResumeArtifacts();
 
     return NextResponse.json({
       ok: true,
@@ -42,7 +42,7 @@ function toApiError(error: unknown) {
       return {
         category: "not_found",
         code: "resume.not_found",
-        message: "Generate a master resume before exporting a PDF.",
+        message: "Generate a master resume before exporting files.",
         status: 404,
       };
     }
@@ -58,19 +58,27 @@ function toApiError(error: unknown) {
     }
 
     if (error.message === "PDF_UPLOAD_FAILED" || error.message === "PDF_METADATA_UPDATE_FAILED") {
-      return {
-        category: "server",
-        code: "resume.pdf_storage_failed",
-        message: "The PDF was built but could not be stored securely. Try exporting again.",
-        status: 500,
-      };
+      return buildStorageError();
+    }
+
+    if (error.message === "ARTIFACT_UPLOAD_FAILED" || error.message === "ARTIFACT_METADATA_UPDATE_FAILED") {
+      return buildStorageError();
     }
   }
 
   return {
     category: "server",
-    code: "resume.pdf_export_failed",
-    message: "Unable to export the master resume PDF right now.",
+    code: "resume.artifact_export_failed",
+    message: "Unable to export the master resume files right now.",
+    status: 500,
+  };
+}
+
+function buildStorageError() {
+  return {
+    category: "server",
+    code: "resume.artifact_storage_failed",
+    message: "The files were built but could not be stored securely. Try exporting again.",
     status: 500,
   };
 }

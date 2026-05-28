@@ -51,7 +51,7 @@ The app generates an ATS-friendly master resume that:
 - Avoids invented facts, dates, credentials, companies, or accomplishments.
 - Uses ATS-friendly layout by default.
 - Excludes profile photos from ATS-first formats unless the user selects a photo-compatible format.
-- Produces PDFs only after validation confirms required content is present, readable, and not clipped.
+- Produces PDF and DOCX artifacts from a standard ATS template; PDFs are available only after validation confirms required content is present, readable, and not clipped.
 
 ### 3. Job-Specific Application Flow
 
@@ -71,7 +71,7 @@ If the user proceeds, the app should:
 - Consume the appropriate tier quota.
 - Generate a job-specific ATS-friendly resume.
 - Generate a job-specific cover letter.
-- Save generated artifacts for download as PDF.
+- Save generated artifacts for download as PDF and DOCX.
 - Store company name, job title, posting URL, generated artifact references, and status.
 
 ### 4. Application Tracking

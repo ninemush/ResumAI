@@ -51,7 +51,7 @@ Goal: generate an ATS-friendly master resume that preserves the user's voice.
 4. App generates structured resume content from confirmed facts.
 5. App validates output schema.
 6. App stores the generated resume.
-7. App creates a private PDF artifact.
+7. App creates private PDF and DOCX artifacts from the standard ATS template.
 8. App validates that the PDF opens, required sections are present, text is readable where ATS compatibility requires it, and content is not clipped.
 9. User reviews and edits.
 
@@ -112,7 +112,7 @@ Goal: log an application, consume quota, and create job-specific materials.
 4. App creates an application record.
 5. App generates a tailored resume.
 6. App generates a tailored cover letter.
-7. App stores generated content and PDF artifacts.
+7. App stores generated content plus PDF and DOCX artifacts.
 8. App validates PDF layout and content before marking artifacts ready.
 9. User reviews/downloads artifacts.
 

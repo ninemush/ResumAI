@@ -2,15 +2,19 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 
+const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
+const SIGNED_URL_TTL_SECONDS = 10 * 60;
+
 export type ArtifactOverview = {
   artifacts: {
     applicationId: string | null;
     companyName: string | null;
     createdAt: string;
-    downloadPath: string | null;
+    docxDownloadUrl: string | null;
     id: string;
     kind: "cover_letter" | "resume";
     label: string;
+    pdfDownloadUrl: string | null;
     roleTitle: string | null;
     status: string;
     updatedAt: string;
@@ -18,6 +22,7 @@ export type ArtifactOverview = {
   }[];
   summary: {
     coverLetters: number;
+    exportedDocx: number;
     exportedPdfs: number;
     resumes: number;
     total: number;
@@ -30,13 +35,13 @@ export async function getArtifactOverview(userId: string): Promise<ArtifactOverv
     await Promise.all([
       supabase
         .from("generated_resumes")
-        .select("id, application_id, resume_type, content_json, pdf_storage_path, status, created_at, updated_at")
+        .select("id, application_id, resume_type, content_json, pdf_storage_path, docx_storage_path, status, created_at, updated_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(100),
       supabase
         .from("generated_cover_letters")
-        .select("id, application_id, content, pdf_storage_path, status, created_at, updated_at")
+        .select("id, application_id, content, pdf_storage_path, docx_storage_path, status, created_at, updated_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(100),
@@ -57,8 +62,8 @@ export async function getArtifactOverview(userId: string): Promise<ArtifactOverv
   const resumeVersions = buildVersionMap(resumes ?? []);
   const coverLetterVersions = buildVersionMap(coverLetters ?? []);
 
-  const artifacts: ArtifactOverview["artifacts"] = [
-    ...(resumes ?? []).map((resume) => {
+  const artifacts: ArtifactOverview["artifacts"] = await Promise.all([
+    ...(resumes ?? []).map(async (resume) => {
       const application = resume.application_id
         ? applications.get(resume.application_id)
         : null;
@@ -67,17 +72,18 @@ export async function getArtifactOverview(userId: string): Promise<ArtifactOverv
         applicationId: resume.application_id,
         companyName: application?.companyName ?? null,
         createdAt: resume.created_at,
-        downloadPath: resume.pdf_storage_path,
+        docxDownloadUrl: await createSignedUrl(resume.docx_storage_path),
         id: resume.id,
         kind: "resume" as const,
         label: readResumeLabel(resume.content_json, resume.resume_type),
+        pdfDownloadUrl: await createSignedUrl(resume.pdf_storage_path),
         roleTitle: application?.jobTitle ?? null,
         status: resume.status,
         updatedAt: resume.updated_at,
         version: resumeVersions.get(resume.id) ?? 1,
       };
     }),
-    ...(coverLetters ?? []).map((coverLetter) => {
+    ...(coverLetters ?? []).map(async (coverLetter) => {
       const application = coverLetter.application_id
         ? applications.get(coverLetter.application_id)
         : null;
@@ -86,27 +92,46 @@ export async function getArtifactOverview(userId: string): Promise<ArtifactOverv
         applicationId: coverLetter.application_id,
         companyName: application?.companyName ?? null,
         createdAt: coverLetter.created_at,
-        downloadPath: coverLetter.pdf_storage_path,
+        docxDownloadUrl: await createSignedUrl(coverLetter.docx_storage_path),
         id: coverLetter.id,
         kind: "cover_letter" as const,
         label: "Cover letter",
+        pdfDownloadUrl: await createSignedUrl(coverLetter.pdf_storage_path),
         roleTitle: application?.jobTitle ?? null,
         status: coverLetter.status,
         updatedAt: coverLetter.updated_at,
         version: coverLetterVersions.get(coverLetter.id) ?? 1,
       };
     }),
-  ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  ]).then((items) => items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)));
 
   return {
     artifacts,
     summary: {
       coverLetters: artifacts.filter((artifact) => artifact.kind === "cover_letter").length,
-      exportedPdfs: artifacts.filter((artifact) => artifact.downloadPath).length,
+      exportedDocx: artifacts.filter((artifact) => artifact.docxDownloadUrl).length,
+      exportedPdfs: artifacts.filter((artifact) => artifact.pdfDownloadUrl).length,
       resumes: artifacts.filter((artifact) => artifact.kind === "resume").length,
       total: artifacts.length,
     },
   };
+}
+
+async function createSignedUrl(path: string | null) {
+  if (!path) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage
+    .from(GENERATED_ARTIFACT_BUCKET)
+    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+
+  if (error || !data?.signedUrl) {
+    return null;
+  }
+
+  return data.signedUrl;
 }
 
 async function readApplications(applicationIds: string[], userId: string) {

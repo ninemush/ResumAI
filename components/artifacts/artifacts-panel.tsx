@@ -35,6 +35,10 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
           <span>Exported PDFs</span>
           <strong>{overview.summary.exportedPdfs}</strong>
         </article>
+        <article className="stage-progress-card">
+          <span>Exported DOCX</span>
+          <strong>{overview.summary.exportedDocx}</strong>
+        </article>
       </section>
 
       <section className="sources-panel" aria-label="Generated artifact list">
@@ -66,14 +70,34 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
                   </p>
                 </div>
                 <span className={`source-pill ${artifact.status}`}>{artifact.status}</span>
-                {artifact.downloadPath ? (
-                  <span className="source-pill succeeded">
-                    <Download size={13} aria-hidden="true" />
-                    PDF stored
-                  </span>
-                ) : (
-                  <span className="source-pill">No PDF yet</span>
-                )}
+                <div className="artifact-actions" aria-label={`${artifact.label} downloads`}>
+                  {artifact.pdfDownloadUrl ? (
+                    <a
+                      className="source-pill succeeded"
+                      href={artifact.pdfDownloadUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <Download size={13} aria-hidden="true" />
+                      PDF
+                    </a>
+                  ) : (
+                    <span className="source-pill">No PDF</span>
+                  )}
+                  {artifact.docxDownloadUrl ? (
+                    <a
+                      className="source-pill succeeded"
+                      href={artifact.docxDownloadUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <Download size={13} aria-hidden="true" />
+                      DOCX
+                    </a>
+                  ) : (
+                    <span className="source-pill">No DOCX</span>
+                  )}
+                </div>
               </article>
             ))}
           </div>
