@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  buildProfileIntelligence,
+  type ProfileIntelligence,
+} from "@/lib/profile/profile-intelligence";
 import { createClient } from "@/lib/supabase/server";
 
 type ProfileFact = {
@@ -59,6 +63,7 @@ export type ProfileOverview = {
   factCount: number;
   confirmedFactCount: number;
   recentSources: ProfileSource[];
+  intelligence: ProfileIntelligence;
   roleRecommendations: RoleRecommendation[];
   sourceCount: number;
   milestones: ProfileMilestone[];
@@ -84,6 +89,15 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
       factCount: 0,
       confirmedFactCount: 0,
       recentSources: [],
+      intelligence: buildProfileIntelligence({
+        facts: [],
+        profile: {
+          headline: null,
+          summary: null,
+          target_direction: null,
+          target_level: null,
+        },
+      }),
       roleRecommendations: [],
       sourceCount: 0,
       milestones: buildProfileMilestones({
@@ -156,6 +170,15 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
   const hasSummary = Boolean(profile.summary);
   const hasTargetDirection = Boolean(profile.target_direction);
   const hasTargetLevel = Boolean(profile.target_level);
+  const intelligence = buildProfileIntelligence({
+    facts: profileFacts,
+    profile: {
+      headline: profile.headline,
+      summary: profile.summary,
+      target_direction: profile.target_direction,
+      target_level: profile.target_level,
+    },
+  });
 
   return {
     profile: {
@@ -173,6 +196,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     factCount: profileFacts.length,
     confirmedFactCount,
     recentSources: recentSourcesWithPreviews,
+    intelligence,
     roleRecommendations: roleRecommendations ?? [],
     sourceCount: sourceCount ?? 0,
     milestones: buildProfileMilestones({

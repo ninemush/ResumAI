@@ -9,6 +9,10 @@ import {
 } from "@/lib/ai/prompts/application-materials";
 import { getMaterialsModel, getOpenAIClient } from "@/lib/ai/openai";
 import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
+import {
+  buildProfileIntelligence,
+  type ProfileIntelligence,
+} from "@/lib/profile/profile-intelligence";
 import { recordQuotaEvent } from "@/lib/quota/quota-events";
 import {
   parseResumeContent,
@@ -126,6 +130,10 @@ export async function generateApplicationMaterials(
     masterResume,
     profileFacts: fitContext.profileFacts,
   });
+  const intelligence = buildProfileIntelligence({
+    facts: facts ?? [],
+    profile,
+  });
   const model = getMaterialsModel();
   const response = await getOpenAIClient().responses.create({
     model,
@@ -134,6 +142,7 @@ export async function generateApplicationMaterials(
       application: context,
       facts: facts ?? [],
       fitAnalysis,
+      intelligence,
       masterResume,
       profile,
     }),
@@ -271,6 +280,7 @@ function buildMaterialsInput({
   application,
   facts,
   fitAnalysis,
+  intelligence,
   masterResume,
   profile,
 }: {
@@ -282,6 +292,7 @@ function buildMaterialsInput({
     user_confirmed: boolean;
   }[];
   fitAnalysis: JobFitAnalysis;
+  intelligence: ProfileIntelligence;
   masterResume: ResumeContent | null;
   profile: {
     display_name: string | null;
@@ -306,6 +317,13 @@ Profile draft:
 
 Profile facts:
 ${facts.map((fact) => `- [${fact.fact_type}${fact.user_confirmed ? ", confirmed" : ""}] ${fact.fact_value}`).join("\n")}
+
+Profile intelligence:
+- Evidence strength: ${intelligence.evidenceStrength}
+- Role target read: ${intelligence.roleTargetRead}
+- Positioning signals: ${intelligence.positioningSignals.join(", ") || "None yet"}
+- Resume focus: ${intelligence.resumeFocus.join(" | ") || "None yet"}
+- High-value gaps: ${intelligence.highValueGaps.map((gap) => `${gap.label}: ${gap.prompt}`).join(" | ") || "None"}
 
 Master resume context:
 ${formatMasterResume(masterResume)}

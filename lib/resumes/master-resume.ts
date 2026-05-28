@@ -9,13 +9,17 @@ import { getMaterialsModel, getOpenAIClient } from "@/lib/ai/openai";
 import { brand } from "@/lib/brand";
 import { recordQuotaEvent } from "@/lib/quota/quota-events";
 import {
+  buildProfileIntelligence,
+  type ProfileIntelligence,
+} from "@/lib/profile/profile-intelligence";
+import {
   parseResumeContent,
   resumeContentSchema,
   type ResumeContent,
 } from "@/lib/resumes/resume-content";
 import { createClient } from "@/lib/supabase/server";
 
-export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v1";
+export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v2";
 const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
 const PDF_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
@@ -150,6 +154,10 @@ export async function generateMasterResume(
     instructions: buildMasterResumeInstructions(),
     input: buildMasterResumeInput({
       confirmedFacts,
+      intelligence: buildProfileIntelligence({
+        facts: confirmedFacts,
+        profile,
+      }),
       instruction: parsed.instruction,
       profile,
     }),
@@ -414,11 +422,11 @@ async function readMasterResumeContext(userId: string) {
   }
 
   const { data: confirmedFacts, error: factsError } = await supabase
-        .from("profile_facts")
-        .select("fact_type, fact_value, confidence")
-        .eq("profile_id", profile.id)
-        .eq("user_id", userId)
-        .order("confidence", { ascending: false })
+    .from("profile_facts")
+    .select("fact_type, fact_value, confidence")
+    .eq("profile_id", profile.id)
+    .eq("user_id", userId)
+    .order("confidence", { ascending: false })
     .limit(80);
 
   if (factsError) {
@@ -535,6 +543,11 @@ outcomes, operating scale, transformation complexity, stakeholder scope,
 financial/commercial impact, customer impact, risk/control outcomes, adoption,
 delivery capacity, cycle time, or productivity when the evidence supports it.
 
+Use the supplied profile intelligence to decide what to foreground, what to
+ask about, and what to keep out of final claims. Treat proof themes as strong
+resume direction. Treat high-value gaps as reviewerNotes or keywordGaps, not as
+facts. A gap prompt should become a pointed question, not an invented metric.
+
 For senior transformation, GTM, professional services, operations, AI/
 automation, customer success, technology, and advisory profiles, look for and
 surface these signals when present:
@@ -555,10 +568,12 @@ keywordGaps rather than pretending the profile is complete.
 
 function buildMasterResumeInput({
   confirmedFacts,
+  intelligence,
   instruction,
   profile,
 }: {
   confirmedFacts: ConfirmedFact[];
+  intelligence: ProfileIntelligence;
   instruction: string | undefined;
   profile: ProfileRecord;
 }) {
@@ -572,6 +587,16 @@ Profile:
 
 Profile evidence:
 ${confirmedFacts.map((fact) => `- ${fact.fact_type}: ${fact.fact_value}`).join("\n")}
+
+Profile intelligence:
+- Evidence strength: ${intelligence.evidenceStrength}
+- Role target read: ${intelligence.roleTargetRead}
+- Positioning signals: ${intelligence.positioningSignals.join(", ") || "None yet"}
+- Resume focus: ${intelligence.resumeFocus.join(" | ") || "None yet"}
+- Proof themes:
+${intelligence.proofThemes.length > 0 ? intelligence.proofThemes.map((theme) => `  - ${theme.label}: ${theme.evidence.join(" / ")}`).join("\n") : "  - None yet"}
+- High-value gaps to resolve:
+${intelligence.highValueGaps.length > 0 ? intelligence.highValueGaps.map((gap) => `  - [${gap.severity}] ${gap.label}: ${gap.prompt}`).join("\n") : "  - None"}
 
 User refinement instruction:
 ${instruction ?? "No extra instruction."}

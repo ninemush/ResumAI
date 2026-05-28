@@ -384,6 +384,56 @@ export function ProfileExplorer({
         </section>
       ) : null}
 
+      <section className="profile-intelligence-panel" aria-label="Profile intelligence">
+        <div className="section-heading">
+          <p className="eyebrow">Hiring signal</p>
+          <h2>What Pramania can already use</h2>
+        </div>
+        <div className="profile-signal-grid">
+          <article>
+            <span>Evidence strength</span>
+            <strong>{formatEvidenceStrength(overview.intelligence.evidenceStrength)}</strong>
+            <p>{overview.intelligence.roleTargetRead}</p>
+          </article>
+          <article>
+            <span>Resume focus</span>
+            <ul>
+              {overview.intelligence.resumeFocus.slice(0, 4).map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </article>
+        </div>
+        {overview.intelligence.proofThemes.length > 0 ? (
+          <div className="proof-theme-list">
+            {overview.intelligence.proofThemes.map((theme) => (
+              <article key={theme.label}>
+                <strong>{theme.label}</strong>
+                <p>{theme.evidence[0]}</p>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      {overview.intelligence.highValueGaps.length > 0 ? (
+        <section className="profile-intelligence-panel" aria-label="High-value gaps">
+          <div className="section-heading">
+            <p className="eyebrow">Sharpen next</p>
+            <h2>Questions that create better bullets</h2>
+          </div>
+          <div className="metric-prompt-list">
+            {overview.intelligence.highValueGaps.slice(0, 5).map((gap) => (
+              <article className={gap.severity} key={`${gap.label}-${gap.prompt}`}>
+                <span>{gap.severity}</span>
+                <strong>{gap.label}</strong>
+                <p>{gap.prompt}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="profile-editor-panel" aria-label="Profile direction editor">
         <div className="section-heading">
           <p className="eyebrow">Working profile</p>
@@ -614,6 +664,16 @@ function formatList(items: string[]) {
   }
 
   return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+
+function formatEvidenceStrength(value: ProfileOverview["intelligence"]["evidenceStrength"]) {
+  const labels: Record<ProfileOverview["intelligence"]["evidenceStrength"], string> = {
+    developing: "Developing",
+    strong: "Strong",
+    thin: "Thin",
+  };
+
+  return labels[value];
 }
 
 function readImageExtension(mimeType: string) {

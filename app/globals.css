@@ -990,6 +990,7 @@ input:focus {
 .jobs-panel,
 .profile-build-panel,
 .profile-editor-panel,
+.profile-intelligence-panel,
 .profile-draft-panel,
 .resume-empty-panel,
 .resume-gap-panel,
@@ -1095,6 +1096,7 @@ input:focus {
 .facts-panel,
 .profile-build-panel,
 .profile-editor-panel,
+.profile-intelligence-panel,
 .profile-draft-panel,
 .resume-gap-panel,
 .roles-panel,
@@ -1102,6 +1104,75 @@ input:focus {
   display: grid;
   gap: 18px;
   padding: 20px;
+}
+
+.profile-signal-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+}
+
+.profile-signal-grid article,
+.proof-theme-list article,
+.metric-prompt-list article {
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.profile-signal-grid span,
+.metric-prompt-list span {
+  color: var(--sage-strong);
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.profile-signal-grid strong,
+.proof-theme-list strong,
+.metric-prompt-list strong {
+  color: var(--foreground);
+  font-size: 0.98rem;
+}
+
+.profile-signal-grid p,
+.profile-signal-grid ul,
+.proof-theme-list p,
+.metric-prompt-list p {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.profile-signal-grid ul {
+  display: grid;
+  gap: 6px;
+  padding-left: 18px;
+}
+
+.proof-theme-list,
+.metric-prompt-list {
+  display: grid;
+  gap: 10px;
+}
+
+.proof-theme-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metric-prompt-list article.critical {
+  border-color: rgba(176, 58, 46, 0.36);
+}
+
+.metric-prompt-list article.important {
+  border-color: rgba(185, 155, 103, 0.42);
 }
 
 .profile-editor-grid {
@@ -2814,6 +2885,8 @@ input:focus {
   .cockpit-panel,
   .profile-milestone-list,
   .profile-summary-grid,
+  .profile-signal-grid,
+  .proof-theme-list,
   .resume-readiness-panel,
   .owner-detail-grid,
   .owner-metric-grid,
