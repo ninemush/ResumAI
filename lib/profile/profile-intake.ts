@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { PROFILE_INTAKE_INSTRUCTIONS, PROFILE_INTAKE_PROMPT_VERSION } from "@/lib/ai/prompts/profile-intake";
 import { getOpenAIClient, getProfileIntakeModel } from "@/lib/ai/openai";
+import { buildProfileIntelligence } from "@/lib/profile/profile-intelligence";
 import { checkProfileIntakeScope } from "@/lib/profile/profile-intake-scope";
 import { createClient } from "@/lib/supabase/server";
 
@@ -222,10 +223,15 @@ export async function extractProfileFactsFromText({
     });
 
     if (deterministicResult.facts.length === 0) {
-      throw error;
+      parsed = buildAdvisorFallbackResult({
+        code: error instanceof Error ? error.message : "AI_PROFILE_INTAKE_FAILED",
+        existingContext,
+        inputLabel,
+        text: normalizedText,
+      });
+    } else {
+      parsed = deterministicResult;
     }
-
-    parsed = deterministicResult;
   }
   const existingFactKeys = new Set(
     existingContext.facts.map((fact) => buildFactKey(fact.fact_type, fact.fact_value)),
@@ -713,15 +719,40 @@ function buildDeterministicProfileIntakeResult({
 }): ParsedProfileIntakeResult {
   const normalizedText = decodeTextEntities(text);
   const lines = readMeaningfulLines(normalizedText);
-  const summary = readSectionText(normalizedText, "Summary", ["Experience", "Activity", "Education"]);
-  const experience = readSectionText(normalizedText, "Experience", ["Education"]);
-  const education = readSectionText(normalizedText, "Education", ["Page "]);
+  const summary = readSectionText(normalizedText, "Summary", [
+    "Experience",
+    "Activity",
+    "Education",
+    "Licenses",
+    "Skills",
+  ]);
+  const experience = readSectionText(normalizedText, "Experience", [
+    "Education",
+    "Licenses",
+    "Certifications",
+    "Skills",
+    "Projects",
+  ]);
+  const education = readSectionText(normalizedText, "Education", [
+    "Licenses",
+    "Certifications",
+    "Skills",
+    "Page ",
+  ]);
   const skills = readLinkedInList({
     lines,
     startLabel: "Top Skills",
-    stopLabels: ["Languages", "Sumeet Sangawar", "Summary"],
-    maxItems: 8,
+    stopLabels: ["Languages", "Summary", "Experience", "Education"],
+    maxItems: 12,
   });
+  const generalSkills = skills.length > 0
+    ? skills
+    : readLinkedInList({
+        lines,
+        startLabel: "Skills",
+        stopLabels: ["Languages", "Summary", "Experience", "Education"],
+        maxItems: 12,
+      });
   const languages = readLinkedInList({
     lines,
     startLabel: "Languages",
@@ -731,13 +762,19 @@ function buildDeterministicProfileIntakeResult({
   const header = readLinkedInHeader(lines);
   const experienceHighlights = readExperienceHighlights(experience);
   const facts: ParsedProfileIntakeResult["facts"] = [];
+  const contactSignals = readContactSignals(lines);
 
   addFact(facts, "other", `Name: ${header.displayName}`, 0.96);
   addFact(facts, "experience", header.headline, 0.94);
   addFact(facts, "preference", `Location: ${header.location}`, 0.88);
   addFact(facts, "industry", deriveIndustrySignal(normalizedText), 0.82);
+  addFact(facts, "other", summary ? `Profile summary: ${summary}` : null, 0.84);
 
-  for (const skill of skills) {
+  for (const contactSignal of contactSignals) {
+    addFact(facts, "other", contactSignal, 0.86);
+  }
+
+  for (const skill of generalSkills) {
     addFact(facts, "skill", skill, 0.9);
   }
 
@@ -753,15 +790,23 @@ function buildDeterministicProfileIntakeResult({
     addFact(facts, "education", educationItem, 0.88);
   }
 
+  for (const credential of readCredentialHighlights(normalizedText)) {
+    addFact(facts, "credential", credential, 0.82);
+  }
+
+  for (const fallbackHighlight of readGeneralCareerHighlights(normalizedText)) {
+    addFact(facts, "experience", fallbackHighlight, 0.78);
+  }
+
   const compactSummary = truncateText(summary || header.headline || "", 900);
   const targetDirection = deriveTargetDirection(normalizedText);
   const targetLevel = deriveTargetLevel(normalizedText);
 
   return {
-    assistantMessage: `I read ${inputLabel} and captured ${Math.min(facts.length, 24)} useful profile signal(s), including current positioning, skills, experience themes, impact evidence, and education. The strongest read is ${targetDirection.toLowerCase()}; I would next sharpen the proof points around scope, measurable outcomes, and board/advisory relevance.`,
+    assistantMessage: `I read ${inputLabel} and captured ${Math.min(facts.length, 24)} useful profile signal(s), including positioning, skills, experience themes, impact evidence, and education where available. The strongest read is ${targetDirection.toLowerCase()}; next I would sharpen scope, measurable outcomes, and the value story behind the strongest roles.`,
     facts: facts.slice(0, 24),
     followUpQuestions: [
-      "Which role lane should I optimize for first: transformation executive, services/GTM operations leader, or board/advisory positioning?",
+      "Which role lane should I optimize for first based on this profile?",
       "Are there any confidential employers, metrics, or customer details you want softened before resume generation?",
     ],
     profileDraft: {
@@ -773,28 +818,93 @@ function buildDeterministicProfileIntakeResult({
     },
     roleRecommendations: [
       {
-        roleFamily: "Enterprise transformation and services leadership",
-        roleTitles: [
-          "Chief Transformation Officer",
-          "VP Professional Services",
-          "Head of GTM Operations",
-          "Enterprise AI Transformation Leader",
-        ],
+        roleFamily: targetDirection,
+        roleTitles: deriveRoleTitles(normalizedText),
         seniorityLevel: targetLevel,
         rationale:
-          "The source shows executive-level operating scope across GTM, professional services, customer outcomes, AI/automation, transformation, controls, and measurable business impact.",
+          "The source contains enough career evidence to support an initial positioning read, but Pramania should still verify the highest-value metrics and role focus with the user before locking the master resume.",
         assumptions: [
           "The LinkedIn PDF reflects the user's current preferred positioning.",
-          "Board advisory interest is a real target path, not only a secondary note.",
+          "Imported source text may omit context that would make the resume stronger.",
         ],
         openQuestions: [
           "Which industries or company stages are highest priority?",
-          "Should the resume lead with transformation, services/GTM scale, or AI automation value creation?",
+          "Which achievements can we quantify with business impact?",
         ],
         confidence: 0.82,
       },
     ],
     suggestedDirection: targetDirection,
+  };
+}
+
+function buildAdvisorFallbackResult({
+  code,
+  existingContext,
+  inputLabel,
+  text,
+}: {
+  code: string;
+  existingContext: ExistingProfileContext;
+  inputLabel: string;
+  text: string;
+}): ParsedProfileIntakeResult {
+  const intelligence = buildProfileIntelligence({
+    facts: existingContext.facts.map((fact) => ({
+      confidence: null,
+      fact_type: fact.fact_type,
+      fact_value: fact.fact_value,
+    })),
+    profile: existingContext.profile ?? {
+      display_name: null,
+      headline: null,
+      summary: null,
+      target_direction: null,
+      target_level: null,
+    },
+  });
+  const asksForMetrics = /metric|measure|quantif|impact|value|kpi|proof|outcome/i.test(text);
+  const gapPrompts = intelligence.highValueGaps
+    .filter((gap) => gap.severity !== "informational")
+    .slice(0, 4)
+    .map((gap) => gap.prompt);
+  const proofThemes = intelligence.proofThemes.map((theme) => theme.label.toLowerCase()).slice(0, 4);
+
+  if (asksForMetrics) {
+    return {
+      assistantMessage: [
+        "Yes. For the master resume, I would not ask for random metrics; I would pressure-test the value story around the signals already visible.",
+        proofThemes.length > 0
+          ? `The current evidence points toward ${proofThemes.join(", ")}.`
+          : "The current profile still needs stronger evidence before I can rank the proof themes confidently.",
+        "Useful metric families are: revenue or bookings influenced, cost or margin improvement, delivery capacity, cycle-time reduction, adoption or utilization, retention/renewal, customer satisfaction, risk/control improvement, team or regional scale, and executive stakeholder complexity.",
+        gapPrompts.length > 0
+          ? `Most valuable next questions: ${gapPrompts.join(" ")}`
+          : "Next, tell me one initiative you led, the scale, what changed, and how the business was better after it.",
+      ].join(" "),
+      facts: [],
+      followUpQuestions: [
+        "Which recent initiative had the clearest business outcome: revenue, cost, customer, risk, speed, or scale?",
+      ],
+      profileDraft: emptyProfileDraftFromContext(existingContext),
+      roleRecommendations: [],
+      suggestedDirection: existingContext.profile?.target_direction ?? null,
+    };
+  }
+
+  return {
+    assistantMessage: [
+      `I saved ${inputLabel}, but the structured AI analysis needs another pass.`,
+      `Root cause: ${code}.`,
+      "The source text is preserved, so you should not need to upload it again. I can still use the saved profile context to keep advising while the extraction is retried.",
+    ].join(" "),
+    facts: [],
+    followUpQuestions: [
+      "Should I retry extracting profile evidence from the saved source, or use the current profile to draft the master resume first?",
+    ],
+    profileDraft: emptyProfileDraftFromContext(existingContext),
+    roleRecommendations: [],
+    suggestedDirection: existingContext.profile?.target_direction ?? null,
   };
 }
 
@@ -844,6 +954,13 @@ function readLinkedInHeader(lines: string[]) {
   };
 }
 
+function readContactSignals(lines: string[]) {
+  return lines
+    .filter((line) => /@|linkedin\.com\/in\//i.test(line))
+    .map((line) => (/@/.test(line) ? `Contact email: ${line}` : `LinkedIn profile: ${line}`))
+    .slice(0, 3);
+}
+
 function readLinkedInList({
   lines,
   startLabel,
@@ -882,27 +999,45 @@ function readLinkedInList({
 }
 
 function readExperienceHighlights(experience: string) {
-  if (!experience) {
-    return [];
-  }
-
   const lines = readMeaningfulLines(experience);
   const highlights: string[] = [];
-  const currentCompany = lines.find((line) => line === "UiPath" || line === "GE") ?? null;
-  const currentTitle = lines.find((line) =>
-    /vice president|director|chief information officer|customer success|digital hub/i.test(line),
-  );
+  const currentCompany = lines.find((line) => looksLikeCompanyLine(line)) ?? null;
+  const currentTitle = lines.find((line) => looksLikeRoleTitle(line));
 
   if (currentCompany && currentTitle) {
     highlights.push(`${currentTitle} at ${currentCompany}`);
   }
 
   for (const line of lines) {
-    if (/•|scaled|reduced|improved|built|led|established|managed|grew|consolidated|instituted/i.test(line)) {
+    if (looksLikeCareerHighlight(line)) {
       highlights.push(line.replace(/^•\s*/, ""));
     }
 
     if (highlights.length >= 8) {
+      break;
+    }
+  }
+
+  return highlights;
+}
+
+function readGeneralCareerHighlights(text: string) {
+  const lines = readMeaningfulLines(text);
+  const highlights: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const nextLine = lines[index + 1] ?? "";
+
+    if (looksLikeRoleTitle(line) && nextLine && looksLikeCompanyLine(nextLine)) {
+      highlights.push(`${line} at ${nextLine}`);
+    }
+
+    if (looksLikeCareerHighlight(line)) {
+      highlights.push(line.replace(/^•\s*/, ""));
+    }
+
+    if (highlights.length >= 10) {
       break;
     }
   }
@@ -928,6 +1063,18 @@ function readEducationHighlights(education: string) {
   }
 
   return highlights.slice(0, 3);
+}
+
+function readCredentialHighlights(text: string) {
+  const lines = readMeaningfulLines(text);
+
+  return lines
+    .filter((line) =>
+      /certified|certification|certificate|license|licence|credential|mba|degree|bachelor|master/i.test(
+        line,
+      ),
+    )
+    .slice(0, 5);
 }
 
 function readSectionText(text: string, startLabel: string, stopLabels: string[]) {
@@ -982,6 +1129,71 @@ function deriveTargetLevel(text: string) {
   }
 
   return null;
+}
+
+function deriveRoleTitles(text: string) {
+  if (/board advisory|board advisor/i.test(text)) {
+    return [
+      "Board Advisor",
+      "Chief Transformation Officer",
+      "VP Enterprise Transformation",
+      "AI Transformation Executive",
+    ];
+  }
+
+  if (/professional services|gtm|customer success/i.test(text)) {
+    return [
+      "VP Professional Services",
+      "Head of GTM Operations",
+      "Customer Success Executive",
+      "Services Transformation Leader",
+    ];
+  }
+
+  if (/product|platform|engineering|technology|cloud|data|ai|automation/i.test(text)) {
+    return [
+      "Technology Transformation Leader",
+      "Product Operations Leader",
+      "AI Automation Leader",
+      "Digital Transformation Director",
+    ];
+  }
+
+  return [
+    "Career target to refine",
+    "Functional leadership role",
+    "Transformation leadership role",
+  ];
+}
+
+function emptyProfileDraftFromContext(existingContext: ExistingProfileContext) {
+  return {
+    displayName: existingContext.profile?.display_name ?? null,
+    headline: existingContext.profile?.headline ?? null,
+    summary: existingContext.profile?.summary ?? null,
+    targetDirection: existingContext.profile?.target_direction ?? null,
+    targetLevel: existingContext.profile?.target_level ?? null,
+  };
+}
+
+function looksLikeRoleTitle(value: string) {
+  return /chief|founder|president|vice president|\bvp\b|director|head|manager|lead|leader|consultant|advisor|officer|architect|engineer|analyst|specialist/i.test(
+    value,
+  );
+}
+
+function looksLikeCompanyLine(value: string) {
+  return (
+    /^[A-Z][A-Za-z0-9&.,' -]{1,80}$/.test(value.trim()) &&
+    !looksLikeRoleTitle(value) &&
+    !/summary|experience|education|skills|contact|languages|page \d+/i.test(value)
+  );
+}
+
+function looksLikeCareerHighlight(value: string) {
+  return /•|achieved|accelerated|automated|built|consolidated|created|delivered|drove|enabled|established|grew|improved|increased|instituted|launched|led|managed|optimized|reduced|scaled|saved|transformed/i.test(
+    value,
+  );
 }
 
 function readMeaningfulLines(text: string) {

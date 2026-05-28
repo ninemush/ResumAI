@@ -76,6 +76,7 @@ type SourceListResponse = {
 type SourceExtractionResult =
   | {
       assistantMessage: string | null;
+      extractedFactCount: number;
       followUpQuestions: string[];
       message: string;
       ok: true;
@@ -84,6 +85,7 @@ type SourceExtractionResult =
     }
   | {
       assistantMessage?: null;
+      extractedFactCount?: 0;
       followUpQuestions?: [];
       message: string;
       ok: false;
@@ -554,6 +556,7 @@ export function ConversationPanel({
 
     return formatSourceIntakeReply({
       assistantMessage: extraction.assistantMessage,
+      extractedFactCount: extraction.extractedFactCount,
       followUpQuestions: extraction.followUpQuestions,
       label: `I found and read ${formatSourceReference(source)}`,
       savedFactCount: extraction.savedFactCount,
@@ -606,6 +609,7 @@ export function ConversationPanel({
 
     return formatSourceIntakeReply({
       assistantMessage: extraction.assistantMessage,
+      extractedFactCount: extraction.extractedFactCount,
       followUpQuestions: extraction.followUpQuestions,
       label: "I read that profile link",
       savedFactCount: extraction.savedFactCount,
@@ -753,6 +757,7 @@ export function ConversationPanel({
 
       return formatSourceIntakeReply({
         assistantMessage: extraction.assistantMessage,
+        extractedFactCount: extraction.extractedFactCount,
         followUpQuestions: extraction.followUpQuestions,
         label: `${file.name} was saved and read`,
         savedFactCount: extraction.savedFactCount,
@@ -802,6 +807,7 @@ export function ConversationPanel({
 
     return {
       assistantMessage: payload.intake?.assistantMessage ?? null,
+      extractedFactCount: Array.isArray(payload.intake?.facts) ? payload.intake.facts.length : 0,
       followUpQuestions: Array.isArray(payload.intake?.followUpQuestions)
         ? payload.intake.followUpQuestions
         : [],
@@ -1094,12 +1100,14 @@ function inferProcessingMode(text: string): ProcessingMode {
 
 function formatSourceIntakeReply({
   assistantMessage,
+  extractedFactCount,
   followUpQuestions,
   label,
   savedFactCount,
   suggestedDirection,
 }: {
   assistantMessage: string | null;
+  extractedFactCount: number;
   followUpQuestions: string[];
   label: string;
   savedFactCount: number;
@@ -1108,6 +1116,10 @@ function formatSourceIntakeReply({
   const savedSummary =
     savedFactCount > 0
       ? `${label}. I found ${savedFactCount} useful profile signal${savedFactCount === 1 ? "" : "s"}.`
+      : extractedFactCount > 0
+        ? `${label}. I found ${extractedFactCount} useful profile signal${
+            extractedFactCount === 1 ? "" : "s"
+          } that already matched your saved profile.`
       : `${label}. I did not find new profile signal to add yet.`;
   const advisorRead = assistantMessage?.trim();
   const direction = suggestedDirection?.trim()
