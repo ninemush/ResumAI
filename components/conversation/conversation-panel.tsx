@@ -522,7 +522,7 @@ export function ConversationPanel({
     if (!response.ok) {
       return (
         payload.error?.message ??
-        "I could not complete the deeper advisor read right now, but I can still help if you share the role, resume point, or decision you want to work through."
+        "I hit a processing issue while reading your saved workspace context. I still have your profile, sources, jobs, applications, and artifacts on record; try the question again in a moment and I will use what is already saved."
       );
     }
 

@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       {
         error: {
           message:
-            "I could not complete the deeper advisor read right now. Share the resume, role, or profile point again and I will keep it grounded in your career context.",
+            "I hit a processing issue while reading the saved workspace context. I still have your profile, sources, jobs, applications, and artifacts on record; try the question again in a moment and I will use what is already saved rather than asking you to repeat it.",
         },
       },
       { status: 500 },
