@@ -119,7 +119,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         <h2>Roles under review</h2>
       </div>
 
-      <div className="job-list">
+      <div className="record-list job-record-list">
         {message ? <p className="system-note success">{message}</p> : null}
         {overview.recentJobs.length === 0 ? (
           <p className="empty-state">
@@ -127,95 +127,108 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
           </p>
         ) : null}
         {overview.recentJobs.map((job) => (
-          <article className="job-row job-review-row" key={job.id}>
-            <div>
-              <h3>{job.title ?? formatJobUrl(job.job_url)}</h3>
-              <p>{job.company ?? formatJobUrl(job.resolved_url ?? job.job_url)}</p>
-              <p>Review status: {formatReviewStatus(job.review_status)}</p>
-              {job.fitSnapshot.score !== null ? (
-                <p>
-                  Fit review: {job.fitAnalysis.summary}
-                </p>
-              ) : null}
-              <div className="fit-review-grid" aria-label="Fit review details">
-                <FitBucket
-                  icon="match"
-                  items={job.fitAnalysis.matchedKeywords}
-                  label="Matched"
-                  placeholder="No matched signals yet"
-                />
-                <FitBucket
-                  icon="risk"
-                  items={job.fitAnalysis.missingKeywords}
-                  label="Gaps"
-                  placeholder="No obvious gaps"
-                />
-                <FitBucket
-                  icon="question"
-                  items={job.fitAnalysis.questions}
-                  label="Questions"
-                  placeholder="No questions yet"
-                />
-              </div>
-              {job.failure_reason ? (
-                <p className="source-failure">{formatFailureReason(job.failure_reason)}</p>
-              ) : null}
-              {expandedJobId === job.id ? (
-                <div className="job-description-preview">
-                  <strong>Job description excerpt</strong>
-                  <p>{job.extracted_text?.slice(0, 1400) ?? "No readable job text available."}</p>
-                </div>
-              ) : null}
-            </div>
-            <span className={`source-pill ${job.ingestion_status}`}>
-              {job.ingestion_status.replace("_", " ")}
-            </span>
+          <article className="record-row job-record" key={job.id}>
             <button
-              className="secondary-action"
+              className="record-main-button"
               onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
               type="button"
             >
-              {expandedJobId === job.id ? "Hide JD" : "View JD"}
+              <span className="record-title">{job.title ?? formatJobUrl(job.job_url)}</span>
+              <span className="record-meta">
+                {job.company ?? formatJobUrl(job.resolved_url ?? job.job_url)}
+                {" · "}
+                {formatReviewStatus(job.review_status)}
+                {job.fitSnapshot.score !== null ? ` · ${job.fitSnapshot.score}% fit` : ""}
+              </span>
+              {job.fitSnapshot.score !== null ? (
+                <span className="record-summary">{job.fitAnalysis.summary}</span>
+              ) : null}
             </button>
-            <a
-              className="secondary-action"
-              href={job.resolved_url ?? job.job_url}
-              rel="noreferrer"
-              target="_blank"
-            >
-              Open
-            </a>
-            {job.ingestion_status === "succeeded" ? (
-              <>
+
+            <span className={`source-pill ${job.ingestion_status}`}>
+              {job.ingestion_status.replace("_", " ")}
+            </span>
+
+            <div className="record-actions">
+              <button
+                className="secondary-action compact-action"
+                onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
+                type="button"
+              >
+                {expandedJobId === job.id ? "Hide" : "Details"}
+              </button>
+              <a
+                className="secondary-action compact-action"
+                href={job.resolved_url ?? job.job_url}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Open
+              </a>
+              {job.ingestion_status === "succeeded" ? (
                 <button
-                  className="secondary-action"
-                  disabled={pendingJobId === job.id}
-                  onClick={() => updateReviewStatus(job.id, "rejected")}
-                  title="Remove this role from active review"
-                  type="button"
-                >
-                  Reject
-                </button>
-                <button
-                  className="secondary-action"
-                  disabled={pendingJobId === job.id}
-                  onClick={() => updateReviewStatus(job.id, "accepted")}
-                  title="Keep this role as worth pursuing"
-                  type="button"
-                >
-                  Accept
-                </button>
-                <button
-                  className="secondary-action"
+                  className="secondary-action compact-action"
                   disabled={pendingJobId === job.id}
                   onClick={() => logApplication(job.id)}
                   title="Log this job, generate targeted materials, and export validated PDF/DOCX files when possible"
                   type="button"
                 >
-                  <Sparkles size={15} aria-hidden="true" />
-                  {pendingJobId === job.id ? "Working..." : "Apply"}
+                  <Sparkles size={14} aria-hidden="true" />
+                  {pendingJobId === job.id ? "Working" : "Apply"}
                 </button>
-              </>
+              ) : null}
+            </div>
+
+            {expandedJobId === job.id ? (
+              <div className="record-detail-panel">
+                <div className="fit-review-grid compact-fit-grid" aria-label="Fit review details">
+                  <FitBucket
+                    icon="match"
+                    items={job.fitAnalysis.matchedKeywords}
+                    label="Matched"
+                    placeholder="No matched signals yet"
+                  />
+                  <FitBucket
+                    icon="risk"
+                    items={job.fitAnalysis.missingKeywords}
+                    label="Gaps"
+                    placeholder="No obvious gaps"
+                  />
+                  <FitBucket
+                    icon="question"
+                    items={job.fitAnalysis.questions}
+                    label="Questions"
+                    placeholder="No questions yet"
+                  />
+                </div>
+                <div className="record-action-strip">
+                  <button
+                    className="secondary-action compact-action"
+                    disabled={pendingJobId === job.id}
+                    onClick={() => updateReviewStatus(job.id, "rejected")}
+                    title="Remove this role from active review"
+                    type="button"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    className="secondary-action compact-action"
+                    disabled={pendingJobId === job.id}
+                    onClick={() => updateReviewStatus(job.id, "accepted")}
+                    title="Keep this role as worth pursuing"
+                    type="button"
+                  >
+                    Accept
+                  </button>
+                </div>
+                {job.failure_reason ? (
+                  <p className="source-failure">{formatFailureReason(job.failure_reason)}</p>
+                ) : null}
+                <div className="job-description-preview">
+                  <strong>Job description excerpt</strong>
+                  <p>{job.extracted_text?.slice(0, 1400) ?? "No readable job text available."}</p>
+                </div>
+              </div>
             ) : null}
           </article>
         ))}

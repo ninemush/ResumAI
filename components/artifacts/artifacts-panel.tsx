@@ -1,3 +1,6 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import { Download, FileText, Layers3 } from "lucide-react";
 
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
@@ -6,109 +9,125 @@ type ArtifactsPanelProps = {
   overview: ArtifactOverview;
 };
 
+type ArtifactFilter = "all" | "resume" | "cover_letter" | "pdf" | "docx";
+
 export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
+  const [filter, setFilter] = useState<ArtifactFilter>("all");
+  const filteredArtifacts = useMemo(
+    () =>
+      overview.artifacts.filter((artifact) => {
+        if (filter === "all") return true;
+        if (filter === "pdf") return Boolean(artifact.pdfDownloadUrl);
+        if (filter === "docx") return Boolean(artifact.docxDownloadUrl);
+        return artifact.kind === filter;
+      }),
+    [filter, overview.artifacts],
+  );
+
   return (
     <main className="profile-pane" aria-labelledby="artifacts-title">
-      <div className="pane-heading">
+      <div className="pane-heading compact-pane-heading">
         <p className="eyebrow">Artifacts</p>
         <h1 id="artifacts-title">Generated materials</h1>
         <p>
-          A chronological record of resumes and cover letters Pramania created,
-          including versions, timestamps, application context, and export status.
+          Resumes and cover letters Pramania created, with versions, timestamps,
+          application context, and download status.
         </p>
       </div>
 
-      <section className="cockpit-panel artifacts-summary" aria-label="Artifact summary">
-        <article className="stage-progress-card">
-          <span>Total</span>
-          <strong>{overview.summary.total}</strong>
-        </article>
-        <article className="stage-progress-card">
-          <span>Resumes</span>
-          <strong>{overview.summary.resumes}</strong>
-        </article>
-        <article className="stage-progress-card">
-          <span>Cover letters</span>
-          <strong>{overview.summary.coverLetters}</strong>
-        </article>
-        <article className="stage-progress-card">
-          <span>Exported PDFs</span>
-          <strong>{overview.summary.exportedPdfs}</strong>
-        </article>
-        <article className="stage-progress-card">
-          <span>Exported DOCX</span>
-          <strong>{overview.summary.exportedDocx}</strong>
-        </article>
+      <section className="artifact-filter-strip" aria-label="Artifact filters">
+        <ArtifactFilterButton active={filter === "all"} count={overview.summary.total} label="All" onClick={() => setFilter("all")} />
+        <ArtifactFilterButton active={filter === "resume"} count={overview.summary.resumes} label="Resumes" onClick={() => setFilter("resume")} />
+        <ArtifactFilterButton active={filter === "cover_letter"} count={overview.summary.coverLetters} label="Cover letters" onClick={() => setFilter("cover_letter")} />
+        <ArtifactFilterButton active={filter === "pdf"} count={overview.summary.exportedPdfs} label="PDFs" onClick={() => setFilter("pdf")} />
+        <ArtifactFilterButton active={filter === "docx"} count={overview.summary.exportedDocx} label="DOCX" onClick={() => setFilter("docx")} />
       </section>
 
-      <section className="sources-panel" aria-label="Generated artifact list">
-        <div className="section-heading">
-          <p className="eyebrow">Chronology</p>
-          <h2>Latest generated files</h2>
-        </div>
-        {overview.artifacts.length > 0 ? (
-          <div className="artifact-list">
-            {overview.artifacts.map((artifact) => (
-              <article className="artifact-row" key={`${artifact.kind}-${artifact.id}`}>
-                <div className="artifact-icon">
-                  {artifact.kind === "resume" ? (
-                    <FileText size={18} aria-hidden="true" />
-                  ) : (
-                    <Layers3 size={18} aria-hidden="true" />
-                  )}
-                </div>
-                <div>
-                  <h3>{artifact.label}</h3>
-                  <p>
-                    {formatArtifactKind(artifact.kind)} v{artifact.version}
-                    {artifact.companyName ? ` for ${artifact.companyName}` : ""}
-                    {artifact.roleTitle ? ` - ${artifact.roleTitle}` : ""}
-                  </p>
-                  <p>
-                    Created {formatDate(artifact.createdAt)}. Updated{" "}
-                    {formatDate(artifact.updatedAt)}.
-                  </p>
-                </div>
-                <span className={`source-pill ${artifact.status}`}>{artifact.status}</span>
-                <div className="artifact-actions" aria-label={`${artifact.label} downloads`}>
-                  {artifact.pdfDownloadUrl ? (
-                    <a
-                      className="source-pill succeeded"
-                      href={artifact.pdfDownloadUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <Download size={13} aria-hidden="true" />
-                      PDF
-                    </a>
-                  ) : (
-                    <span className="source-pill">No PDF</span>
-                  )}
-                  {artifact.docxDownloadUrl ? (
-                    <a
-                      className="source-pill succeeded"
-                      href={artifact.docxDownloadUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <Download size={13} aria-hidden="true" />
-                      DOCX
-                    </a>
-                  ) : (
-                    <span className="source-pill">No DOCX</span>
-                  )}
-                </div>
-              </article>
-            ))}
-          </div>
+      <section className="record-list artifact-record-list" aria-label="Generated artifact list">
+        {filteredArtifacts.length > 0 ? (
+          filteredArtifacts.map((artifact) => (
+            <article className="record-row artifact-record" key={`${artifact.kind}-${artifact.id}`}>
+              <div className="artifact-icon">
+                {artifact.kind === "resume" ? (
+                  <FileText size={18} aria-hidden="true" />
+                ) : (
+                  <Layers3 size={18} aria-hidden="true" />
+                )}
+              </div>
+              <div className="record-main">
+                <h3 className="record-title">{artifact.label}</h3>
+                <p className="record-meta">
+                  {formatArtifactKind(artifact.kind)} v{artifact.version}
+                  {artifact.companyName ? ` · ${artifact.companyName}` : ""}
+                  {artifact.roleTitle ? ` · ${artifact.roleTitle}` : ""}
+                </p>
+                <p className="record-summary">
+                  Created {formatDate(artifact.createdAt)} · Updated {formatDate(artifact.updatedAt)}
+                </p>
+              </div>
+              <span className={`source-pill ${artifact.status}`}>{artifact.status}</span>
+              <div className="record-actions artifact-actions" aria-label={`${artifact.label} downloads`}>
+                {artifact.pdfDownloadUrl ? (
+                  <a
+                    className="secondary-action compact-action"
+                    href={artifact.pdfDownloadUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <Download size={13} aria-hidden="true" />
+                    PDF
+                  </a>
+                ) : (
+                  <span className="source-pill muted">No PDF</span>
+                )}
+                {artifact.docxDownloadUrl ? (
+                  <a
+                    className="secondary-action compact-action"
+                    href={artifact.docxDownloadUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <Download size={13} aria-hidden="true" />
+                    DOCX
+                  </a>
+                ) : (
+                  <span className="source-pill muted">No DOCX</span>
+                )}
+              </div>
+            </article>
+          ))
         ) : (
           <p className="empty-state">
-            Generated resumes and cover letters will appear here after you create a
-            master resume or application materials.
+            No artifacts match this filter yet. Generate or export a resume or cover
+            letter and it will appear here.
           </p>
         )}
       </section>
     </main>
+  );
+}
+
+function ArtifactFilterButton({
+  active,
+  count,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  count: number;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-pressed={active}
+      className={`artifact-filter-chip${active ? " active" : ""}`}
+      onClick={onClick}
+      type="button"
+    >
+      <strong>{count}</strong>
+      <span>{label}</span>
+    </button>
   );
 }
 

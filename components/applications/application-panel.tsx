@@ -218,7 +218,16 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
         <h2>Follow-up tracker</h2>
       </div>
 
-      <div className="job-list">
+      <div className="application-stage-strip" aria-label="Application stage summary">
+        {overview.summary.byStage.map((stage) => (
+          <span key={stage.label}>
+            <strong>{stage.value}</strong>
+            {stage.label}
+          </span>
+        ))}
+      </div>
+
+      <div className="record-list application-record-list">
         {message ? <p className="system-note success">{message}</p> : null}
         {overview.recentApplications.length === 0 ? (
           <p className="empty-state">
@@ -226,44 +235,26 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
           </p>
         ) : null}
         {overview.recentApplications.map((application) => (
-          <article className="job-row" key={application.id}>
-            <div>
-              <h3>{application.jobTitle ?? "Application"}</h3>
-              <p>{application.companyName}</p>
-              <p>{formatStatus(application.status)}</p>
-              {application.latestResumeStatus || application.latestCoverLetterStatus ? (
-                <p>
-                  Materials: resume {application.latestResumeStatus ?? "not ready"}, cover letter{" "}
-                  {application.latestCoverLetterStatus ?? "not ready"}
-                </p>
-              ) : null}
-              {application.latestResumeHeadline ? (
-                <p>Resume direction: {application.latestResumeHeadline}</p>
-              ) : null}
-              {application.latestCoverLetterExcerpt ? (
-                <p>Cover letter: {application.latestCoverLetterExcerpt}</p>
-              ) : null}
-              <div className="application-timeline" aria-label="Application status history">
-                <strong>Lifecycle</strong>
-                {application.statusEvents.length > 0 ? (
-                  application.statusEvents.map((event) => (
-                    <span key={`${event.createdAt}-${event.newStatus}`}>
-                      {formatStatus(event.previousStatus ?? "draft")} {"->"}{" "}
-                      {formatStatus(event.newStatus)}
-                      <em>{formatDate(event.createdAt)} via {event.source}</em>
-                    </span>
-                  ))
-                ) : (
-                  <span>
-                    {formatStatus(application.status)}
-                    <em>Current status</em>
-                  </span>
-                )}
-              </div>
-            </div>
+          <article className="record-row application-record" key={application.id}>
+            <button
+              className="record-main-button"
+              onClick={() => loadReview(application.id)}
+              type="button"
+            >
+              <span className="record-title">{application.jobTitle ?? "Application"}</span>
+              <span className="record-meta">
+                {application.companyName} · {formatStatus(application.status)} · Updated{" "}
+                {formatDate(application.updatedAt)}
+              </span>
+              <span className="record-summary">
+                {application.latestResumeHeadline ??
+                  `Materials: resume ${application.latestResumeStatus ?? "not ready"}, cover letter ${application.latestCoverLetterStatus ?? "not ready"}`}
+              </span>
+            </button>
+
             <select
               aria-label={`Update ${application.companyName} application status`}
-              className="status-select"
+              className="status-select compact-status-select"
               disabled={pendingApplicationId === application.id}
               onChange={(event) => updateStatus(application.id, event.target.value)}
               value={application.status}
@@ -274,24 +265,48 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
                 </option>
               ))}
             </select>
-            <button
-              className="secondary-action"
-              disabled={generatingApplicationId === application.id}
-              onClick={() => generateMaterials(application.id)}
-              type="button"
-            >
-              <WandSparkles size={15} aria-hidden="true" />
-              {generatingApplicationId === application.id ? "Generating..." : "Generate"}
-            </button>
-            <button
-              className="secondary-action"
-              disabled={loadingReviewApplicationId === application.id}
-              onClick={() => loadReview(application.id)}
-              type="button"
-            >
-              <FileText size={15} aria-hidden="true" />
-              {loadingReviewApplicationId === application.id ? "Opening..." : "Review"}
-            </button>
+
+            <div className="record-actions">
+              <button
+                className="secondary-action compact-action"
+                disabled={generatingApplicationId === application.id}
+                onClick={() => generateMaterials(application.id)}
+                type="button"
+              >
+                <WandSparkles size={14} aria-hidden="true" />
+                {generatingApplicationId === application.id ? "Generating" : "Generate"}
+              </button>
+              <button
+                className="secondary-action compact-action"
+                disabled={loadingReviewApplicationId === application.id}
+                onClick={() => loadReview(application.id)}
+                type="button"
+              >
+                <FileText size={14} aria-hidden="true" />
+                {loadingReviewApplicationId === application.id ? "Opening" : "Review"}
+              </button>
+            </div>
+
+            <div className="application-timeline compact-timeline" aria-label="Application status history">
+              <strong>Latest status activity</strong>
+              {application.statusEvents.length > 0 ? (
+                application.statusEvents.slice(0, 2).map((event) => (
+                  <span key={`${event.createdAt}-${event.newStatus}`}>
+                    {formatStatus(event.previousStatus ?? "draft")} {"->"}{" "}
+                    {formatStatus(event.newStatus)}
+                    <em>{formatDate(event.createdAt)} via {event.source}</em>
+                  </span>
+                ))
+              ) : (
+                <span>
+                  {formatStatus(application.status)}
+                  <em>Current status</em>
+                </span>
+              )}
+            </div>
+            {application.latestCoverLetterExcerpt ? (
+              <p className="record-subnote">Cover letter: {application.latestCoverLetterExcerpt}</p>
+            ) : null}
           </article>
         ))}
       </div>
@@ -318,7 +333,10 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
               </button>
               <button
                 className="secondary-action"
-                disabled={!activeReview.exportReadiness.canExport || exportingApplicationId === activeReview.application.id}
+                disabled={
+                  !activeReview.exportReadiness.canExport ||
+                  exportingApplicationId === activeReview.application.id
+                }
                 onClick={exportFiles}
                 title={
                   activeReview.exportReadiness.canExport

@@ -193,9 +193,10 @@ function SourcePreviewThumb({
 }) {
   if (!source.previewUrl) {
     return (
-      <span className="source-file-thumb" aria-hidden="true">
-        <FileText size={24} />
-      </span>
+      <button className="source-file-thumb interactive" onClick={onOpen} type="button">
+        <FileText size={24} aria-hidden="true" />
+        <span>{formatSourceType(source.source_type)}</span>
+      </button>
     );
   }
 
@@ -277,7 +278,26 @@ function SourceViewer({
           ) : (
             <div className="attachment-viewer-empty">
               <FileText size={28} aria-hidden="true" />
-              <p>Preview is not available, but the source record is preserved.</p>
+              <p>
+                Preview is not available, but the source record is preserved and can
+                be retried or used as audit context.
+              </p>
+              <dl className="source-viewer-metadata">
+                <div>
+                  <dt>Status</dt>
+                  <dd>{source.extraction_status.replace("_", " ")}</dd>
+                </div>
+                <div>
+                  <dt>Type</dt>
+                  <dd>{formatSourceType(source.source_type)}</dd>
+                </div>
+                {source.failure_reason ? (
+                  <div>
+                    <dt>Last issue</dt>
+                    <dd>{formatFailureReason(source.failure_reason)}</dd>
+                  </div>
+                ) : null}
+              </dl>
             </div>
           )}
         </div>

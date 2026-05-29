@@ -1877,8 +1877,235 @@ input:focus {
 .jobs-panel,
 .applications-panel {
   display: grid;
-  gap: 16px;
-  padding: 20px;
+  gap: 14px;
+  padding: 18px;
+}
+
+.compact-pane-heading {
+  margin-bottom: 18px;
+}
+
+.record-list {
+  display: grid;
+  gap: 10px;
+}
+
+.record-row {
+  align-items: center;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 12px;
+}
+
+.record-main,
+.record-main-button {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.record-main-button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.record-main-button:hover .record-title {
+  color: var(--sage-strong);
+}
+
+.record-title {
+  color: var(--foreground);
+  font-size: 0.96rem;
+  font-weight: 750;
+  line-height: 1.25;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.record-meta,
+.record-summary,
+.record-subnote {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.38;
+  margin: 0;
+}
+
+.record-summary {
+  color: var(--ink-soft);
+}
+
+.record-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.record-detail-panel {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  padding-top: 12px;
+}
+
+.record-action-strip {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.job-record {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.application-record {
+  grid-template-columns: minmax(0, 1fr) minmax(160px, auto) auto minmax(180px, 260px);
+}
+
+.compact-status-select {
+  max-width: 180px;
+  min-width: 150px;
+}
+
+.application-stage-strip,
+.artifact-filter-strip {
+  align-items: stretch;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.application-stage-strip span,
+.artifact-filter-chip {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  color: var(--muted);
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.application-stage-strip strong,
+.artifact-filter-chip strong {
+  color: var(--foreground);
+  font-family: var(--font-pr-brand), Georgia, serif;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.artifact-filter-chip {
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.artifact-filter-chip span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.artifact-filter-chip.active,
+.artifact-filter-chip:hover {
+  background: rgba(185, 155, 103, 0.12);
+  border-color: rgba(185, 155, 103, 0.38);
+}
+
+.artifact-record {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.compact-timeline {
+  margin: 0;
+  padding: 9px;
+}
+
+.compact-timeline strong {
+  font-size: 0.76rem;
+}
+
+.compact-fit-grid {
+  margin-top: 0;
+}
+
+.settings-section-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-section-card {
+  align-items: flex-start;
+  background: rgba(255, 250, 243, 0.72);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 150px;
+  padding: 18px;
+}
+
+.settings-section-card svg {
+  color: var(--sage-strong);
+  margin-top: 2px;
+}
+
+.settings-section-card span {
+  color: var(--sage-strong);
+  display: block;
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.settings-section-card strong {
+  color: var(--foreground);
+  display: block;
+  font-size: 1.02rem;
+  margin-bottom: 6px;
+}
+
+.settings-section-card p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.settings-card-note {
+  margin-top: 8px !important;
+}
+
+.inline-link {
+  color: var(--sage-strong);
+  display: inline-flex;
+  font-size: 0.86rem;
+  font-weight: 800;
+  margin-top: 10px;
+  text-decoration: none;
+}
+
+.inline-link:hover {
+  text-decoration: underline;
 }
 
 .job-list {
@@ -2197,6 +2424,38 @@ input:focus {
 .source-pill.processing {
   background: var(--pr-mist-beige);
   color: var(--ink-soft);
+}
+
+.source-pill.muted {
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--muted);
+}
+
+.source-viewer-metadata {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  width: min(420px, 100%);
+}
+
+.source-viewer-metadata div {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 4px;
+  padding-top: 9px;
+}
+
+.source-viewer-metadata dt {
+  color: var(--sage-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.source-viewer-metadata dd {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  margin: 0;
 }
 
 .secondary-action,
@@ -3131,14 +3390,29 @@ input:focus {
   .resume-readiness-panel,
   .owner-detail-grid,
   .settings-grid,
+  .settings-section-grid,
   .owner-metric-grid,
   .fit-review-grid,
   .profile-editor-grid,
+  .record-row,
+  .job-record,
+  .application-record,
+  .artifact-record,
   .job-row,
   .job-row:has(.secondary-action),
   .materials-editor-grid,
   .fact-groups {
     grid-template-columns: 1fr;
+  }
+
+  .record-actions,
+  .record-action-strip {
+    justify-content: flex-start;
+  }
+
+  .compact-status-select {
+    max-width: none;
+    width: 100%;
   }
 
   .materials-review-header {
