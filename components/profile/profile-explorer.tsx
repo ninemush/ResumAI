@@ -251,28 +251,28 @@ export function ProfileExplorer({
 
       <section className="cockpit-panel" aria-label="Career cockpit">
         <CockpitMetric
-          detail="Profile readiness improves as Pramania reads stronger sources and your direction becomes clearer."
+          detail="Open resume studio"
           label="Readiness"
           onClick={() => onNavigate("resume")}
           value={`${overview.readinessScore}%`}
         />
         <CockpitMetric
-          detail={`${applicationOverview.summary.needsReview} application${applicationOverview.summary.needsReview === 1 ? "" : "s"} still need a decision or next action.`}
+          detail={`${applicationOverview.summary.needsReview} need review`}
           label="Applications"
           onClick={() => onNavigate("applications")}
           value={applicationOverview.summary.total}
         />
         <CockpitMetric
-          detail="Use this to keep follow-up conversations precise."
+          detail="Track active loops"
           label="Interviewing"
           onClick={() => onNavigate("applications")}
           value={applicationOverview.summary.interviewing}
         />
         <CockpitMetric
-          detail={`${jobOverview.summary.readyForReview} readable job post${jobOverview.summary.readyForReview === 1 ? "" : "s"} ready for fit review.`}
+          detail={`${jobOverview.summary.identified} saved roles`}
           label="Jobs to review"
           onClick={() => onNavigate("jobs")}
-          value={jobOverview.summary.identified}
+          value={jobOverview.summary.readyForReview}
         />
         <div className="stage-progress-card">
           <div>
@@ -285,9 +285,11 @@ export function ProfileExplorer({
           </div>
           <div className="stage-progress" aria-label="Application status distribution">
             {applicationOverview.summary.byStage.map((stage) => (
-              <span
+              <button
                 key={stage.label}
+                onClick={() => onNavigate("applications")}
                 title={`${stage.label}: ${stage.value}`}
+                type="button"
               >
                 <i
                   style={
@@ -301,7 +303,7 @@ export function ProfileExplorer({
                 />
                 <em>{stage.value}</em>
                 {stage.label}
-              </span>
+              </button>
             ))}
           </div>
         </div>
