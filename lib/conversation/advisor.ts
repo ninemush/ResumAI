@@ -206,7 +206,8 @@ generic chatbot reply. Use the saved profile context, recent conversation, and
 current app surface to answer as a senior talent advisor.
 
 Do not expose internal processing language such as "captured signals",
-"profile facts", "schema", "source IDs", or "pipeline". Speak naturally.
+"profile facts", "schema", "source IDs", "pipeline", or counts of sources/signals.
+Speak naturally and explain the practical career value, not the mechanics.
 
 If the user asks for guidance, give pointed, domain-aware hypotheses and a
 small next step. If the profile is thin, say what evidence would unlock better
@@ -219,8 +220,14 @@ acknowledge it directly and use the saved context.
 
 Keep the response concise: usually 2 short paragraphs or 3-5 crisp bullets.
 Ask at most one follow-up question unless the user explicitly wants a list.
-You may use simple bullets when they improve clarity. Do not use markdown
-headings or long numbered lists in chat.
+You may use simple bullets when they improve clarity. Do not use long numbered
+lists in chat. If you use labels, keep them short, like "What I see:" or
+"Best next move:".
+
+If the user is asking "why", "you already have my information", or challenging a
+previous answer, do not treat it as new profile evidence. Answer the concern
+directly, apologize briefly if the product fell short, and use the saved context
+to give a better answer.
 `.trim();
 }
 
@@ -398,7 +405,7 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
     `- Summary: ${read("summary") ?? "None"}`,
     `- Skills: ${readArray("skills").slice(0, 16).join(", ") || "None"}`,
     `- Experience highlights: ${readArray("experienceBullets").slice(0, 8).join(" / ") || "None"}`,
-    `- Gaps: ${readArray("gaps").slice(0, 6).join(" / ") || "None"}`,
+    `- Gaps: ${readArray("keywordGaps").slice(0, 6).join(" / ") || "None"}`,
   ].join("\n");
 }
 
@@ -427,14 +434,6 @@ function buildContextAwareAdvisorFallback({
     intelligence?.roleTargetRead ||
     profile?.headline ||
     "your current target direction";
-  const workspaceSnapshot = [
-    workspace.sources.total > 0 ? `${workspace.sources.total} saved sources` : null,
-    workspace.applications ? `${workspace.applications.summary.total} applications` : null,
-    workspace.jobs ? `${workspace.jobs.summary.identified} saved jobs` : null,
-    workspace.artifacts ? `${workspace.artifacts.summary.total} generated artifacts` : null,
-  ]
-    .filter(Boolean)
-    .join(", ");
   const proofThemes = intelligence?.proofThemes
     .flatMap((theme) => theme.evidence)
     .filter(Boolean)
@@ -447,11 +446,15 @@ function buildContextAwareAdvisorFallback({
   const resumeText = formatLatestResumeForAdvisor(latestResume);
 
   if (normalized.includes("why")) {
-    return `You are right to push back. I do have your saved workspace context${workspaceSnapshot ? ` (${workspaceSnapshot})` : ""}, so I should not ask you to repeat it. Based on the current record, the strongest lane is ${roleRead}. The next useful move is to turn the strongest proof into sharper resume evidence, especially around ${formatListForSentence(gaps.map((gap) => gap.label), "scope, measurable outcomes, and role focus")}.`;
+    return `You are right to push back. I do have your saved workspace context, so I should not ask you to repeat it.
+
+Based on the current record, the strongest lane is ${roleRead}. The next useful move is to turn the strongest proof into sharper resume evidence, especially around ${formatListForSentence(gaps.map((gap) => gap.label), "scope, measurable outcomes, and role focus")}.`;
   }
 
   if (normalized.includes("metric") || normalized.includes("missing")) {
-    return `Based on what I already have, your profile does not need generic metrics; it needs executive-grade proof tied to scope and business value. For ${roleRead}, I would strengthen: revenue owned or influenced, margin or profitability movement, customer/portfolio scale, regional or team scope, before-and-after operating improvements, and decision authority.
+    return `What I see:
+- Your profile does not need generic metrics; it needs executive-grade proof tied to scope and business value.
+- For ${roleRead}, I would strengthen revenue owned or influenced, margin or profitability movement, customer/portfolio scale, regional or team scope, before-and-after operating improvements, and decision authority.
 
 The proof already visible includes ${formatListForSentence(proofThemes ?? [], "transformation, GTM/services leadership, operations, AI/automation, and P&L-adjacent work")}. What is missing is not whether those examples are VP+ level; it is attaching each one to the role, company, scale, and outcome so the master resume reads as board-ready rather than broadly senior.`;
   }
@@ -480,6 +483,13 @@ function formatListForSentence(items: string[], fallback: string) {
 function normalizeAdvisorMessage(message: string) {
   const normalized = message
     .replace(/\r\n/g, "\n")
+    .replace(/^\s{0,3}#{1,6}\s+(.+)$/gm, "$1:")
+    .replace(/\s+-\s+(?=(?:\*\*)?[A-Z0-9])/g, "\n- ")
+    .replace(
+      /([.!?])\s+((?:What I see|What I learned|What is missing|Best next move|Next step|Why it matters|Recommendation|My recommendation):)/g,
+      "$1\n\n$2",
+    )
+    .replace(/(\S)\s+(\*\*[A-Z][^*]{2,64}\*\*:)/g, "$1\n\n$2")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
