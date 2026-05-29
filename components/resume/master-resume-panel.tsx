@@ -57,6 +57,10 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
   }, [isDirty]);
 
   async function generateResume() {
+    if (isDirty && !window.confirm("Regenerating will replace unsaved resume edits. Continue?")) {
+      return;
+    }
+
     setIsGenerating(true);
     setMessage(null);
 
@@ -121,6 +125,11 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
   }
 
   async function exportResumeFiles() {
+    if (isDirty) {
+      setMessage("Save or discard your resume edits before exporting PDF and DOCX files.");
+      return;
+    }
+
     setIsExporting(true);
     setMessage(null);
 
@@ -286,11 +295,10 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
           ) : null}
 
           <div className="resume-document-preview" aria-label="Resume preview">
-            <header>
+            <header className="resume-preview-header">
               <strong className="resume-preview-name">
                 {profileOverview.profile?.displayName ?? "Your Name"}
               </strong>
-              <span className="resume-preview-helper">Master ATS resume</span>
               <textarea
                 aria-label="Resume headline"
                 className="resume-headline-field"
@@ -352,9 +360,9 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
                 <div className="resume-experience-section-list">
                   {draft.experienceSections.map((section, index) => (
                     <article className="resume-experience-section" key={`${section.roleTitle}-${index}`}>
-                      <div className="resume-role-grid">
-                        <label>
-                          Role
+                      <div className="resume-role-card-header">
+                        <label className="resume-role-title-field">
+                          <span className="sr-only">Role</span>
                           <input
                             aria-label={`Role title for experience ${index + 1}`}
                             onChange={(event) =>
@@ -362,11 +370,12 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
                                 roleTitle: event.target.value,
                               })
                             }
+                            placeholder="Role title"
                             value={section.roleTitle}
                           />
                         </label>
-                        <label>
-                          Company
+                        <label className="resume-role-company-field">
+                          <span className="sr-only">Company</span>
                           <input
                             aria-label={`Company for ${section.roleTitle}`}
                             onChange={(event) =>
@@ -374,11 +383,14 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
                                 company: event.target.value,
                               })
                             }
+                            placeholder="Company"
                             value={section.company ?? ""}
                           />
                         </label>
+                      </div>
+                      <div className="resume-role-meta-row">
                         <label>
-                          Dates
+                          <span className="sr-only">Dates</span>
                           <input
                             aria-label={`Dates for ${section.roleTitle}`}
                             onChange={(event) =>
@@ -391,7 +403,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
                           />
                         </label>
                         <label>
-                          Location
+                          <span className="sr-only">Location</span>
                           <input
                             aria-label={`Location for ${section.roleTitle}`}
                             onChange={(event) =>
@@ -399,6 +411,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
                                 location: event.target.value,
                               })
                             }
+                            placeholder="Location"
                             value={section.location ?? ""}
                           />
                         </label>
@@ -465,6 +478,19 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
                         rows={Math.max(1, Math.ceil(bullet.length / 88))}
                         value={bullet}
                       />
+                      <button
+                        aria-label={`Remove selected experience bullet ${index + 1}`}
+                        className="icon-only-action"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            experienceBullets: draft.experienceBullets.filter((_, itemIndex) => itemIndex !== index),
+                          })
+                        }
+                        type="button"
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
                     </div>
                   ))}
                   <button

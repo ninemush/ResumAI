@@ -1524,20 +1524,20 @@ input:focus {
   width: 100%;
 }
 
-.resume-document-preview header {
+.resume-preview-header {
   display: grid;
-  gap: 4px;
+  gap: 7px;
   min-width: 0;
 }
 
-.resume-document-preview header textarea,
-.resume-document-preview header input {
+.resume-preview-header textarea,
+.resume-preview-header input {
   border: 0;
   border-bottom: 2px solid var(--line);
   border-radius: 0;
   color: var(--foreground);
   font-family: inherit;
-  font-size: clamp(0.96rem, 1.4vw, 1.15rem);
+  font-size: clamp(0.92rem, 1.2vw, 1.04rem);
   font-weight: 700;
   max-width: 100%;
   overflow-wrap: anywhere;
@@ -1550,6 +1550,7 @@ input:focus {
   overflow: hidden;
   resize: none;
   white-space: normal;
+  word-break: normal;
 }
 
 .resume-preview-helper {
@@ -1647,16 +1648,17 @@ input:focus {
 }
 
 .resume-experience-section {
-  border: 1px solid rgba(185, 155, 103, 0.22);
-  border-radius: var(--pr-radius-sm);
+  border: 0;
+  border-top: 1px solid rgba(185, 155, 103, 0.28);
+  border-radius: 0;
   display: grid;
-  gap: 14px;
-  padding: 14px;
+  gap: 10px;
+  padding: 14px 0 0;
 }
 
 .resume-experience-section:focus-within {
   border-color: rgba(185, 155, 103, 0.48);
-  box-shadow: 0 12px 32px rgba(18, 29, 47, 0.06);
+  box-shadow: none;
 }
 
 .resume-experience-section strong {
@@ -1669,20 +1671,46 @@ input:focus {
   font-size: 0.84rem;
 }
 
-.resume-role-grid {
+.resume-role-card-header {
+  align-items: baseline;
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
 }
 
-.resume-role-grid label {
+.resume-role-card-header label,
+.resume-role-meta-row label {
   color: var(--muted);
   display: grid;
-  font-size: 0.72rem;
-  font-weight: 800;
   gap: 4px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+}
+
+.resume-role-title-field input {
+  color: var(--foreground);
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.resume-role-company-field input {
+  color: var(--foreground);
+  font-size: 0.96rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.resume-role-meta-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.resume-role-meta-row input {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.resume-role-meta-row label:last-child input {
+  text-align: right;
 }
 
 .resume-bullet-editor {
@@ -1706,6 +1734,7 @@ input:focus {
 .resume-bullet-row textarea {
   border-bottom: 1px solid rgba(185, 155, 103, 0.2);
   min-height: 34px;
+  padding-bottom: 3px;
 }
 
 .resume-role-actions {
@@ -3797,9 +3826,15 @@ input:focus {
     padding: 20px;
   }
 
-  .resume-role-grid,
+  .resume-role-card-header,
+  .resume-role-meta-row,
   .resume-bullet-row {
     grid-template-columns: 1fr;
+  }
+
+  .resume-role-company-field input,
+  .resume-role-meta-row label:last-child input {
+    text-align: left;
   }
 
   .resume-bullet-row span {
