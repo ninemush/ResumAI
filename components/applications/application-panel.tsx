@@ -62,9 +62,12 @@ const applicationStatuses = [
   { value: "withdrawn", label: "Withdrawn" },
 ];
 
+type StageFilter = "All" | "Review" | "Applied" | "Interview" | "Selected" | "Closed";
+
 export function ApplicationPanel({ overview, showEmptyState = false }: ApplicationPanelProps) {
   const router = useRouter();
   const [activeReview, setActiveReview] = useState<MaterialReview | null>(null);
+  const [activeStageFilter, setActiveStageFilter] = useState<StageFilter>("All");
   const [coverLetterDraft, setCoverLetterDraft] = useState("");
   const [resumeDraft, setResumeDraft] = useState<ResumeContent | null>(null);
   const [exportingApplicationId, setExportingApplicationId] = useState<string | null>(null);
@@ -77,6 +80,10 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
   if (overview.recentApplications.length === 0 && !showEmptyState) {
     return null;
   }
+
+  const visibleApplications = overview.recentApplications.filter((application) =>
+    applicationMatchesStage(application.status, activeStageFilter),
+  );
 
   async function updateStatus(applicationId: string, status: string) {
     setPendingApplicationId(applicationId);
@@ -218,12 +225,27 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
         <h2>Follow-up tracker</h2>
       </div>
 
-      <div className="application-stage-strip" aria-label="Application stage summary">
+      <div className="record-filter-strip" aria-label="Application stage filters">
+        <button
+          aria-pressed={activeStageFilter === "All"}
+          className={`record-filter-chip ${activeStageFilter === "All" ? "active" : ""}`}
+          onClick={() => setActiveStageFilter("All")}
+          type="button"
+        >
+          <strong>{overview.summary.total}</strong>
+          <span>All</span>
+        </button>
         {overview.summary.byStage.map((stage) => (
-          <span key={stage.label}>
+          <button
+            aria-pressed={activeStageFilter === stage.label}
+            className={`record-filter-chip ${activeStageFilter === stage.label ? "active" : ""}`}
+            key={stage.label}
+            onClick={() => setActiveStageFilter(stage.label as StageFilter)}
+            type="button"
+          >
             <strong>{stage.value}</strong>
-            {stage.label}
-          </span>
+            <span>{stage.label}</span>
+          </button>
         ))}
       </div>
 
@@ -234,7 +256,10 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
             Applications will appear here after you approve logging a readable job post.
           </p>
         ) : null}
-        {overview.recentApplications.map((application) => (
+        {overview.recentApplications.length > 0 && visibleApplications.length === 0 ? (
+          <p className="empty-state">No applications in this stage yet.</p>
+        ) : null}
+        {visibleApplications.map((application) => (
           <article className="record-row application-record" key={application.id}>
             <button
               className="record-main-button"
@@ -517,4 +542,24 @@ function splitLines(value: string) {
     .split("\n")
     .map((line) => line.trim().replace(/^-+\s*/, ""))
     .filter(Boolean);
+}
+
+function applicationMatchesStage(status: string, stage: StageFilter) {
+  if (stage === "All") {
+    return true;
+  }
+
+  const stageStatuses: Record<Exclude<StageFilter, "All">, Set<string>> = {
+    Applied: new Set(["applied", "no_reply"]),
+    Closed: new Set(["rejected", "interviewed_not_selected", "withdrawn"]),
+    Interview: new Set([
+      "interview_in_progress",
+      "interviewed_not_selected",
+      "interviewed_selected",
+    ]),
+    Review: new Set(["draft"]),
+    Selected: new Set(["interviewed_selected"]),
+  };
+
+  return stageStatuses[stage].has(status);
 }

@@ -10,8 +10,13 @@ type JobIngestionPanelProps = {
   showEmptyState?: boolean;
 };
 
+const jobFilters = ["All", "Ready", "Accepted", "Rejected", "Needs attention"] as const;
+
+type JobFilter = (typeof jobFilters)[number];
+
 export function JobIngestionPanel({ overview, showEmptyState = false }: JobIngestionPanelProps) {
   const router = useRouter();
+  const [activeJobFilter, setActiveJobFilter] = useState<JobFilter>("All");
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -19,6 +24,9 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
   if (overview.recentJobs.length === 0 && !showEmptyState) {
     return null;
   }
+
+  const visibleJobs = overview.recentJobs.filter((job) => jobMatchesFilter(job, activeJobFilter));
+  const filterCounts = buildJobFilterCounts(overview.recentJobs);
 
   async function logApplication(jobId: string) {
     setPendingJobId(jobId);
@@ -119,6 +127,21 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         <h2>Roles under review</h2>
       </div>
 
+      <div className="record-filter-strip" aria-label="Job review filters">
+        {jobFilters.map((filter) => (
+          <button
+            aria-pressed={activeJobFilter === filter}
+            className={`record-filter-chip ${activeJobFilter === filter ? "active" : ""}`}
+            key={filter}
+            onClick={() => setActiveJobFilter(filter)}
+            type="button"
+          >
+            <strong>{filterCounts[filter]}</strong>
+            <span>{filter}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="record-list job-record-list">
         {message ? <p className="system-note success">{message}</p> : null}
         {overview.recentJobs.length === 0 ? (
@@ -126,7 +149,10 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
             Paste a public job post into Pramania to start a fit review.
           </p>
         ) : null}
-        {overview.recentJobs.map((job) => (
+        {overview.recentJobs.length > 0 && visibleJobs.length === 0 ? (
+          <p className="empty-state">No roles match this filter yet.</p>
+        ) : null}
+        {visibleJobs.map((job) => (
           <article className="record-row job-record" key={job.id}>
             <button
               className="record-main-button"
@@ -312,4 +338,40 @@ function formatFailureReason(reason: string) {
   };
 
   return friendlyMessages[reason] ?? "Ingestion needs another attempt.";
+}
+
+function jobMatchesFilter(job: JobOverview["recentJobs"][number], filter: JobFilter) {
+  if (filter === "All") {
+    return true;
+  }
+
+  if (filter === "Ready") {
+    return job.ingestion_status === "succeeded" && job.review_status === "needs_review";
+  }
+
+  if (filter === "Accepted") {
+    return job.review_status === "accepted";
+  }
+
+  if (filter === "Rejected") {
+    return job.review_status === "rejected";
+  }
+
+  return job.ingestion_status === "failed";
+}
+
+function buildJobFilterCounts(jobs: JobOverview["recentJobs"]) {
+  return jobFilters.reduce<Record<JobFilter, number>>(
+    (counts, filter) => {
+      counts[filter] = jobs.filter((job) => jobMatchesFilter(job, filter)).length;
+      return counts;
+    },
+    {
+      Accepted: 0,
+      All: 0,
+      "Needs attention": 0,
+      Ready: 0,
+      Rejected: 0,
+    },
+  );
 }

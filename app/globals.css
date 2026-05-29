@@ -2185,6 +2185,7 @@ input:focus {
   min-width: 150px;
 }
 
+.record-filter-strip,
 .application-stage-strip,
 .artifact-filter-strip {
   align-items: center;
@@ -2193,6 +2194,7 @@ input:focus {
   gap: 8px;
 }
 
+.record-filter-chip,
 .application-stage-strip span,
 .artifact-filter-chip {
   background: rgba(255, 255, 255, 0.62);
@@ -2206,6 +2208,31 @@ input:focus {
   padding: 9px 12px;
 }
 
+.record-filter-chip {
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.record-filter-chip span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.record-filter-chip.active,
+.record-filter-chip:hover {
+  background: rgba(185, 155, 103, 0.12);
+  border-color: rgba(185, 155, 103, 0.38);
+}
+
+.record-filter-chip.active span,
+.record-filter-chip:hover span {
+  color: var(--foreground);
+}
+
+.record-filter-chip strong,
 .application-stage-strip strong,
 .artifact-filter-chip strong {
   color: var(--foreground);

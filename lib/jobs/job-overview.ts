@@ -39,12 +39,12 @@ export async function getJobOverview(userId: string): Promise<JobOverview> {
       )
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
-      .limit(5),
+      .limit(50),
     readUserFitContext(userId),
   ]);
 
   return {
-    recentJobs: (jobs ?? []).slice(0, 5).map((job) => {
+    recentJobs: (jobs ?? []).map((job) => {
       const fitAnalysis = analyzeJobFit({
         jobText: job.extracted_text,
         masterResume: fitContext.masterResume,

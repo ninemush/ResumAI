@@ -95,7 +95,7 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
   }));
 
   return {
-    recentApplications: recentApplications.slice(0, 5),
+    recentApplications: recentApplications.slice(0, 50),
     openFollowUpCount: recentApplications.filter((application) =>
       followUpStatuses.has(application.status),
     ).length,
