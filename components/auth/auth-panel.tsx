@@ -180,10 +180,10 @@ export function AuthPanel() {
           <Image
             alt={brand.logoAlt}
             className="auth-hero-logo"
-            height={500}
+            height={941}
             priority
             src={brand.horizontalLogoPath}
-            width={1800}
+            width={1672}
           />
         </div>
         <h1 id="auth-title">Turn your experience into a sharper career story.</h1>

@@ -61,10 +61,10 @@ export function SideNav({ activeView, collapsed, onSelectView, onToggleCollapsed
         <Image
           alt={brand.logoAlt}
           className="side-nav-logo side-nav-logo-lockup"
-          height={78}
+          height={941}
           priority
           src={brand.horizontalLogoPath}
-          width={280}
+          width={1672}
         />
         <div className="side-nav-brand-copy">
           <strong>{brand.name}</strong>

@@ -6,11 +6,12 @@ export const brand = {
   tagline: configuredTagline || "Career clarity, guided by intelligence",
   category: "Career intelligence",
   description: "AI-assisted job application workspace.",
-  appIconPath: "/brand/pramania-app-icon.svg",
-  bloomMarkPath: "/brand/pramania-bloom-mark.svg",
-  horizontalLogoPath: "/brand/pramania-horizontal-lockup.svg",
+  appIconPath: "/brand/pramania-app-icon-dark.png",
+  appIconLightPath: "/brand/pramania-app-icon-light.png",
+  bloomMarkPath: "/brand/pramania-bloom-mark-transparent.png",
+  horizontalLogoPath: "/brand/pramania-horizontal-lockup-transparent.png",
   logoAlt: "Pramania primary logo",
-  logoPath: "/brand/pramania-primary-logo.svg",
+  logoPath: "/brand/pramania-primary-logo-transparent.png",
 } as const;
 
 export function getBrandInitials(name = brand.name) {

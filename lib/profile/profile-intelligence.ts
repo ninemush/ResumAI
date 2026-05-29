@@ -76,6 +76,8 @@ export function buildProfileIntelligence({
   profile: ProfileSnapshot;
 }): ProfileIntelligence {
   const values = facts.map((fact) => fact.fact_value);
+  const proofFacts = facts.filter(isProofBearingFact);
+  const proofValues = proofFacts.map((fact) => fact.fact_value);
   const profileText = [
     profile.headline,
     profile.summary,
@@ -88,7 +90,7 @@ export function buildProfileIntelligence({
     .toLowerCase();
   const proofThemes = signalGroups
     .map((group) => ({
-      evidence: values
+      evidence: proofValues
         .filter((value) => group.terms.some((term) => value.toLowerCase().includes(term)))
         .slice(0, 3),
       label: group.label,
@@ -98,7 +100,7 @@ export function buildProfileIntelligence({
   const missingGroups = signalGroups
     .filter((group) => !group.terms.some((term) => profileText.includes(term)))
     .slice(0, 4);
-  const evidenceStrength = readEvidenceStrength(facts.length, proofThemes.length);
+  const evidenceStrength = readEvidenceStrength(proofFacts.length, proofThemes.length);
 
   return {
     evidenceStrength,
@@ -115,6 +117,10 @@ export function buildProfileIntelligence({
     resumeFocus: readResumeFocus({ proofThemes, profile }),
     roleTargetRead: readRoleTargetRead(profile),
   };
+}
+
+function isProofBearingFact(fact: ProfileFact) {
+  return ["experience", "project", "accolade", "credential"].includes(fact.fact_type);
 }
 
 function readEvidenceStrength(factCount: number, themeCount: number): ProfileIntelligence["evidenceStrength"] {

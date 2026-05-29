@@ -238,6 +238,10 @@ export function ConversationPanel({
     }
   }
 
+  function handleMessageInput(value: string) {
+    setMessage(value);
+  }
+
   async function processMessage(text: string) {
     const urls = extractUrls(text);
     const textWithoutUrls = removeUrls(text, urls).trim();
@@ -973,7 +977,7 @@ export function ConversationPanel({
                 onOpen={() => setActiveAttachment(item.attachment ?? null)}
               />
             ) : null}
-            <p>{item.text}</p>
+            <ChatMessageBody text={item.text} />
           </div>
         ))}
         {isSubmitting ? (
@@ -1009,7 +1013,8 @@ export function ConversationPanel({
         </button>
         <input
           disabled={isSubmitting}
-          onChange={(event) => setMessage(event.target.value)}
+          onChange={(event) => handleMessageInput(event.target.value)}
+          onInput={(event) => handleMessageInput(event.currentTarget.value)}
           onPaste={(event) => {
             const files = event.clipboardData.files;
 
@@ -1261,6 +1266,104 @@ function cleanPlainChatText(value: string) {
     .trim();
 }
 
+type ChatMessageBlock =
+  | {
+      kind: "paragraph";
+      text: string;
+    }
+  | {
+      items: string[];
+      kind: "list";
+    };
+
+function ChatMessageBody({ text }: { text: string }) {
+  const blocks = parseChatMessageBlocks(text);
+
+  return (
+    <div className="chat-message-body">
+      {blocks.map((block, index) => {
+        if (block.kind === "list") {
+          return (
+            <ul key={`list-${index}`}>
+              {block.items.map((item, itemIndex) => (
+                <li key={`${item}-${itemIndex}`}>{renderInlineChatText(item)}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        return <p key={`${block.text}-${index}`}>{renderInlineChatText(block.text)}</p>;
+      })}
+    </div>
+  );
+}
+
+function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
+  const normalized = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\s+-\s+(?=\*\*?[A-Z0-9])/g, "\n- ")
+    .replace(/\s+[-•]\s+(?=[A-Z][^.!?]{2,80}:)/g, "\n- ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (!normalized) return [{ kind: "paragraph", text: "" }];
+
+  const blocks: ChatMessageBlock[] = [];
+  let pendingList: string[] = [];
+
+  const flushList = () => {
+    if (pendingList.length > 0) {
+      blocks.push({ kind: "list", items: pendingList });
+      pendingList = [];
+    }
+  };
+
+  for (const rawLine of normalized.split("\n")) {
+    const line = rawLine.trim();
+
+    if (!line) {
+      flushList();
+      continue;
+    }
+
+    const bullet = line.match(/^[-•]\s+(.+)$/);
+
+    if (bullet) {
+      pendingList.push(cleanChatListItem(bullet[1]));
+      continue;
+    }
+
+    flushList();
+    blocks.push({ kind: "paragraph", text: line });
+  }
+
+  flushList();
+
+  return blocks;
+}
+
+function cleanChatListItem(value: string) {
+  return value
+    .replace(/^\d+\.\s+/, "")
+    .replace(/^\*\*(.+?)\*\*:?\s*/, "**$1:** ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function renderInlineChatText(text: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+
+  return parts.map((part, index) => {
+    const strong = part.match(/^\*\*([^*]+)\*\*$/);
+
+    if (strong) {
+      return <strong key={`${part}-${index}`}>{strong[1]}</strong>;
+    }
+
+    return part;
+  });
+}
+
 function inferProfilePatch(text: string) {
   const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
   const targetDirection = extractProfileFieldValue(text, [
@@ -1271,11 +1374,9 @@ function inferProfilePatch(text: string) {
     "set my target role to",
     "target role is",
     "my target role is",
-    "i want to target",
-    "i am targeting",
   ]);
 
-  if (targetDirection) {
+  if (targetDirection && isSafeDirectProfileField(targetDirection, 240)) {
     return {
       patch: { targetDirection },
       reply: `Set your working target direction to ${targetDirection}. I will use that as the lane when shaping profile and resume guidance.`,
@@ -1291,7 +1392,7 @@ function inferProfilePatch(text: string) {
     "my seniority is",
   ]);
 
-  if (targetLevel) {
+  if (targetLevel && isSafeDirectProfileField(targetLevel, 120)) {
     return {
       patch: { targetLevel },
       reply: `Set your working target level to ${targetLevel}. I will keep screening and resume language calibrated to that level.`,
@@ -1305,7 +1406,7 @@ function inferProfilePatch(text: string) {
     "update my headline to",
   ]);
 
-  if (headline) {
+  if (headline && isSafeDirectProfileField(headline, 180)) {
     return {
       patch: { headline },
       reply: "Updated your profile headline. I will use that positioning as a starting point, and we can keep sharpening it as more evidence comes in.",
@@ -1319,7 +1420,7 @@ function inferProfilePatch(text: string) {
     "update my summary to",
   ]);
 
-  if (summary) {
+  if (summary && isSafeDirectProfileField(summary, 900)) {
     return {
       patch: { summary },
       reply: "Updated your profile summary. I will treat it as your working read, not a final resume claim until the evidence supports it.",
@@ -1332,7 +1433,7 @@ function inferProfilePatch(text: string) {
     "update my name to",
   ]);
 
-  if (displayName && !/\b(role|title|company|team|target)\b/.test(normalized)) {
+  if (displayName && isSafeDirectProfileField(displayName, 120) && !/\b(role|title|company|team|target)\b/.test(normalized)) {
     return {
       patch: { displayName },
       reply: `Updated your profile name to ${displayName}.`,
@@ -1340,6 +1441,13 @@ function inferProfilePatch(text: string) {
   }
 
   return null;
+}
+
+function isSafeDirectProfileField(value: string, maxLength: number) {
+  if (value.length > maxLength) return false;
+  if (value.split(/[.!?]/).filter((part) => part.trim().length > 0).length > 1) return false;
+
+  return true;
 }
 
 function extractProfileFieldValue(text: string, phrases: string[]) {
