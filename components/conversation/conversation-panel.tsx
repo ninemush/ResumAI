@@ -1092,11 +1092,11 @@ function getProcessingMessage(mode: ProcessingMode, step: number, activeView: Ap
   const messages: Record<ProcessingMode, string[]> = {
     advisor: [
       `Reading your question against what I know from your ${surface}.`,
-      "Checking the profile evidence before I answer, so this does not become generic advice.",
+      "Checking the profile context before I answer, so this does not become generic advice.",
       "Looking for the strongest career move, not just the next reply.",
       "Pressure-testing the answer like a recruiter would: fit, proof, seniority, and risk.",
       "Looking for the useful next question, not a long questionnaire.",
-      "Separating what we know from what we still need to prove.",
+      "Separating what we already know from what would make the answer sharper.",
       "Checking whether this is a master-profile question or a role-specific question.",
       "Bringing the resume, profile, and recent conversation together.",
       "Making the guidance practical enough that you can act on it.",
@@ -1114,13 +1114,13 @@ function getProcessingMessage(mode: ProcessingMode, step: number, activeView: Ap
     ],
     file: [
       hasFileIntent
-        ? `Reading ${intent.split(",")[0]} and looking for career evidence.`
-        : "Reading the file and looking for career evidence...",
+        ? `Reading ${intent.split(",")[0]} and looking for career context.`
+        : "Reading the file and looking for career context...",
       "Pulling out roles, scope, skills, credentials, and proof points...",
       "Separating useful evidence from formatting noise...",
       "Checking whether this is resume text, profile text, or screenshot text...",
       "Looking for the details a recruiter would actually screen for...",
-      "Keeping the source attached so you can see where each detail came from...",
+      "Keeping the source attached so you can see where the useful details came from...",
       "Checking whether the master resume should change from this source...",
       "Looking for seniority, scope, domain, and measurable outcomes...",
       "Reading for what changed: stronger positioning, missing metrics, or useful keywords...",
@@ -1265,6 +1265,10 @@ function cleanPlainChatText(value: string) {
   return value
     .replace(/^\s{0,3}#{1,6}\s+/gm, "")
     .replace(/\r\n/g, "\n")
+    .replace(
+      /\s+((?:What I see|What I learned|What is missing|Best next move|Next step|Why it matters|Recommendation|My recommendation|Conservative|Balanced|Executive\/board-ready|Board-ready):)/g,
+      "\n\n$1",
+    )
     .replace(/\s+-\s+(?=\*\*?[A-Z0-9])/g, "\n- ")
     .replace(/\s+[-•]\s+(?=[A-Z][^.!?]{2,80}:)/g, "\n- ")
     .replace(
@@ -1326,6 +1330,10 @@ function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
   const normalized = text
     .replace(/\r\n/g, "\n")
     .replace(/^\s{0,3}#{1,6}\s+(.+)$/gm, "\n\n**$1**\n")
+    .replace(
+      /\s+((?:What I see|What I learned|What is missing|Best next move|Next step|Why it matters|Recommendation|My recommendation|Conservative|Balanced|Executive\/board-ready|Board-ready):)/g,
+      "\n\n$1",
+    )
     .replace(/(\S)\s+(\*\*[A-Z][^*]{2,64}\*\*:)/g, "$1\n\n$2")
     .replace(
       /([.!?])\s+((?:Conservative|Balanced|Executive\/board-ready|Board-ready|My recommendation|Recommendation|What to fix first|Why it matters|What I learned|What is missing|Next step|Next question):)/g,

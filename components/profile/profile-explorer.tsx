@@ -252,7 +252,7 @@ export function ProfileExplorer({
       <section className="cockpit-panel" aria-label="Career cockpit">
         <CockpitMetric
           detail="Open resume studio"
-          label="Readiness"
+          label="Resume readiness"
           onClick={() => onNavigate("resume")}
           value={`${overview.readinessScore}%`}
         />
@@ -344,7 +344,7 @@ export function ProfileExplorer({
         </div>
         <div className="profile-signal-grid">
           <article>
-            <span>Current confidence</span>
+            <span>Positioning strength</span>
             <strong>{formatEvidenceStrength(overview.intelligence.evidenceStrength)}</strong>
             <p>{overview.intelligence.roleTargetRead}</p>
           </article>
@@ -621,9 +621,9 @@ function formatList(items: string[]) {
 
 function formatEvidenceStrength(value: ProfileOverview["intelligence"]["evidenceStrength"]) {
   const labels: Record<ProfileOverview["intelligence"]["evidenceStrength"], string> = {
-    developing: "Developing",
-    strong: "Strong",
-    thin: "Thin",
+    developing: "Taking shape",
+    strong: "Well supported",
+    thin: "Needs more proof",
   };
 
   return labels[value];

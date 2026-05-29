@@ -13,26 +13,11 @@ import {
 import { useRouter } from "next/navigation";
 
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import type { ResumeContent } from "@/lib/resumes/resume-content";
 
 type ApplicationPanelProps = {
   overview: ApplicationOverview;
   showEmptyState?: boolean;
-};
-
-type ResumeContent = {
-  experienceBullets: string[];
-  experienceSections?: {
-    bullets: string[];
-    company?: string | null;
-    endDate?: string | null;
-    role?: string | null;
-    startDate?: string | null;
-  }[];
-  headline: string;
-  keywordGaps: string[];
-  reviewerNotes: string[];
-  skills: string[];
-  summary: string;
 };
 
 type MaterialReview = {
@@ -239,7 +224,7 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
         <p className="eyebrow">Applications</p>
         <h2>Application pipeline</h2>
         <p>
-          Track each role like a candidate pipeline: status, tailored materials,
+          A compact record of every role you choose to pursue: stage, materials,
           and the next follow-up decision.
         </p>
       </div>
@@ -283,6 +268,7 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
             <button
               className="record-main-button"
               onClick={() => loadReview(application.id)}
+              title="Open tailored materials and application details"
               type="button"
             >
               <span className="record-title">{application.jobTitle ?? "Application"}</span>
@@ -607,11 +593,11 @@ function splitLines(value: string) {
 }
 
 function readResumeExperienceDraft(resume: ResumeContent) {
-  if (resume.experienceSections?.length) {
+  if (resume.experienceSections.length > 0) {
     return resume.experienceSections
       .map((section) => {
-        const heading = [section.role, section.company].filter(Boolean).join(" · ");
-        const dates = [section.startDate, section.endDate].filter(Boolean).join(" - ");
+        const heading = [section.roleTitle, section.company].filter(Boolean).join(" · ");
+        const dates = [section.dates, section.location].filter(Boolean).join(" · ");
         const bullets = section.bullets.map((bullet) => `- ${bullet}`).join("\n");
 
         return [heading, dates, bullets].filter(Boolean).join("\n");

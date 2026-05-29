@@ -2153,6 +2153,11 @@ input:focus {
   padding: 11px 12px;
 }
 
+.record-row:hover {
+  border-color: rgba(185, 155, 103, 0.38);
+  box-shadow: 0 14px 34px rgba(60, 47, 37, 0.07);
+}
+
 .record-main,
 .record-main-button {
   display: grid;

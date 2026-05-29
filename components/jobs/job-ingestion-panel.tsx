@@ -124,10 +124,10 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
     <section className="jobs-panel" aria-label="Recent job posts">
       <div className="section-heading">
         <p className="eyebrow">Jobs</p>
-        <h2>Roles under review</h2>
+        <h2>Role decisions</h2>
         <p>
-          A focused queue of roles Pramania has read and kept ready for a decision:
-          ignore, watch, or turn into tailored materials.
+          A focused queue of roles Pramania has read. Open a row to see fit,
+          tradeoffs, and whether it is worth turning into tailored materials.
         </p>
       </div>
 
@@ -161,6 +161,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
             <button
               className="record-main-button"
               onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
+              title="Open the fit review for this role"
               type="button"
             >
               <span className="record-title">{job.title ?? formatJobUrl(job.job_url)}</span>
@@ -171,7 +172,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
               <span className="record-summary">
                 {job.fitSnapshot.score !== null
                   ? job.fitAnalysis.summary
-                  : "Pramania will summarize fit once the job post is readable."}
+                  : "Open the role once Pramania has readable job-post text."}
               </span>
             </button>
 
