@@ -129,20 +129,22 @@ export async function runConversationAdvisor(
     userId: user.id,
   });
   const model = getProfileIntakeModel();
+  const instructions = buildAdvisorInstructions();
+  const inputPayload = buildAdvisorInput({
+    facts: factsError ? [] : ((facts ?? []) as ConversationFact[]),
+    latestResume: resumeError ? null : latestResume,
+    message: input.message,
+    profile,
+    recentConversation: conversationError ? [] : (conversation ?? []).reverse(),
+    surface: input.surface,
+    workspace,
+  });
 
   try {
     const response = await createOpenAIResponse({
       model,
-      instructions: buildAdvisorInstructions(),
-      input: buildAdvisorInput({
-        facts: factsError ? [] : ((facts ?? []) as ConversationFact[]),
-        latestResume: resumeError ? null : latestResume,
-        message: input.message,
-        profile,
-        recentConversation: conversationError ? [] : (conversation ?? []).reverse(),
-        surface: input.surface,
-        workspace,
-      }),
+      instructions,
+      input: inputPayload,
       max_output_tokens: 1700,
       metadata: {
         feature: "conversation_advisor",
@@ -185,6 +187,20 @@ export async function runConversationAdvisor(
       }),
     );
 
+    const relaxedResponse = await runRelaxedAdvisorAttempt({
+      input: inputPayload,
+      instructions,
+      model,
+      surface: input.surface,
+      userId: user.id,
+    });
+
+    if (relaxedResponse) {
+      return {
+        assistantMessage: relaxedResponse,
+      };
+    }
+
     return {
       assistantMessage: buildContextAwareAdvisorFallback({
         facts: factsError ? [] : ((facts ?? []) as ConversationFact[]),
@@ -194,6 +210,57 @@ export async function runConversationAdvisor(
         workspace,
       }),
     };
+  }
+}
+
+async function runRelaxedAdvisorAttempt({
+  input,
+  instructions,
+  model,
+  surface,
+  userId,
+}: {
+  input: string;
+  instructions: string;
+  model: string;
+  surface: string;
+  userId: string;
+}) {
+  try {
+    const response = await createOpenAIResponse({
+      model,
+      instructions: `${instructions}
+
+Return plain text only. Do not return JSON, markdown tables, or code fences.
+Use short paragraphs and bullets only when they make the career advice clearer.`,
+      input,
+      max_output_tokens: 1700,
+      metadata: {
+        feature: "conversation_advisor",
+        response_mode: "relaxed_text",
+        surface,
+      },
+      safety_identifier: hashUserId(userId),
+      store: false,
+      text: {
+        verbosity: "medium",
+      },
+    });
+
+    if (response.error || response.incomplete_details || !response.output_text.trim()) {
+      return null;
+    }
+
+    return normalizeAdvisorMessage(response.output_text);
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "conversation_advisor_relaxed_attempt_failed",
+        code: error instanceof Error ? error.message : "UNKNOWN_CONVERSATION_ADVISOR_RELAXED_ERROR",
+      }),
+    );
+
+    return null;
   }
 }
 
@@ -228,6 +295,12 @@ If the user is asking "why", "you already have my information", or challenging a
 previous answer, do not treat it as new profile evidence. Answer the concern
 directly, apologize briefly if the product fell short, and use the saved context
 to give a better answer.
+
+If the user asks what you learned from an uploaded resume, LinkedIn export, PDF,
+or source, summarize the concrete career evidence visible in saved context first.
+Then explain what should change in the master profile or resume. Do not respond
+as though the source is unavailable unless the context truly has no readable
+source excerpt.
 `.trim();
 }
 

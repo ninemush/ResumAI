@@ -919,9 +919,10 @@ export function ConversationPanel({
   }
 
   function appendAssistantMessage(text: string, persist = false) {
-    setMessages((current) => [...current, { speaker: "assistant", text }]);
+    const cleanText = cleanPlainChatText(text);
+    setMessages((current) => [...current, { speaker: "assistant", text: cleanText }]);
     if (persist) {
-      persistConversationMessage("assistant", text);
+      persistConversationMessage("assistant", cleanText);
     }
   }
 
@@ -1263,9 +1264,19 @@ function formatSourceIntakeReply({
 function cleanPlainChatText(value: string) {
   return value
     .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\s+-\s+(?=\*\*?[A-Z0-9])/g, "\n- ")
+    .replace(/\s+[-•]\s+(?=[A-Z][^.!?]{2,80}:)/g, "\n- ")
+    .replace(
+      /\bI (?:found|pulled out|captured|read and saved)\s+\d+\s+(?:useful\s+)?(?:profile\s+)?signals?\b[,.]?\s*/gi,
+      "",
+    )
+    .replace(/\bFound\s+\d+\s+(?:useful\s+)?profile\s+signals?\.?\s*/gi, "")
+    .replace(/\b(?:Saved|stored)\s+\d+\s+(?:new\s+)?profile\s+details?\.?\s*/gi, "")
     .replace(/^\s*\d+\.\s+(\*\*.*?\*\*:?\s*)/gm, "- $1")
     .replace(/^\s*\d+\.\s+/gm, "- ")
     .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
