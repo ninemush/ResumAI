@@ -181,6 +181,7 @@ export async function generateMasterResume(
             "headline",
             "summary",
             "skills",
+            "experienceSections",
             "experienceBullets",
             "keywordGaps",
             "reviewerNotes",
@@ -192,6 +193,32 @@ export async function generateMasterResume(
               type: "array",
               maxItems: 24,
               items: { type: "string" },
+            },
+            experienceSections: {
+              type: "array",
+              maxItems: 8,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["roleTitle", "company", "location", "dates", "bullets"],
+                properties: {
+                  roleTitle: { type: "string" },
+                  company: {
+                    anyOf: [{ type: "string" }, { type: "null" }],
+                  },
+                  location: {
+                    anyOf: [{ type: "string" }, { type: "null" }],
+                  },
+                  dates: {
+                    anyOf: [{ type: "string" }, { type: "null" }],
+                  },
+                  bullets: {
+                    type: "array",
+                    maxItems: 7,
+                    items: { type: "string" },
+                  },
+                },
+              },
             },
             experienceBullets: {
               type: "array",
@@ -533,6 +560,13 @@ hint of the user's voice by keeping language clear, candid, and grounded.
 Write for a broad master resume, not a specific job post. Use recruiter-grade
 judgment: strong positioning, supported keywords, evidence-backed bullets, and
 clear gaps the user should fill before using this as an application source.
+
+Use a standard ATS structure. The headline must be a concise title or
+positioning line, not a pipe-delimited keyword list. Put keyword breadth into
+skills and experience, not the title. Organize work history into role-based
+experienceSections when the evidence names roles, employers, dates, or scope.
+Each role section should contain bullets that read like resume bullets, not
+loose notes. Also provide experienceBullets as fallback selected highlights.
 
 Treat the master resume as the reusable source of truth. Do not overfit it to
 one narrow role. Capture the user's broader leadership pattern, domain depth,

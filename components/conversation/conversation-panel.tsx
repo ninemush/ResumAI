@@ -244,7 +244,7 @@ export function ConversationPanel({
     const summaries: string[] = [];
 
     if (urls.length === 0) {
-      if (looksLikeAdvisorQuestion(text) && !looksLikeConcreteWorkflowCommand(text)) {
+      if (shouldRouteToAdvisor(text)) {
         appendAssistantMessage(await processAdvisorQuestion(text), true);
         return;
       }
@@ -288,7 +288,7 @@ export function ConversationPanel({
         return;
       }
 
-      if (looksLikeAdvisorQuestion(text)) {
+      if (shouldRouteToAdvisor(text)) {
         appendAssistantMessage(await processAdvisorQuestion(text), true);
         return;
       }
@@ -302,7 +302,7 @@ export function ConversationPanel({
 
     if (!processedActionUrl && shouldProcessProfileRemainder({ textWithoutUrls, urls })) {
       summaries.push(
-        looksLikeAdvisorQuestion(textWithoutUrls)
+        shouldRouteToAdvisor(textWithoutUrls)
           ? await processAdvisorQuestion(textWithoutUrls)
           : await processProfileText(textWithoutUrls),
       );
@@ -1785,6 +1785,22 @@ function looksLikeAdvisorQuestion(text: string) {
       normalized,
     )
   );
+}
+
+function shouldRouteToAdvisor(text: string) {
+  if (!looksLikeAdvisorQuestion(text) || looksLikeConcreteWorkflowCommand(text)) {
+    return false;
+  }
+
+  const normalized = text.toLowerCase();
+
+  if (/\b(i am|i'm|i have|i did|i led|i managed|i built|i created|my role|my experience)\b/.test(normalized)) {
+    return /\b(what should|advice|recommend|where do i fit|how would you|what metrics|quantif|business value)\b/.test(
+      normalized,
+    );
+  }
+
+  return true;
 }
 
 function looksLikeConcreteWorkflowCommand(text: string) {

@@ -238,10 +238,13 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
 
           <div className="resume-document-preview" aria-label="Resume preview">
             <header>
+              <strong className="resume-preview-name">
+                {profileOverview.profile?.displayName ?? "Your Name"}
+              </strong>
               <input
                 aria-label="Resume headline"
                 onChange={(event) => setDraft({ ...draft, headline: event.target.value })}
-                value={draft.headline}
+                value={formatResumeHeadline(draft.headline)}
               />
             </header>
             <section>
@@ -268,18 +271,49 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
               />
             </section>
             <section>
-              <h3>Experience Highlights</h3>
-              <textarea
-                aria-label="Experience bullets"
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    experienceBullets: splitLines(event.target.value),
-                  })
-                }
-                rows={Math.max(8, draft.experienceBullets.length + 2)}
-                value={draft.experienceBullets.map((bullet) => `- ${bullet}`).join("\n")}
-              />
+              <h3>{draft.experienceSections.length > 0 ? "Professional Experience" : "Selected Experience"}</h3>
+              {draft.experienceSections.length > 0 ? (
+                <div className="resume-experience-section-list">
+                  {draft.experienceSections.map((section, index) => (
+                    <article className="resume-experience-section" key={`${section.roleTitle}-${index}`}>
+                      <strong>{[section.roleTitle, section.company].filter(Boolean).join(", ")}</strong>
+                      {[section.location, section.dates].filter(Boolean).length > 0 ? (
+                        <span>{[section.location, section.dates].filter(Boolean).join(" | ")}</span>
+                      ) : null}
+                      <textarea
+                        aria-label={`Experience bullets for ${section.roleTitle}`}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            experienceSections: draft.experienceSections.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? {
+                                    ...item,
+                                    bullets: splitLines(event.target.value),
+                                  }
+                                : item,
+                            ),
+                          })
+                        }
+                        rows={Math.max(3, section.bullets.length + 1)}
+                        value={section.bullets.map((bullet) => `- ${bullet}`).join("\n")}
+                      />
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <textarea
+                  aria-label="Experience bullets"
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      experienceBullets: splitLines(event.target.value),
+                    })
+                  }
+                  rows={Math.max(8, draft.experienceBullets.length + 2)}
+                  value={draft.experienceBullets.map((bullet) => `- ${bullet}`).join("\n")}
+                />
+              )}
             </section>
           </div>
 
@@ -352,4 +386,15 @@ function splitLines(value: string) {
     .split(/\n|,/)
     .map((line) => line.trim().replace(/^-+\s*/, ""))
     .filter(Boolean);
+}
+
+function formatResumeHeadline(headline: string) {
+  const normalized = headline.replace(/\s*\|\s*/g, " / ").replace(/\s+/g, " ").trim();
+  const segments = normalized.split(/\s+\/\s+/).filter(Boolean);
+
+  if (segments.length <= 2) {
+    return normalized;
+  }
+
+  return segments.slice(0, 2).join(" / ");
 }

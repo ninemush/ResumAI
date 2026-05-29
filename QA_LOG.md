@@ -45,3 +45,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: production-like QA was missing a durable demo account; AI calls did not fall back when the requested model was blocked; PDF validation matched exact extracted strings and rejected layout-normalized text.
 - Fix: created a local-only QA credential file, confirmed the QA user in Supabase for repeatable testing, added OpenAI response fallback handling, set the documented default model back to `gpt-4o`, normalized PDF validation text, and tightened chat output to plain text.
 - Validation: signed in as the QA user, uploaded a resume text file through chat, verified profile readiness increased, generated a master resume, exported validated PDF/DOCX artifacts, swept Cockpit/Profile/Sources/Artifacts/Applications/Jobs/Settings, then ran lint, production build, and 38/38 Playwright tests.
+
+### Fixed: advisor, resume, and record layouts were below V1 quality
+
+- Area: conversation routing, AI model configuration, master resume studio, Jobs, Applications.
+- Finding: broad career-advice questions could fall into profile-ingestion copy, the app stayed on `gpt-4o` despite stronger model access, the master resume preview used the headline like a giant title and did not show the user's name, and workspace grids stretched Jobs/Applications into sparse empty cards.
+- Root cause: the chat router treated some advice prompts as profile facts, resume content lacked role-section structure, and `profile-pane` grid rows stretched sparse panels to fill the viewport.
+- Fix: routed advice questions to the advisor path unless they are concrete workflow commands, moved model defaults to `gpt-5.4` with `gpt-4.1` fallback for model/provider failures, added role-based experience sections to master resume output, rendered the user's name separately from a concise headline, switched ATS exports to normal comma-separated skills, and made workspace rows content-sized.
+- Validation: confirmed the account's OpenAI model access through the Models API, smoke-tested `gpt-5.4` through the Responses API, ran lint, production build, and 38/38 Playwright tests. Headless visual QA could not complete a cookie-backed UI login in this session even though the same credentials authenticated through Supabase directly; this remains a QA harness issue to fix before broader release testing.

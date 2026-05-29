@@ -831,6 +831,7 @@ input:focus {
 .profile-pane {
   display: grid;
   gap: 24px;
+  align-content: start;
   min-width: 0;
 }
 
@@ -869,7 +870,7 @@ input:focus {
 }
 
 .profile-pane {
-  grid-template-rows: auto auto 1fr;
+  grid-auto-rows: max-content;
 }
 
 .profile-heading {
@@ -1520,11 +1521,20 @@ input:focus {
   border-bottom: 2px solid var(--line);
   border-radius: 0;
   color: var(--foreground);
-  font-family: var(--font-pr-brand), Georgia, serif;
-  font-size: clamp(1.7rem, 3vw, 2.45rem);
-  font-weight: 650;
-  padding: 0 0 12px;
+  font-family: inherit;
+  font-size: clamp(0.96rem, 1.4vw, 1.15rem);
+  font-weight: 700;
+  padding: 6px 0 12px;
   width: 100%;
+}
+
+.resume-preview-name {
+  color: var(--foreground);
+  display: block;
+  font-size: clamp(1.45rem, 2.4vw, 1.9rem);
+  letter-spacing: 0;
+  line-height: 1.15;
+  margin-bottom: 4px;
 }
 
 .resume-document-preview section {
@@ -1553,6 +1563,26 @@ input:focus {
   padding: 0;
   resize: vertical;
   width: 100%;
+}
+
+.resume-experience-section-list {
+  display: grid;
+  gap: 16px;
+}
+
+.resume-experience-section {
+  display: grid;
+  gap: 4px;
+}
+
+.resume-experience-section strong {
+  color: var(--foreground);
+  font-size: 0.98rem;
+}
+
+.resume-experience-section span {
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .resume-advanced-editor {
@@ -1876,6 +1906,7 @@ input:focus {
 
 .jobs-panel,
 .applications-panel {
+  align-content: start;
   display: grid;
   gap: 14px;
   padding: 18px;
@@ -1898,6 +1929,7 @@ input:focus {
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) auto auto;
+  min-height: 0;
   padding: 12px;
 }
 
@@ -1981,7 +2013,7 @@ input:focus {
 
 .application-stage-strip,
 .artifact-filter-strip {
-  align-items: stretch;
+  align-items: start;
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -1995,7 +2027,7 @@ input:focus {
   color: var(--muted);
   display: grid;
   gap: 4px;
-  min-height: 58px;
+  min-height: 0;
   padding: 10px 12px;
 }
 

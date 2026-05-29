@@ -61,7 +61,8 @@ function shouldRetryWithFallback(error: unknown, requestedModel: ResponseCreateP
   const message = error.message.toLowerCase();
 
   return (
-    status === 404 &&
-    (message.includes("model") || message.includes("verified") || message.includes("not found"))
+    (status === 404 &&
+      (message.includes("model") || message.includes("verified") || message.includes("not found"))) ||
+    (status !== null && status >= 500)
   );
 }

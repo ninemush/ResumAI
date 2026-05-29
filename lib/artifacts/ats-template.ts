@@ -39,6 +39,7 @@ export async function buildAtsResumePdf(input: ResumeTemplateInput) {
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const document = createPdfLayout({ bold, pdf, regular });
+  const headline = formatResumeHeadline(input.resume.headline);
 
   drawTextBlock(document, input.displayName ?? input.resume.headline, {
     font: bold,
@@ -46,7 +47,7 @@ export async function buildAtsResumePdf(input: ResumeTemplateInput) {
   });
 
   if (input.displayName) {
-    drawTextBlock(document, input.resume.headline, {
+    drawTextBlock(document, headline, {
       color: taupe,
       font: regular,
       lineGap: 3,
@@ -65,17 +66,14 @@ export async function buildAtsResumePdf(input: ResumeTemplateInput) {
 
   drawRule(document);
   drawSection(document, "Professional Summary", [input.resume.summary]);
-  drawSection(document, "Core Skills", [input.resume.skills.join(" | ")]);
-  drawSection(
-    document,
-    "Experience Highlights",
-    input.resume.experienceBullets.map((bullet) => `- ${bullet}`),
-  );
+  drawSection(document, "Core Skills", [formatSkills(input.resume.skills)]);
+  drawExperience(document, input.resume);
 
   return pdf.save();
 }
 
 export async function buildAtsResumeDocx(input: ResumeTemplateInput) {
+  const headline = formatResumeHeadline(input.resume.headline);
   const children: Paragraph[] = [
     docxParagraph(input.displayName ?? input.resume.headline, {
       bold: true,
@@ -87,7 +85,7 @@ export async function buildAtsResumeDocx(input: ResumeTemplateInput) {
 
   if (input.displayName) {
     children.push(
-      docxParagraph(input.resume.headline, {
+      docxParagraph(headline, {
         color: "6F6252",
         size: 21,
         spacingAfter: 60,
@@ -109,14 +107,8 @@ export async function buildAtsResumeDocx(input: ResumeTemplateInput) {
     docxSectionHeading("Professional Summary"),
     docxParagraph(input.resume.summary, { spacingAfter: 160 }),
     docxSectionHeading("Core Skills"),
-    docxParagraph(input.resume.skills.join(" | "), { spacingAfter: 160 }),
-    docxSectionHeading("Experience Highlights"),
-    ...input.resume.experienceBullets.map((bullet) =>
-      docxParagraph(bullet, {
-        bullet: true,
-        spacingAfter: 70,
-      }),
-    ),
+    docxParagraph(formatSkills(input.resume.skills), { spacingAfter: 160 }),
+    ...buildDocxExperience(input.resume),
   );
 
   return Packer.toBuffer(createDocx(children, "ATS resume"));
@@ -216,6 +208,115 @@ function drawSection(document: PdfLayout, title: string, lines: string[]) {
     });
     addVerticalSpace(document, 4);
   }
+}
+
+function drawExperience(document: PdfLayout, resume: ResumeContent) {
+  const sections = resume.experienceSections ?? [];
+
+  if (sections.length === 0) {
+    drawSection(
+      document,
+      "Selected Experience",
+      resume.experienceBullets.map((bullet) => `- ${bullet}`),
+    );
+    return;
+  }
+
+  addVerticalSpace(document, 10);
+  drawTextBlock(document, "PROFESSIONAL EXPERIENCE", {
+    color: navy,
+    font: document.bold,
+    lineGap: 2,
+    size: 10,
+  });
+  addVerticalSpace(document, 3);
+
+  for (const section of sections) {
+    const heading = [section.roleTitle, section.company].filter(Boolean).join(", ");
+    drawTextBlock(document, heading, {
+      font: document.bold,
+      lineGap: 3,
+      size: 10.4,
+    });
+    const meta = [section.location, section.dates].filter(Boolean).join(" | ");
+    if (meta) {
+      drawTextBlock(document, meta, {
+        color: taupe,
+        font: document.regular,
+        lineGap: 3,
+        size: 9.3,
+      });
+    }
+    for (const bullet of section.bullets) {
+      drawTextBlock(document, `- ${bullet}`, {
+        font: document.regular,
+        lineGap: 4,
+        size: 10.2,
+      });
+    }
+    addVerticalSpace(document, 5);
+  }
+}
+
+function buildDocxExperience(resume: ResumeContent) {
+  const sections = resume.experienceSections ?? [];
+
+  if (sections.length === 0) {
+    return [
+      docxSectionHeading("Selected Experience"),
+      ...resume.experienceBullets.map((bullet) =>
+        docxParagraph(bullet, {
+          bullet: true,
+          spacingAfter: 70,
+        }),
+      ),
+    ];
+  }
+
+  return [
+    docxSectionHeading("Professional Experience"),
+    ...sections.flatMap((section) => {
+      const heading = [section.roleTitle, section.company].filter(Boolean).join(", ");
+      const meta = [section.location, section.dates].filter(Boolean).join(" | ");
+      return [
+        docxParagraph(heading, {
+          bold: true,
+          spacingAfter: 40,
+          spacingBefore: 80,
+        }),
+        ...(meta
+          ? [
+              docxParagraph(meta, {
+                color: "6F6252",
+                size: 19,
+                spacingAfter: 60,
+              }),
+            ]
+          : []),
+        ...section.bullets.map((bullet) =>
+          docxParagraph(bullet, {
+            bullet: true,
+            spacingAfter: 70,
+          }),
+        ),
+      ];
+    }),
+  ];
+}
+
+function formatResumeHeadline(headline: string) {
+  const normalized = headline.replace(/\s*\|\s*/g, " / ").replace(/\s+/g, " ").trim();
+  const segments = normalized.split(/\s+\/\s+/).filter(Boolean);
+
+  if (segments.length <= 2) {
+    return normalized;
+  }
+
+  return segments.slice(0, 2).join(" / ");
+}
+
+function formatSkills(skills: string[]) {
+  return skills.filter(Boolean).join(", ");
 }
 
 function drawTextBlock(
