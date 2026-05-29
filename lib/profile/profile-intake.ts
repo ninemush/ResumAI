@@ -921,12 +921,12 @@ function buildAdvisorFallbackResult({
   return {
     assistantMessage: [
       `I saved ${inputLabel}, and the text is preserved. I do not need you to upload it again.`,
-      "The analysis pass did not complete cleanly, so I will keep the user-facing guidance grounded in the profile context that is already saved instead of asking you to repeat yourself.",
-      "Best next move: use the saved source to regenerate the master resume, then review the experience section role by role for missing dates, scope, and measurable outcomes.",
+      "I can still work from the saved profile context instead of asking you to repeat yourself.",
+      "Best next move: turn the saved material into a role-by-role master resume, then tighten dates, scope, ownership, and measurable outcomes where the profile is still broad.",
     ].join(" "),
     facts: [],
     followUpQuestions: [
-      "Should I retry extracting profile evidence from the saved source, or use the current profile to draft the master resume first?",
+      "Should I use the current profile to sharpen the master resume first?",
     ],
     profileDraft: emptyProfileDraftFromContext(existingContext),
     roleRecommendations: [],

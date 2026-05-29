@@ -1250,7 +1250,10 @@ function formatSourceIntakeReply({
   const direction = suggestedDirection?.trim()
     ? `My current read: ${suggestedDirection.trim()}`
     : null;
-  const nextQuestion = followUpQuestions.find((question) => question.trim().length > 0);
+  const nextQuestion = selectSourceFollowUp({
+    followUpQuestions,
+    suggestedDirection,
+  });
   const sourceRead =
     savedFactCount > 0 || extractedFactCount > 0
       ? `${label}. I updated the profile foundation from it.`
@@ -1259,6 +1262,33 @@ function formatSourceIntakeReply({
   return [sourceRead, advisorRead, direction, nextQuestion]
     .filter(Boolean)
     .join(" ");
+}
+
+function selectSourceFollowUp({
+  followUpQuestions,
+  suggestedDirection,
+}: {
+  followUpQuestions: string[];
+  suggestedDirection: string | null;
+}) {
+  const usefulQuestion = followUpQuestions.find((question) => {
+    const normalized = question.toLowerCase();
+
+    return (
+      question.trim().length > 0 &&
+      !/which role lane should i optimize|which role lane|optimize for first/.test(normalized)
+    );
+  });
+
+  if (usefulQuestion) {
+    return usefulQuestion;
+  }
+
+  if (suggestedDirection?.trim()) {
+    return `I would start by shaping the master resume around ${suggestedDirection.trim().toLowerCase()}, then pressure-test the strongest metrics and scope.`;
+  }
+
+  return followUpQuestions.find((question) => question.trim().length > 0) ?? null;
 }
 
 function cleanPlainChatText(value: string) {
