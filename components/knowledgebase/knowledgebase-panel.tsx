@@ -14,7 +14,6 @@ type KnowledgebasePanelProps = {
 
 export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
   const router = useRouter();
-  const sourceSummary = readSourceSummary(overview);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<ProfileOverview["recentSources"][number] | null>(
@@ -54,28 +53,21 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
         <p className="eyebrow">Sources</p>
         <h1 id="knowledgebase-title">Source library</h1>
         <p>
-          This is the audit-friendly record of what you gave {brand.name}, what was
-          read successfully, and what still needs a retry.
+          A chronological record of resumes, LinkedIn exports, screenshots, links,
+          and notes that shaped your profile and resume direction.
         </p>
       </div>
 
       {message ? <p className="system-note success">{message}</p> : null}
 
-      <section className="cockpit-panel source-summary-panel" aria-label="Source summary">
+      <section className="sources-helper-panel" aria-label="How Pramania uses sources">
         <div>
-          <span>Total sources</span>
-          <strong>{sourceSummary.total}</strong>
-          <p>Files, links, notes, and screenshots you have shared.</p>
+          <strong>What belongs here</strong>
+          <p>Drop anything useful into chat. Pramania classifies it, reads what it can, and keeps the original source preserved here.</p>
         </div>
         <div>
-          <span>Read successfully</span>
-          <strong>{sourceSummary.succeeded}</strong>
-          <p>Sources already reflected in your profile foundation.</p>
-        </div>
-        <div>
-          <span>Needs attention</span>
-          <strong>{sourceSummary.failed + sourceSummary.pending}</strong>
-          <p>Retryable sources or items waiting to be read.</p>
+          <strong>What you do here</strong>
+          <p>Preview the original file, retry extraction if needed, and audit where profile context came from.</p>
         </div>
       </section>
 
@@ -164,7 +156,7 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
         )}
       </section>
 
-      <section className="sources-panel" aria-label="How sources are used">
+      <section className="sources-panel slim-sources-panel" aria-label="How sources are used">
         <div className="section-heading">
           <p className="eyebrow">How this helps</p>
           <h2>Grounded career memory</h2>
@@ -306,20 +298,6 @@ function SourceViewer({
   );
 }
 
-function readSourceSummary(overview: ProfileOverview) {
-  return overview.recentSources.reduce(
-    (summary, source) => ({
-      failed: summary.failed + (source.extraction_status === "failed" ? 1 : 0),
-      pending:
-        summary.pending +
-        (["pending", "processing"].includes(source.extraction_status) ? 1 : 0),
-      succeeded: summary.succeeded + (source.extraction_status === "succeeded" ? 1 : 0),
-      total: summary.total + 1,
-    }),
-    { failed: 0, pending: 0, succeeded: 0, total: 0 },
-  );
-}
-
 function formatSourceType(sourceType: string) {
   if (sourceType === "docx") return "Word document";
   if (sourceType === "pdf") return "PDF";
@@ -400,7 +378,7 @@ function formatFailureReason(reason: string) {
 
 function formatSourceGuidance(source: ProfileOverview["recentSources"][number]) {
   if (source.extraction_status === "succeeded") {
-    return "Read into your profile evidence.";
+    return "Read into your profile and resume context.";
   }
 
   if (source.extraction_status === "processing") {

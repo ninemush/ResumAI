@@ -53,3 +53,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the chat router treated some advice prompts as profile facts, resume content lacked role-section structure, and `profile-pane` grid rows stretched sparse panels to fill the viewport.
 - Fix: routed advice questions to the advisor path unless they are concrete workflow commands, moved model defaults to `gpt-5.4` with `gpt-4.1` fallback for model/provider failures, added role-based experience sections to master resume output, rendered the user's name separately from a concise headline, switched ATS exports to normal comma-separated skills, and made workspace rows content-sized.
 - Validation: confirmed the account's OpenAI model access through the Models API, smoke-tested `gpt-5.4` through the Responses API, ran lint, production build, and 38/38 Playwright tests. Headless visual QA could not complete a cookie-backed UI login in this session even though the same credentials authenticated through Supabase directly; this remains a QA harness issue to fix before broader release testing.
+
+### Fixed: record pages still exposed internal product language
+
+- Area: Sources, Artifacts, Jobs, Applications, chat wording.
+- Finding: source and artifact pages still leaned on operational counts, generated-file rows could not be opened for context, and some copy still used internal “signal” language that does not help a job seeker understand what to do next.
+- Root cause: record pages were optimized around implementation status instead of user decisions: what was read, what can be opened, what should be retried, what can be exported, and what needs follow-up.
+- Fix: replaced the source summary counter block with a practical source-library explainer, added an artifact detail viewer with context and downloads, changed application wording to a candidate pipeline, made job summaries read as match decisions, and removed remaining user-facing “hiring signal” language from prompts and UI copy.
+- Validation: lint, production build, and 38/38 Playwright tests passed. Headless authenticated click-through still cannot complete email/password submit in this local browser harness, so authenticated visual QA remains partially manual until the QA session harness is repaired.

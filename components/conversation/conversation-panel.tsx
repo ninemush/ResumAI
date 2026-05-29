@@ -1903,7 +1903,7 @@ function buildApplicationFollowUpPrompt(applicationOverview: ApplicationOverview
 
 function buildProfileGapPrompt(profileOverview: ProfileOverview) {
   if (!profileOverview.profile || profileOverview.factCount === 0) {
-    return "The highest-value next step is to give me a resume, LinkedIn/portfolio link, or a quick work-history note so I can identify hiring signal and gaps.";
+    return "The highest-value next step is to give me a resume, LinkedIn/portfolio link, or a quick work-history note so I can identify your strongest positioning and the gaps worth closing.";
   }
 
   const missing: string[] = [];

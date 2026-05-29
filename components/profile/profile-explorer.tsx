@@ -340,11 +340,11 @@ export function ProfileExplorer({
       <section className="profile-intelligence-panel" aria-label="Profile intelligence">
         <div className="section-heading">
           <p className="eyebrow">Career read</p>
-          <h2>What Pramania can already use</h2>
+          <h2>What is already strong</h2>
         </div>
         <div className="profile-signal-grid">
           <article>
-            <span>Evidence strength</span>
+            <span>Current confidence</span>
             <strong>{formatEvidenceStrength(overview.intelligence.evidenceStrength)}</strong>
             <p>{overview.intelligence.roleTargetRead}</p>
           </article>

@@ -34,7 +34,7 @@ const authHighlights = [
   {
     icon: FileText,
     title: "Start with your story",
-    body: "Share a resume, LinkedIn profile, or career note. Pramania will help turn it into clear, useful signal.",
+    body: "Share a resume, LinkedIn profile, or career note. Pramania will help turn it into clear, useful direction.",
   },
   {
     icon: Compass,

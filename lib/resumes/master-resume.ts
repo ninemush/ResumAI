@@ -658,7 +658,7 @@ facts. A gap prompt should become a pointed question, not an invented metric.
 
 For senior transformation, GTM, professional services, operations, AI/
 automation, customer success, technology, and advisory profiles, look for and
-surface these signals when present:
+surface these proof points when present:
 - revenue/bookings/growth, margin/profitability, cost reduction, utilization,
   delivery capacity, pipeline/backlog, portfolio/pricing, customer adoption,
   time-to-value, NPS/retention/renewal, automation throughput, deployment time,
@@ -709,7 +709,7 @@ grounded in the excerpt text.
 Profile intelligence:
 - Evidence strength: ${intelligence.evidenceStrength}
 - Role target read: ${intelligence.roleTargetRead}
-- Positioning signals: ${intelligence.positioningSignals.join(", ") || "None yet"}
+- Positioning context: ${intelligence.positioningSignals.join(", ") || "None yet"}
 - Resume focus: ${intelligence.resumeFocus.join(" | ") || "None yet"}
 - Proof themes:
 ${intelligence.proofThemes.length > 0 ? intelligence.proofThemes.map((theme) => `  - ${theme.label}: ${theme.evidence.join(" / ")}`).join("\n") : "  - None yet"}

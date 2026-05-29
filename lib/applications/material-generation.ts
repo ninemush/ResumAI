@@ -321,7 +321,7 @@ ${facts.map((fact) => `- [${fact.fact_type}${fact.user_confirmed ? ", confirmed"
 Profile intelligence:
 - Evidence strength: ${intelligence.evidenceStrength}
 - Role target read: ${intelligence.roleTargetRead}
-- Positioning signals: ${intelligence.positioningSignals.join(", ") || "None yet"}
+- Positioning context: ${intelligence.positioningSignals.join(", ") || "None yet"}
 - Resume focus: ${intelligence.resumeFocus.join(" | ") || "None yet"}
 - High-value gaps: ${intelligence.highValueGaps.map((gap) => `${gap.label}: ${gap.prompt}`).join(" | ") || "None"}
 
@@ -343,7 +343,7 @@ ${application.job_ingestions?.extracted_text?.slice(0, 14000)}
 Return:
 - resume.headline: targeted, ATS-aware headline.
 - resume.summary: concise professional summary.
-- resume.skills: high-signal ATS skills that are supported by profile evidence.
+- resume.skills: high-value ATS skills that are supported by profile evidence.
 - resume.experienceBullets: rewritten bullets that align evidence to the role.
 - resume.keywordGaps: important job keywords or proof points missing from the
   captured profile/master resume evidence. Do not hide gaps.

@@ -625,7 +625,7 @@ function sanitizeProfileIntakePayload(payload: unknown): ParsedProfileIntakeResu
   return {
     assistantMessage: truncateText(
       readString(record.assistantMessage) ||
-        "I read the source and pulled out usable career signal for your profile.",
+        "I read the source and pulled out useful career context for your profile.",
       1200,
     ),
     facts: readArray(record.facts)

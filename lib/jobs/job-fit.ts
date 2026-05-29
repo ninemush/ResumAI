@@ -446,16 +446,16 @@ function buildFitSummary({
     strong_match: "looks promising",
     weak_match: "looks like a stretch right now",
   }[recommendation];
-  const signalText =
+  const alignmentText =
     alignmentThemes.length > 0
-      ? ` Stronger alignment themes: ${alignmentThemes.slice(0, 3).join(", ")}.`
+      ? ` Strongest alignment themes: ${alignmentThemes.slice(0, 3).join(", ")}.`
       : "";
   const matchText =
     matchedKeywords.length > 0
       ? ` Matched areas include ${matchedKeywords.slice(0, 4).join(", ")}.`
       : "";
 
-  return `Fit is ${score}% and ${label}.${signalText}${matchText}`;
+  return `Match is ${score}% and ${label}.${alignmentText}${matchText}`;
 }
 
 function readSignalGroups(text: string) {

@@ -126,7 +126,8 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         <p className="eyebrow">Jobs</p>
         <h2>Roles under review</h2>
         <p>
-          A focused queue of roles Pramania has read, scored, and kept ready for your decision.
+          A focused queue of roles Pramania has read and kept ready for a decision:
+          ignore, watch, or turn into tailored materials.
         </p>
       </div>
 
@@ -167,9 +168,11 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                 {job.company ?? formatJobUrl(job.resolved_url ?? job.job_url)} · Added{" "}
                 <time dateTime={job.created_at}>{formatShortDate(job.created_at)}</time>
               </span>
-              {job.fitSnapshot.score !== null ? (
-                <span className="record-summary">{job.fitAnalysis.summary}</span>
-              ) : null}
+              <span className="record-summary">
+                {job.fitSnapshot.score !== null
+                  ? job.fitAnalysis.summary
+                  : "Pramania will summarize fit once the job post is readable."}
+              </span>
             </button>
 
             <div className="record-date-column">
@@ -179,7 +182,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
 
             <div className="record-status-stack">
               {job.fitSnapshot.score !== null ? (
-                <span className="fit-score-pill">{job.fitSnapshot.score}% fit</span>
+                <span className="fit-score-pill">{job.fitSnapshot.score}% match</span>
               ) : null}
             </div>
 

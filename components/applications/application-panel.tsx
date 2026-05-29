@@ -21,6 +21,13 @@ type ApplicationPanelProps = {
 
 type ResumeContent = {
   experienceBullets: string[];
+  experienceSections?: {
+    bullets: string[];
+    company?: string | null;
+    endDate?: string | null;
+    role?: string | null;
+    startDate?: string | null;
+  }[];
   headline: string;
   keywordGaps: string[];
   reviewerNotes: string[];
@@ -230,9 +237,10 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
     <section className="applications-panel" aria-label="Tracked applications">
       <div className="section-heading">
         <p className="eyebrow">Applications</p>
-        <h2>Follow-up tracker</h2>
+        <h2>Application pipeline</h2>
         <p>
-          Track each application like a candidate pipeline: decision, materials, status, and next step.
+          Track each role like a candidate pipeline: status, tailored materials,
+          and the next follow-up decision.
         </p>
       </div>
 
@@ -406,78 +414,88 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
           {!resumeDraft || !activeReview.coverLetter ? (
             <p className="empty-state">Generate materials first, then this review area becomes editable.</p>
           ) : (
-            <div className="materials-editor-grid">
-              <label>
-                Resume headline
-                <input
-                  value={resumeDraft.headline}
-                  onChange={(event) =>
-                    setResumeDraft({ ...resumeDraft, headline: event.target.value })
-                  }
-                />
-              </label>
-              <label>
-                Resume summary
-                <textarea
-                  rows={5}
-                  value={resumeDraft.summary}
-                  onChange={(event) =>
-                    setResumeDraft({ ...resumeDraft, summary: event.target.value })
-                  }
-                />
-              </label>
-              <label>
-                Skills
-                <textarea
-                  rows={4}
-                  value={resumeDraft.skills.join("\n")}
-                  onChange={(event) =>
-                    setResumeDraft({
-                      ...resumeDraft,
-                      skills: splitLines(event.target.value),
-                    })
-                  }
-                />
-              </label>
-              <label>
-                Experience bullets
-                <textarea
-                  rows={8}
-                  value={resumeDraft.experienceBullets.join("\n")}
-                  onChange={(event) =>
-                    setResumeDraft({
-                      ...resumeDraft,
-                      experienceBullets: splitLines(event.target.value),
-                    })
-                  }
-                />
-              </label>
-              <label>
-                Keyword gaps to verify
-                <textarea
-                  rows={5}
-                  value={resumeDraft.keywordGaps.join("\n")}
-                  onChange={(event) =>
-                    setResumeDraft({
-                      ...resumeDraft,
-                      keywordGaps: splitLines(event.target.value),
-                    })
-                  }
-                />
-              </label>
-              <label>
-                Reviewer notes and risk checks
-                <textarea
-                  rows={5}
-                  value={resumeDraft.reviewerNotes.join("\n")}
-                  onChange={(event) =>
-                    setResumeDraft({
-                      ...resumeDraft,
-                      reviewerNotes: splitLines(event.target.value),
-                    })
-                  }
-                />
-              </label>
+            <div className="materials-review-layout">
+              <section className="material-document-editor" aria-label="Targeted resume editor">
+                <div className="material-document-heading">
+                  <p className="eyebrow">Targeted resume</p>
+                  <label>
+                    Headline
+                    <input
+                      value={resumeDraft.headline}
+                      onChange={(event) =>
+                        setResumeDraft({ ...resumeDraft, headline: event.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+                <label>
+                  Professional summary
+                  <textarea
+                    rows={5}
+                    value={resumeDraft.summary}
+                    onChange={(event) =>
+                      setResumeDraft({ ...resumeDraft, summary: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Core skills
+                  <textarea
+                    rows={3}
+                    value={resumeDraft.skills.join("\n")}
+                    onChange={(event) =>
+                      setResumeDraft({
+                        ...resumeDraft,
+                        skills: splitLines(event.target.value),
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Experience and impact bullets
+                  <textarea
+                    rows={10}
+                    value={readResumeExperienceDraft(resumeDraft)}
+                    onChange={(event) =>
+                      setResumeDraft({
+                        ...resumeDraft,
+                        experienceBullets: splitLines(event.target.value),
+                        experienceSections: [],
+                      })
+                    }
+                  />
+                </label>
+              </section>
+
+              <aside className="material-review-notes" aria-label="Review notes">
+                <label>
+                  Gaps to verify
+                  <textarea
+                    rows={5}
+                    value={resumeDraft.keywordGaps.join("\n")}
+                    onChange={(event) =>
+                      setResumeDraft({
+                        ...resumeDraft,
+                        keywordGaps: splitLines(event.target.value),
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Reviewer notes
+                  <textarea
+                    rows={5}
+                    value={resumeDraft.reviewerNotes.join("\n")}
+                    onChange={(event) =>
+                      setResumeDraft({
+                        ...resumeDraft,
+                        reviewerNotes: splitLines(event.target.value),
+                      })
+                    }
+                  />
+                </label>
+              </aside>
+
               <label className="cover-letter-editor">
                 Cover letter
                 <textarea
@@ -586,6 +604,22 @@ function splitLines(value: string) {
     .split("\n")
     .map((line) => line.trim().replace(/^-+\s*/, ""))
     .filter(Boolean);
+}
+
+function readResumeExperienceDraft(resume: ResumeContent) {
+  if (resume.experienceSections?.length) {
+    return resume.experienceSections
+      .map((section) => {
+        const heading = [section.role, section.company].filter(Boolean).join(" · ");
+        const dates = [section.startDate, section.endDate].filter(Boolean).join(" - ");
+        const bullets = section.bullets.map((bullet) => `- ${bullet}`).join("\n");
+
+        return [heading, dates, bullets].filter(Boolean).join("\n");
+      })
+      .join("\n\n");
+  }
+
+  return resume.experienceBullets.map((bullet) => `- ${bullet}`).join("\n");
 }
 
 function applicationMatchesStage(status: string, stage: StageFilter) {

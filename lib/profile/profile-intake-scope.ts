@@ -109,7 +109,7 @@ export function checkProfileIntakeScope(message: string): ProfileIntakeScopeChec
 }
 
 function buildRedirectMessage() {
-  return `I need to keep us focused on your career profile, resume, role fit, job posts, applications, and interview direction. Share anything about your work history, target role, achievements, industry, credentials, or a job you are considering and I will help translate it into hiring signal.`;
+  return `I need to keep us focused on your career profile, resume, role fit, job posts, applications, and interview direction. Share anything about your work history, target role, achievements, industry, credentials, or a job you are considering and I will help translate it into practical career guidance.`;
 }
 
 function buildCapabilityAnswer() {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, FileText, Layers3 } from "lucide-react";
+import { Download, ExternalLink, FileText, Layers3, X } from "lucide-react";
 
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 
@@ -12,6 +12,9 @@ type ArtifactsPanelProps = {
 type ArtifactFilter = "all" | "resume" | "cover_letter" | "pdf" | "docx";
 
 export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
+  const [activeArtifact, setActiveArtifact] = useState<ArtifactOverview["artifacts"][number] | null>(
+    null,
+  );
   const [filter, setFilter] = useState<ArtifactFilter>("all");
   const filteredArtifacts = useMemo(
     () =>
@@ -30,8 +33,8 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
         <p className="eyebrow">Artifacts</p>
         <h1 id="artifacts-title">Generated materials</h1>
         <p>
-          Resumes and cover letters Pramania created, with versions, timestamps,
-          application context, and download status.
+          A chronological cabinet for resumes and cover letters Pramania created,
+          including the role context and export files when available.
         </p>
       </div>
 
@@ -67,6 +70,14 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
               </div>
               <span className={`source-pill ${artifact.status}`}>{artifact.status}</span>
               <div className="record-actions artifact-actions" aria-label={`${artifact.label} downloads`}>
+                <button
+                  className="secondary-action compact-action"
+                  onClick={() => setActiveArtifact(artifact)}
+                  type="button"
+                >
+                  <ExternalLink size={13} aria-hidden="true" />
+                  Open
+                </button>
                 {artifact.pdfDownloadUrl ? (
                   <a
                     className="secondary-action compact-action"
@@ -102,6 +113,10 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
           </p>
         )}
       </section>
+
+      {activeArtifact ? (
+        <ArtifactViewer artifact={activeArtifact} onClose={() => setActiveArtifact(null)} />
+      ) : null}
     </main>
   );
 }
@@ -139,4 +154,88 @@ function formatDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function ArtifactViewer({
+  artifact,
+  onClose,
+}: {
+  artifact: ArtifactOverview["artifacts"][number];
+  onClose: () => void;
+}) {
+  return (
+    <div className="attachment-viewer-backdrop" role="presentation" onClick={onClose}>
+      <div
+        aria-label={`Open ${artifact.label}`}
+        aria-modal="true"
+        className="attachment-viewer artifact-viewer"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <header>
+          <div>
+            <strong>{artifact.label}</strong>
+            <span>
+              {formatArtifactKind(artifact.kind)} v{artifact.version} · Updated{" "}
+              {formatDate(artifact.updatedAt)}
+            </span>
+          </div>
+          <button className="secondary-action compact-action" onClick={onClose} type="button">
+            <X size={14} aria-hidden="true" />
+            Close
+          </button>
+        </header>
+
+        <div className="artifact-viewer-body">
+          <dl className="artifact-metadata-grid">
+            <div>
+              <dt>Status</dt>
+              <dd>{artifact.status.replaceAll("_", " ")}</dd>
+            </div>
+            <div>
+              <dt>Context</dt>
+              <dd>
+                {artifact.roleTitle && artifact.companyName
+                  ? `${artifact.roleTitle} at ${artifact.companyName}`
+                  : artifact.companyName ?? artifact.roleTitle ?? "Master material"}
+              </dd>
+            </div>
+            <div>
+              <dt>Created</dt>
+              <dd>{formatDate(artifact.createdAt)}</dd>
+            </div>
+            <div>
+              <dt>Downloads</dt>
+              <dd>
+                {artifact.pdfDownloadUrl || artifact.docxDownloadUrl
+                  ? "Export files are ready."
+                  : "Not exported yet."}
+              </dd>
+            </div>
+          </dl>
+
+          <div className="artifact-download-panel">
+            {artifact.pdfDownloadUrl ? (
+              <a className="secondary-action" href={artifact.pdfDownloadUrl} rel="noreferrer" target="_blank">
+                <Download size={15} aria-hidden="true" />
+                Open PDF
+              </a>
+            ) : null}
+            {artifact.docxDownloadUrl ? (
+              <a className="secondary-action" href={artifact.docxDownloadUrl} rel="noreferrer" target="_blank">
+                <Download size={15} aria-hidden="true" />
+                Download DOCX
+              </a>
+            ) : null}
+            {!artifact.pdfDownloadUrl && !artifact.docxDownloadUrl ? (
+              <p>
+                Open the related resume or application material, review it, then export
+                PDF and DOCX files from there.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
