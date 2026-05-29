@@ -23,9 +23,9 @@ test("requires terms acceptance before local account creation", async ({ page })
   await page.goto("/");
 
   await page.getByRole("button", { name: "Create account" }).click();
-  await page.getByLabel("Full name").fill("Terms Test User");
-  await page.getByLabel("Email").fill(`terms-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
+  await page.locator('input[name="name"]').fill("Terms Test User");
+  await page.locator('input[name="email"]').fill(`terms-${Date.now()}@example.com`);
+  await page.locator('input[name="password"]').fill("correct-horse-battery");
   await page.getByRole("button", { name: /Start my private profile/i }).click();
 
   await expect(page.getByText(/accept the Terms and Conditions/i)).toBeVisible();

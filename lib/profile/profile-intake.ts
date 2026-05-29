@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import { PROFILE_INTAKE_INSTRUCTIONS, PROFILE_INTAKE_PROMPT_VERSION } from "@/lib/ai/prompts/profile-intake";
-import { getOpenAIClient, getProfileIntakeModel } from "@/lib/ai/openai";
+import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
 import { buildProfileIntelligence } from "@/lib/profile/profile-intelligence";
 import { checkProfileIntakeScope } from "@/lib/profile/profile-intake-scope";
 import { createClient } from "@/lib/supabase/server";
@@ -312,6 +312,8 @@ Use recent conversation context only as continuity support. Treat the new source
 as the current user intent.
 If useful, include a suggestedDirection, but make it tentative and ask for the
 user's acknowledgement before treating it as final.
+Use plain text only in assistantMessage. Do not use markdown bold, markdown
+headings, or numbered list syntax because the live chat renders plain text.
 `.trim();
 }
 
@@ -332,7 +334,7 @@ async function runProfileIntakeModel({
 
   for (let attempt = 1; attempt <= PROFILE_INTAKE_MAX_ATTEMPTS; attempt += 1) {
     try {
-      const response = await getOpenAIClient().responses.create({
+      const response = await createOpenAIResponse({
         model,
         instructions: PROFILE_INTAKE_INSTRUCTIONS,
         input: buildProfileIntakeInput({

@@ -7,7 +7,7 @@ import mammoth from "mammoth";
 import { extractText } from "unpdf";
 import { z } from "zod";
 
-import { getOpenAIClient, getProfileIntakeModel } from "@/lib/ai/openai";
+import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
 import { extractProfileFactsFromText, type ProfileIntakeResult } from "@/lib/profile/profile-intake";
 import { createClient } from "@/lib/supabase/server";
 
@@ -277,7 +277,7 @@ async function extractPdfTextWithModel({
 
   for (let attempt = 1; attempt <= PDF_AI_MAX_ATTEMPTS; attempt += 1) {
     try {
-      const response = await getOpenAIClient().responses.create({
+      const response = await createOpenAIResponse({
         model: getProfileIntakeModel(),
         instructions:
           "You are a PDF text extraction service for a career profile builder. Extract only text that is visible in the PDF. Preserve headings, dates, employers, job titles, skills, credentials, education, certifications, projects, and bullets when readable. Do not add facts, commentary, markdown fences, summaries, or explanations. If no career-relevant text is readable, return an empty string.",
@@ -360,7 +360,7 @@ async function extractImageTextFromStorage({
 
   for (let attempt = 1; attempt <= IMAGE_OCR_MAX_ATTEMPTS; attempt += 1) {
     try {
-      const response = await getOpenAIClient().responses.create({
+      const response = await createOpenAIResponse({
         model: getProfileIntakeModel(),
         instructions:
           "You are an OCR extraction service for a career profile builder. Extract only visible text from the image. Preserve headings, dates, employers, job titles, skills, credentials, and bullets when readable. Do not add facts, commentary, markdown fences, or explanations. If no career-relevant text is readable, return an empty string.",

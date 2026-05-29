@@ -30,10 +30,12 @@ export async function validateGeneratedPdf({
     errors.push("PDF_TEXT_EXTRACTION_FAILED");
   }
 
-  const normalizedText = extractedText.toLowerCase();
+  const normalizedText = normalizePdfText(extractedText);
 
   for (const phrase of requiredPhrases) {
-    if (phrase.trim() && !normalizedText.includes(phrase.toLowerCase())) {
+    const normalizedPhrase = normalizePdfText(phrase);
+
+    if (normalizedPhrase && !normalizedText.includes(normalizedPhrase)) {
       errors.push(`PDF_MISSING_REQUIRED_TEXT:${phrase.slice(0, 80)}`);
     }
   }
@@ -47,4 +49,13 @@ export async function validateGeneratedPdf({
     textLength: extractedText.length,
     valid: errors.length === 0,
   };
+}
+
+function normalizePdfText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[“”]/g, "\"")
+    .replace(/[‘’]/g, "'")
+    .trim();
 }

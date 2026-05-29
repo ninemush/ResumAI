@@ -496,7 +496,7 @@ export function ConversationPanel({
 
     setStatus(null);
 
-    return payload.assistantMessage as string;
+    return cleanPlainChatText(payload.assistantMessage as string);
   }
 
   async function processAdvisorQuestion(text: string) {
@@ -1236,7 +1236,7 @@ function formatSourceIntakeReply({
   savedFactCount: number;
   suggestedDirection: string | null;
 }) {
-  const advisorRead = assistantMessage?.trim();
+  const advisorRead = assistantMessage ? cleanPlainChatText(assistantMessage) : null;
   const direction = suggestedDirection?.trim()
     ? `My current read: ${suggestedDirection.trim()}`
     : null;
@@ -1249,6 +1249,16 @@ function formatSourceIntakeReply({
   return [sourceRead, advisorRead, direction, nextQuestion]
     .filter(Boolean)
     .join(" ");
+}
+
+function cleanPlainChatText(value: string) {
+  return value
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s*\d+\.\s+\*\*(.*?)\*\*:?/gm, "$1:")
+    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
 }
 
 function inferProfilePatch(text: string) {

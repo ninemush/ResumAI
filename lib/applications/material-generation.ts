@@ -7,7 +7,7 @@ import {
   APPLICATION_MATERIALS_INSTRUCTIONS,
   APPLICATION_MATERIALS_PROMPT_VERSION,
 } from "@/lib/ai/prompts/application-materials";
-import { getMaterialsModel, getOpenAIClient } from "@/lib/ai/openai";
+import { getMaterialsModel, createOpenAIResponse } from "@/lib/ai/openai";
 import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
 import {
   buildProfileIntelligence,
@@ -135,7 +135,7 @@ export async function generateApplicationMaterials(
     profile,
   });
   const model = getMaterialsModel();
-  const response = await getOpenAIClient().responses.create({
+  const response = await createOpenAIResponse({
     model,
     instructions: APPLICATION_MATERIALS_INSTRUCTIONS,
     input: buildMaterialsInput({

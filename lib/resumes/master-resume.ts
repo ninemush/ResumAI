@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { buildAtsResumeDocx, buildAtsResumePdf } from "@/lib/artifacts/ats-template";
 import { validateGeneratedPdf } from "@/lib/applications/pdf-validation";
-import { getMaterialsModel, getOpenAIClient } from "@/lib/ai/openai";
+import { getMaterialsModel, createOpenAIResponse } from "@/lib/ai/openai";
 import { brand } from "@/lib/brand";
 import { recordQuotaEvent } from "@/lib/quota/quota-events";
 import {
@@ -149,7 +149,7 @@ export async function generateMasterResume(
   }
 
   const model = getMaterialsModel();
-  const response = await getOpenAIClient().responses.create({
+  const response = await createOpenAIResponse({
     model,
     instructions: buildMasterResumeInstructions(),
     input: buildMasterResumeInput({

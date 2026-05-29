@@ -37,3 +37,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the authenticated workspace was being validated more like a route/API surface than a real workbench for someone managing 20+ jobs, files, generated artifacts, and follow-ups.
 - Fix: introduced a compact record layout pattern, clickable/toggleable job rows, dense application rows with status and action controls, interactive artifact filters, preserved source viewer behavior for no-preview records, and replaced "Workspace controls" with account/privacy/subscription/support settings.
 - Validation: lint, production build, full Playwright suite, and local public-page hydration smoke. Authenticated visual QA still needs seeded-session browser coverage so layout regressions are caught before release.
+
+### Fixed: QA demo exposed model and export failures
+
+- Area: authenticated demo journey, conversation advisor, profile ingestion, master resume export.
+- Finding: a newly created QA user could sign in and upload source material, but the first advisor response failed when the configured model was unavailable, and master resume PDF export failed content validation despite producing a readable draft.
+- Root cause: production-like QA was missing a durable demo account; AI calls did not fall back when the requested model was blocked; PDF validation matched exact extracted strings and rejected layout-normalized text.
+- Fix: created a local-only QA credential file, confirmed the QA user in Supabase for repeatable testing, added OpenAI response fallback handling, set the documented default model back to `gpt-4o`, normalized PDF validation text, and tightened chat output to plain text.
+- Validation: signed in as the QA user, uploaded a resume text file through chat, verified profile readiness increased, generated a master resume, exported validated PDF/DOCX artifacts, swept Cockpit/Profile/Sources/Artifacts/Applications/Jobs/Settings, then ran lint, production build, and 38/38 Playwright tests.

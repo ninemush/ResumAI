@@ -3,7 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-import { getOpenAIClient, getProfileIntakeModel } from "@/lib/ai/openai";
+import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
 import { PROFILE_INTAKE_INSTRUCTIONS } from "@/lib/ai/prompts/profile-intake";
 import { brand } from "@/lib/brand";
 import { buildProfileIntelligence } from "@/lib/profile/profile-intelligence";
@@ -88,7 +88,7 @@ export async function runConversationAdvisor(
   }
 
   const model = getProfileIntakeModel();
-  const response = await getOpenAIClient().responses.create({
+  const response = await createOpenAIResponse({
     model,
     instructions: buildAdvisorInstructions(),
     input: buildAdvisorInput({
@@ -148,6 +148,8 @@ advice. If the user has provided enough context, do not ask generic questions.
 
 Keep the response concise: usually 2 short paragraphs or 3-5 crisp bullets.
 Ask at most one follow-up question unless the user explicitly wants a list.
+Use plain text only. Do not use markdown bold, markdown headings, or numbered
+list syntax because the live chat renders plain text.
 `.trim();
 }
 
