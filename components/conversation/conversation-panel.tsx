@@ -244,6 +244,11 @@ export function ConversationPanel({
     const summaries: string[] = [];
 
     if (urls.length === 0) {
+      if (looksLikeAdvisorQuestion(text) && !looksLikeConcreteWorkflowCommand(text)) {
+        appendAssistantMessage(await processAdvisorQuestion(text), true);
+        return;
+      }
+
       const profileEditAction = await processProfileEditAction(text);
 
       if (profileEditAction) {
@@ -1772,6 +1777,16 @@ function looksLikeAdvisorQuestion(text: string) {
   );
 }
 
+function looksLikeConcreteWorkflowCommand(text: string) {
+  return (
+    looksLikeMasterResumeExportRequest(text) ||
+    looksLikeMaterialGenerationRequest(text) ||
+    looksLikeApplicationLogRequest(text) ||
+    inferApplicationStatus(text) !== null ||
+    inferProfilePatch(text) !== null
+  );
+}
+
 function mapActiveViewToAdvisorSurface(activeView: AppView) {
   const surfaceMap: Partial<Record<AppView, string>> = {
     applications: "applications",
@@ -1883,6 +1898,10 @@ function looksLikeApplicationLogRequest(text: string) {
 function looksLikeMaterialGenerationRequest(text: string) {
   const normalized = text.toLowerCase();
 
+  if (looksLikeReflectiveQuestion(normalized)) {
+    return false;
+  }
+
   return (
     /\b(generate|create|draft|write|make)\b.*\b(resume|cover letter|materials)\b/.test(normalized) ||
     /\b(resume|cover letter|materials)\b.*\b(generate|create|draft|write|make)\b/.test(normalized)
@@ -1891,6 +1910,10 @@ function looksLikeMaterialGenerationRequest(text: string) {
 
 function looksLikeMasterResumeRequest(text: string) {
   const normalized = text.toLowerCase();
+
+  if (looksLikeReflectiveQuestion(normalized)) {
+    return false;
+  }
 
   if (/\b(cover letter|job-specific|targeted|for this role|for the role)\b/.test(normalized)) {
     return false;
@@ -1907,10 +1930,26 @@ function looksLikeMasterResumeRequest(text: string) {
 
 function looksLikeMasterResumeExportRequest(text: string) {
   const normalized = text.toLowerCase();
+  const asksForLearningOrDiagnosis =
+    /\b(what did you learn|what have you learned|what do you know|why|how come|i dont see|i don't see|did not|didn't|failed|error)\b/.test(
+      normalized,
+    );
+
+  if (asksForLearningOrDiagnosis) {
+    return false;
+  }
 
   return (
-    /\b(export|download|make|create|generate)\b.*\b(master resume|base resume|core resume|resume)\b.*\b(pdf)\b/.test(normalized) ||
-    /\b(pdf)\b.*\b(master resume|base resume|core resume|resume)\b/.test(normalized)
+    /\b(export|download)\b.*\b(master resume|base resume|core resume|resume)\b.*\b(pdf|docx|word|file|files)\b/.test(normalized) ||
+    /\b(master resume|base resume|core resume|resume)\b.*\b(export|download)\b.*\b(pdf|docx|word|file|files)\b/.test(normalized) ||
+    /\b(make|create|generate)\b.*\b(pdf|docx|word file)\b.*\b(master resume|base resume|core resume|resume)\b/.test(normalized)
+  );
+}
+
+function looksLikeReflectiveQuestion(normalized: string) {
+  return (
+    normalized.includes("?") &&
+    /\b(what|why|how|where|which|should|could|would|do you think|based on)\b/.test(normalized)
   );
 }
 
