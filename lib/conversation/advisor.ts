@@ -472,11 +472,31 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
     const value = (content as Record<string, unknown>)[key];
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
   };
+  const experienceSections = Array.isArray((content as Record<string, unknown>).experienceSections)
+    ? ((content as Record<string, unknown>).experienceSections as unknown[])
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const section = item as Record<string, unknown>;
+          const roleTitle = typeof section.roleTitle === "string" ? section.roleTitle : null;
+          const company = typeof section.company === "string" ? section.company : null;
+          const dates = typeof section.dates === "string" ? section.dates : null;
+          const bullets = Array.isArray(section.bullets)
+            ? section.bullets.filter((bullet): bullet is string => typeof bullet === "string").slice(0, 4)
+            : [];
+
+          if (!roleTitle && !company && bullets.length === 0) return null;
+
+          return `${[roleTitle, company].filter(Boolean).join(" at ") || "Role"}${dates ? ` (${dates})` : ""}: ${bullets.join(" / ")}`;
+        })
+        .filter((item): item is string => Boolean(item))
+        .slice(0, 6)
+    : [];
 
   return [
     `- Headline: ${read("headline") ?? "None"}`,
     `- Summary: ${read("summary") ?? "None"}`,
     `- Skills: ${readArray("skills").slice(0, 16).join(", ") || "None"}`,
+    `- Role-based experience: ${experienceSections.join(" || ") || "None"}`,
     `- Experience highlights: ${readArray("experienceBullets").slice(0, 8).join(" / ") || "None"}`,
     `- Gaps: ${readArray("keywordGaps").slice(0, 6).join(" / ") || "None"}`,
   ].join("\n");

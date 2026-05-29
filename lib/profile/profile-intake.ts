@@ -216,7 +216,7 @@ export async function extractProfileFactsFromText({
       normalizedText,
       userId: user.id,
     });
-  } catch (error) {
+  } catch {
     const deterministicResult = buildDeterministicProfileIntakeResult({
       inputLabel,
       text: normalizedText,
@@ -224,7 +224,6 @@ export async function extractProfileFactsFromText({
 
     if (deterministicResult.facts.length === 0) {
       parsed = buildAdvisorFallbackResult({
-        code: error instanceof Error ? error.message : "AI_PROFILE_INTAKE_FAILED",
         existingContext,
         inputLabel,
         text: normalizedText,
@@ -857,23 +856,21 @@ function buildDeterministicIntakeMessage({
   const isUserMessage = /user message|natural language|typed note/i.test(inputLabel);
 
   if (isUserMessage && /target|role|land|looking|interested|want/i.test(normalizedText)) {
-    return `Good, ${targetDirection.toLowerCase()} is a useful starting point. I’ll treat this as your working direction and look for the evidence that makes it credible: scope owned, stakeholders, operating problem, tools or methods, and measurable outcomes. What is the strongest example from your background that proves this lane?`;
+    return `Good, ${targetDirection.toLowerCase()} is a useful starting point. I’ll treat that as the working lane and start looking for proof that would make it credible: scope owned, operating problem, stakeholders, tools or methods, and measurable outcomes. A strong next move is to add one example where you changed revenue, cost, speed, risk, customer outcomes, or team capacity.`;
   }
 
   if (isUserMessage) {
-    return "That helps. I’m adding this to your profile direction. To make it strong enough for recruiters and ATS screens, let’s attach evidence to it: what role, scope, tools, stakeholders, and outcome should we connect to this?";
+    return "I’ve added that to the profile foundation. The useful next step is to connect it to proof: the role it belongs to, the scope you owned, the stakeholders involved, and what changed because of the work.";
   }
 
-  return `I read ${inputLabel} and updated the profile foundation. My current positioning read is ${targetDirection.toLowerCase()}. Before we turn this into resume language, I would verify the strongest metrics, scope, and role focus so the profile feels precise rather than generic.`;
+  return `I read ${inputLabel} and updated the profile foundation. My current positioning read is ${targetDirection.toLowerCase()}. I’ll use that to shape the master resume around role history, scope, business impact, and the proof that should matter most to recruiters.`;
 }
 
 function buildAdvisorFallbackResult({
-  code,
   existingContext,
   inputLabel,
   text,
 }: {
-  code: string;
   existingContext: ExistingProfileContext;
   inputLabel: string;
   text: string;
@@ -923,9 +920,9 @@ function buildAdvisorFallbackResult({
 
   return {
     assistantMessage: [
-      `I saved ${inputLabel}, but the structured AI analysis needs another pass.`,
-      `Root cause: ${code}.`,
-      "The source text is preserved, so you should not need to upload it again. I can still use the saved profile context to keep advising while the extraction is retried.",
+      `I saved ${inputLabel}, and the text is preserved. I do not need you to upload it again.`,
+      "The analysis pass did not complete cleanly, so I will keep the user-facing guidance grounded in the profile context that is already saved instead of asking you to repeat yourself.",
+      "Best next move: use the saved source to regenerate the master resume, then review the experience section role by role for missing dates, scope, and measurable outcomes.",
     ].join(" "),
     facts: [],
     followUpQuestions: [

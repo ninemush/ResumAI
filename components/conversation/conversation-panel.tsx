@@ -1271,6 +1271,8 @@ function cleanPlainChatText(value: string) {
       /\bI (?:found|pulled out|captured|read and saved)\s+\d+\s+(?:useful\s+)?(?:profile\s+)?signals?\b[,.]?\s*/gi,
       "",
     )
+    .replace(/\bRoot cause:\s*[A-Z0-9_.-]+\.?\s*/gi, "")
+    .replace(/\bstructured AI analysis needs another pass\.?\s*/gi, "the analysis needs another pass. ")
     .replace(/\bFound\s+\d+\s+(?:useful\s+)?profile\s+signals?\.?\s*/gi, "")
     .replace(/\b(?:Saved|stored)\s+\d+\s+(?:new\s+)?profile\s+details?\.?\s*/gi, "")
     .replace(/^\s*\d+\.\s+(\*\*.*?\*\*:?\s*)/gm, "- $1")

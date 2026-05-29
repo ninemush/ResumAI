@@ -63,6 +63,12 @@ function shouldRetryWithFallback(error: unknown, requestedModel: ResponseCreateP
   return (
     (status === 404 &&
       (message.includes("model") || message.includes("verified") || message.includes("not found"))) ||
+    (status === 400 &&
+      (message.includes("model") ||
+        message.includes("not found") ||
+        message.includes("does not exist") ||
+        message.includes("not supported") ||
+        message.includes("unsupported"))) ||
     (status !== null && status >= 500)
   );
 }
