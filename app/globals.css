@@ -3918,12 +3918,21 @@ input:focus {
     z-index: 2;
   }
 
+  .workspace-shell.workspace-first .conversation-pane {
+    border-width: 1px 0 0;
+    order: 3;
+  }
+
   .workspace-main {
     min-height: auto;
     order: 3;
     padding: 18px;
     position: relative;
     z-index: 1;
+  }
+
+  .workspace-shell.workspace-first .workspace-main {
+    order: 2;
   }
 
   .profile-pane {

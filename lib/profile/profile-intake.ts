@@ -217,19 +217,31 @@ export async function extractProfileFactsFromText({
       userId: user.id,
     });
   } catch {
-    const deterministicResult = buildDeterministicProfileIntakeResult({
+    const relaxedResult = await runRelaxedProfileIntakeModel({
+      existingContext,
       inputLabel,
-      text: normalizedText,
+      model,
+      normalizedText,
+      userId: user.id,
     });
 
-    if (deterministicResult.facts.length === 0) {
-      parsed = buildAdvisorFallbackResult({
-        existingContext,
+    if (relaxedResult) {
+      parsed = relaxedResult;
+    } else {
+      const deterministicResult = buildDeterministicProfileIntakeResult({
         inputLabel,
         text: normalizedText,
       });
-    } else {
-      parsed = deterministicResult;
+
+      if (deterministicResult.facts.length === 0) {
+        parsed = buildAdvisorFallbackResult({
+          existingContext,
+          inputLabel,
+          text: normalizedText,
+        });
+      } else {
+        parsed = deterministicResult;
+      }
     }
   }
   const existingFactKeys = new Set(
@@ -495,6 +507,76 @@ async function runProfileIntakeModel({
   }
 
   throw new Error(lastFailureCode);
+}
+
+async function runRelaxedProfileIntakeModel({
+  existingContext,
+  inputLabel,
+  model,
+  normalizedText,
+  userId,
+}: {
+  existingContext: ExistingProfileContext;
+  inputLabel: string;
+  model: string;
+  normalizedText: string;
+  userId: string;
+}) {
+  try {
+    const response = await createOpenAIResponse({
+      model,
+      instructions: `${PROFILE_INTAKE_INSTRUCTIONS}
+
+Return valid JSON only. Do not wrap it in markdown or code fences.
+Use this exact object shape:
+{
+  "assistantMessage": "short, natural advisor response",
+  "facts": [{"type": "experience", "value": "evidence-backed fact", "confidence": 0.9}],
+  "followUpQuestions": ["one useful question"],
+  "profileDraft": {
+    "displayName": null,
+    "headline": null,
+    "summary": null,
+    "targetDirection": null,
+    "targetLevel": null
+  },
+  "roleRecommendations": [],
+  "suggestedDirection": null
+}
+Keep array lengths within the schema limits.`,
+      input: buildProfileIntakeInput({
+        existingContext,
+        label: inputLabel,
+        text: normalizedText,
+      }),
+      max_output_tokens: 3500,
+      metadata: {
+        prompt_version: PROFILE_INTAKE_PROMPT_VERSION,
+        feature: "profile_intake",
+        response_mode: "relaxed_json",
+      },
+      safety_identifier: hashUserId(userId),
+      store: false,
+      text: {
+        verbosity: "medium",
+      },
+    });
+
+    if (response.error || response.incomplete_details || !response.output_text.trim()) {
+      return null;
+    }
+
+    return parseProfileIntakeOutput(stripJsonFence(response.output_text));
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "profile_intake_relaxed_model_failed",
+        code: toProfileIntakeFailureCode(error),
+      }),
+    );
+
+    return null;
+  }
 }
 
 async function readExistingProfileContext({
@@ -1283,6 +1365,12 @@ function readString(value: unknown) {
 
 function readStringOrNull(value: unknown) {
   return typeof value === "string" ? value.trim() : null;
+}
+
+function stripJsonFence(value: string) {
+  const trimmed = value.trim();
+  const fenceMatch = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
+  return fenceMatch?.[1]?.trim() ?? trimmed;
 }
 
 function truncateText(value: string, maxLength: number) {

@@ -112,8 +112,10 @@ export function WorkspaceLayout({
     });
   }
 
+  const mobileFocusClass = layout.activeView === "profile" ? "conversation-first" : "workspace-first";
+
   return (
-    <div className="workspace-shell" style={shellStyle}>
+    <div className={`workspace-shell ${mobileFocusClass}`} style={shellStyle}>
       <SideNav
         activeView={layout.activeView}
         collapsed={layout.navCollapsed}
