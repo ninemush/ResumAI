@@ -250,6 +250,7 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
                 {application.latestResumeHeadline ??
                   `Materials: resume ${application.latestResumeStatus ?? "not ready"}, cover letter ${application.latestCoverLetterStatus ?? "not ready"}`}
               </span>
+              <span className="record-subnote">{formatLatestActivity(application)}</span>
             </button>
 
             <select
@@ -267,6 +268,14 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
             </select>
 
             <div className="record-actions">
+              <a
+                className="secondary-action compact-action"
+                href={application.jobUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Open job
+              </a>
               <button
                 className="secondary-action compact-action"
                 disabled={generatingApplicationId === application.id}
@@ -285,24 +294,6 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
                 <FileText size={14} aria-hidden="true" />
                 {loadingReviewApplicationId === application.id ? "Opening" : "Review"}
               </button>
-            </div>
-
-            <div className="application-timeline compact-timeline" aria-label="Application status history">
-              <strong>Latest status activity</strong>
-              {application.statusEvents.length > 0 ? (
-                application.statusEvents.slice(0, 2).map((event) => (
-                  <span key={`${event.createdAt}-${event.newStatus}`}>
-                    {formatStatus(event.previousStatus ?? "draft")} {"->"}{" "}
-                    {formatStatus(event.newStatus)}
-                    <em>{formatDate(event.createdAt)} via {event.source}</em>
-                  </span>
-                ))
-              ) : (
-                <span>
-                  {formatStatus(application.status)}
-                  <em>Current status</em>
-                </span>
-              )}
             </div>
             {application.latestCoverLetterExcerpt ? (
               <p className="record-subnote">Cover letter: {application.latestCoverLetterExcerpt}</p>
@@ -491,6 +482,17 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
 
 function formatStatus(status: string) {
   return applicationStatuses.find((item) => item.value === status)?.label ?? status.replaceAll("_", " ");
+}
+
+function formatLatestActivity(
+  application: ApplicationOverview["recentApplications"][number],
+) {
+  const latestEvent = application.statusEvents[0];
+  if (!latestEvent) {
+    return `Current status: ${formatStatus(application.status)}`;
+  }
+
+  return `Latest: ${formatStatus(latestEvent.newStatus)} on ${formatDate(latestEvent.createdAt)}`;
 }
 
 function formatExportStatus(status: MaterialReview["exportReadiness"]["status"]) {

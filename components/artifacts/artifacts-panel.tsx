@@ -77,9 +77,7 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
                     <Download size={13} aria-hidden="true" />
                     PDF
                   </a>
-                ) : (
-                  <span className="source-pill muted">No PDF</span>
-                )}
+                ) : null}
                 {artifact.docxDownloadUrl ? (
                   <a
                     className="secondary-action compact-action"
@@ -90,9 +88,10 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
                     <Download size={13} aria-hidden="true" />
                     DOCX
                   </a>
-                ) : (
-                  <span className="source-pill muted">No DOCX</span>
-                )}
+                ) : null}
+                {!artifact.pdfDownloadUrl && !artifact.docxDownloadUrl ? (
+                  <span className="source-pill muted">Not exported</span>
+                ) : null}
               </div>
             </article>
           ))

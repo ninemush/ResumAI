@@ -138,16 +138,20 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                 {job.company ?? formatJobUrl(job.resolved_url ?? job.job_url)}
                 {" · "}
                 {formatReviewStatus(job.review_status)}
-                {job.fitSnapshot.score !== null ? ` · ${job.fitSnapshot.score}% fit` : ""}
               </span>
               {job.fitSnapshot.score !== null ? (
                 <span className="record-summary">{job.fitAnalysis.summary}</span>
               ) : null}
             </button>
 
-            <span className={`source-pill ${job.ingestion_status}`}>
-              {job.ingestion_status.replace("_", " ")}
-            </span>
+            <div className="record-status-stack">
+              {job.fitSnapshot.score !== null ? (
+                <span className="fit-score-pill">{job.fitSnapshot.score}% fit</span>
+              ) : null}
+              <span className={`source-pill ${job.ingestion_status}`}>
+                {formatIngestionStatus(job.ingestion_status)}
+              </span>
+            </div>
 
             <div className="record-actions">
               <button
@@ -245,6 +249,17 @@ function formatReviewStatus(status: string) {
   };
 
   return labels[status] ?? "needs review";
+}
+
+function formatIngestionStatus(status: string) {
+  const labels: Record<string, string> = {
+    failed: "Needs attention",
+    pending: "Queued",
+    processing: "Reading",
+    succeeded: "Ready",
+  };
+
+  return labels[status] ?? status.replace("_", " ");
 }
 
 function FitBucket({

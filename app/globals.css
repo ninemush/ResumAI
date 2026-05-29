@@ -2047,12 +2047,12 @@ input:focus {
   align-items: center;
   background: var(--panel-strong);
   border: 1px solid var(--line);
-  border-radius: var(--pr-radius-md);
+  border-radius: var(--pr-radius-sm);
   display: grid;
-  gap: 12px;
+  gap: 10px 12px;
   grid-template-columns: minmax(0, 1fr) auto auto;
   min-height: 0;
-  padding: 12px;
+  padding: 12px 14px;
 }
 
 .record-main,
@@ -2078,7 +2078,7 @@ input:focus {
 
 .record-title {
   color: var(--foreground);
-  font-size: 0.96rem;
+  font-size: 0.98rem;
   font-weight: 750;
   line-height: 1.25;
   margin: 0;
@@ -2096,6 +2096,10 @@ input:focus {
 
 .record-summary {
   color: var(--ink-soft);
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .record-actions {
@@ -2104,6 +2108,26 @@ input:focus {
   flex-wrap: wrap;
   gap: 7px;
   justify-content: flex-end;
+}
+
+.record-status-stack {
+  align-items: end;
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.fit-score-pill {
+  background: rgba(57, 98, 88, 0.1);
+  border: 1px solid rgba(57, 98, 88, 0.24);
+  border-radius: 999px;
+  color: var(--sage-strong);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1;
+  padding: 7px 10px;
+  white-space: nowrap;
 }
 
 .record-detail-panel {
@@ -2125,7 +2149,13 @@ input:focus {
 }
 
 .application-record {
-  grid-template-columns: minmax(0, 1fr) minmax(160px, auto) auto minmax(180px, 260px);
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto) auto;
+}
+
+.application-record > .record-subnote {
+  border-top: 1px solid var(--line);
+  grid-column: 1 / -1;
+  padding-top: 8px;
 }
 
 .compact-status-select {
@@ -2135,10 +2165,10 @@ input:focus {
 
 .application-stage-strip,
 .artifact-filter-strip {
-  align-items: start;
-  display: grid;
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
 
 .application-stage-strip span,
@@ -2147,10 +2177,11 @@ input:focus {
   border: 1px solid var(--line);
   border-radius: var(--pr-radius-sm);
   color: var(--muted);
-  display: grid;
+  display: inline-grid;
   gap: 4px;
   min-height: 0;
-  padding: 10px 12px;
+  min-width: 116px;
+  padding: 9px 12px;
 }
 
 .application-stage-strip strong,
@@ -3658,8 +3689,11 @@ input:focus {
   }
 
   .record-actions,
-  .record-action-strip {
+  .record-action-strip,
+  .record-status-stack {
+    align-items: start;
     justify-content: flex-start;
+    justify-items: start;
   }
 
   .compact-status-select {
