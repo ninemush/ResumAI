@@ -39,6 +39,7 @@ type AdvisorProfile = {
 
 type AdvisorSource = {
   created_at: string;
+  extracted_text: string | null;
   extraction_status: string;
   original_filename: string | null;
   source_type: string;
@@ -113,7 +114,14 @@ export async function runConversationAdvisor(
   ]);
 
   if (factsError || conversationError || resumeError) {
-    throw new Error("ADVISOR_CONTEXT_READ_FAILED");
+    console.warn(
+      JSON.stringify({
+        event: "conversation_advisor_partial_context",
+        facts: factsError?.message ?? null,
+        conversation: conversationError?.message ?? null,
+        resume: resumeError?.message ?? null,
+      }),
+    );
   }
 
   const workspace = await readAdvisorWorkspaceContext({
@@ -127,11 +135,11 @@ export async function runConversationAdvisor(
       model,
       instructions: buildAdvisorInstructions(),
       input: buildAdvisorInput({
-        facts: (facts ?? []) as ConversationFact[],
-        latestResume,
+        facts: factsError ? [] : ((facts ?? []) as ConversationFact[]),
+        latestResume: resumeError ? null : latestResume,
         message: input.message,
         profile,
-        recentConversation: (conversation ?? []).reverse(),
+        recentConversation: conversationError ? [] : (conversation ?? []).reverse(),
         surface: input.surface,
         workspace,
       }),
@@ -179,8 +187,8 @@ export async function runConversationAdvisor(
 
     return {
       assistantMessage: buildContextAwareAdvisorFallback({
-        facts: (facts ?? []) as ConversationFact[],
-        latestResume,
+        facts: factsError ? [] : ((facts ?? []) as ConversationFact[]),
+        latestResume: resumeError ? null : latestResume,
         message: input.message,
         profile,
         workspace,
@@ -292,9 +300,10 @@ async function readAdvisorWorkspaceContext({
     profileId
       ? supabase
           .from("profile_sources")
-          .select("source_type, source_url, original_filename, extraction_status, created_at", {
-            count: "exact",
-          })
+          .select(
+            "source_type, source_url, original_filename, extracted_text, extraction_status, created_at",
+            { count: "exact" },
+          )
           .eq("profile_id", profileId)
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
@@ -341,7 +350,7 @@ function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
     `Sources: ${workspace.sources.total} saved.`,
     ...workspace.sources.recent.slice(0, 8).map(
       (source) =>
-        `- Source: ${source.original_filename ?? source.source_url ?? source.source_type}; type ${source.source_type}; extraction ${source.extraction_status}.`,
+        `- Source: ${source.original_filename ?? source.source_url ?? source.source_type}; type ${source.source_type}; extraction ${source.extraction_status}; readable excerpt ${formatSourceExcerpt(source.extracted_text)}.`,
     ),
   ];
   const artifactLines = workspace.artifacts
@@ -355,6 +364,14 @@ function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
     : ["Artifacts: unavailable."];
 
   return [...applicationLines, ...jobLines, ...sourceLines, ...artifactLines].join("\n");
+}
+
+function formatSourceExcerpt(value: string | null) {
+  if (!value?.trim()) {
+    return "not available";
+  }
+
+  return value.replace(/\s+/g, " ").trim().slice(0, 900);
 }
 
 function formatLatestResumeForAdvisor(latestResume: unknown) {
@@ -422,6 +439,10 @@ function buildContextAwareAdvisorFallback({
     .flatMap((theme) => theme.evidence)
     .filter(Boolean)
     .slice(0, 5);
+  const sourceEvidence = workspace.sources.recent
+    .map((source) => formatSourceExcerpt(source.extracted_text))
+    .filter((excerpt) => excerpt !== "not available")
+    .slice(0, 3);
   const gaps = intelligence?.highValueGaps.slice(0, 4) ?? [];
   const resumeText = formatLatestResumeForAdvisor(latestResume);
 
@@ -438,7 +459,7 @@ The proof already visible includes ${formatListForSentence(proofThemes ?? [], "t
   if (normalized.includes("resume") || normalized.includes("profile pdf") || normalized.includes("learn")) {
     return `I have enough saved context to answer without asking you to re-upload. The current master resume shows this snapshot: ${resumeText.replace(/\n/g, " ")}
 
-What I would improve next is the experience architecture: group the UiPath, GE, services, transformation, GTM, operations, and AI/automation proof by role and attach measurable scope to each. That is the difference between a senior activity list and a resume that reads like credible executive value.`;
+The saved source material adds this useful evidence: ${formatListForSentence(sourceEvidence, "role history, scope, skills, and positioning evidence from the uploaded source")}. What I would improve next is the experience architecture: group the proof by role, attach dates and scope, and turn each role into outcome-led bullets. That is the difference between a senior activity list and a resume that reads like credible executive value.`;
   }
 
   return `Based on what I already know, I would position you around ${roleRead}. The strongest evidence to preserve is ${formatListForSentence(proofThemes ?? [], "enterprise transformation, services/GTM leadership, operations, AI/automation, and measurable business outcomes")}.
