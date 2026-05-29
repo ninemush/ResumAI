@@ -6,7 +6,6 @@ import {
   FileText,
   FileType,
   ImageIcon,
-  Loader2,
   Mic,
   Paperclip,
   SendHorizontal,
@@ -172,13 +171,14 @@ export function ConversationPanel({
   });
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [isDragActive, setIsDragActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("profile");
   const [processingStep, setProcessingStep] = useState(0);
   const [processingIntent, setProcessingIntent] = useState("");
   const [activeAttachment, setActiveAttachment] = useState<MessageAttachment | null>(null);
+  const isSubmitting = pendingRequestCount > 0;
 
   useEffect(() => {
     const messageList = messageListRef.current;
@@ -221,7 +221,7 @@ export function ConversationPanel({
     setProcessingMode(inferProcessingMode(trimmedMessage));
     setProcessingIntent(trimmedMessage);
     setProcessingStep(0);
-    setIsSubmitting(true);
+    beginProcessing();
     appendUserMessage(trimmedMessage);
     persistConversationMessage("user", trimmedMessage);
 
@@ -232,10 +232,18 @@ export function ConversationPanel({
         "I could not save that note cleanly yet. I still understood the direction; try sending it again, or add a little more context so I can attach it to the right part of your profile.",
       );
     } finally {
-      setIsSubmitting(false);
+      endProcessing();
       setProcessingIntent("");
       setProcessingStep(0);
     }
+  }
+
+  function beginProcessing() {
+    setPendingRequestCount((count) => count + 1);
+  }
+
+  function endProcessing() {
+    setPendingRequestCount((count) => Math.max(0, count - 1));
   }
 
   function handleMessageInput(value: string) {
@@ -667,7 +675,7 @@ export function ConversationPanel({
     setProcessingMode("file");
     setProcessingIntent(fileList.map((file) => file.name).join(", "));
     setProcessingStep(0);
-    setIsSubmitting(true);
+    beginProcessing();
     appendUserMessage(
       fileList.length === 1 ? "Dropped a file" : `Dropped ${fileList.length} files`,
       fileList.length === 1 ? buildMessageAttachment(fileList[0]) : undefined,
@@ -691,7 +699,7 @@ export function ConversationPanel({
     } catch {
       setError("I could not finish reading that file. Try again, or paste the most important text directly.");
     } finally {
-      setIsSubmitting(false);
+      endProcessing();
       setProcessingIntent("");
       setProcessingStep(0);
     }
@@ -995,7 +1003,6 @@ export function ConversationPanel({
         <button
           aria-label="Attach file"
           className="attach-button"
-          disabled={isSubmitting}
           onClick={() => fileInputRef.current?.click()}
           type="button"
         >
@@ -1004,7 +1011,6 @@ export function ConversationPanel({
         <button
           aria-label={isListening ? "Stop voice input" : "Start voice input"}
           className={isListening ? "voice-button active" : "voice-button"}
-          disabled={isSubmitting}
           onClick={toggleVoiceInput}
           title={isListening ? "Stop voice input" : "Voice input"}
           type="button"
@@ -1012,7 +1018,6 @@ export function ConversationPanel({
           <Mic size={18} aria-hidden="true" />
         </button>
         <input
-          disabled={isSubmitting}
           onChange={(event) => handleMessageInput(event.target.value)}
           onInput={(event) => handleMessageInput(event.currentTarget.value)}
           onPaste={(event) => {
@@ -1031,7 +1036,6 @@ export function ConversationPanel({
           ref={fileInputRef}
           accept=".pdf,.doc,.docx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp,.heic,.heif"
           className="sr-only"
-          disabled={isSubmitting}
           multiple
           onChange={(event) => {
             if (event.target.files) {
@@ -1041,9 +1045,9 @@ export function ConversationPanel({
           }}
           type="file"
         />
-        <button disabled={isSubmitting || message.trim().length < 3} type="submit" aria-label="Send message">
+        <button disabled={message.trim().length < 3} type="submit" aria-label="Send message">
           {isSubmitting ? (
-            <Loader2 className="spin" size={18} aria-hidden="true" />
+            <SendHorizontal size={18} aria-hidden="true" />
           ) : (
             <SendHorizontal size={18} aria-hidden="true" />
           )}
@@ -1258,15 +1262,18 @@ function formatSourceIntakeReply({
 
 function cleanPlainChatText(value: string) {
   return value
-    .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/^\s{0,3}#{1,6}\s+/gm, "")
-    .replace(/^\s*\d+\.\s+\*\*(.*?)\*\*:?/gm, "$1:")
-    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/^\s*\d+\.\s+(\*\*.*?\*\*:?\s*)/gm, "- $1")
+    .replace(/^\s*\d+\.\s+/gm, "- ")
     .replace(/[ \t]+\n/g, "\n")
     .trim();
 }
 
 type ChatMessageBlock =
+  | {
+      kind: "heading";
+      text: string;
+    }
   | {
       kind: "paragraph";
       text: string;
@@ -1292,6 +1299,10 @@ function ChatMessageBody({ text }: { text: string }) {
           );
         }
 
+        if (block.kind === "heading") {
+          return <h3 key={`${block.text}-${index}`}>{renderInlineChatText(block.text)}</h3>;
+        }
+
         return <p key={`${block.text}-${index}`}>{renderInlineChatText(block.text)}</p>;
       })}
     </div>
@@ -1301,6 +1312,12 @@ function ChatMessageBody({ text }: { text: string }) {
 function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
   const normalized = text
     .replace(/\r\n/g, "\n")
+    .replace(/^\s{0,3}#{1,6}\s+(.+)$/gm, "\n\n**$1**\n")
+    .replace(/(\S)\s+(\*\*[A-Z][^*]{2,64}\*\*:)/g, "$1\n\n$2")
+    .replace(
+      /([.!?])\s+((?:Conservative|Balanced|Executive\/board-ready|Board-ready|My recommendation|Recommendation|What to fix first|Why it matters|What I learned|What is missing|Next step|Next question):)/g,
+      "$1\n\n$2",
+    )
     .replace(/\s+-\s+(?=\*\*?[A-Z0-9])/g, "\n- ")
     .replace(/\s+[-•]\s+(?=[A-Z][^.!?]{2,80}:)/g, "\n- ")
     .replace(/\n{3,}/g, "\n\n")
@@ -1330,6 +1347,23 @@ function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
 
     if (bullet) {
       pendingList.push(cleanChatListItem(bullet[1]));
+      continue;
+    }
+
+    const heading = line.match(/^\*\*([^*]+)\*\*:?\s*$/);
+
+    if (heading) {
+      flushList();
+      blocks.push({ kind: "heading", text: heading[1].trim() });
+      continue;
+    }
+
+    const headingWithText = line.match(/^\*\*([^*]+)\*\*:?\s+(.+)$/);
+
+    if (headingWithText) {
+      flushList();
+      blocks.push({ kind: "heading", text: headingWithText[1].trim() });
+      blocks.push({ kind: "paragraph", text: headingWithText[2].trim() });
       continue;
     }
 

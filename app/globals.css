@@ -1512,6 +1512,7 @@ input:focus {
   width: 100%;
 }
 
+.resume-document-preview header textarea,
 .resume-document-preview header input {
   border: 0;
   border-bottom: 2px solid var(--line);
@@ -1522,6 +1523,13 @@ input:focus {
   font-weight: 700;
   padding: 6px 0 12px;
   width: 100%;
+}
+
+.resume-headline-field {
+  line-height: 1.28;
+  overflow: hidden;
+  resize: none;
+  white-space: normal;
 }
 
 .resume-preview-name {
@@ -1561,14 +1569,59 @@ input:focus {
   width: 100%;
 }
 
+.resume-document-preview input {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(185, 155, 103, 0.28);
+  border-radius: 0;
+  color: var(--foreground);
+  font: inherit;
+  min-width: 0;
+  padding: 3px 0 5px;
+  width: 100%;
+}
+
+.resume-section-heading-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.resume-section-heading-row h3 {
+  flex: 1;
+}
+
+.resume-unsaved-banner {
+  align-items: center;
+  background: rgba(185, 155, 103, 0.12);
+  border: 1px solid rgba(185, 155, 103, 0.34);
+  border-radius: var(--pr-radius-sm);
+  color: var(--ink);
+  display: flex;
+  font-weight: 750;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.resume-unsaved-banner div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .resume-experience-section-list {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .resume-experience-section {
+  border: 1px solid rgba(185, 155, 103, 0.22);
+  border-radius: var(--pr-radius-sm);
   display: grid;
-  gap: 4px;
+  gap: 12px;
+  padding: 14px;
 }
 
 .resume-experience-section strong {
@@ -1579,6 +1632,79 @@ input:focus {
 .resume-experience-section span {
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.resume-role-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.resume-role-grid label {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.72rem;
+  font-weight: 800;
+  gap: 4px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.resume-bullet-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.resume-bullet-row {
+  align-items: start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+}
+
+.resume-bullet-row span {
+  color: var(--gold);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.resume-bullet-row textarea {
+  border-bottom: 1px solid rgba(185, 155, 103, 0.2);
+  min-height: 34px;
+  resize: vertical;
+}
+
+.resume-role-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.resume-inline-action,
+.icon-only-action {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  gap: 6px;
+  justify-content: center;
+  padding: 7px 10px;
+}
+
+.icon-only-action {
+  height: 32px;
+  padding: 0;
+  width: 32px;
+}
+
+.resume-inline-action.danger {
+  color: var(--danger);
 }
 
 .resume-advanced-editor {
@@ -2846,6 +2972,17 @@ input:focus {
   margin-top: 0;
 }
 
+.chat-message-body h3 {
+  color: var(--ink);
+  font-size: 0.96rem;
+  line-height: 1.28;
+  margin: 4px 0 0;
+}
+
+.chat-message-body h3:first-child {
+  margin-top: 0;
+}
+
 .chat-message-body ul {
   display: grid;
   gap: 8px;
@@ -3559,5 +3696,23 @@ input:focus {
   .profile-photo-action {
     grid-column: 1 / -1;
     justify-self: start;
+  }
+
+  .resume-document-preview {
+    padding: 20px;
+  }
+
+  .resume-role-grid,
+  .resume-bullet-row {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-bullet-row span {
+    display: none;
+  }
+
+  .resume-unsaved-banner {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

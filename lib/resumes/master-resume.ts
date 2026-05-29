@@ -19,7 +19,7 @@ import {
 } from "@/lib/resumes/resume-content";
 import { createClient } from "@/lib/supabase/server";
 
-export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v2";
+export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v3";
 const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
 const PDF_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
@@ -562,11 +562,23 @@ judgment: strong positioning, supported keywords, evidence-backed bullets, and
 clear gaps the user should fill before using this as an application source.
 
 Use a standard ATS structure. The headline must be a concise title or
-positioning line, not a pipe-delimited keyword list. Put keyword breadth into
-skills and experience, not the title. Organize work history into role-based
-experienceSections when the evidence names roles, employers, dates, or scope.
-Each role section should contain bullets that read like resume bullets, not
-loose notes. Also provide experienceBullets as fallback selected highlights.
+positioning line under 95 characters, not a pipe-delimited keyword list. Put
+keyword breadth into skills and experience, not the title. The summary should
+be tight enough for a resume preview, usually 90-140 words.
+
+The work history must be organized into role-based experienceSections whenever
+the evidence names employers, roles, dates, scope, or repeated role context.
+Order experienceSections from current/most recent to oldest based on the source
+evidence. Each section should include roleTitle, company, location, and dates
+when those are present in the evidence. Use null only when the evidence truly
+does not include the field, and add a reviewerNote asking for the missing dates
+or company instead of inventing them.
+
+Each role section should contain resume bullets that combine action, scope, and
+business value. Keep bullets tied to that role. Do not flatten rich work history
+into a generic highlights list unless the source evidence is too thin to attach
+work to employers. Also provide experienceBullets as fallback selected
+highlights, but role-based experienceSections are the primary resume content.
 
 Treat the master resume as the reusable source of truth. Do not overfit it to
 one narrow role. Capture the user's broader leadership pattern, domain depth,
