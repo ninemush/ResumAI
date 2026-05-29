@@ -183,7 +183,7 @@ export function analyzeJobFit({
   const jobSignalGroups = readSignalGroups(jobText);
 
   if (candidateKeywords.length === 0) {
-    return buildEmptyFit("Add or confirm profile evidence before Pramania can judge role fit.");
+    return buildEmptyFit("Add profile context before Pramania can give a fair fit read.");
   }
 
   const normalizedCandidateTerms = candidateKeywords.map(normalizeKeyword);
@@ -230,7 +230,7 @@ export function analyzeJobFit({
       matchedKeywords,
       recommendation,
       score,
-      signalMatches: candidateSignalGroups.filter((signal) => jobSignalGroups.includes(signal)),
+      alignmentThemes: candidateSignalGroups.filter((signal) => jobSignalGroups.includes(signal)),
     }),
   };
 }
@@ -239,7 +239,7 @@ function buildEmptyFit(summary: string): JobFitAnalysis {
   return {
     matchedKeywords: [],
     missingKeywords: [],
-    questions: ["Share or confirm more profile evidence before deciding whether to proceed."],
+    questions: ["Share a resume, profile, or role-history note before deciding whether to proceed."],
     recommendation: "needs_profile",
     risks: ["Not enough trusted profile context to assess this role."],
     score: null,
@@ -430,15 +430,15 @@ function readSenioritySignals(jobText: string) {
 }
 
 function buildFitSummary({
+  alignmentThemes,
   matchedKeywords,
   recommendation,
   score,
-  signalMatches,
 }: {
+  alignmentThemes: string[];
   matchedKeywords: string[];
   recommendation: JobFitAnalysis["recommendation"];
   score: number;
-  signalMatches: string[];
 }) {
   const label = {
     needs_profile: "needs more profile evidence",
@@ -447,12 +447,12 @@ function buildFitSummary({
     weak_match: "looks like a stretch right now",
   }[recommendation];
   const signalText =
-    signalMatches.length > 0
-      ? ` Stronger alignment themes: ${signalMatches.slice(0, 3).join(", ")}.`
+    alignmentThemes.length > 0
+      ? ` Stronger alignment themes: ${alignmentThemes.slice(0, 3).join(", ")}.`
       : "";
   const matchText =
     matchedKeywords.length > 0
-      ? ` Matched signals include ${matchedKeywords.slice(0, 4).join(", ")}.`
+      ? ` Matched areas include ${matchedKeywords.slice(0, 4).join(", ")}.`
       : "";
 
   return `Fit is ${score}% and ${label}.${signalText}${matchText}`;

@@ -339,7 +339,7 @@ export function ProfileExplorer({
 
       <section className="profile-intelligence-panel" aria-label="Profile intelligence">
         <div className="section-heading">
-          <p className="eyebrow">Hiring signal</p>
+          <p className="eyebrow">Career read</p>
           <h2>What Pramania can already use</h2>
         </div>
         <div className="profile-signal-grid">
@@ -390,7 +390,7 @@ export function ProfileExplorer({
       <section className="profile-editor-panel" aria-label="Profile direction editor">
         <div className="section-heading">
           <p className="eyebrow">Working profile</p>
-          <h2>Your career signal</h2>
+          <h2>Your profile direction</h2>
         </div>
         <div className="profile-editor-grid">
           <label>

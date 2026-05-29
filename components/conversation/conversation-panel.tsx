@@ -1114,8 +1114,8 @@ function getProcessingMessage(mode: ProcessingMode, step: number, activeView: Ap
     ],
     file: [
       hasFileIntent
-        ? `Reading ${intent.split(",")[0]} and looking for hiring signal.`
-        : "Reading the file and looking for hiring signal...",
+        ? `Reading ${intent.split(",")[0]} and looking for career evidence.`
+        : "Reading the file and looking for career evidence...",
       "Pulling out roles, scope, skills, credentials, and proof points...",
       "Separating useful evidence from formatting noise...",
       "Checking whether this is resume text, profile text, or screenshot text...",
@@ -1128,7 +1128,7 @@ function getProcessingMessage(mode: ProcessingMode, step: number, activeView: Ap
     ],
     job: [
       "Reading the job post and filtering out page noise...",
-      "Looking for role requirements, seniority signals, and keywords...",
+      "Looking for role requirements, seniority cues, and keywords...",
       "Comparing the post against what we know about your profile...",
       "Checking the fit read for unknowns instead of pretending certainty...",
       "Pulling out the parts that matter for resume targeting...",
@@ -1146,12 +1146,12 @@ function getProcessingMessage(mode: ProcessingMode, step: number, activeView: Ap
       "Looking for the clearest next question, not a long interrogation...",
       "Checking whether this should update your profile, resume, or target direction...",
       "Looking for the business value behind the activity.",
-      "Separating a useful career signal from a note that just needs context.",
+      "Separating useful career evidence from notes that need more context.",
       "Almost there. I'm turning this into profile evidence and a useful next step.",
     ],
     resume: [
       "Reviewing your profile evidence before drafting resume language...",
-      "Checking for ATS signal without making it sound generic...",
+      "Checking for ATS strength without making it sound generic...",
       "Keeping unsupported claims out and preserving your voice...",
       "Looking for sharper outcomes, cleaner verbs, and less filler...",
       "Checking whether the draft reads like a human with real scope...",
@@ -1833,7 +1833,7 @@ function formatFitRecommendation(recommendation: string | undefined) {
     needs_profile: "hold until we add stronger profile evidence.",
     possible_match: "worth a closer look, but not a blind apply.",
     strong_match: "pursue it, assuming the role scope matches what you want next.",
-    weak_match: "treat it as a stretch unless you can prove the missing signals.",
+    weak_match: "treat it as a stretch unless you can prove the missing requirements.",
   };
 
   return labels[recommendation ?? ""] ?? "review carefully before applying.";

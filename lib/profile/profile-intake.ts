@@ -899,7 +899,7 @@ function buildAdvisorFallbackResult({
   if (asksForMetrics) {
     return {
       assistantMessage: [
-        "Yes. For the master resume, I would not ask for random metrics; I would pressure-test the value story around the signals already visible.",
+        "Yes. For the master resume, I would not ask for random metrics; I would pressure-test the value story around the experience already visible.",
         proofThemes.length > 0
           ? `The current evidence points toward ${proofThemes.join(", ")}.`
           : "The current profile still needs stronger evidence before I can rank the proof themes confidently.",
@@ -1130,7 +1130,7 @@ function deriveIndustrySignal(text: string) {
     "Customer success",
   ].filter((signal) => text.toLowerCase().includes(signal.toLowerCase()));
 
-  return signals.length > 0 ? `Industry/domain signals: ${signals.join(", ")}` : null;
+  return signals.length > 0 ? `Industry/domain read: ${signals.join(", ")}` : null;
 }
 
 function deriveTargetDirection(text: string) {
