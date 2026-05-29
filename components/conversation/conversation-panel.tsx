@@ -1923,7 +1923,7 @@ function looksLikeAdvisorQuestion(text: string) {
 
   return (
     normalized.includes("?") ||
-    /\b(advice|advise|recommend|recommendation|what should|should i|shouldn't you|shouldnt you|tell me|based on what you know|what do you think|where do i fit|what roles|which roles|what metrics|quantify|quantifiable|business value|proof point|proof points|how would you position|career advice)\b/.test(
+    /\b(advice|advise|recommend|recommendation|what should|should i|shouldn't you|shouldnt you|tell me|based on what you know|what do you think|where do i fit|what roles|which roles|what metrics|quantify|quantifiable|business value|proof point|proof points|how would you position|career advice|you have my|you have all|you already have|use what you know|why not|why could|why can)\b/.test(
       normalized,
     )
   );

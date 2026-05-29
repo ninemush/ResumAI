@@ -1512,6 +1512,12 @@ input:focus {
   width: 100%;
 }
 
+.resume-document-preview header {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .resume-document-preview header textarea,
 .resume-document-preview header input {
   border: 0;
@@ -1521,6 +1527,8 @@ input:focus {
   font-family: inherit;
   font-size: clamp(0.96rem, 1.4vw, 1.15rem);
   font-weight: 700;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   padding: 6px 0 12px;
   width: 100%;
 }
@@ -1530,6 +1538,15 @@ input:focus {
   overflow: hidden;
   resize: none;
   white-space: normal;
+}
+
+.resume-preview-helper {
+  color: var(--muted);
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
 }
 
 .resume-preview-name {
@@ -1564,8 +1581,9 @@ input:focus {
   font: inherit;
   line-height: 1.58;
   min-height: 0;
+  overflow: hidden;
   padding: 0;
-  resize: vertical;
+  resize: none;
   width: 100%;
 }
 
@@ -1620,8 +1638,13 @@ input:focus {
   border: 1px solid rgba(185, 155, 103, 0.22);
   border-radius: var(--pr-radius-sm);
   display: grid;
-  gap: 12px;
+  gap: 14px;
   padding: 14px;
+}
+
+.resume-experience-section:focus-within {
+  border-color: rgba(185, 155, 103, 0.48);
+  box-shadow: 0 12px 32px rgba(18, 29, 47, 0.06);
 }
 
 .resume-experience-section strong {
@@ -1671,7 +1694,6 @@ input:focus {
 .resume-bullet-row textarea {
   border-bottom: 1px solid rgba(185, 155, 103, 0.2);
   min-height: 34px;
-  resize: vertical;
 }
 
 .resume-role-actions {

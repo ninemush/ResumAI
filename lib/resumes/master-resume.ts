@@ -13,6 +13,7 @@ import {
   type ProfileIntelligence,
 } from "@/lib/profile/profile-intelligence";
 import {
+  normalizeResumeContent,
   parseResumeContent,
   resumeContentSchema,
   type ResumeContent,
@@ -55,6 +56,13 @@ type ResumeRow = {
   prompt_version: string | null;
   status: string;
   updated_at: string;
+};
+
+type SourceEvidence = {
+  extracted_text: string | null;
+  original_filename: string | null;
+  source_type: string;
+  source_url: string | null;
 };
 
 export type MasterResumeOverview = {
@@ -100,7 +108,11 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
     });
   }
 
-  const [{ data: facts, error: factsError }, { data: latestResume, error: resumeError }] =
+  const [
+    { data: facts, error: factsError },
+    { data: latestResume, error: resumeError },
+    { data: sourceEvidence, error: sourceError },
+  ] =
     await Promise.all([
       supabase
         .from("profile_facts")
@@ -119,6 +131,14 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from("profile_sources")
+        .select("source_type, source_url, original_filename, extracted_text")
+        .eq("profile_id", profile.id)
+        .eq("user_id", userId)
+        .not("extracted_text", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(8),
     ]);
 
   if (factsError) {
@@ -129,10 +149,18 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
     throw new Error("MASTER_RESUME_READ_FAILED");
   }
 
+  if (sourceError) {
+    console.warn("master_resume.source_evidence_read_failed", {
+      profileId: profile.id,
+      userIdHash: hashUserId(userId),
+    });
+  }
+
   return buildOverview({
     confirmedFacts: facts ?? [],
     latestResume,
     profile,
+    sourceEvidence: sourceError ? [] : (sourceEvidence ?? []),
   });
 }
 
@@ -141,8 +169,8 @@ export async function generateMasterResume(
 ): Promise<GenerateMasterResumeResult> {
   const parsed = generateMasterResumeSchema.parse(input);
   const { supabase, userId } = await getAuthenticatedContext();
-  const { profile, confirmedFacts } = await readMasterResumeContext(userId);
-  const missingEvidence = readMissingEvidence({ confirmedFacts, profile });
+  const { profile, confirmedFacts, sourceEvidence } = await readMasterResumeContext(userId);
+  const missingEvidence = readMissingEvidence({ confirmedFacts, profile, sourceEvidence });
 
   if (missingEvidence.length > 0) {
     throw new Error("MASTER_RESUME_CONTEXT_TOO_THIN");
@@ -160,6 +188,7 @@ export async function generateMasterResume(
       }),
       instruction: parsed.instruction,
       profile,
+      sourceEvidence,
     }),
     max_output_tokens: 3000,
     metadata: {
@@ -246,7 +275,7 @@ export async function generateMasterResume(
     throw new Error("AI_MASTER_RESUME_FAILED");
   }
 
-  const resume = resumeContentSchema.parse(JSON.parse(response.output_text));
+  const resume = normalizeResumeContent(resumeContentSchema.parse(JSON.parse(response.output_text)));
   const { data: generatedResume, error: resumeError } = await supabase
     .from("generated_resumes")
     .insert({
@@ -288,6 +317,7 @@ export async function updateMasterResume(
   input: z.input<typeof updateMasterResumeSchema>,
 ): Promise<MasterResumeOverview> {
   const parsed = updateMasterResumeSchema.parse(input);
+  const normalizedResume = normalizeResumeContent(parsed.resume);
   const { supabase, userId } = await getAuthenticatedContext();
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -321,7 +351,7 @@ export async function updateMasterResume(
   const { error: updateError } = await supabase
     .from("generated_resumes")
     .update({
-      content_json: parsed.resume,
+      content_json: normalizedResume,
       docx_storage_path: null,
       pdf_storage_path: null,
       status: "draft",
@@ -368,10 +398,11 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
   }
 
   const resume = parseResumeContent(latestResume.content_json);
+  const normalizedResume = normalizeResumeContent(resume);
   const templateInput = {
     contextLine: [profile.target_direction, profile.target_level].filter(Boolean).join(" | "),
     displayName: profile.display_name,
-    resume,
+    resume: normalizedResume,
   };
   const [pdfBytes, docxBytes] = await Promise.all([
     buildAtsResumePdf(templateInput),
@@ -379,7 +410,7 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
   ]);
   const validation = await validateGeneratedPdf({
     bytes: pdfBytes,
-    requiredPhrases: [resume.headline, resume.summary],
+    requiredPhrases: [normalizedResume.headline, normalizedResume.summary],
   });
 
   if (!validation.valid) {
@@ -455,14 +486,30 @@ async function readMasterResumeContext(userId: string) {
     .eq("user_id", userId)
     .order("confidence", { ascending: false })
     .limit(80);
+  const { data: sourceEvidence, error: sourceError } = await supabase
+    .from("profile_sources")
+    .select("source_type, source_url, original_filename, extracted_text")
+    .eq("profile_id", profile.id)
+    .eq("user_id", userId)
+    .not("extracted_text", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(8);
 
   if (factsError) {
     throw new Error("PROFILE_FACTS_READ_FAILED");
   }
 
+  if (sourceError) {
+    console.warn("master_resume.source_evidence_read_failed", {
+      profileId: profile.id,
+      userIdHash: hashUserId(userId),
+    });
+  }
+
   return {
     confirmedFacts: confirmedFacts ?? [],
     profile,
+    sourceEvidence: sourceError ? [] : (sourceEvidence ?? []),
   };
 }
 
@@ -470,12 +517,14 @@ async function buildOverview({
   confirmedFacts,
   latestResume,
   profile,
+  sourceEvidence,
 }: {
   confirmedFacts: ConfirmedFact[];
   latestResume: ResumeRow | null;
   profile: Pick<ProfileRecord, "target_direction" | "target_level">;
+  sourceEvidence: SourceEvidence[];
 }) {
-  const missingEvidence = readMissingEvidence({ confirmedFacts, profile });
+  const missingEvidence = readMissingEvidence({ confirmedFacts, profile, sourceEvidence });
 
   return buildEmptyOverview({
     confirmedFactCount: confirmedFacts.length,
@@ -520,22 +569,34 @@ function buildEmptyOverview({
 function readMissingEvidence({
   confirmedFacts,
   profile,
+  sourceEvidence = [],
 }: {
   confirmedFacts: ConfirmedFact[];
   profile?: Pick<ProfileRecord, "target_direction" | "target_level">;
+  sourceEvidence?: SourceEvidence[];
 }) {
   const types = new Set(confirmedFacts.map((fact) => fact.fact_type));
+  const sourceText = sourceEvidence.map((source) => source.extracted_text ?? "").join("\n");
+  const hasSourceText = sourceText.replace(/\s+/g, " ").trim().length > 500;
+  const hasWorkEvidence =
+    types.has("experience") ||
+    types.has("project") ||
+    /\b(experience|employment|work history|company|director|vice president|manager|lead|consultant|advisor|engineer|analyst)\b/i.test(
+      sourceText,
+    );
+  const hasSkillEvidence =
+    types.has("skill") || /\b(skills?|competenc|technolog|tools?|expertise)\b/i.test(sourceText);
   const missing: string[] = [];
 
-  if (confirmedFacts.length < 3) {
+  if (confirmedFacts.length < 3 && !hasSourceText) {
     missing.push("At least 3 proof points");
   }
 
-  if (!types.has("experience") && !types.has("project")) {
+  if (!hasWorkEvidence) {
     missing.push("Work experience or project evidence");
   }
 
-  if (!types.has("skill")) {
+  if (!hasSkillEvidence) {
     missing.push("Skills");
   }
 
@@ -550,9 +611,10 @@ function buildMasterResumeInstructions() {
   return `
 You are ${brand.name}'s senior resume strategist.
 
-Create an ATS-friendly master resume draft using only captured profile facts
-and profile direction supplied in the input. Do not invent employers, dates,
-credentials, metrics, tools, titles, education, awards, or outcomes.
+Create an ATS-friendly master resume draft using only captured profile facts,
+readable source excerpts, and profile direction supplied in the input. Do not
+invent employers, dates, credentials, metrics, tools, titles, education, awards,
+or outcomes.
 
 The resume should feel polished and human, not generic AI output. Preserve a
 hint of the user's voice by keeping language clear, candid, and grounded.
@@ -617,11 +679,13 @@ function buildMasterResumeInput({
   intelligence,
   instruction,
   profile,
+  sourceEvidence,
 }: {
   confirmedFacts: ConfirmedFact[];
   intelligence: ProfileIntelligence;
   instruction: string | undefined;
   profile: ProfileRecord;
+  sourceEvidence: SourceEvidence[];
 }) {
   return `
 Profile:
@@ -633,6 +697,14 @@ Profile:
 
 Profile evidence:
 ${confirmedFacts.map((fact) => `- ${fact.fact_type}: ${fact.fact_value}`).join("\n")}
+
+Readable source excerpts:
+${formatSourceEvidenceForPrompt(sourceEvidence)}
+
+Treat readable source excerpts as user-provided evidence. If extracted profile
+facts are thin but source excerpts contain structured LinkedIn/resume history,
+use the source excerpts to build role-based experience sections. Keep claims
+grounded in the excerpt text.
 
 Profile intelligence:
 - Evidence strength: ${intelligence.evidenceStrength}
@@ -649,6 +721,21 @@ ${instruction ?? "No extra instruction."}
 
 Return structured JSON only.
 `.trim();
+}
+
+function formatSourceEvidenceForPrompt(sourceEvidence: SourceEvidence[]) {
+  const excerpts = sourceEvidence
+    .map((source) => {
+      const excerpt = source.extracted_text?.replace(/\s+/g, " ").trim().slice(0, 2200);
+      if (!excerpt) return null;
+
+      return `- ${source.original_filename ?? source.source_url ?? source.source_type}: ${excerpt}`;
+    })
+    .filter(Boolean);
+
+  return excerpts.length > 0
+    ? excerpts.join("\n")
+    : "No readable source excerpts available.";
 }
 
 async function createSignedArtifactUrl(path: string | null) {

@@ -23,3 +23,53 @@ export type ResumeContent = z.infer<typeof resumeContentSchema>;
 export function parseResumeContent(value: unknown): ResumeContent {
   return resumeContentSchema.parse(value);
 }
+
+export function normalizeResumeContent(value: ResumeContent): ResumeContent {
+  const experienceSections = value.experienceSections
+    .map((section) => ({
+      bullets: section.bullets.map(cleanResumeText).filter(Boolean).slice(0, 7),
+      company: cleanNullableText(section.company),
+      dates: cleanNullableText(section.dates),
+      location: cleanNullableText(section.location),
+      roleTitle: cleanResumeText(section.roleTitle) || "Role",
+    }))
+    .filter((section) => section.bullets.length > 0 || section.roleTitle !== "Role")
+    .slice(0, 8);
+  const experienceBullets = value.experienceBullets
+    .map(cleanResumeText)
+    .filter(Boolean)
+    .slice(0, 14);
+
+  return resumeContentSchema.parse({
+    experienceBullets:
+      experienceBullets.length > 0
+        ? experienceBullets
+        : experienceSections.flatMap((section) => section.bullets).slice(0, 8),
+    experienceSections,
+    headline: cleanResumeHeadline(value.headline),
+    keywordGaps: value.keywordGaps.map(cleanResumeText).filter(Boolean).slice(0, 16),
+    reviewerNotes: value.reviewerNotes.map(cleanResumeText).filter(Boolean).slice(0, 8),
+    skills: value.skills.map(cleanResumeText).filter(Boolean).slice(0, 24),
+    summary: cleanResumeText(value.summary),
+  });
+}
+
+function cleanNullableText(value: string | null) {
+  const cleanValue = cleanResumeText(value ?? "");
+  return cleanValue || null;
+}
+
+function cleanResumeText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function cleanResumeHeadline(value: string) {
+  const normalized = cleanResumeText(value).replace(/\s*\|\s*/g, " / ");
+  const segments = normalized.split(/\s+\/\s+/).filter(Boolean);
+
+  if (segments.length <= 2) {
+    return normalized.slice(0, 140);
+  }
+
+  return segments.slice(0, 2).join(" / ").slice(0, 140);
+}

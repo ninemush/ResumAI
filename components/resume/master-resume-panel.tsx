@@ -14,7 +14,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type { ResumeContent } from "@/lib/resumes/resume-content";
+import { normalizeResumeContent, type ResumeContent } from "@/lib/resumes/resume-content";
 import type { MasterResumeOverview } from "@/lib/resumes/master-resume";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
@@ -86,6 +86,14 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
       return;
     }
 
+    let normalizedDraft: ResumeContent;
+    try {
+      normalizedDraft = normalizeResumeContent(draft);
+    } catch {
+      setMessage("The resume has an empty required section. Add a summary, headline, skill, and at least one experience bullet before saving.");
+      return;
+    }
+
     setIsSaving(true);
     setMessage(null);
 
@@ -93,7 +101,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
       const response = await fetch("/api/resume/master", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume: draft }),
+        body: JSON.stringify({ resume: normalizedDraft }),
       });
       const payload = await response.json();
 
@@ -282,6 +290,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
               <strong className="resume-preview-name">
                 {profileOverview.profile?.displayName ?? "Your Name"}
               </strong>
+              <span className="resume-preview-helper">Master ATS resume</span>
               <textarea
                 aria-label="Resume headline"
                 className="resume-headline-field"
