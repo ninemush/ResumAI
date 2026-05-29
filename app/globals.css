@@ -1405,27 +1405,33 @@ input:focus {
 }
 
 .resume-readiness-panel {
-  align-items: center;
+  align-items: start;
   display: grid;
-  gap: 18px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  grid-template-columns: 1fr;
   padding: 20px;
 }
 
 .resume-readiness-panel > div:first-child {
   display: grid;
   gap: 6px;
+  max-width: 620px;
 }
 
 .resume-readiness-panel span {
-  color: var(--foreground);
-  font-family: var(--font-pr-brand), Georgia, serif;
-  font-size: 2.4rem;
-  line-height: 1;
+  color: var(--sage-strong);
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .resume-readiness-panel strong {
   color: var(--foreground);
+  font-size: 1.1rem;
+  line-height: 1.25;
 }
 
 .resume-readiness-panel p,
@@ -1439,7 +1445,7 @@ input:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .resume-gap-panel ul {
@@ -1502,6 +1508,7 @@ input:focus {
 .resume-review-grid {
   display: grid;
   gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .review-item {
@@ -1539,6 +1546,13 @@ input:focus {
   display: flex;
   gap: 8px;
   line-height: 1.45;
+  margin: 0;
+}
+
+.resume-review-note {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
   margin: 0;
 }
 
@@ -1635,6 +1649,15 @@ input:focus {
   width: 100%;
 }
 
+.resume-document-preview .resume-role-title-field textarea {
+  border-bottom: 1px solid rgba(185, 155, 103, 0.28);
+  color: var(--foreground);
+  font-size: 1rem;
+  font-weight: 850;
+  line-height: 1.32;
+  padding: 3px 0 5px;
+}
+
 .resume-document-preview input {
   background: transparent;
   border: 0;
@@ -1718,12 +1741,6 @@ input:focus {
   color: var(--muted);
   display: grid;
   gap: 4px;
-}
-
-.resume-role-title-field input {
-  color: var(--foreground);
-  font-size: 1rem;
-  font-weight: 850;
 }
 
 .resume-role-company-field input {
@@ -3953,6 +3970,7 @@ input:focus {
   .sources-helper-panel,
   .owner-metric-grid,
   .fit-review-grid,
+  .resume-review-grid,
   .profile-editor-grid,
   .record-row,
   .job-record,

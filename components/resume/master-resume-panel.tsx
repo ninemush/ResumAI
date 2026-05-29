@@ -40,6 +40,27 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
     () => JSON.stringify(draft) !== JSON.stringify(savedDraft),
     [draft, savedDraft],
   );
+  const reviewItems = useMemo(() => {
+    const items = [
+      ...currentOverview.missingEvidence.map((text) => ({
+        severity: "critical" as const,
+        text,
+      })),
+      ...(draft?.keywordGaps ?? []).map((text) => ({
+        severity: "important" as const,
+        text,
+      })),
+      ...(draft?.reviewerNotes ?? []).map((text) => ({
+        severity: "informational" as const,
+        text,
+      })),
+    ];
+
+    return {
+      hasMore: items.length > 8,
+      visible: items.slice(0, 8),
+    };
+  }, [currentOverview.missingEvidence, draft?.keywordGaps, draft?.reviewerNotes]);
 
   useEffect(() => {
     if (!isDirty) {
@@ -160,7 +181,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
         <p className="eyebrow">Profile & resume studio</p>
         <h1 id="resume-studio-title">Master profile and resume</h1>
         <p>
-          Build a reusable ATS-friendly master resume from your profile evidence, then
+          Build a reusable ATS-friendly master resume from your career context, then
           create sharper role-focused variants from the same trusted context.
         </p>
       </div>
@@ -239,23 +260,27 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
 
       {message ? <p className="system-note success">{message}</p> : null}
 
-      {(currentOverview.missingEvidence.length > 0 || draft?.keywordGaps.length || draft?.reviewerNotes.length) ? (
+      {reviewItems.visible.length > 0 ? (
         <section className="resume-gap-panel priority-review-panel" aria-label="Master resume review priorities">
           <div className="section-heading">
             <p className="eyebrow">Review first</p>
             <h2>Gaps and reviewer notes</h2>
           </div>
           <div className="resume-review-grid">
-            {currentOverview.missingEvidence.map((gap) => (
-              <ReviewItem key={gap} severity="critical" text={gap} />
-            ))}
-            {draft?.keywordGaps.map((gap) => (
-              <ReviewItem key={gap} severity="important" text={gap} />
-            ))}
-            {draft?.reviewerNotes.map((note) => (
-              <ReviewItem key={note} severity="informational" text={note} />
+            {reviewItems.visible.map((item) => (
+              <ReviewItem
+                key={`${item.severity}-${item.text}`}
+                severity={item.severity}
+                text={item.text}
+              />
             ))}
           </div>
+          {reviewItems.hasMore ? (
+            <p className="resume-review-note">
+              More refinement prompts are preserved in the advanced editor. The resume
+              draft stays visible so you can edit the actual document first.
+            </p>
+          ) : null}
         </section>
       ) : null}
 
@@ -363,7 +388,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
                       <div className="resume-role-card-header">
                         <label className="resume-role-title-field">
                           <span className="sr-only">Role</span>
-                          <input
+                          <textarea
                             aria-label={`Role title for experience ${index + 1}`}
                             onChange={(event) =>
                               updateExperienceSection(draft, setDraft, index, {
@@ -371,6 +396,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
                               })
                             }
                             placeholder="Role title"
+                            rows={Math.max(1, Math.ceil(section.roleTitle.length / 54))}
                             value={section.roleTitle}
                           />
                         </label>
@@ -547,7 +573,7 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
           <div>
             <h2>No master resume yet</h2>
             <p>
-              Add profile evidence first, then generate a draft here. Pramania will keep
+              Add career context first, then generate a draft here. Pramania will keep
               unsupported claims out and call out evidence gaps before you tailor for jobs.
             </p>
           </div>
