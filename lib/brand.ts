@@ -12,6 +12,8 @@ export const brand = {
   horizontalLogoPath: "/brand/pramania-horizontal-lockup-transparent.png",
   logoAlt: "Pramania primary logo",
   logoPath: "/brand/pramania-primary-logo-transparent.png",
+  stackedLogoPath: "/brand/pramania-stacked-lockup-transparent.png",
+  wordmarkPath: "/brand/pramania-wordmark-only-transparent.png",
 } as const;
 
 export function getBrandInitials(name = brand.name) {
