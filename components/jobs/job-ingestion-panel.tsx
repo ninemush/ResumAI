@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, CircleHelp, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleHelp, ExternalLink, Sparkles } from "lucide-react";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 
 type JobIngestionPanelProps = {
@@ -125,6 +125,9 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       <div className="section-heading">
         <p className="eyebrow">Jobs</p>
         <h2>Roles under review</h2>
+        <p>
+          A focused queue of roles Pramania has read, scored, and kept ready for your decision.
+        </p>
       </div>
 
       <div className="record-filter-strip" aria-label="Job review filters">
@@ -161,22 +164,23 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
             >
               <span className="record-title">{job.title ?? formatJobUrl(job.job_url)}</span>
               <span className="record-meta">
-                {job.company ?? formatJobUrl(job.resolved_url ?? job.job_url)}
-                {" · "}
-                {formatReviewStatus(job.review_status)}
+                {job.company ?? formatJobUrl(job.resolved_url ?? job.job_url)} · Added{" "}
+                <time dateTime={job.created_at}>{formatShortDate(job.created_at)}</time>
               </span>
               {job.fitSnapshot.score !== null ? (
                 <span className="record-summary">{job.fitAnalysis.summary}</span>
               ) : null}
             </button>
 
+            <div className="record-date-column">
+              <span>{formatReviewStatus(job.review_status)}</span>
+              <strong>{formatIngestionStatus(job.ingestion_status)}</strong>
+            </div>
+
             <div className="record-status-stack">
               {job.fitSnapshot.score !== null ? (
                 <span className="fit-score-pill">{job.fitSnapshot.score}% fit</span>
               ) : null}
-              <span className={`source-pill ${job.ingestion_status}`}>
-                {formatIngestionStatus(job.ingestion_status)}
-              </span>
             </div>
 
             <div className="record-actions">
@@ -193,6 +197,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                 rel="noreferrer"
                 target="_blank"
               >
+                <ExternalLink size={14} aria-hidden="true" />
                 Open
               </a>
               {job.ingestion_status === "succeeded" ? (
@@ -215,20 +220,20 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                   <FitBucket
                     icon="match"
                     items={job.fitAnalysis.matchedKeywords}
-                    label="Matched"
-                    placeholder="No matched signals yet"
+                    label="Aligned"
+                    placeholder="Pramania has not found clear alignment yet."
                   />
                   <FitBucket
                     icon="risk"
                     items={job.fitAnalysis.missingKeywords}
-                    label="Gaps"
-                    placeholder="No obvious gaps"
+                    label="Gaps to Validate"
+                    placeholder="No obvious gaps from the readable post."
                   />
                   <FitBucket
                     icon="question"
                     items={job.fitAnalysis.questions}
-                    label="Questions"
-                    placeholder="No questions yet"
+                    label="Decision Questions"
+                    placeholder="No follow-up questions yet."
                   />
                 </div>
                 <div className="record-action-strip">
@@ -255,7 +260,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                   <p className="source-failure">{formatFailureReason(job.failure_reason)}</p>
                 ) : null}
                 <div className="job-description-preview">
-                  <strong>Job description excerpt</strong>
+                  <strong>Readable job-post excerpt</strong>
                   <p>{job.extracted_text?.slice(0, 1400) ?? "No readable job text available."}</p>
                 </div>
               </div>
@@ -326,6 +331,13 @@ function formatJobUrl(jobUrl: string) {
   } catch {
     return "Job post";
   }
+}
+
+function formatShortDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "short",
+  }).format(new Date(value));
 }
 
 function formatFailureReason(reason: string) {

@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Download, FileText, Save, ShieldCheck, WandSparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  Download,
+  ExternalLink,
+  FileText,
+  Save,
+  ShieldCheck,
+  WandSparkles,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
@@ -223,6 +231,9 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
       <div className="section-heading">
         <p className="eyebrow">Applications</p>
         <h2>Follow-up tracker</h2>
+        <p>
+          Track each application like a candidate pipeline: decision, materials, status, and next step.
+        </p>
       </div>
 
       <div className="record-filter-strip" aria-label="Application stage filters">
@@ -268,14 +279,22 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
             >
               <span className="record-title">{application.jobTitle ?? "Application"}</span>
               <span className="record-meta">
-                {application.companyName} · {formatStatus(application.status)} · Updated{" "}
+                {application.companyName} · Created {formatDate(application.createdAt)} · Updated{" "}
                 {formatDate(application.updatedAt)}
               </span>
               <span className="record-summary">
                 {application.latestResumeHeadline ??
                   `Materials: resume ${application.latestResumeStatus ?? "not ready"}, cover letter ${application.latestCoverLetterStatus ?? "not ready"}`}
               </span>
-              <span className="record-subnote">{formatLatestActivity(application)}</span>
+              <span className="record-material-row">
+                <span className={materialPillClass(application.latestResumeStatus)}>
+                  Resume {formatMaterialStatus(application.latestResumeStatus)}
+                </span>
+                <span className={materialPillClass(application.latestCoverLetterStatus)}>
+                  Cover letter {formatMaterialStatus(application.latestCoverLetterStatus)}
+                </span>
+                <span>{formatLatestActivity(application)}</span>
+              </span>
             </button>
 
             <select
@@ -299,7 +318,8 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
                 rel="noreferrer"
                 target="_blank"
               >
-                Open job
+                <ExternalLink size={14} aria-hidden="true" />
+                Job
               </a>
               <button
                 className="secondary-action compact-action"
@@ -320,9 +340,6 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
                 {loadingReviewApplicationId === application.id ? "Opening" : "Review"}
               </button>
             </div>
-            {application.latestCoverLetterExcerpt ? (
-              <p className="record-subnote">Cover letter: {application.latestCoverLetterExcerpt}</p>
-            ) : null}
           </article>
         ))}
       </div>
@@ -518,6 +535,33 @@ function formatLatestActivity(
   }
 
   return `Latest: ${formatStatus(latestEvent.newStatus)} on ${formatDate(latestEvent.createdAt)}`;
+}
+
+function formatMaterialStatus(status: string | null) {
+  if (!status) {
+    return "not ready";
+  }
+
+  const labels: Record<string, string> = {
+    draft: "draft",
+    exported: "exported",
+    failed: "needs review",
+    ready: "ready",
+  };
+
+  return labels[status] ?? status.replaceAll("_", " ");
+}
+
+function materialPillClass(status: string | null) {
+  if (status === "exported" || status === "ready") {
+    return "material-pill ready";
+  }
+
+  if (status === "failed") {
+    return "material-pill warning";
+  }
+
+  return "material-pill";
 }
 
 function formatExportStatus(status: MaterialReview["exportReadiness"]["status"]) {
