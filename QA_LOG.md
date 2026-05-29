@@ -27,3 +27,13 @@ This log records product-quality issues found during user-style validation. Fixe
 - Impact: authenticated user journey cannot be repeatedly tested through production email signup without polluting user metrics or tripping email throttles.
 - Recommended systemic fix: add a controlled private-beta QA path, seeded demo account, or separate dev/staging Supabase project before broader QA cycles.
 - Current mitigation: unauthenticated, public, and auth-required API behavior are covered by automated tests; full authenticated production journeys require a known demo credential or a non-production environment.
+
+## 2026-05-29
+
+### Fixed: workspace record pages did not scale to real user volume
+
+- Area: authenticated workspace, Jobs, Applications, Artifacts, Sources, Settings.
+- Finding: Jobs and Applications used oversized cards with large empty areas; Artifacts exposed non-interactive count cards; Settings duplicated cockpit-style metrics instead of showing real account controls; Sources without previews were not clickable.
+- Root cause: the authenticated workspace was being validated more like a route/API surface than a real workbench for someone managing 20+ jobs, files, generated artifacts, and follow-ups.
+- Fix: introduced a compact record layout pattern, clickable/toggleable job rows, dense application rows with status and action controls, interactive artifact filters, preserved source viewer behavior for no-preview records, and replaced "Workspace controls" with account/privacy/subscription/support settings.
+- Validation: lint, production build, full Playwright suite, and local public-page hydration smoke. Authenticated visual QA still needs seeded-session browser coverage so layout regressions are caught before release.
