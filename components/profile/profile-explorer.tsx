@@ -5,7 +5,6 @@ import type { CSSProperties } from "react";
 import {
   Camera,
   CheckCircle2,
-  Circle,
   Compass,
   Save,
   Sparkles,
@@ -50,11 +49,7 @@ export function ProfileExplorer({
   const headline =
     overview.profile?.headline ??
     "Add a resume, LinkedIn profile, portfolio, or a few notes to shape your direction.";
-  const hasFacts = overview.factCount > 0;
   const profileGaps = readProfileGaps(overview);
-  const pendingReviewCount =
-    applicationOverview.summary.needsReview +
-    jobOverview.summary.readyForReview;
   const nextMove = readNextMove({
     applicationOverview,
     jobOverview,
@@ -229,44 +224,6 @@ export function ProfileExplorer({
         </div>
       </div>
 
-      <section className="readiness-panel" aria-label="Profile readiness">
-        <div>
-          <span className="readiness-score">{overview.readinessScore}%</span>
-          <p>Profile readiness</p>
-        </div>
-        <p>
-          {hasFacts
-            ? "Pramania has enough background to start shaping your positioning. The next improvement is sharper outcomes and role focus."
-            : "Drop a resume, LinkedIn PDF, portfolio link, or quick career note in Pramania. I’ll turn it into a profile direction with as little effort from you as possible."}
-        </p>
-      </section>
-
-      <section className="profile-build-panel" aria-label="Profile build progress">
-        <div className="section-heading">
-          <p className="eyebrow">Profile build</p>
-          <h2>What is ready, and what needs work</h2>
-        </div>
-        <div className="profile-milestone-list">
-          {overview.milestones.map((milestone) => (
-            <article
-              className={milestone.complete ? "complete" : undefined}
-              key={milestone.key}
-              title={milestone.detail}
-            >
-              {milestone.complete ? (
-                <CheckCircle2 size={16} aria-hidden="true" />
-              ) : (
-                <Circle size={16} aria-hidden="true" />
-              )}
-              <div>
-                <strong>{milestone.label}</strong>
-                <span>{milestone.detail}</span>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
       <section className="next-action-panel" aria-label="Recommended next step">
         <div>
           <p className="eyebrow">Next best move</p>
@@ -316,12 +273,6 @@ export function ProfileExplorer({
           label="Jobs to review"
           onClick={() => onNavigate("jobs")}
           value={jobOverview.summary.identified}
-        />
-        <CockpitMetric
-          detail={`${pendingReviewCount} job or application item${pendingReviewCount === 1 ? "" : "s"} need a decision or next action.`}
-          label="Needs review"
-          onClick={() => onNavigate(pendingReviewCount > 0 ? "applications" : "jobs")}
-          value={pendingReviewCount}
         />
         <div className="stage-progress-card">
           <div>

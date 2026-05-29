@@ -148,22 +148,6 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
         </p>
       </div>
 
-      <section className="profile-draft-panel" aria-label="Working profile snapshot">
-        <div className="section-heading">
-          <p className="eyebrow">Current profile read</p>
-          <h2>{profileOverview.profile?.headline ?? "Still calibrating"}</h2>
-        </div>
-        <p>
-          {profileOverview.profile?.summary ??
-            "Pramania needs a little more background before it can write a strong positioning read."}
-        </p>
-        <div className="draft-chips">
-          <span>{profileOverview.profile?.targetDirection ?? "Target direction open"}</span>
-          <span>{profileOverview.profile?.targetLevel ?? "Level open"}</span>
-          <span>{currentOverview.canGenerate ? "Resume-ready foundation" : "Needs more career context"}</span>
-        </div>
-      </section>
-
       <section className="resume-readiness-panel" aria-label="Master resume readiness">
         <div>
           <span>{currentOverview.canGenerate ? "Ready" : "Needs work"}</span>
