@@ -85,3 +85,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the chat renderer handled simple bullets and headings, but did not normalize common LLM label patterns before parsing sections and lists.
 - Fix: normalized labelled guidance before saving and rendering, added section recognition for recruiter-style labels such as headline improvement, summary clarity, proof of impact, and missing metrics, and converted labelled paragraphs into readable headings with supporting text.
 - Validation: lint passed and authenticated visual QA confirmed the affected advisor note now renders without doubled label punctuation.
+
+### Fixed: resume editor fields could scroll inside the document preview
+
+- Area: Profile & Resume studio.
+- Finding: long headline, skill, summary, or experience fields could create small nested scrollbars inside the resume preview, making the editor feel broken and unlike a document.
+- Root cause: textareas used estimated row counts based on character length, which did not always match actual wrapped line height in the responsive preview.
+- Fix: added document-level textarea auto-growth so fields expand to their rendered content height whenever the draft loads or the user edits text.
+- Validation: lint passed and authenticated visual QA confirmed no resume preview textarea had hidden overflow after render.

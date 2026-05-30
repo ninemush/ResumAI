@@ -11,7 +11,7 @@ import {
   Trash2,
   WandSparkles,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { normalizeResumeContent, type ResumeContent } from "@/lib/resumes/resume-content";
@@ -25,6 +25,7 @@ type MasterResumePanelProps = {
 
 export function MasterResumePanel({ overview, profileOverview }: MasterResumePanelProps) {
   const router = useRouter();
+  const resumePreviewRef = useRef<HTMLDivElement | null>(null);
   const [currentOverview, setCurrentOverview] = useState(overview);
   const [draft, setDraft] = useState<ResumeContent | null>(
     overview.latestResume?.content ?? null,
@@ -76,6 +77,16 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
 
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
+
+  useEffect(() => {
+    if (!draft || !resumePreviewRef.current) {
+      return;
+    }
+
+    resumePreviewRef.current.querySelectorAll("textarea").forEach((field) => {
+      autoGrowTextArea(field);
+    });
+  }, [draft]);
 
   async function generateResume() {
     if (isDirty && !window.confirm("Regenerating will replace unsaved resume edits. Continue?")) {
@@ -319,7 +330,16 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
             </div>
           ) : null}
 
-          <div className="resume-document-preview" aria-label="Resume preview">
+          <div
+            className="resume-document-preview"
+            aria-label="Resume preview"
+            onInputCapture={(event) => {
+              if (event.target instanceof HTMLTextAreaElement) {
+                autoGrowTextArea(event.target);
+              }
+            }}
+            ref={resumePreviewRef}
+          >
             <header className="resume-preview-header">
               <strong className="resume-preview-name">
                 {profileOverview.profile?.displayName ?? "Your Name"}
@@ -617,6 +637,11 @@ function normalizeHeadlineInput(headline: string) {
   }
 
   return segments.slice(0, 2).join(" / ");
+}
+
+function autoGrowTextArea(field: HTMLTextAreaElement) {
+  field.style.height = "auto";
+  field.style.height = `${field.scrollHeight}px`;
 }
 
 function updateExperienceSection(
