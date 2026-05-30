@@ -333,3 +333,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: accepted file types and resume-context scoring used different labels for the same source class.
 - Fix: aligned the scorer to the stored `txt` source type so dropped text resumes and profile notes are prioritized correctly.
 - Validation: lint, focused signed-in desktop workspace regression, and production build passed.
+
+### Verified: signed-in master resume export creates both file types
+
+- Area: master resume export.
+- Finding: earlier manual UX review showed a PDF validation failure message, so the authenticated export path needed direct validation with a real session.
+- Root cause: not a new defect in this pass; this was a confirmation check on the currently deployed export path after resume-template and validation improvements.
+- Fix: no code change required.
+- Validation: authenticated demo session POSTed `/api/resume/master/export`; response returned 200 with PDF and DOCX URLs and resume status `ready`.
