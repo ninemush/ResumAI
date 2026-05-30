@@ -205,3 +205,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the mobile layout stacked both large surfaces with little separation, and there was no regression check proving the profile view remained chat-first.
 - Fix: added a clear boundary before the mobile cockpit, reduced redundant profile heading copy below chat, and added a Playwright check that profile mode is conversation-first without cockpit overlap.
 - Validation: focused mobile signed-in workspace regression tests passed.
+
+### Fixed: advisor fallback copy could end awkwardly
+
+- Area: Pramania conversation advisor.
+- Finding: long advisor answers could be trimmed with a mechanical "I can keep going" phrase, and one fallback still used proof-oriented wording.
+- Root cause: the normalization guard appended a generic continuation phrase after trimming, and fallback language had not been fully aligned with user-facing evidence terminology.
+- Fix: made long answers stop at a natural break and replaced proof language with role-based evidence wording.
+- Validation: signed-in advisor route returned a context-grounded answer for the demo user; lint, whitespace diff check, and production build passed.

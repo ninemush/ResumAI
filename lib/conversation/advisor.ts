@@ -679,7 +679,7 @@ The saved source material adds this useful evidence: ${formatListForSentence(sou
 
   return `Based on what I already know, I would position you around ${roleRead}. The strongest evidence to preserve is ${formatListForSentence(proofThemes ?? [], proofThemeFallback || "the clearest proof already saved in your profile")}.
 
-The next best move is to sharpen the master profile into role-based proof: what you owned, how large it was, what changed, and why it mattered commercially. I will use your saved profile, sources, jobs, applications, and artifacts as context instead of asking you to start over.`;
+The next best move is to sharpen the master profile into role-based evidence: what you owned, how large it was, what changed, and why it mattered commercially. I will use your saved profile, sources, jobs, applications, and artifacts as context instead of asking you to start over.`;
 }
 
 function stripJsonOnlyInstruction(input: string) {
@@ -796,7 +796,7 @@ function normalizeAdvisorMessage(message: string) {
   const sentenceBreak = normalized.lastIndexOf(". ", 1200);
   const cutAt = Math.max(naturalBreak, sentenceBreak);
 
-  return `${normalized.slice(0, cutAt > 780 ? cutAt + 1 : 1200).trim()} I can keep going from here.`;
+  return normalized.slice(0, cutAt > 780 ? cutAt + 1 : 1200).trim();
 }
 
 function hashUserId(userId: string) {
