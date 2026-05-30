@@ -284,30 +284,6 @@ export function MasterResumePanel({
 
       {message ? <p className="system-note success">{message}</p> : null}
 
-      {reviewItems.visible.length > 0 ? (
-        <section className="resume-gap-panel priority-review-panel" aria-label="Master resume review priorities">
-          <div className="section-heading">
-            <p className="eyebrow">Review first</p>
-            <h2>Gaps and reviewer notes</h2>
-          </div>
-          <div className="resume-review-grid">
-            {reviewItems.visible.map((item) => (
-              <ReviewItem
-                key={`${item.severity}-${item.text}`}
-                severity={item.severity}
-                text={item.text}
-              />
-            ))}
-          </div>
-          {reviewItems.hiddenCount > 0 ? (
-            <p className="resume-review-note">
-              {reviewItems.hiddenCount} more refinement prompt{reviewItems.hiddenCount === 1 ? "" : "s"} are
-              preserved in the advanced editor so the resume itself stays easy to work on.
-            </p>
-          ) : null}
-        </section>
-      ) : null}
-
       {draft ? (
         <section className="materials-review master-resume-editor resume-studio-surface" aria-label="Master resume editor">
           <div className="materials-review-header">
@@ -570,6 +546,8 @@ export function MasterResumePanel({
             </section>
           </div>
 
+          <ResumeReviewSection reviewItems={reviewItems} />
+
           <details className="resume-advanced-editor">
             <summary>Edit gap and reviewer fields</summary>
             <label>
@@ -601,18 +579,61 @@ export function MasterResumePanel({
           </details>
         </section>
       ) : (
-        <section className="resume-empty-panel" aria-label="No master resume yet">
-          <FileText size={22} aria-hidden="true" />
-          <div>
-            <h2>No master resume yet</h2>
-            <p>
-              Add career context first, then generate a draft here. Pramania will keep
-              unsupported claims out and call out evidence gaps before you tailor for jobs.
-            </p>
-          </div>
-        </section>
+        <>
+          <ResumeReviewSection reviewItems={reviewItems} />
+          <section className="resume-empty-panel" aria-label="No master resume yet">
+            <FileText size={22} aria-hidden="true" />
+            <div>
+              <h2>No master resume yet</h2>
+              <p>
+                Add career context first, then generate a draft here. Pramania will keep
+                unsupported claims out and call out evidence gaps before you tailor for jobs.
+              </p>
+            </div>
+          </section>
+        </>
       )}
     </main>
+  );
+}
+
+function ResumeReviewSection({
+  reviewItems,
+}: {
+  reviewItems: {
+    hiddenCount: number;
+    visible: Array<{
+      severity: "critical" | "important" | "informational";
+      text: string;
+    }>;
+  };
+}) {
+  if (reviewItems.visible.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="resume-gap-panel priority-review-panel" aria-label="Master resume review priorities">
+      <div className="section-heading">
+        <p className="eyebrow">Review next</p>
+        <h2>Resume refinement prompts</h2>
+      </div>
+      <div className="resume-review-grid">
+        {reviewItems.visible.map((item) => (
+          <ReviewItem
+            key={`${item.severity}-${item.text}`}
+            severity={item.severity}
+            text={item.text}
+          />
+        ))}
+      </div>
+      {reviewItems.hiddenCount > 0 ? (
+        <p className="resume-review-note">
+          {reviewItems.hiddenCount} more refinement prompt{reviewItems.hiddenCount === 1 ? "" : "s"} are
+          preserved in the advanced editor so the resume itself stays easy to work on.
+        </p>
+      ) : null}
+    </section>
   );
 }
 

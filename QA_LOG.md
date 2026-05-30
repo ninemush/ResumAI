@@ -283,5 +283,13 @@ This log records product-quality issues found during user-style validation. Fixe
 - Area: Profile & Resume Studio.
 - Finding: a user could edit the master resume and click another workspace tab without an in-app warning, which made the editor feel unsafe.
 - Root cause: the unsaved-edit guard only covered browser unload, not app-level navigation between workspace surfaces.
-- Fix: lifted resume dirty state into the workspace shell and prompt before leaving the resume studio; also compacted review prompts when a draft exists so the resume stays central.
+- Fix: lifted resume dirty state into the workspace shell and prompt before leaving the resume studio.
 - Validation: lint, whitespace diff check, and focused signed-in Playwright regression for the unsaved-edit guard passed.
+
+### Fixed: resume studio buried the actual resume below review cards
+
+- Area: Profile & Resume Studio.
+- Finding: the master resume screen spent too much first-viewport space on reviewer prompts before showing the resume document.
+- Root cause: review priorities rendered as a separate panel above the editor, so the draft itself started below the fold on common desktop layouts.
+- Fix: moved review prompts inside the resume studio underneath the editable document, keeping the actual resume central while preserving guidance.
+- Validation: lint, whitespace diff check, focused signed-in Playwright regression tests, and authenticated desktop screenshot QA passed.
