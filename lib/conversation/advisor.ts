@@ -349,7 +349,7 @@ Profile intelligence:
 ${intelligence ? `- Evidence strength: ${intelligence.evidenceStrength}
 - Role target read: ${intelligence.roleTargetRead}
 - Resume focus: ${intelligence.resumeFocus.join(" | ") || "None yet"}
-- Proof themes: ${intelligence.proofThemes.map((theme) => `${theme.label}: ${theme.evidence.join(" / ")}`).join("; ") || "None yet"}
+- Impact themes: ${intelligence.proofThemes.map((theme) => `${theme.label}: ${theme.evidence.join(" / ")}`).join("; ") || "None yet"}
 - High-value gaps: ${intelligence.highValueGaps.map((gap) => `[${gap.severity}] ${gap.label}: ${gap.prompt}`).join("; ") || "None"}` : "No profile intelligence yet."}
 
 Latest master resume exists: ${latestResume ? "yes" : "no"}

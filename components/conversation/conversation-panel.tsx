@@ -1341,6 +1341,7 @@ function cleanPlainChatText(value: string) {
     )
     .replace(/\bRoot cause:\s*[A-Z0-9_.-]+\.?\s*/gi, "")
     .replace(/\bstructured AI analysis needs another pass\.?\s*/gi, "the analysis needs another pass. ")
+    .replace(/\bProof of impact\s*:/gi, "Impact evidence:")
     .replace(/\bFound\s+\d+\s+(?:useful\s+)?profile\s+signals?\.?\s*/gi, "")
     .replace(/\b(?:Saved|stored)\s+\d+\s+(?:new\s+)?profile\s+details?\.?\s*/gi, "")
     .replace(
@@ -1389,6 +1390,7 @@ const CHAT_SECTION_LABELS = [
   "Board-ready",
   "Headline improvement",
   "Summary clarity",
+  "Impact evidence",
   "Proof of impact",
   "Leadership depth",
   "Experience structure",
@@ -1565,6 +1567,10 @@ function cleanChatListItem(value: string) {
 }
 
 function toDisplayLabel(value: string) {
+  if (/^proof of impact$/i.test(value.trim())) {
+    return "Impact evidence";
+  }
+
   return value
     .replace(/\s+/g, " ")
     .split(" ")

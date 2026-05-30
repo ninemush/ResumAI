@@ -213,3 +213,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the normalization guard appended a generic continuation phrase after trimming, and fallback language had not been fully aligned with user-facing evidence terminology.
 - Fix: made long answers stop at a natural break and replaced proof language with role-based evidence wording.
 - Validation: signed-in advisor route returned a context-grounded answer for the demo user; lint, whitespace diff check, and production build passed.
+
+### Fixed: chat could expose proof-oriented labels
+
+- Area: Pramania chat formatting.
+- Finding: some assistant answers could label a section "Proof of impact," which reads like internal resume review terminology rather than calm user guidance.
+- Root cause: the advisor context and chat section parser still recognized proof-oriented wording from earlier iterations.
+- Fix: changed advisor context wording to impact themes and remapped visible "Proof of impact" labels to "Impact evidence" while preserving old-message parsing.
+- Validation: lint, whitespace diff check, and production build passed.
