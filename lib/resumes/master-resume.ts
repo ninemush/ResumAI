@@ -1059,7 +1059,7 @@ function buildMasterResumeInstructions() {
   return `
 You are ${brand.name}'s senior resume strategist.
 
-Create an ATS-friendly master resume draft using only captured profile facts,
+Create an ATS-friendly master resume draft using only saved profile context,
 readable source excerpts, and profile direction supplied in the input. Do not
 invent employers, dates, credentials, metrics, tools, titles, education, awards,
 or outcomes.

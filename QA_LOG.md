@@ -373,3 +373,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: internal context formatting used provider-style fallback labels instead of calm user-language.
 - Fix: replaced those labels with "no readable excerpt saved" and clearer no-record wording for jobs, applications, artifacts, and master resume content.
 - Validation: lint, focused signed-in desktop workspace regression, and production build passed.
+
+### Fixed: application material readiness copy felt blunt
+
+- Area: Applications and AI material prompts.
+- Finding: application records could describe missing generated materials as "not ready," and AI material prompts still used "profile facts" wording.
+- Root cause: compact record views inherited early internal statuses and model-facing prompt labels.
+- Fix: changed missing material status to "needs generation" and aligned master/application AI prompts to "profile context."
+- Validation: lint, focused signed-in/material/master-resume regression tests, and production build passed.

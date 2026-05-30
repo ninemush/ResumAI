@@ -284,7 +284,7 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
               </span>
               <span className="record-summary">
                 {application.latestResumeHeadline ??
-                  `Materials: resume ${application.latestResumeStatus ?? "not ready"}, cover letter ${application.latestCoverLetterStatus ?? "not ready"}`}
+                  `Materials: resume ${formatMaterialStatus(application.latestResumeStatus)}, cover letter ${formatMaterialStatus(application.latestCoverLetterStatus)}`}
               </span>
               <span className="record-material-row">
                 <span className={materialPillClass(application.latestResumeStatus)}>
@@ -549,7 +549,7 @@ function formatLatestActivity(
 
 function formatMaterialStatus(status: string | null) {
   if (!status) {
-    return "not ready";
+    return "needs generation";
   }
 
   const labels: Record<string, string> = {
