@@ -255,7 +255,7 @@ async function generateMasterResumeDraft({
       model,
       instructions: buildMasterResumeInstructions(),
       input: masterResumeInput,
-      max_output_tokens: 3000,
+      max_output_tokens: 5000,
       metadata: {
         feature: "master_resume",
         profile_id: profile.id,
@@ -405,7 +405,7 @@ Use this exact object shape:
 If dates or employers are present in the source excerpts, preserve them in role-based experienceSections.
 If the source is a LinkedIn profile PDF or archive, use its role history as the primary structure.`,
       input,
-      max_output_tokens: 3400,
+      max_output_tokens: 5600,
       metadata: {
         feature: "master_resume",
         profile_id: profileId,
@@ -910,7 +910,7 @@ Return structured JSON only.
 function formatSourceEvidenceForPrompt(sourceEvidence: SourceEvidence[]) {
   const excerpts = sourceEvidence
     .map((source) => {
-      const excerpt = source.extracted_text?.replace(/\s+/g, " ").trim().slice(0, 2200);
+      const excerpt = buildResumeSourceExcerpt(source.extracted_text);
       if (!excerpt) return null;
 
       return `- ${source.original_filename ?? source.source_url ?? source.source_type}: ${excerpt}`;
@@ -920,6 +920,50 @@ function formatSourceEvidenceForPrompt(sourceEvidence: SourceEvidence[]) {
   return excerpts.length > 0
     ? excerpts.join("\n")
     : "No readable source excerpts available.";
+}
+
+function buildResumeSourceExcerpt(text: string | null) {
+  const cleanText = text?.replace(/\s+/g, " ").trim();
+
+  if (!cleanText) {
+    return null;
+  }
+
+  if (cleanText.length <= 3600) {
+    return cleanText;
+  }
+
+  const windows: Array<{ end: number; start: number }> = [{ start: 0, end: 1300 }];
+  const sectionPattern =
+    /\b(summary|experience|employment|work history|professional experience|projects?|skills?|education|certifications?|licenses?|awards?|honou?rs?|publications?|volunteer|recommendations?)\b/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = sectionPattern.exec(cleanText)) && windows.length < 7) {
+    windows.push({
+      start: Math.max(0, match.index - 320),
+      end: Math.min(cleanText.length, match.index + 1500),
+    });
+  }
+
+  const merged = windows
+    .sort((left, right) => left.start - right.start)
+    .reduce<Array<{ end: number; start: number }>>((items, window) => {
+      const previous = items.at(-1);
+
+      if (previous && window.start <= previous.end + 120) {
+        previous.end = Math.max(previous.end, window.end);
+        return items;
+      }
+
+      items.push({ ...window });
+      return items;
+    }, []);
+
+  return merged
+    .map((window) => cleanText.slice(window.start, window.end).trim())
+    .filter(Boolean)
+    .join(" [...] ")
+    .slice(0, 5200);
 }
 
 async function createSignedArtifactUrl(path: string | null) {

@@ -141,3 +141,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: fallback copy contained example-heavy default language, and resume textareas did not fully constrain long unbroken heading text inside the digital document surface.
 - Fix: made fallback wording profile-derived and generic across industries, tightened advisor response length, and added wrapping safeguards for the resume headline and document fields.
 - Validation: lint, production build, whitespace diff check, focused signed-in workspace Playwright coverage, and the full Playwright suite passed with 45 passing tests and 3 intentional viewport-specific skips.
+
+### Fixed: master resume generation could miss later role history in rich sources
+
+- Area: master resume generation from LinkedIn PDFs, resumes, and long source files.
+- Finding: a rich source could still lead to shallow resume sections when the most useful role history appeared after the first extracted-text slice.
+- Root cause: the master resume prompt used the beginning of each source, which can over-weight contact, summary, and skills sections and under-weight later experience sections in profile exports.
+- Fix: changed source excerpting to include the beginning plus targeted windows around resume-relevant sections such as experience, employment, work history, skills, education, certifications, projects, and awards. Increased model output budget so role-based experience sections have room to be complete.
+- Validation: lint, whitespace diff check, production build, master-resume API auth checks, and signed-in workspace regression tests passed.
