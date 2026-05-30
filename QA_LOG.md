@@ -61,3 +61,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: record pages were optimized around implementation status instead of user decisions: what was read, what can be opened, what should be retried, what can be exported, and what needs follow-up.
 - Fix: replaced the source summary counter block with a practical source-library explainer, added an artifact detail viewer with context and downloads, changed application wording to a candidate pipeline, made job summaries read as match decisions, and removed remaining user-facing “hiring signal” language from prompts and UI copy.
 - Validation: lint, production build, and 38/38 Playwright tests passed. Headless authenticated click-through still cannot complete email/password submit in this local browser harness, so authenticated visual QA remains partially manual until the QA session harness is repaired.
+
+### Fixed: authenticated workspace QA and mobile focus gaps
+
+- Area: signed-in workspace, mobile navigation, conversation rendering, profile cockpit.
+- Finding: automated QA still did not emulate a signed-in user, mobile record pages could sit behind the chat-first layout, cockpit metrics had ambiguous accessible names, and numbered advisor responses could render as dense markdown text instead of readable guidance.
+- Root cause: the test harness stopped at public/auth-required surfaces, while the real app experience depends on Supabase SSR session cookies and authenticated layout state. Chat rendering also handled bullets better than numbered LLM advice.
+- Fix: added a reusable demo-auth helper for Playwright, added signed-in cockpit/mobile workspace regression tests, made mobile record views take focus when selected from nav, gave cockpit metrics explicit action labels, softened user-facing gap copy from proof-point language to outcome evidence, and taught chat rendering to format numbered advice as structured list content.
+- Validation: lint, production build, and full Playwright suite passed with 41 passing tests and 1 intentional desktop skip for a mobile-only assertion. A direct authenticated advisor API smoke test with the QA account also returned a contextual answer using saved profile context.

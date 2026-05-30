@@ -529,7 +529,7 @@ function readProfileGaps(overview: ProfileOverview) {
   }
 
   if (overview.factCount < 3) {
-    gaps.push("Stronger proof points");
+    gaps.push("Outcome evidence");
   }
 
   if (overview.sourceCount === 0) {
@@ -552,7 +552,7 @@ function readNextMove({
 }) {
   if (overview.factCount === 0) {
     return {
-      title: "Start with the raw material",
+      title: "Start with what you have",
       body: `Drop a resume, paste LinkedIn or a portfolio, or tell ${brand.name} what you have done. One useful source is enough to begin building your profile.`,
     };
   }
@@ -603,7 +603,13 @@ function CockpitMetric({
   value: number | string;
 }) {
   return (
-    <button className="cockpit-metric" onClick={onClick} title={detail} type="button">
+    <button
+      aria-label={`Open ${label}: ${value}. ${detail}`}
+      className="cockpit-metric"
+      onClick={onClick}
+      title={detail}
+      type="button"
+    >
       <span>{label}</span>
       <strong>{value}</strong>
       <p>{detail}</p>
