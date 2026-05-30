@@ -2201,6 +2201,33 @@ input:focus {
   gap: 8px;
 }
 
+.record-empty-panel {
+  align-items: start;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px dashed rgba(185, 155, 103, 0.42);
+  border-radius: var(--pr-radius-sm);
+  color: var(--sage-strong);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  max-width: 680px;
+  padding: 14px;
+}
+
+.record-empty-panel strong {
+  color: var(--foreground);
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 3px;
+}
+
+.record-empty-panel p {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.48;
+  margin: 0;
+}
+
 .record-row {
   align-items: center;
   background: var(--panel-strong);

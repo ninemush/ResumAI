@@ -293,3 +293,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: review priorities rendered as a separate panel above the editor, so the draft itself started below the fold on common desktop layouts.
 - Fix: moved review prompts inside the resume studio underneath the editable document, keeping the actual resume central while preserving guidance.
 - Validation: lint, whitespace diff check, focused signed-in Playwright regression tests, and authenticated desktop screenshot QA passed.
+
+### Fixed: empty job and application pages felt like blank space
+
+- Area: Jobs and Applications.
+- Finding: empty list pages were technically compact but did not give a clear next action, leaving a large quiet canvas with little user value.
+- Root cause: the empty states were plain text inside the list container instead of a designed, action-oriented state.
+- Fix: added compact empty-state panels that explain what happens next without reintroducing old cluttered card layouts.
+- Validation: lint, whitespace diff check, and focused signed-in Playwright regression tests passed; the test caught and prevented old wording from returning.

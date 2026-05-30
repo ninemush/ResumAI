@@ -149,9 +149,13 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       <div className="record-list job-record-list">
         {message ? <p className="system-note success">{message}</p> : null}
         {overview.recentJobs.length === 0 ? (
-          <p className="empty-state">
-            Paste a public job post into Pramania to start a fit review.
-          </p>
+          <div className="record-empty-panel">
+            <Sparkles size={18} aria-hidden="true" />
+            <div>
+              <strong>No job decisions yet</strong>
+              <p>Paste a public job post into Pramania. It will read the role, compare it with your profile, and help you decide whether to apply.</p>
+            </div>
+          </div>
         ) : null}
         {overview.recentJobs.length > 0 && visibleJobs.length === 0 ? (
           <p className="empty-state">No roles match this filter yet.</p>

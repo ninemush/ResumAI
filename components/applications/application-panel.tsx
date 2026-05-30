@@ -256,9 +256,13 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
       <div className="record-list application-record-list">
         {message ? <p className="system-note success">{message}</p> : null}
         {overview.recentApplications.length === 0 ? (
-          <p className="empty-state">
-            Applications will appear here after you approve logging a readable job post.
-          </p>
+          <div className="record-empty-panel">
+            <FileText size={18} aria-hidden="true" />
+            <div>
+              <strong>No applications logged yet</strong>
+              <p>When you approve a role, it will appear here with its stage, tailored materials, and follow-up history.</p>
+            </div>
+          </div>
         ) : null}
         {overview.recentApplications.length > 0 && visibleApplications.length === 0 ? (
           <p className="empty-state">No applications in this stage yet.</p>
