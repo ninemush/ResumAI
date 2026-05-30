@@ -339,7 +339,10 @@ async function generateMasterResumeDraft({
     if (response.error || response.incomplete_details) {
       strictFailureCode = "AI_MASTER_RESUME_INCOMPLETE";
     } else {
-      return parseMasterResumeModelOutput(response.output_text);
+      return enrichMasterResumeWithSourceTimeline(
+        parseMasterResumeModelOutput(response.output_text),
+        sourceEvidence,
+      );
     }
   } catch (error) {
     strictFailureCode = toMasterResumeFailureCode(error);
@@ -357,6 +360,7 @@ async function generateMasterResumeDraft({
     input: masterResumeInput,
     model,
     profileId: profile.id,
+    sourceEvidence,
     userId,
   });
 
@@ -371,11 +375,13 @@ async function runRelaxedMasterResumeModel({
   input,
   model,
   profileId,
+  sourceEvidence,
   userId,
 }: {
   input: string;
   model: string;
   profileId: string;
+  sourceEvidence: SourceEvidence[];
   userId: string;
 }) {
   try {
@@ -423,7 +429,10 @@ If the source is a LinkedIn profile PDF or archive, use its role history as the 
       return null;
     }
 
-    return parseMasterResumeModelOutput(stripJsonFence(response.output_text));
+    return enrichMasterResumeWithSourceTimeline(
+      parseMasterResumeModelOutput(stripJsonFence(response.output_text)),
+      sourceEvidence,
+    );
   } catch (error) {
     console.warn(
       JSON.stringify({
@@ -439,6 +448,241 @@ If the source is a LinkedIn profile PDF or archive, use its role history as the 
 
 function parseMasterResumeModelOutput(outputText: string) {
   return normalizeResumeContent(resumeContentSchema.parse(JSON.parse(stripJsonFence(outputText))));
+}
+
+function enrichMasterResumeWithSourceTimeline(
+  resume: ResumeContent,
+  sourceEvidence: SourceEvidence[],
+) {
+  const sourceSections = extractExperienceSectionsFromSources(sourceEvidence);
+
+  if (sourceSections.length === 0) {
+    return resume;
+  }
+
+  const existingUsefulSections = resume.experienceSections.filter(
+    (section) => section.company || section.dates || section.bullets.length >= 2,
+  );
+
+  if (existingUsefulSections.length >= Math.min(sourceSections.length, 3)) {
+    return resume;
+  }
+
+  return normalizeResumeContent({
+    ...resume,
+    experienceSections: mergeExperienceSections(sourceSections, resume.experienceSections),
+    reviewerNotes: [
+      ...resume.reviewerNotes,
+      "Review the imported role timeline for exact dates, company names, and ownership scope before exporting.",
+    ].slice(0, 8),
+  });
+}
+
+function extractExperienceSectionsFromSources(sourceEvidence: SourceEvidence[]) {
+  const sections = sourceEvidence
+    .flatMap((source) => extractExperienceSectionsFromText(source.extracted_text ?? ""))
+    .filter((section) => section.roleTitle && (section.company || section.dates || section.bullets.length > 0));
+
+  const seen = new Set<string>();
+
+  return sections
+    .filter((section) => {
+      const key = [section.roleTitle, section.company ?? "", section.dates ?? ""]
+        .join("|")
+        .toLowerCase();
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 8);
+}
+
+function mergeExperienceSections(
+  sourceSections: ResumeContent["experienceSections"],
+  modelSections: ResumeContent["experienceSections"],
+) {
+  const merged = [...sourceSections];
+
+  for (const section of modelSections) {
+    const matchesExisting = merged.some((item) =>
+      [item.roleTitle, item.company ?? ""].join(" ").toLowerCase().includes(
+        [section.roleTitle, section.company ?? ""].join(" ").toLowerCase().slice(0, 40),
+      ),
+    );
+
+    if (!matchesExisting) {
+      merged.push(section);
+    }
+  }
+
+  return merged.slice(0, 8);
+}
+
+function extractExperienceSectionsFromText(text: string) {
+  const experienceText = readExperienceText(text);
+  const lines = readResumeSourceLines(experienceText || text);
+  const sections: ResumeContent["experienceSections"] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const roleTitle = lines[index];
+
+    if (!looksLikeResumeRoleTitle(roleTitle)) {
+      continue;
+    }
+
+    const nextLines = lines.slice(index + 1, index + 8);
+    const companyIndex = nextLines.findIndex((line) => looksLikeResumeCompany(line));
+    const dateIndex = nextLines.findIndex((line) => looksLikeDateRange(line));
+
+    if (companyIndex < 0 && dateIndex < 0) {
+      continue;
+    }
+
+    const company = companyIndex >= 0 ? nextLines[companyIndex] : null;
+    const dates = dateIndex >= 0 ? nextLines[dateIndex] : null;
+    const location = nextLines.find((line, lineIndex) =>
+      lineIndex !== companyIndex &&
+      lineIndex !== dateIndex &&
+      looksLikeResumeLocation(line),
+    ) ?? null;
+    const bulletStart = index + 1 + Math.max(companyIndex, dateIndex, 0) + 1;
+    const bulletLines: string[] = [];
+
+    for (let cursor = bulletStart; cursor < lines.length; cursor += 1) {
+      const line = lines[cursor];
+      const following = lines.slice(cursor + 1, cursor + 5);
+      const startsNextRole =
+        looksLikeResumeRoleTitle(line) &&
+        following.some((candidate) => looksLikeResumeCompany(candidate) || looksLikeDateRange(candidate));
+
+      if (startsNextRole || looksLikeResumeSectionBoundary(line)) {
+        break;
+      }
+
+      if (looksLikeResumeImpactLine(line)) {
+        bulletLines.push(cleanResumeSourceLine(line));
+      }
+
+      if (bulletLines.length >= 5) {
+        break;
+      }
+    }
+
+    sections.push({
+      bullets: bulletLines.length > 0
+        ? bulletLines
+        : [`Held ${roleTitle}${company ? ` at ${company}` : ""}${dates ? ` (${dates})` : ""}. Add measurable scope and outcomes.`],
+      company,
+      dates,
+      location,
+      roleTitle,
+    });
+
+    if (sections.length >= 8) {
+      break;
+    }
+  }
+
+  return sections;
+}
+
+function readExperienceText(text: string) {
+  const decoded = decodeResumeSourceText(text);
+  const startMatch = /(?:^|\n)\s*(experience|professional experience|employment|work history)\s*(?:\n|$)/i.exec(decoded);
+
+  if (!startMatch) {
+    return "";
+  }
+
+  const startIndex = startMatch.index + startMatch[0].length;
+  const remainder = decoded.slice(startIndex);
+  const stopMatch = /(?:^|\n)\s*(education|licenses?|certifications?|skills?|projects?|volunteer|recommendations?|awards?|honou?rs?)\s*(?:\n|$)/i.exec(remainder);
+
+  return remainder.slice(0, stopMatch?.index ?? remainder.length).trim();
+}
+
+function readResumeSourceLines(text: string) {
+  return decodeResumeSourceText(text)
+    .split(/\n+/)
+    .map(cleanResumeSourceLine)
+    .filter((line) => line.length > 1)
+    .filter((line) => !/^page\s+\d+/i.test(line))
+    .filter((line) => !/^(contact|top skills|languages|summary|experience|professional experience)$/i.test(line));
+}
+
+function cleanResumeSourceLine(value: string) {
+  return value
+    .replace(/^[-•*]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function decodeResumeSourceText(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function looksLikeResumeRoleTitle(value: string) {
+  return (
+    value.length <= 140 &&
+    /\b(chief|founder|president|vice president|\bvp\b|director|head|manager|lead|leader|consultant|advisor|officer|architect|engineer|analyst|specialist|partner|principal|owner|executive)\b/i.test(
+      value,
+    ) &&
+    !looksLikeDateRange(value) &&
+    !looksLikeResumeSectionBoundary(value)
+  );
+}
+
+function looksLikeResumeCompany(value: string) {
+  return (
+    value.length <= 100 &&
+    !looksLikeResumeRoleTitle(value) &&
+    !looksLikeDateRange(value) &&
+    !looksLikeResumeLocation(value) &&
+    !looksLikeResumeSectionBoundary(value) &&
+    /^[A-Z0-9][A-Za-z0-9&.,'’() -]{1,100}$/.test(value)
+  );
+}
+
+function looksLikeDateRange(value: string) {
+  return /\b(present|current|jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|19\d{2}|20\d{2}|yrs?|years?|mos?|months?)\b/i.test(
+    value,
+  );
+}
+
+function looksLikeResumeLocation(value: string) {
+  return (
+    value.length <= 100 &&
+    /\b(remote|hybrid|united states|united kingdom|uae|dubai|abu dhabi|riyadh|singapore|india|canada|europe|emea|mea|middle east|saudi|london|new york|san francisco)\b/i.test(
+      value,
+    )
+  );
+}
+
+function looksLikeResumeImpactLine(value: string) {
+  return (
+    value.length >= 28 &&
+    !looksLikeDateRange(value) &&
+    !looksLikeResumeSectionBoundary(value) &&
+    /\b(achieved|accelerated|automated|built|consolidated|created|delivered|directed|drove|enabled|established|expanded|grew|improved|increased|instituted|launched|led|managed|optimized|owned|reduced|scaled|saved|shaped|standardized|transformed|governed|advised|mentored|supported|responsible|oversaw|strategy|operations|portfolio|pricing|governance|revenue|margin|profit|cost|customer|team|regional|global)\b/i.test(
+      value,
+    )
+  );
+}
+
+function looksLikeResumeSectionBoundary(value: string) {
+  return /^(summary|experience|professional experience|employment|work history|education|licenses?|certifications?|skills?|projects?|volunteer|recommendations?|awards?|honou?rs?|languages|contact)$/i.test(
+    value.trim(),
+  );
 }
 
 function stripJsonFence(value: string) {

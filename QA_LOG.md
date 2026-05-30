@@ -165,3 +165,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: wait-state messages were keyed only to the route mode, not to the user's sentiment or correction intent.
 - Fix: added recovery-aware wait-state copy for frustrated or corrective prompts so Pramania explicitly checks saved profile, resume, sources, and recent conversation before answering.
 - Validation: lint, whitespace diff check, signed-in workspace regression tests, and production build passed.
+
+### Fixed: master resume could flatten rich role history
+
+- Area: master resume generation from uploaded resumes, LinkedIn PDFs, and other rich sources.
+- Finding: even after source extraction succeeded, the generated master resume could still collapse work history into a generic highlights list when the model under-produced role-based sections.
+- Root cause: the generator schema requested role sections, but there was no deterministic recovery path when saved source text clearly contained role titles, companies, dates, locations, and impact lines.
+- Fix: added a source-timeline enrichment pass that extracts recognizable role history from saved source text and uses it to preserve professional experience sections when the model output is too shallow.
+- Validation: lint, whitespace diff check, production build, master-resume API auth checks, and signed-in workspace regression tests passed.
