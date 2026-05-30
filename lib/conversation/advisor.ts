@@ -660,24 +660,24 @@ For ${roleRead}, I would frame ${metricClaim ? `"${metricClaim}"` : "that metric
   if (normalized.includes("why")) {
     return `You are right to push back. I do have your saved workspace context, so I should not ask you to repeat it.
 
-Based on the current record, the strongest lane is ${roleRead}. The useful missing layer is not more background; it is cleaner resume proof around ${formatListForSentence(gaps.map((gap) => gap.label), "scope, measurable outcomes, and role focus")}. I should answer from that context first, then ask only for the one detail that would materially improve the result.`;
+Based on the current record, the strongest lane is ${roleRead}. The useful missing layer is not more background; it is cleaner resume evidence around ${formatListForSentence(gaps.map((gap) => gap.label), "scope, measurable outcomes, and role focus")}. I should answer from that context first, then ask only for the one detail that would materially improve the result.`;
   }
 
   if (normalized.includes("metric") || normalized.includes("missing")) {
     return `What I see:
-- Your profile does not need generic metrics; it needs proof tied to scope, authority, and business value.
+- Your profile does not need generic metrics; it needs evidence tied to scope, authority, and business value.
 - For ${roleRead}, I would strengthen ${metricGuidance}.
 
-The proof already visible includes ${formatListForSentence(proofThemes ?? [], proofThemeFallback || "the strongest saved proof themes in your profile")}. What is missing is not whether those examples are senior enough; it is attaching each one to the role, company, scale, and outcome so the master resume reads as precise rather than broadly senior.`;
+The evidence already visible includes ${formatListForSentence(proofThemes ?? [], proofThemeFallback || "the strongest saved impact themes in your profile")}. What is missing is not whether those examples are senior enough; it is attaching each one to the role, company, scale, and outcome so the master resume reads as precise rather than broadly senior.`;
   }
 
   if (normalized.includes("resume") || normalized.includes("profile pdf") || normalized.includes("learn")) {
     return `I have enough saved context to answer without asking you to re-upload. The current master resume shows this snapshot: ${resumeText.replace(/\n/g, " ")}
 
-The saved source material adds this useful evidence: ${formatListForSentence(sourceEvidence, "role history, scope, skills, and positioning evidence from the uploaded source")}. What I would improve next is the experience architecture: group the proof by role, attach dates and scope, and turn each role into outcome-led bullets. That is the difference between a senior activity list and a resume that reads like credible executive value.`;
+The saved source material adds this useful evidence: ${formatListForSentence(sourceEvidence, "role history, scope, skills, and positioning evidence from the uploaded source")}. What I would improve next is the experience architecture: group the evidence by role, attach dates and scope, and turn each role into outcome-led bullets. That is the difference between a senior activity list and a resume that reads like credible executive value.`;
   }
 
-  return `Based on what I already know, I would position you around ${roleRead}. The strongest evidence to preserve is ${formatListForSentence(proofThemes ?? [], proofThemeFallback || "the clearest proof already saved in your profile")}.
+  return `Based on what I already know, I would position you around ${roleRead}. The strongest evidence to preserve is ${formatListForSentence(proofThemes ?? [], proofThemeFallback || "the clearest evidence already saved in your profile")}.
 
 The next best move is to sharpen the master profile into role-based evidence: what you owned, how large it was, what changed, and why it mattered commercially. I will use your saved profile, sources, jobs, applications, and artifacts as context instead of asking you to start over.`;
 }

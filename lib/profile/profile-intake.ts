@@ -938,14 +938,14 @@ function buildDeterministicIntakeMessage({
   const isUserMessage = /user message|natural language|typed note/i.test(inputLabel);
 
   if (isUserMessage && /target|role|land|looking|interested|want/i.test(normalizedText)) {
-    return `Good, ${targetDirection.toLowerCase()} is a useful starting point. I’ll treat that as the working lane and start looking for proof that would make it credible: scope owned, operating problem, stakeholders, tools or methods, and measurable outcomes. A strong next move is to add one example where you changed revenue, cost, speed, risk, customer outcomes, or team capacity.`;
+    return `Good, ${targetDirection.toLowerCase()} is a useful starting point. I’ll treat that as the working lane and look for evidence that makes it credible: scope owned, operating problem, stakeholders, tools or methods, and measurable outcomes. A strong next move is to add one example where you changed revenue, cost, speed, risk, customer outcomes, or team capacity.`;
   }
 
   if (isUserMessage) {
-    return "I’ve added that to the profile foundation. The useful next step is to connect it to proof: the role it belongs to, the scope you owned, the stakeholders involved, and what changed because of the work.";
+    return "I’ve added that to the profile foundation. The useful next step is to connect it to career evidence: the role it belongs to, the scope you owned, the stakeholders involved, and what changed because of the work.";
   }
 
-  return `I read ${inputLabel} and updated the profile foundation. My current positioning read is ${targetDirection.toLowerCase()}. I’ll use that to shape the master resume around role history, scope, business impact, and the proof that should matter most to recruiters.`;
+  return `I read ${inputLabel} and updated the profile foundation. My current positioning read is ${targetDirection.toLowerCase()}. I’ll use that to shape the master resume around role history, scope, business impact, and the evidence that should matter most to recruiters.`;
 }
 
 function buildAdvisorFallbackResult({
@@ -984,7 +984,7 @@ function buildAdvisorFallbackResult({
         "Yes. For the master resume, I would not ask for random metrics; I would pressure-test the value story around the experience already visible.",
         proofThemes.length > 0
           ? `The current evidence points toward ${proofThemes.join(", ")}.`
-          : "The current profile still needs stronger evidence before I can rank the proof themes confidently.",
+          : "The current profile still needs stronger evidence before I can rank the impact themes confidently.",
         "Useful metric families are: revenue or bookings influenced, cost or margin improvement, delivery capacity, cycle-time reduction, adoption or utilization, retention/renewal, customer satisfaction, risk/control improvement, team or regional scale, and executive stakeholder complexity.",
         gapPrompts.length > 0
           ? `Most valuable next questions: ${gapPrompts.join(" ")}`

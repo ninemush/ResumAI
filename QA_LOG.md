@@ -221,3 +221,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the advisor context and chat section parser still recognized proof-oriented wording from earlier iterations.
 - Fix: changed advisor context wording to impact themes and remapped visible "Proof of impact" labels to "Impact evidence" while preserving old-message parsing.
 - Validation: lint, whitespace diff check, and production build passed.
+
+### Fixed: profile intake and wait states still used proof wording
+
+- Area: Pramania intake, advisor fallback, and processing states.
+- Finding: several user-facing fallback and wait-state messages still said proof when the product should speak in terms of evidence, outcomes, and business value.
+- Root cause: early prototype copy had been reused in deterministic recovery paths and loading messages after the main chat renderer was improved.
+- Fix: replaced remaining user-facing proof wording with career evidence, impact themes, and measurable outcome language.
+- Validation: lint, whitespace diff check, and production build passed.
