@@ -453,7 +453,7 @@ function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
       ]
     : ["Jobs: unavailable."];
   const sourceLines = [
-    `Sources: ${workspace.sources.total} saved.`,
+    "Saved source material:",
     ...workspace.sources.recent.slice(0, 8).map(
       (source) =>
         `- Source: ${source.original_filename ?? source.source_url ?? source.source_type}; type ${source.source_type}; extraction ${source.extraction_status}; readable excerpt ${formatSourceExcerpt(source.extracted_text)}.`,

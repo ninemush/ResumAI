@@ -247,10 +247,10 @@ export function ProfileExplorer({
 
       <section className="cockpit-panel" aria-label="Career cockpit">
         <CockpitMetric
-          detail="Open master resume"
-          label="Resume"
+          detail="Open profile and resume"
+          label="Profile"
           onClick={() => onNavigate("resume")}
-          value={`${overview.readinessScore}%`}
+          value={readProfileState(overview)}
         />
         <CockpitMetric
           detail={`${applicationOverview.summary.needsReview} need review`}
@@ -507,6 +507,18 @@ function readStageWidth(value: number, total: number) {
   }
 
   return Math.max(8, Math.round((value / total) * 100));
+}
+
+function readProfileState(overview: ProfileOverview) {
+  if (overview.readinessScore >= 80) {
+    return "Ready";
+  }
+
+  if (overview.sourceCount > 0 || overview.factCount > 0) {
+    return "Building";
+  }
+
+  return "Start";
 }
 
 function readProfileGaps(overview: ProfileOverview) {

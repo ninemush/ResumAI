@@ -261,3 +261,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: cleanup removed visible app wording first, while negative prompt examples and owner-only labels were left behind.
 - Fix: rewrote the advisor boundary to ban internal mechanics without repeating the old phrases, changed source-upload success copy to explain user value, and renamed owner system-health wording to failure indicators.
 - Validation: lint, whitespace diff check, focused signed-in workspace regression tests, and production build passed.
+
+### Fixed: cockpit and advisor still over-weighted operational counts
+
+- Area: profile cockpit and Pramania advisor context.
+- Finding: the first cockpit metric showed a readiness percentage, and the advisor context still included a raw saved-source count that could leak into low-value replies.
+- Root cause: early cockpit and context packets were designed around system measurement instead of a user's next decision.
+- Fix: changed the cockpit profile metric to a plain action state and removed the raw source count from the advisor context payload.
+- Validation: lint, whitespace diff check, focused signed-in workspace regression tests, and production build passed.
