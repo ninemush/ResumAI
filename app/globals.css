@@ -470,6 +470,29 @@ input:focus {
   color: #9a9287;
 }
 
+.auth-legal-links {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.78rem;
+  font-weight: 650;
+  gap: 8px;
+  justify-content: center;
+  margin: 0;
+}
+
+.auth-legal-links a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.auth-legal-links a:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-decoration-color: rgba(185, 155, 103, 0.6);
+  text-underline-offset: 3px;
+}
+
 .provider-icon {
   height: 18px;
   width: 18px;

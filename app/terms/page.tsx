@@ -88,7 +88,11 @@ export default function TermsPage() {
           Pramania is designed to protect user data, but no system is perfectly
           secure. You should not upload information you are not authorized to
           share. You are responsible for reviewing what you save, export, or submit
-          outside the service.
+          outside the service. Our{" "}
+          <Link href="/privacy" target="_blank">
+            Privacy Policy
+          </Link>{" "}
+          explains how Pramania collects, uses, stores, and protects information.
         </p>
 
         <h2>9. Acceptable Use</h2>

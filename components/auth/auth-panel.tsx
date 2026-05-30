@@ -296,6 +296,10 @@ export function AuthPanel() {
               <a href="/terms" rel="noreferrer" target="_blank">
                 Terms and Conditions
               </a>
+              {" "}and acknowledge the{" "}
+              <a href="/privacy" rel="noreferrer" target="_blank">
+                Privacy Policy
+              </a>
               . I understand I am responsible for reviewing and approving all
               generated content before using it.
             </span>
@@ -334,6 +338,15 @@ export function AuthPanel() {
             </button>
           ))}
         </div>
+        <p className="auth-legal-links">
+          <a href="/terms" target="_blank" rel="noreferrer">
+            Terms
+          </a>
+          <span aria-hidden="true">·</span>
+          <a href="/privacy" target="_blank" rel="noreferrer">
+            Privacy
+          </a>
+        </p>
       </form>
       </section>
 

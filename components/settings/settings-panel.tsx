@@ -68,6 +68,9 @@ export function SettingsPanel({ session }: SettingsPanelProps) {
             <a className="inline-link" href="/terms" target="_blank" rel="noreferrer">
               Review terms
             </a>
+            <a className="inline-link" href="/privacy" target="_blank" rel="noreferrer">
+              Review privacy policy
+            </a>
           </div>
         </article>
 

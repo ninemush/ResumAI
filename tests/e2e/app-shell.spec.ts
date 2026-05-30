@@ -38,3 +38,11 @@ test("renders the terms document", async ({ page }) => {
   await expect(page.locator("body")).toContainText(/User Responsibility/i);
   await expect(page.locator("body")).toContainText(/No Employment, Hiring, or Outcome Guarantee/i);
 });
+
+test("renders the privacy policy", async ({ page }) => {
+  await page.goto("/privacy");
+
+  await expect(page.getByRole("heading", { name: "Privacy Policy" })).toBeVisible();
+  await expect(page.locator("body")).toContainText(/AI Processing/i);
+  await expect(page.locator("body")).toContainText(/Data Separation and Access Control/i);
+});

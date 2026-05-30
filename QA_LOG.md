@@ -93,3 +93,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: textareas used estimated row counts based on character length, which did not always match actual wrapped line height in the responsive preview.
 - Fix: added document-level textarea auto-growth so fields expand to their rendered content height whenever the draft loads or the user edits text.
 - Validation: lint passed and authenticated visual QA confirmed no resume preview textarea had hidden overflow after render.
+
+### Fixed: V1 legal surface lacked a visible privacy policy
+
+- Area: public legal pages, signup consent, settings.
+- Finding: users could review Terms and Conditions, but the app did not expose a dedicated Privacy Policy despite collecting resumes, profile sources, job links, generated materials, and application records.
+- Root cause: terms acceptance shipped before the privacy surface was made navigable.
+- Fix: added a Privacy Policy page covering submitted data, derived service data, AI processing, third-party services, retention, user choices, security, cookies, international processing, and contact; linked it from signup, public auth, settings, and the terms document.
+- Validation: added Playwright coverage for `/privacy`.
