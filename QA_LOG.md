@@ -357,3 +357,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: earlier cleanup focused on visible chat and cockpit wording before source-library and model-context labels were swept.
 - Fix: changed model context to "saved career context," advanced the profile-intake prompt version, and rewrote the source helper copy around the user's career record and grounded advice.
 - Validation: lint, focused signed-in desktop workspace regression, and production build passed.
+
+### Verified: full desktop and mobile regression suite passed
+
+- Area: release confidence.
+- Finding: after the source/advisor cleanup, the full e2e suite needed a single-worker run to catch cross-surface regressions without noisy parallelism.
+- Root cause: not a defect; this was the broad validation pass after the latest UX and language tightening.
+- Fix: no code change required.
+- Validation: `npm run test:e2e -- --workers=1` passed with 48 tests passing and 6 viewport-scoped tests intentionally skipped.
