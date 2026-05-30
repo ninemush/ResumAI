@@ -574,14 +574,22 @@ function formatListForSentence(items: string[], fallback: string) {
 }
 
 function normalizeAdvisorMessage(message: string) {
+  const sectionLabels =
+    "What I see|What I learned|What is missing|What to fix first|Best next move|Next step|Next question|Why it matters|Recommendation|My recommendation|Conservative|Balanced|Executive\\/board-ready|Board-ready|Headline improvement|Summary clarity|Proof of impact|Leadership depth|Experience structure|Role fit|Resume impact|Missing metrics|Useful evidence|What I would do next";
   const normalized = message
     .replace(/\r\n/g, "\n")
+    .replace(/\*\*([^*\n:]{2,80}):\*\*:/g, "**$1:**")
+    .replace(/\*\*([^*\n:]{2,80}):\*\*/g, "**$1:**")
+    .replace(/\*\*([^*\n]{2,80})\*\*::/g, "**$1:**")
+    .replace(/\*\*([^*\n]{2,80})\*\*:/g, "**$1:**")
+    .replace(/\b([A-Z][A-Za-z0-9 /&+()'-]{2,54})::/g, "$1:")
     .replace(/^\s{0,3}#{1,6}\s+(.+)$/gm, "$1:")
     .replace(/\s+-\s+(?=(?:\*\*)?[A-Z0-9])/g, "\n- ")
     .replace(
-      /([.!?])\s+((?:What I see|What I learned|What is missing|Best next move|Next step|Why it matters|Recommendation|My recommendation):)/g,
+      new RegExp(`([.!?])\\s+((?:${sectionLabels})\\s*:)`, "g"),
       "$1\n\n$2",
     )
+    .replace(new RegExp(`\\s+((?:${sectionLabels})\\s*:)`, "g"), "\n\n$1")
     .replace(/(\S)\s+(\*\*[A-Z][^*]{2,64}\*\*:)/g, "$1\n\n$2")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

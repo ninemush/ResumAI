@@ -77,3 +77,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: extraction, profile analysis, and resume generation were treated as one happy-path operation instead of a resilient pipeline with recoverable downstream steps.
 - Fix: kept source extraction success separate from profile-analysis failure, replaced internal root-cause copy with recoverable user language, added a relaxed JSON fallback for master resume generation, and expanded master resume context to use more recent readable sources.
 - Validation: lint, production build, and full Playwright suite passed with 41 passing tests and 1 intentional desktop skip.
+
+### Fixed: advisor messages could still render as dense model output
+
+- Area: conversation rendering and advisor response normalization.
+- Finding: older and model-generated advisor notes could show markdown residue such as doubled colons after bold labels, and multiple labelled recommendations could collapse into one dense wall of text.
+- Root cause: the chat renderer handled simple bullets and headings, but did not normalize common LLM label patterns before parsing sections and lists.
+- Fix: normalized labelled guidance before saving and rendering, added section recognition for recruiter-style labels such as headline improvement, summary clarity, proof of impact, and missing metrics, and converted labelled paragraphs into readable headings with supporting text.
+- Validation: lint passed and authenticated visual QA confirmed the affected advisor note now renders without doubled label punctuation.

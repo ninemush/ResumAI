@@ -1293,10 +1293,15 @@ function selectSourceFollowUp({
 
 function cleanPlainChatText(value: string) {
   return value
-    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
     .replace(/\r\n/g, "\n")
+    .replace(/\*\*([^*\n:]{2,80}):\*\*:/g, "$1:")
+    .replace(/\*\*([^*\n:]{2,80}):\*\*/g, "$1:")
+    .replace(/\*\*([^*\n]{2,80})\*\*::/g, "$1:")
+    .replace(/\*\*([^*\n]{2,80})\*\*:/g, "$1:")
+    .replace(/\b([A-Z][A-Za-z0-9 /&+()'-]{2,54})::/g, "$1:")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
     .replace(
-      /\s+((?:What I see|What I learned|What is missing|Best next move|Next step|Why it matters|Recommendation|My recommendation|Conservative|Balanced|Executive\/board-ready|Board-ready):)/g,
+      new RegExp(`\\s+((?:${CHAT_SECTION_LABELS})\\s*:)`, "g"),
       "\n\n$1",
     )
     .replace(/\s+-\s+(?=\*\*?[A-Z0-9])/g, "\n- ")
@@ -1330,6 +1335,33 @@ type ChatMessageBlock =
       kind: "list";
     };
 
+const CHAT_SECTION_LABELS = [
+  "What I see",
+  "What I learned",
+  "What is missing",
+  "What to fix first",
+  "Best next move",
+  "Next step",
+  "Next question",
+  "Why it matters",
+  "Recommendation",
+  "My recommendation",
+  "Conservative",
+  "Balanced",
+  "Executive\\/board-ready",
+  "Board-ready",
+  "Headline improvement",
+  "Summary clarity",
+  "Proof of impact",
+  "Leadership depth",
+  "Experience structure",
+  "Role fit",
+  "Resume impact",
+  "Missing metrics",
+  "Useful evidence",
+  "What I would do next",
+].join("|");
+
 function ChatMessageBody({ text }: { text: string }) {
   const blocks = parseChatMessageBlocks(text);
 
@@ -1359,14 +1391,19 @@ function ChatMessageBody({ text }: { text: string }) {
 function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
   const normalized = text
     .replace(/\r\n/g, "\n")
+    .replace(/\*\*([^*\n:]{2,80}):\*\*:/g, "**$1:**")
+    .replace(/\*\*([^*\n:]{2,80}):\*\*/g, "**$1:**")
+    .replace(/\*\*([^*\n]{2,80})\*\*::/g, "**$1:**")
+    .replace(/\*\*([^*\n]{2,80})\*\*:/g, "**$1:**")
+    .replace(/\b([A-Z][A-Za-z0-9 /&+()'-]{2,54})::/g, "$1:")
     .replace(/^\s{0,3}#{1,6}\s+(.+)$/gm, "\n\n**$1**\n")
     .replace(
-      /\s+((?:What I see|What I learned|What is missing|Best next move|Next step|Why it matters|Recommendation|My recommendation|Conservative|Balanced|Executive\/board-ready|Board-ready):)/g,
+      new RegExp(`\\s+((?:${CHAT_SECTION_LABELS})\\s*:)`, "g"),
       "\n\n$1",
     )
     .replace(/(\S)\s+(\*\*[A-Z][^*]{2,64}\*\*:)/g, "$1\n\n$2")
     .replace(
-      /([.!?])\s+((?:Conservative|Balanced|Executive\/board-ready|Board-ready|My recommendation|Recommendation|What to fix first|Why it matters|What I learned|What is missing|Next step|Next question):)/g,
+      new RegExp(`([.!?])\\s+((?:${CHAT_SECTION_LABELS})\\s*:)`, "g"),
       "$1\n\n$2",
     )
     .replace(/\s+(\d+\.\s+(?:\*\*)?[A-Z][^.!?\n]{2,90}:)/g, "\n$1")
@@ -1419,6 +1456,17 @@ function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
       continue;
     }
 
+    const labelledParagraph = line.match(
+      new RegExp(`^(${CHAT_SECTION_LABELS})\\s*:\\s+(.+)$`, "i"),
+    );
+
+    if (labelledParagraph) {
+      flushList();
+      blocks.push({ kind: "heading", text: toDisplayLabel(labelledParagraph[1]) });
+      blocks.push({ kind: "paragraph", text: labelledParagraph[2].trim() });
+      continue;
+    }
+
     flushList();
     blocks.push({ kind: "paragraph", text: line });
   }
@@ -1431,9 +1479,29 @@ function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
 function cleanChatListItem(value: string) {
   return value
     .replace(/^\d+\.\s+/, "")
-    .replace(/^\*\*(.+?)\*\*:?\s*/, "**$1:** ")
+    .replace(/\*\*([^*\n:]{2,80}):\*\*:/g, "**$1:**")
+    .replace(/\*\*([^*\n:]{2,80}):\*\*/g, "**$1:**")
+    .replace(/\*\*([^*\n]{2,80})\*\*::/g, "**$1:**")
+    .replace(/^\*\*([^*\n]+?)(?::)?\*\*:?\s*/, (_, label: string) => {
+      return `**${label.trim()}:** `;
+    })
+    .replace(/^([A-Z][A-Za-z0-9 /&+()'-]{2,54})::\s*/, "$1: ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function toDisplayLabel(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((part) => {
+      if (/^(AI|ATS|GTM|VP|PDF|DOCX|URL|P&L|SOX)$/i.test(part)) {
+        return part.toUpperCase();
+      }
+
+      return `${part.slice(0, 1).toUpperCase()}${part.slice(1).toLowerCase()}`;
+    })
+    .join(" ");
 }
 
 function renderInlineChatText(text: string) {
