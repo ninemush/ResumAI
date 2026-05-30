@@ -62,19 +62,25 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
 
       <section className="sources-helper-panel" aria-label="How Pramania uses sources">
         <div>
-          <strong>What belongs here</strong>
-          <p>Drop anything useful into chat. Pramania classifies it, reads what it can, and keeps the original source preserved here.</p>
+          <strong>Your career record</strong>
+          <p>
+            Every resume, LinkedIn export, screenshot, note, and link you share
+            in chat is kept here in order.
+          </p>
         </div>
         <div>
-          <strong>What you do here</strong>
-          <p>Preview the original file, retry extraction if needed, and audit where profile context came from.</p>
+          <strong>Why it matters</strong>
+          <p>
+            Pramania uses these sources to keep advice, resumes, and job-fit
+            reviews grounded in what you actually shared.
+          </p>
         </div>
       </section>
 
       <section className="sources-panel" aria-label="Profile sources">
         <div className="section-heading">
           <p className="eyebrow">Sources used</p>
-          <h2>Input stream</h2>
+          <h2>Timeline</h2>
         </div>
         {overview.recentSources.length > 0 ? (
           <div className="source-list">
@@ -164,8 +170,8 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
         <p className="evidence-note">
           {brand.name} uses these sources to build your profile, draft your master
           resume, assess role fit, and create application materials. You should not
-          have to manage individual extracted details here; profile edits belong in
-          the Profile cockpit or the conversation.
+          have to manage individual extracted details here. Update your profile
+          directly in Profile & Resume, or ask Pramania to refine it in chat.
         </p>
       </section>
 

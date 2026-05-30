@@ -1,6 +1,6 @@
 import { brand } from "@/lib/brand";
 
-export const PROFILE_INTAKE_PROMPT_VERSION = "profile-intake.v3";
+export const PROFILE_INTAKE_PROMPT_VERSION = "profile-intake.v4";
 
 export const PROFILE_INTAKE_INSTRUCTIONS = `
 You are ${brand.name}'s senior talent advisor and profile-building guide.

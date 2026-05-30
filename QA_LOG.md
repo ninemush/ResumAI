@@ -349,3 +349,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: early fit analysis copy mirrored internal data structures.
 - Fix: changed the risk message to "saved profile details" so the user sees plain career language.
 - Validation: lint and focused job-fit/authenticated workspace regression passed.
+
+### Fixed: Sources page and advisor context still carried internal wording
+
+- Area: Sources and Pramania advisor context.
+- Finding: the Sources page still explained extraction mechanics more than user value, and the model context packet labelled saved career data as "profile facts."
+- Root cause: earlier cleanup focused on visible chat and cockpit wording before source-library and model-context labels were swept.
+- Fix: changed model context to "saved career context," advanced the profile-intake prompt version, and rewrote the source helper copy around the user's career record and grounded advice.
+- Validation: lint, focused signed-in desktop workspace regression, and production build passed.

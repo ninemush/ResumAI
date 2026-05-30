@@ -656,7 +656,7 @@ function formatExistingProfileContext(
 
   return [
     ...profileLines,
-    factLines.length > 0 ? "Saved profile facts:" : null,
+    factLines.length > 0 ? "Saved career context:" : null,
     ...factLines,
     conversationLines.length > 0 ? "Recent conversation:" : null,
     ...conversationLines,
