@@ -34,7 +34,7 @@ export function OwnerConsole({ metrics }: OwnerConsoleProps) {
           icon={BriefcaseBusiness}
           label="Applications"
           value={metrics.applications.logged}
-          detail={`${metrics.applications.converted} converted proxy`}
+          detail={`${formatRate(metrics.outcomes.interviewRate)} interview rate, ${formatRate(metrics.outcomes.selectionRate)} selected`}
         />
         <MetricCard
           icon={Activity}
@@ -52,6 +52,10 @@ export function OwnerConsole({ metrics }: OwnerConsoleProps) {
 
       <section className="owner-detail-grid" aria-label="Detailed operating metrics">
         <MetricBreakdown title="Application statuses" values={metrics.applications.byStatus} />
+        <OutcomeBreakdown title="Outcome by tier" values={metrics.outcomes.byTier} />
+        <OutcomeBreakdown title="Outcome by role family" values={metrics.outcomes.byRoleFamily} />
+        <OutcomeBreakdown title="Outcome by source" values={metrics.outcomes.bySourceType} />
+        <OutcomeBreakdown title="Outcome by resume type" values={metrics.outcomes.byResumeType} />
         <MetricBreakdown title="Feature usage" values={metrics.featureUsage} />
         <MetricBreakdown title="Profile sources" values={metrics.sources} />
         <div className="owner-detail-panel">
@@ -67,6 +71,10 @@ export function OwnerConsole({ metrics }: OwnerConsoleProps) {
             <div>
               <dt>Profile extraction failures</dt>
               <dd>{metrics.systemHealth.profileExtractionFailures}</dd>
+            </div>
+            <div>
+              <dt>Avg. hours to first response</dt>
+              <dd>{metrics.outcomes.averageHoursToFirstResponse.toLocaleString()}</dd>
             </div>
             <div>
               <dt>Generated at</dt>
@@ -127,6 +135,45 @@ function MetricBreakdown({ title, values }: { title: string; values: Record<stri
   );
 }
 
+function OutcomeBreakdown({
+  title,
+  values,
+}: {
+  title: string;
+  values: Record<string, Record<string, number>>;
+}) {
+  const entries = Object.entries(values);
+
+  return (
+    <div className="owner-detail-panel">
+      <div className="section-heading">
+        <p className="eyebrow">Outcomes</p>
+        <h2>{title}</h2>
+      </div>
+      {entries.length > 0 ? (
+        <dl className="metric-list">
+          {entries.map(([label, metrics]) => (
+            <div key={label}>
+              <dt>{formatLabel(label)}</dt>
+              <dd>
+                {Object.entries(metrics)
+                  .map(([metricLabel, value]) =>
+                    metricLabel.toLowerCase().includes("rate")
+                      ? `${formatLabel(metricLabel)} ${formatRate(value)}`
+                      : `${formatLabel(metricLabel)} ${value.toLocaleString()}`,
+                  )
+                  .join(" · ")}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="empty-state">No outcome data yet.</p>
+      )}
+    </div>
+  );
+}
+
 function formatLabel(value: string) {
   return value.replaceAll("_", " ");
 }
@@ -136,4 +183,8 @@ function formatTimestamp(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatRate(value: number) {
+  return `${Math.round(value * 100)}%`;
 }

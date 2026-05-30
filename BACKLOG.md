@@ -4,11 +4,11 @@ This backlog captures approved direction that should be designed and implemented
 
 ## Core App Cockpit And Measurement
 
-- Expand the profile cockpit with application funnel metrics: jobs identified, jobs awaiting review, applications drafted, applied, no reply, interviewing, rejected, selected, and withdrawn.
-- Make cockpit metrics clickable so every summary number opens the underlying records and the same command path can later be triggered from chat or voice.
-- Store normalized application stage events so cohort analysis can answer where users succeed or drop off.
-- Add user-base analytics for interview rate, rejection rate, selection rate, time-to-response, and conversion by tier, role family, resume version, and source type.
-- Keep all analytics privacy-safe, aggregated by default, and never expose one user's private data to another user.
+- Done: Expand the profile cockpit with application funnel metrics: jobs identified, jobs awaiting review, applications drafted, applied, no reply, interviewing, rejected, selected, and withdrawn.
+- Done: Make cockpit metrics clickable so every summary number opens the underlying records and the same command path can later be triggered from chat or voice.
+- Done: Store normalized application stage events so cohort analysis can answer where users succeed or drop off.
+- Done: Add user-base analytics for interview rate, rejection rate, selection rate, time-to-response, and conversion by tier, role family, resume version, and source type.
+- Done: Keep all analytics privacy-safe, aggregated by default, and never expose one user's private data to another user.
 
 ## Profile Build And Intake
 

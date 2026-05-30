@@ -20,6 +20,8 @@ type ProfileSource = {
   source_type: string;
   source_url: string | null;
   storage_path: string | null;
+  extractedTextPreview: string | null;
+  readableCharacterCount: number;
   previewUrl: string | null;
   original_filename: string | null;
   extraction_status: string;
@@ -133,7 +135,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
       supabase
         .from("profile_sources")
         .select(
-          "id, source_type, source_url, storage_path, original_filename, extraction_status, failure_reason, created_at",
+          "id, source_type, source_url, storage_path, original_filename, extracted_text, extraction_status, failure_reason, created_at",
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
@@ -219,16 +221,29 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
 
 async function addSourcePreviewUrls(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  sources: Omit<ProfileSource, "previewUrl">[],
+  sources: (Omit<ProfileSource, "extractedTextPreview" | "previewUrl" | "readableCharacterCount"> & {
+    extracted_text?: string | null;
+  })[],
 ) {
   return Promise.all(
-    sources.map(async (source) => ({
+    sources.map(async ({ extracted_text: extractedText, ...source }) => ({
       ...source,
+      extractedTextPreview: formatSourceTextPreview(extractedText),
+      readableCharacterCount: extractedText?.replace(/\s+/g, " ").trim().length ?? 0,
       previewUrl: ["docx", "image", "pdf", "txt", "linkedin"].includes(source.source_type)
         ? await createProfileSourceUrl(supabase, source.storage_path)
         : null,
     })),
   );
+}
+
+function formatSourceTextPreview(value: string | null | undefined) {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.length > 420 ? `${normalized.slice(0, 420)}...` : normalized;
 }
 
 async function createProfileSourceUrl(

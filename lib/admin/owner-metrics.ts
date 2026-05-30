@@ -5,6 +5,10 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
 const countRecordSchema = z.record(z.string(), z.number().int().nonnegative());
+const outcomeSegmentSchema = z.record(
+  z.string(),
+  z.record(z.string(), z.number().nonnegative()),
+);
 
 export const ownerMetricsSchema = z.object({
   applications: z.object({
@@ -19,6 +23,27 @@ export const ownerMetricsSchema = z.object({
     ingested: z.number().int().nonnegative(),
     succeeded: z.number().int().nonnegative(),
   }),
+  outcomes: z
+    .object({
+      averageHoursToFirstResponse: z.number().nonnegative().default(0),
+      byRoleFamily: outcomeSegmentSchema.default({}),
+      byResumeType: outcomeSegmentSchema.default({}),
+      bySourceType: outcomeSegmentSchema.default({}),
+      byTier: outcomeSegmentSchema.default({}),
+      interviewRate: z.number().nonnegative().default(0),
+      rejectionRate: z.number().nonnegative().default(0),
+      selectionRate: z.number().nonnegative().default(0),
+    })
+    .default({
+      averageHoursToFirstResponse: 0,
+      byResumeType: {},
+      byRoleFamily: {},
+      bySourceType: {},
+      byTier: {},
+      interviewRate: 0,
+      rejectionRate: 0,
+      selectionRate: 0,
+    }),
   materials: z.object({
     coverLetterPdfs: z.number().int().nonnegative(),
     generatedCoverLetters: z.number().int().nonnegative(),

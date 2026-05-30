@@ -31,9 +31,16 @@ export type ApplicationOverview = {
     total: number;
     applied: number;
     interviewing: number;
+    noReply: number;
     selected: number;
     rejected: number;
+    withdrawn: number;
     needsReview: number;
+    byStatus: {
+      label: string;
+      status: string;
+      value: number;
+    }[];
     byStage: {
       label: string;
       value: number;
@@ -161,15 +168,32 @@ function summarizeApplications(applications: { status: string }[]) {
   const rejected = applications.filter((application) =>
     rejectedStatuses.has(application.status),
   ).length;
+  const noReply = applications.filter((application) => application.status === "no_reply").length;
+  const withdrawn = applications.filter((application) => application.status === "withdrawn").length;
   const needsReview = applications.filter((application) => application.status === "draft").length;
 
   return {
     total,
     applied,
     interviewing,
+    noReply,
     selected,
     rejected,
+    withdrawn,
     needsReview,
+    byStatus: [
+      { label: "Draft", status: "draft", value: needsReview },
+      { label: "Applied", status: "applied", value: applications.filter((item) => item.status === "applied").length },
+      { label: "No reply", status: "no_reply", value: noReply },
+      {
+        label: "Interviewing",
+        status: "interview_in_progress",
+        value: applications.filter((item) => item.status === "interview_in_progress").length,
+      },
+      { label: "Rejected", status: "rejected", value: applications.filter((item) => item.status === "rejected").length },
+      { label: "Selected", status: "interviewed_selected", value: selected },
+      { label: "Withdrawn", status: "withdrawn", value: withdrawn },
+    ],
     byStage: [
       { label: "Review", value: needsReview },
       { label: "Applied", value: applied },

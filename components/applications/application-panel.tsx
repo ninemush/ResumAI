@@ -16,6 +16,7 @@ import type { ApplicationOverview } from "@/lib/applications/application-overvie
 import type { ResumeContent } from "@/lib/resumes/resume-content";
 
 type ApplicationPanelProps = {
+  initialStageFilter?: StageFilter;
   overview: ApplicationOverview;
   showEmptyState?: boolean;
 };
@@ -62,12 +63,16 @@ const applicationStatuses = [
   { value: "withdrawn", label: "Withdrawn" },
 ];
 
-type StageFilter = "All" | "Review" | "Applied" | "Interview" | "Selected" | "Closed";
+export type StageFilter = "All" | "Review" | "Applied" | "Interview" | "Selected" | "Closed";
 
-export function ApplicationPanel({ overview, showEmptyState = false }: ApplicationPanelProps) {
+export function ApplicationPanel({
+  initialStageFilter = "All",
+  overview,
+  showEmptyState = false,
+}: ApplicationPanelProps) {
   const router = useRouter();
   const [activeReview, setActiveReview] = useState<MaterialReview | null>(null);
-  const [activeStageFilter, setActiveStageFilter] = useState<StageFilter>("All");
+  const [activeStageFilter, setActiveStageFilter] = useState<StageFilter>(initialStageFilter);
   const [coverLetterDraft, setCoverLetterDraft] = useState("");
   const [resumeDraft, setResumeDraft] = useState<ResumeContent | null>(null);
   const [exportingApplicationId, setExportingApplicationId] = useState<string | null>(null);
@@ -306,6 +311,9 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
               <span className="record-meta">
                 {cleanDisplayText(application.companyName)} · Updated {formatShortDate(application.updatedAt)}
               </span>
+              <span className="record-subtle-line">
+                {formatLatestActivity(application)}
+              </span>
             </button>
 
             <button
@@ -349,7 +357,7 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
                   </option>
                 ))}
               </select>
-              <span>{formatLatestActivity(application)}</span>
+              <span>{formatStatus(application.status)}</span>
             </div>
 
             <div className="record-actions">

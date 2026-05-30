@@ -7,6 +7,7 @@ import { OwnerConsole } from "@/components/admin/owner-console";
 import type { AppView } from "@/components/app-shell/side-nav";
 import { SideNav } from "@/components/app-shell/side-nav";
 import { ApplicationPanel } from "@/components/applications/application-panel";
+import type { StageFilter } from "@/components/applications/application-panel";
 import { ArtifactsPanel } from "@/components/artifacts/artifacts-panel";
 import { ConversationPanel } from "@/components/conversation/conversation-panel";
 import { JobIngestionPanel } from "@/components/jobs/job-ingestion-panel";
@@ -45,9 +46,17 @@ type WorkspaceLayoutProps = {
 type WorkspaceLayoutState = {
   conversationWidth: number;
   activeView: AppView;
+  applicationStageFilter: StageFilter;
   navCollapsed: boolean;
   navWidth: number;
 };
+
+export type WorkspaceNavigationTarget =
+  | AppView
+  | {
+      applicationStageFilter?: StageFilter;
+      view: AppView;
+    };
 
 export function WorkspaceLayout({
   applicationOverview,
@@ -61,6 +70,7 @@ export function WorkspaceLayout({
 }: WorkspaceLayoutProps) {
   const [layout, setLayout] = useState<WorkspaceLayoutState>({
     activeView: "profile",
+    applicationStageFilter: "All",
     conversationWidth: DEFAULT_CONVERSATION_WIDTH,
     navCollapsed: false,
     navWidth: DEFAULT_NAV_WIDTH,
@@ -115,7 +125,11 @@ export function WorkspaceLayout({
 
   const mobileFocusClass = layout.activeView === "profile" ? "conversation-first" : "workspace-first";
 
-  function selectView(activeView: AppView) {
+  function selectView(target: WorkspaceNavigationTarget) {
+    const activeView = typeof target === "string" ? target : target.view;
+    const applicationStageFilter =
+      typeof target === "string" ? undefined : target.applicationStageFilter;
+
     if (
       hasUnsavedResumeChanges &&
       layout.activeView === "resume" &&
@@ -128,6 +142,10 @@ export function WorkspaceLayout({
     setLayout((currentLayout) => ({
       ...currentLayout,
       activeView,
+      applicationStageFilter:
+        activeView === "applications"
+          ? (applicationStageFilter ?? currentLayout.applicationStageFilter)
+          : currentLayout.applicationStageFilter,
     }));
   }
 
@@ -157,6 +175,7 @@ export function WorkspaceLayout({
       <div className="workspace-main">
         {renderWorkspaceView({
           activeView: layout.activeView,
+          applicationStageFilter: layout.applicationStageFilter,
           applicationOverview,
           artifactOverview,
           jobOverview,
@@ -192,6 +211,7 @@ export function WorkspaceLayout({
 
 function renderWorkspaceView({
   activeView,
+  applicationStageFilter,
   applicationOverview,
   artifactOverview,
   jobOverview,
@@ -203,13 +223,14 @@ function renderWorkspaceView({
   session,
 }: {
   activeView: AppView;
+  applicationStageFilter: StageFilter;
   applicationOverview: ApplicationOverview;
   artifactOverview: ArtifactOverview;
   jobOverview: JobOverview;
   masterResumeOverview: MasterResumeOverview;
   ownerMetrics: OwnerMetrics | null;
   onResumeDirtyChange: (isDirty: boolean) => void;
-  onSelectView: (view: AppView) => void;
+  onSelectView: (target: WorkspaceNavigationTarget) => void;
   profileOverview: ProfileOverview;
   session: WorkspaceSession;
 }) {
@@ -230,7 +251,13 @@ function renderWorkspaceView({
   }
 
   if (activeView === "applications") {
-    return <ApplicationPanel overview={applicationOverview} showEmptyState />;
+    return (
+      <ApplicationPanel
+        initialStageFilter={applicationStageFilter}
+        overview={applicationOverview}
+        showEmptyState
+      />
+    );
   }
 
   if (activeView === "resume") {

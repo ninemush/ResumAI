@@ -1083,7 +1083,7 @@ input:focus {
   align-items: end;
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   min-height: 74px;
 }
 
@@ -2352,11 +2352,17 @@ input:focus {
 
 .record-meta,
 .record-summary,
-.record-subnote {
+.record-subnote,
+.record-subtle-line {
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.38;
   margin: 0;
+}
+
+.record-subtle-line {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
 }
 
 .record-summary {
@@ -2444,8 +2450,8 @@ input:focus {
 
 .application-record {
   grid-template-columns:
-    minmax(210px, 1fr) minmax(220px, 1.15fr) minmax(142px, 0.42fr)
-    minmax(210px, auto);
+    minmax(210px, 0.9fr) minmax(260px, 1.35fr) minmax(150px, 0.42fr)
+    minmax(300px, auto);
 }
 
 .application-record > .record-subnote {
@@ -2480,6 +2486,14 @@ input:focus {
   color: var(--muted);
   font-size: 0.72rem;
   line-height: 1.2;
+}
+
+.application-record-list {
+  gap: 8px;
+}
+
+.application-record-list .record-row {
+  min-height: 0;
 }
 
 .compact-status-select {
@@ -2861,6 +2875,66 @@ input:focus {
 .source-timestamp {
   color: var(--ink-soft) !important;
   font-size: 0.74rem !important;
+}
+
+.source-capability-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.source-capability-row span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 6px 8px;
+}
+
+.source-capability-row .ready {
+  background: rgba(57, 98, 88, 0.1);
+  border-color: rgba(57, 98, 88, 0.22);
+  color: var(--sage-strong);
+}
+
+.source-capability-row .warning {
+  background: rgba(179, 60, 48, 0.09);
+  border-color: rgba(179, 60, 48, 0.22);
+  color: var(--danger);
+}
+
+.source-excerpt {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.source-excerpt summary {
+  align-items: center;
+  color: var(--foreground);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.8rem;
+  font-weight: 850;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.source-excerpt summary span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.source-excerpt p {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  margin-top: 8px;
 }
 
 .compact-action {

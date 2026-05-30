@@ -13,6 +13,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { brand } from "@/lib/brand";
+import type { WorkspaceNavigationTarget } from "@/components/app-shell/workspace-layout";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import type { JobOverview } from "@/lib/jobs/job-overview";
@@ -23,7 +24,7 @@ type ProfileExplorerProps = {
   applicationOverview: ApplicationOverview;
   artifactOverview: ArtifactOverview;
   jobOverview: JobOverview;
-  onNavigate: (view: "applications" | "artifacts" | "jobs" | "knowledgebase" | "resume") => void;
+  onNavigate: (target: WorkspaceNavigationTarget) => void;
   overview: ProfileOverview;
 };
 
@@ -256,16 +257,28 @@ export function ProfileExplorer({
           value="Open"
         />
         <CockpitMetric
-          detail="Track roles you chose to pursue"
+          detail="Track every role you chose to pursue"
           label="Applications"
-          onClick={() => onNavigate("applications")}
+          onClick={() => onNavigate({ applicationStageFilter: "All", view: "applications" })}
           value={applicationOverview.summary.total}
         />
         <CockpitMetric
-          detail="Follow-ups and outcomes"
+          detail="Active interview loops and next steps"
           label="Interviewing"
-          onClick={() => onNavigate("applications")}
+          onClick={() => onNavigate({ applicationStageFilter: "Interview", view: "applications" })}
           value={applicationOverview.summary.interviewing}
+        />
+        <CockpitMetric
+          detail="Roles sent but not answered yet"
+          label="No reply"
+          onClick={() => onNavigate({ applicationStageFilter: "Applied", view: "applications" })}
+          value={applicationOverview.summary.noReply}
+        />
+        <CockpitMetric
+          detail="Closed or rejected applications"
+          label="Closed"
+          onClick={() => onNavigate({ applicationStageFilter: "Closed", view: "applications" })}
+          value={applicationOverview.summary.rejected}
         />
         <CockpitMetric
           detail="Decide whether to pursue these roles"
@@ -296,10 +309,15 @@ export function ProfileExplorer({
           </div>
           {applicationOverview.summary.total > 0 ? (
             <div className="stage-progress" aria-label="Application status distribution">
-              {applicationOverview.summary.byStage.map((stage) => (
+              {applicationOverview.summary.byStatus.map((stage) => (
                 <button
                   key={stage.label}
-                  onClick={() => onNavigate("applications")}
+                  onClick={() =>
+                    onNavigate({
+                      applicationStageFilter: mapStatusToStageFilter(stage.status),
+                      view: "applications",
+                    })
+                  }
                   title={`${stage.label}: ${stage.value}`}
                   type="button"
                 >
@@ -521,6 +539,14 @@ export function ProfileExplorer({
       ) : null}
     </main>
   );
+}
+
+function mapStatusToStageFilter(status: string) {
+  if (status === "draft") return "Review";
+  if (status === "interview_in_progress") return "Interview";
+  if (status === "interviewed_selected") return "Selected";
+  if (["rejected", "interviewed_not_selected", "withdrawn"].includes(status)) return "Closed";
+  return "Applied";
 }
 
 function readStageWidth(value: number, total: number) {

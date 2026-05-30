@@ -127,10 +127,26 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
                     <h3>{source.original_filename ?? formatSourceUrl(source.source_url)}</h3>
                     <p>{formatSourceType(source.source_type)}</p>
                     <p className="source-timestamp">{formatSourceTimestamp(source.created_at)}</p>
+                    <div className="source-capability-row" aria-label="Source capabilities">
+                      {buildSourceCapabilities(source).map((capability) => (
+                        <span className={capability.tone} key={capability.label}>
+                          {capability.label}
+                        </span>
+                      ))}
+                    </div>
                     {source.failure_reason ? (
                       <p className="source-failure">{formatFailureReason(source.failure_reason)}</p>
                     ) : null}
                     <p>{formatSourceGuidance(source)}</p>
+                    {source.extractedTextPreview ? (
+                      <details className="source-excerpt">
+                        <summary>
+                          Read excerpt
+                          <span>{source.readableCharacterCount.toLocaleString()} characters</span>
+                        </summary>
+                        <p>{source.extractedTextPreview}</p>
+                      </details>
+                    ) : null}
                     {source.source_type === "image" && source.extraction_status === "failed" ? (
                       <div className="source-fallback" aria-label="Image OCR import options">
                         <FileText size={15} aria-hidden="true" />
@@ -443,6 +459,38 @@ function formatSourceGuidance(source: ProfileOverview["recentSources"][number]) 
   }
 
   return "Saved as profile source.";
+}
+
+function buildSourceCapabilities(source: ProfileOverview["recentSources"][number]) {
+  const capabilities: { label: string; tone: string }[] = [];
+
+  if (source.extraction_status === "succeeded" && source.readableCharacterCount > 0) {
+    capabilities.push({ label: "Profile context available", tone: "ready" });
+  }
+
+  if (source.previewUrl) {
+    capabilities.push({ label: "Preview available", tone: "neutral" });
+  }
+
+  if (source.source_type === "pdf") {
+    capabilities.push({ label: "PDF text/vision parser", tone: "neutral" });
+  } else if (source.source_type === "docx") {
+    capabilities.push({ label: "Word parser", tone: "neutral" });
+  } else if (source.source_type === "image") {
+    capabilities.push({ label: "OCR retry supported", tone: "neutral" });
+  } else if (source.source_type === "linkedin" && source.source_url) {
+    capabilities.push({ label: "Public web only", tone: source.extraction_status === "failed" ? "warning" : "neutral" });
+  } else if (source.source_type === "linkedin" && source.storage_path) {
+    capabilities.push({ label: "LinkedIn export", tone: "neutral" });
+  } else if (["link", "portfolio"].includes(source.source_type)) {
+    capabilities.push({ label: "Public page reader", tone: "neutral" });
+  }
+
+  if (source.extraction_status === "failed") {
+    capabilities.push({ label: "Needs attention", tone: "warning" });
+  }
+
+  return capabilities;
 }
 
 function sourceMatchesFilter(
