@@ -149,3 +149,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the master resume prompt used the beginning of each source, which can over-weight contact, summary, and skills sections and under-weight later experience sections in profile exports.
 - Fix: changed source excerpting to include the beginning plus targeted windows around resume-relevant sections such as experience, employment, work history, skills, education, certifications, projects, and awards. Increased model output budget so role-based experience sections have room to be complete.
 - Validation: lint, whitespace diff check, production build, master-resume API auth checks, and signed-in workspace regression tests passed.
+
+### Fixed: advisor context could under-read long uploaded sources
+
+- Area: Pramania conversation advisor.
+- Finding: advisor answers about uploaded PDFs or profile exports could miss later work-history evidence, even when the source text was saved.
+- Root cause: the advisor payload used the first excerpt of each readable source, which can miss role history in long profile exports.
+- Fix: mirrored the master-resume source-windowing strategy for advisor context so Pramania sees the beginning plus targeted windows around experience, skills, education, certifications, projects, and related sections.
+- Validation: lint, whitespace diff check, production build, profile/advisor API auth checks, and signed-in workspace regression tests passed.

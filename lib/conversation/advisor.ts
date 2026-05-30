@@ -486,7 +486,7 @@ function formatReadableSourcesForAdvisor(sources: AdvisorSource[]) {
     .slice(0, 6)
     .map((source) => {
       const label = source.original_filename ?? source.source_url ?? source.source_type;
-      const excerpt = source.extracted_text?.replace(/\s+/g, " ").trim().slice(0, 1400);
+      const excerpt = buildAdvisorSourceExcerpt(source.extracted_text);
 
       return `- ${label} (${source.source_type}, ${source.extraction_status}): ${excerpt}`;
     });
@@ -506,6 +506,50 @@ function formatReadableSourcesForAdvisor(sources: AdvisorSource[]) {
   return failedSources.length > 0
     ? `No readable source excerpts are available. Recent extraction issues:\n${failedSources.join("\n")}`
     : "No readable source excerpts are available.";
+}
+
+function buildAdvisorSourceExcerpt(text: string | null) {
+  const cleanText = text?.replace(/\s+/g, " ").trim();
+
+  if (!cleanText) {
+    return "not available";
+  }
+
+  if (cleanText.length <= 2200) {
+    return cleanText;
+  }
+
+  const windows: Array<{ end: number; start: number }> = [{ start: 0, end: 850 }];
+  const sectionPattern =
+    /\b(summary|experience|employment|work history|professional experience|projects?|skills?|education|certifications?|licenses?|awards?|honou?rs?|publications?|volunteer|recommendations?)\b/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = sectionPattern.exec(cleanText)) && windows.length < 6) {
+    windows.push({
+      start: Math.max(0, match.index - 260),
+      end: Math.min(cleanText.length, match.index + 1000),
+    });
+  }
+
+  const merged = windows
+    .sort((left, right) => left.start - right.start)
+    .reduce<Array<{ end: number; start: number }>>((items, window) => {
+      const previous = items.at(-1);
+
+      if (previous && window.start <= previous.end + 100) {
+        previous.end = Math.max(previous.end, window.end);
+        return items;
+      }
+
+      items.push({ ...window });
+      return items;
+    }, []);
+
+  return merged
+    .map((window) => cleanText.slice(window.start, window.end).trim())
+    .filter(Boolean)
+    .join(" [...] ")
+    .slice(0, 3400);
 }
 
 function formatLatestResumeForAdvisor(latestResume: unknown) {
