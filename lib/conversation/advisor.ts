@@ -20,7 +20,7 @@ export const conversationAdvisorRequestSchema = z.object({
 });
 
 const advisorResponseSchema = z.object({
-  assistantMessage: z.string().min(1).max(1900),
+  assistantMessage: z.string().min(1).max(1500),
 });
 
 type ConversationFact = {
@@ -146,7 +146,7 @@ export async function runConversationAdvisor(
       model,
       instructions,
       input: inputPayload,
-      max_output_tokens: 1200,
+      max_output_tokens: 900,
       metadata: {
         feature: "conversation_advisor",
         surface: input.surface,
@@ -235,7 +235,7 @@ async function runRelaxedAdvisorAttempt({
 Return plain text only. Do not return JSON, markdown tables, or code fences.
 Use short paragraphs and bullets only when they make the career advice clearer.`,
       input: stripJsonOnlyInstruction(input),
-      max_output_tokens: 1200,
+      max_output_tokens: 900,
       metadata: {
         feature: "conversation_advisor",
         response_mode: "relaxed_text",
@@ -286,11 +286,11 @@ recent conversation. Never ask the user to repeat information that appears in
 that context. If a user challenges you because you already have their data,
 acknowledge it directly and use the saved context.
 
-Keep the response concise: usually 2 short paragraphs or 3-5 crisp bullets.
-Ask at most one follow-up question unless the user explicitly wants a list.
-You may use simple bullets when they improve clarity. Do not use long numbered
-lists in chat. If you use labels, keep them short, like "What I see:" or
-"Best next move:".
+Keep the response easy to read in a narrow chat panel: no more than 180 words
+unless the user explicitly asks for a deeper review. Prefer this structure:
+"What I see:" one short paragraph, "Best lanes:" up to 3 bullets, and
+"Best next move:" one practical action. Ask at most one follow-up question.
+Do not use long numbered lists in chat.
 
 If the user is asking "why", "you already have my information", or challenging a
 previous answer, do not treat it as new profile evidence. Answer the concern
@@ -769,7 +769,7 @@ function formatListForSentence(items: string[], fallback: string) {
 
 function normalizeAdvisorMessage(message: string) {
   const sectionLabels =
-    "What I see|What I learned|What is missing|What to fix first|Best next move|Next step|Next question|Why it matters|Recommendation|My recommendation|Conservative|Balanced|Executive\\/board-ready|Board-ready|Headline improvement|Summary clarity|Impact evidence|Leadership depth|Experience structure|Role fit|Resume impact|Missing metrics|Useful evidence|What I would do next";
+    "What I see|What I learned|What is missing|What to fix first|Best lanes|Strongest lanes|Role lanes|Best next move|Next step|Next question|Why it matters|Recommendation|My recommendation|Conservative|Balanced|Executive\\/board-ready|Board-ready|Headline improvement|Summary clarity|Impact evidence|Proof of impact|Leadership depth|Experience structure|Role fit|Resume impact|Resume fix|Metrics to quantify|Metric to quantify|Missing metrics|Useful evidence|What I would do next";
   const normalized = message
     .replace(/\r\n/g, "\n")
     .replace(/\*\*([^*\n:]{2,80}):\*\*:/g, "**$1:**")
@@ -788,15 +788,15 @@ function normalizeAdvisorMessage(message: string) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  if (normalized.length <= 1200) {
+  if (normalized.length <= 1050) {
     return normalized;
   }
 
-  const naturalBreak = normalized.lastIndexOf("\n", 1200);
-  const sentenceBreak = normalized.lastIndexOf(". ", 1200);
+  const naturalBreak = normalized.lastIndexOf("\n", 1050);
+  const sentenceBreak = normalized.lastIndexOf(". ", 1050);
   const cutAt = Math.max(naturalBreak, sentenceBreak);
 
-  return normalized.slice(0, cutAt > 780 ? cutAt + 1 : 1200).trim();
+  return normalized.slice(0, cutAt > 720 ? cutAt + 1 : 1050).trim();
 }
 
 function hashUserId(userId: string) {
