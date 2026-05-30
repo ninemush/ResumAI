@@ -43,6 +43,44 @@ test.describe("authenticated workspace", () => {
     expect(jobsBox?.y ?? 0).toBeLessThan(advisorBox?.y ?? Number.POSITIVE_INFINITY);
   });
 
+  test("keeps profile mode chat-first on mobile without cockpit overlap", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "Mobile chat-first layout is a mobile-specific regression check.");
+
+    await page.goto("/");
+
+    await expect(page.getByText("Career advisor")).toBeVisible();
+    await expect(page.getByText("Profile cockpit")).toBeVisible();
+
+    const shellClassName = await page.locator(".workspace-shell").evaluate((element) => element.className);
+    const layoutBoxes = await page.evaluate(() => {
+      const conversation = document.querySelector(".conversation-pane")?.getBoundingClientRect();
+      const workspace = document.querySelector(".workspace-main")?.getBoundingClientRect();
+
+      return {
+        conversation: conversation
+          ? {
+              bottom: conversation.bottom,
+              top: conversation.top,
+            }
+          : null,
+        workspace: workspace
+          ? {
+              bottom: workspace.bottom,
+              top: workspace.top,
+            }
+          : null,
+      };
+    });
+
+    expect(shellClassName).toContain("conversation-first");
+    expect(layoutBoxes.conversation?.top ?? Number.POSITIVE_INFINITY).toBeLessThan(
+      layoutBoxes.workspace?.top ?? 0,
+    );
+    expect(layoutBoxes.conversation?.bottom ?? 0).toBeLessThanOrEqual(
+      (layoutBoxes.workspace?.top ?? Number.POSITIVE_INFINITY) + 1,
+    );
+  });
+
   test("keeps record-heavy desktop surfaces compact and action oriented", async ({ page, isMobile }) => {
     test.skip(isMobile, "Desktop record density is covered separately from mobile focus.");
 

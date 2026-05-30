@@ -3992,8 +3992,25 @@ input:focus {
     order: 2;
   }
 
+  .workspace-shell.conversation-first .workspace-main {
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+  }
+
   .profile-pane {
     padding: 0;
+  }
+
+  .workspace-shell.conversation-first .profile-pane {
+    gap: 16px;
+  }
+
+  .workspace-shell.conversation-first .profile-heading {
+    gap: 12px;
+  }
+
+  .workspace-shell.conversation-first .profile-heading .pane-heading p:not(.eyebrow) {
+    display: none;
   }
 
   .conversation-header {

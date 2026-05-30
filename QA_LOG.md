@@ -197,3 +197,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: early implementation copy mirrored the data model and prompt terminology.
 - Fix: replaced remaining user-facing/internal-leak phrasing with role evidence, outcomes, achievements, and evidence-gap language.
 - Validation: lint, whitespace diff check, profile/master-resume API auth checks, signed-in workspace regression tests, and production build passed.
+
+### Fixed: mobile profile view could feel visually stacked behind chat
+
+- Area: signed-in mobile workspace.
+- Finding: the profile cockpit and Pramania chat could feel visually crowded on mobile, especially when a user opened the app expecting to start in the conversation.
+- Root cause: the mobile layout stacked both large surfaces with little separation, and there was no regression check proving the profile view remained chat-first.
+- Fix: added a clear boundary before the mobile cockpit, reduced redundant profile heading copy below chat, and added a Playwright check that profile mode is conversation-first without cockpit overlap.
+- Validation: focused mobile signed-in workspace regression tests passed.
