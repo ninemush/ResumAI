@@ -1776,7 +1776,7 @@ function buildFileExtractionFailureMessage({
   sourceType: string;
 }) {
   if (sourceType === "image") {
-    return `${fileName} was saved as an image source, but I could not read the visible text yet: ${message} You can retry from Knowledgebase, paste the key text here, or drop a clearer screenshot and I will fold it into your profile evidence.`;
+    return `${fileName} was saved as an image source, but I could not read the visible text yet: ${message} You can retry from Sources, paste the key text here, or drop a clearer screenshot and I will fold it into your profile.`;
   }
 
   if (sourceType === "pdf") {
@@ -1784,14 +1784,14 @@ function buildFileExtractionFailureMessage({
   }
 
   if (sourceType === "docx") {
-    return `${fileName} was saved as a Word source, but I could not extract readable text yet: ${message} You can retry from Knowledgebase or paste the resume text here.`;
+    return `${fileName} was saved as a Word source, but I could not extract readable text yet: ${message} You can retry from Sources or paste the resume text here.`;
   }
 
   if (sourceType === "linkedin") {
-    return `${fileName} was saved as a LinkedIn export source, but I could not extract profile data yet: ${message} LinkedIn archive ZIPs and profile CSV files work best. You can retry from Knowledgebase or drop the LinkedIn PDF export instead.`;
+    return `${fileName} was saved as a LinkedIn export source, but I could not extract profile data yet: ${message} LinkedIn archive ZIPs and profile CSV files work best. You can retry from Sources or drop the LinkedIn PDF export instead.`;
   }
 
-  return `${fileName} was saved as a source, but I could not extract readable text yet: ${message} You can retry from Knowledgebase or paste the important text here.`;
+  return `${fileName} was saved as a source, but I could not extract readable text yet: ${message} You can retry from Sources or paste the important text here.`;
 }
 
 function looksLikeExistingSourceRequest(text: string) {

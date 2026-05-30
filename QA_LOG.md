@@ -317,3 +317,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the empty states were plain text inside the list container instead of a designed, action-oriented state.
 - Fix: added compact empty-state panels that explain what happens next without reintroducing old cluttered card layouts.
 - Validation: lint, whitespace diff check, and focused signed-in Playwright regression tests passed; the test caught and prevented old wording from returning.
+
+### Fixed: source retry copy still used old workspace vocabulary
+
+- Area: Pramania chat file/source recovery and authenticated workspace regression coverage.
+- Finding: file extraction failure copy still told users to retry from "Knowledgebase" even though the navigation and product language now say "Sources."
+- Root cause: the visible workspace labels were updated before the older deterministic recovery copy was swept.
+- Fix: changed source recovery copy to point to Sources, removed unnecessary evidence jargon from image recovery, and added a signed-in regression to prevent old source/detail/signal language from returning on the Sources page.
+- Validation: lint and focused signed-in desktop workspace regression passed.

@@ -132,6 +132,12 @@ test.describe("authenticated workspace", () => {
     await expect(page.getByRole("heading", { name: /Generated materials/i })).toBeVisible();
     await expectCompactRecordIfPresent(page, "Generated materials", ".artifact-record");
 
+    await page.locator(".side-nav").getByRole("button", { name: /^Sources$/i }).click();
+    await expect(page.getByRole("heading", { name: /Source library/i })).toBeVisible();
+    await expect(page.getByText("Knowledgebase", { exact: false })).toHaveCount(0);
+    await expect(page.getByText("Captured details", { exact: false })).toHaveCount(0);
+    await expect(page.getByText("profile signals", { exact: false })).toHaveCount(0);
+
     await page.locator(".side-nav").getByRole("button", { name: /^Settings$/i }).click();
     await expect(page.getByRole("heading", { name: /Account and privacy/i })).toBeVisible();
     await expect(page.getByText("Workspace controls")).toHaveCount(0);
