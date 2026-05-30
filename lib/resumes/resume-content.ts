@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const MAX_RESUME_EXPERIENCE_SECTIONS = 12;
+
 export const resumeExperienceSectionSchema = z.object({
   bullets: z.array(z.string().trim().min(1).max(320)).max(7),
   company: z.string().trim().max(120).nullable().default(null),
@@ -10,7 +12,7 @@ export const resumeExperienceSectionSchema = z.object({
 
 export const resumeContentSchema = z.object({
   experienceBullets: z.array(z.string().trim().min(1).max(320)).max(14),
-  experienceSections: z.array(resumeExperienceSectionSchema).max(8).default([]),
+  experienceSections: z.array(resumeExperienceSectionSchema).max(MAX_RESUME_EXPERIENCE_SECTIONS).default([]),
   headline: z.string().trim().min(1).max(220),
   keywordGaps: z.array(z.string().trim().min(1).max(140)).max(16),
   reviewerNotes: z.array(z.string().trim().min(1).max(260)).max(8),
@@ -31,10 +33,10 @@ export function normalizeResumeContent(value: ResumeContent): ResumeContent {
       company: cleanNullableText(section.company),
       dates: cleanNullableText(section.dates),
       location: cleanNullableText(section.location),
-      roleTitle: cleanResumeText(section.roleTitle) || "Role",
+      roleTitle: stripResumeUiLabels(cleanResumeText(section.roleTitle)) || "Role",
     }))
     .filter((section) => section.bullets.length > 0 || section.roleTitle !== "Role")
-    .slice(0, 8);
+    .slice(0, MAX_RESUME_EXPERIENCE_SECTIONS);
   const experienceBullets = value.experienceBullets
     .map(cleanResumeText)
     .filter(Boolean)
@@ -50,7 +52,7 @@ export function normalizeResumeContent(value: ResumeContent): ResumeContent {
     keywordGaps: value.keywordGaps.map(cleanResumeText).filter(Boolean).slice(0, 16),
     reviewerNotes: value.reviewerNotes.map(cleanResumeText).filter(Boolean).slice(0, 8),
     skills: value.skills.map(cleanResumeText).filter(Boolean).slice(0, 24),
-    summary: cleanResumeText(value.summary),
+    summary: stripResumeUiLabels(cleanResumeText(value.summary)),
   });
 }
 
@@ -64,7 +66,7 @@ function cleanResumeText(value: string) {
 }
 
 function cleanResumeHeadline(value: string) {
-  const normalized = cleanResumeText(value).replace(/\s*\|\s*/g, " / ");
+  const normalized = stripResumeUiLabels(cleanResumeText(value)).replace(/\s*\|\s*/g, " / ");
   const segments = normalized.split(/\s+\/\s+/).filter(Boolean);
 
   if (segments.length <= 2) {
@@ -72,4 +74,11 @@ function cleanResumeHeadline(value: string) {
   }
 
   return segments.slice(0, 2).join(" / ").slice(0, 140);
+}
+
+function stripResumeUiLabels(value: string) {
+  return value
+    .replace(/^(?:draft|final|saved)\s*[:\-–—]\s*/i, "")
+    .replace(/^(?:master\s+ats\s+resume|ats\s+master\s+resume|master\s+resume)\s*[:\-–—]?\s*/i, "")
+    .trim();
 }

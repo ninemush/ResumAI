@@ -13,11 +13,13 @@ import {
   type ProfileIntelligence,
 } from "@/lib/profile/profile-intelligence";
 import {
+  MAX_RESUME_EXPERIENCE_SECTIONS,
   normalizeResumeContent,
   parseResumeContent,
   resumeContentSchema,
   type ResumeContent,
 } from "@/lib/resumes/resume-content";
+import { extractExperienceSectionsFromText } from "@/lib/resumes/source-experience";
 import { createClient } from "@/lib/supabase/server";
 
 export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v3";
@@ -290,7 +292,7 @@ async function generateMasterResumeDraft({
               },
               experienceSections: {
                 type: "array",
-                maxItems: 8,
+                maxItems: MAX_RESUME_EXPERIENCE_SECTIONS,
                 items: {
                   type: "object",
                   additionalProperties: false,
@@ -460,14 +462,6 @@ function enrichMasterResumeWithSourceTimeline(
     return resume;
   }
 
-  const existingUsefulSections = resume.experienceSections.filter(
-    (section) => section.company || section.dates || section.bullets.length >= 2,
-  );
-
-  if (existingUsefulSections.length >= Math.min(sourceSections.length, 3)) {
-    return resume;
-  }
-
   return normalizeResumeContent({
     ...resume,
     experienceSections: mergeExperienceSections(sourceSections, resume.experienceSections),
@@ -498,7 +492,7 @@ function extractExperienceSectionsFromSources(sourceEvidence: SourceEvidence[]) 
       seen.add(key);
       return true;
     })
-    .slice(0, 8);
+    .slice(0, MAX_RESUME_EXPERIENCE_SECTIONS);
 }
 
 function mergeExperienceSections(
@@ -519,190 +513,7 @@ function mergeExperienceSections(
     }
   }
 
-  return merged.slice(0, 8);
-}
-
-function extractExperienceSectionsFromText(text: string) {
-  const experienceText = readExperienceText(text);
-  const lines = readResumeSourceLines(experienceText || text);
-  const sections: ResumeContent["experienceSections"] = [];
-  let currentCompany: string | null = null;
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    const followingLines = lines.slice(index + 1, index + 4);
-
-    if (looksLikeResumeCompanyHeading(line, followingLines)) {
-      currentCompany = line;
-      continue;
-    }
-
-    const roleTitle = line;
-
-    if (!looksLikeResumeRoleTitle(roleTitle)) {
-      continue;
-    }
-
-    const nextLines = lines.slice(index + 1, index + 8);
-    const companyIndex = nextLines.findIndex((line) => looksLikeResumeCompany(line));
-    const dateIndex = nextLines.findIndex((line) => looksLikeDateRange(line));
-
-    if (companyIndex < 0 && dateIndex < 0) {
-      continue;
-    }
-
-    const company = companyIndex >= 0 ? nextLines[companyIndex] : currentCompany;
-    const dates = dateIndex >= 0 ? nextLines[dateIndex] : null;
-    const location = nextLines.find((line, lineIndex) =>
-      lineIndex !== companyIndex &&
-      lineIndex !== dateIndex &&
-      looksLikeResumeLocation(line),
-    ) ?? null;
-    const bulletStart = index + 1 + Math.max(companyIndex, dateIndex, 0) + 1;
-    const bulletLines: string[] = [];
-
-    for (let cursor = bulletStart; cursor < lines.length; cursor += 1) {
-      const line = lines[cursor];
-      const following = lines.slice(cursor + 1, cursor + 5);
-      const startsNextRole =
-        looksLikeResumeRoleTitle(line) &&
-        following.some((candidate) => looksLikeResumeCompany(candidate) || looksLikeDateRange(candidate));
-
-      if (startsNextRole || looksLikeResumeSectionBoundary(line)) {
-        break;
-      }
-
-      if (looksLikeResumeImpactLine(line)) {
-        bulletLines.push(cleanResumeSourceLine(line));
-      }
-
-      if (bulletLines.length >= 5) {
-        break;
-      }
-    }
-
-    sections.push({
-      bullets: bulletLines.length > 0
-        ? bulletLines
-        : [`Held ${roleTitle}${company ? ` at ${company}` : ""}${dates ? ` (${dates})` : ""}. Add measurable scope and outcomes.`],
-      company,
-      dates,
-      location,
-      roleTitle,
-    });
-
-    if (sections.length >= 8) {
-      break;
-    }
-  }
-
-  return sections;
-}
-
-function readExperienceText(text: string) {
-  const decoded = decodeResumeSourceText(text);
-  const startMatch = /(?:^|\n)\s*(experience|professional experience|employment|work history)\s*(?:\n|$)/i.exec(decoded);
-
-  if (!startMatch) {
-    return "";
-  }
-
-  const startIndex = startMatch.index + startMatch[0].length;
-  const remainder = decoded.slice(startIndex);
-  const stopMatch = /(?:^|\n)\s*(education|licenses?|certifications?|skills?|projects?|volunteer|recommendations?|awards?|honou?rs?)\s*(?:\n|$)/i.exec(remainder);
-
-  return remainder.slice(0, stopMatch?.index ?? remainder.length).trim();
-}
-
-function readResumeSourceLines(text: string) {
-  return decodeResumeSourceText(text)
-    .split(/\n+/)
-    .map(cleanResumeSourceLine)
-    .filter((line) => line.length > 1)
-    .filter((line) => !/^page\s+\d+/i.test(line))
-    .filter((line) => !/^(contact|top skills|languages|summary|experience|professional experience)$/i.test(line));
-}
-
-function cleanResumeSourceLine(value: string) {
-  return value
-    .replace(/^[-•*]\s*/, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function decodeResumeSourceText(value: string) {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-function looksLikeResumeRoleTitle(value: string) {
-  return (
-    value.length <= 140 &&
-    /\b(chief|founder|president|vice president|\bvp\b|director|head|manager|lead|leader|leadership program|consultant|advisor|officer|architect|engineer|analyst|specialist|partner|principal|owner|executive)\b/i.test(
-      value,
-    ) &&
-    !looksLikeDateRange(value) &&
-    !looksLikeResumeSectionBoundary(value)
-  );
-}
-
-function looksLikeResumeCompany(value: string) {
-  return (
-    value.length <= 100 &&
-    !looksLikeResumeRoleTitle(value) &&
-    !looksLikeDateRange(value) &&
-    !looksLikeResumeLocation(value) &&
-    !looksLikeResumeSectionBoundary(value) &&
-    /^[A-Z0-9][A-Za-z0-9&.,'’() -]{1,100}$/.test(value)
-  );
-}
-
-function looksLikeResumeCompanyHeading(value: string, followingLines: string[]) {
-  return (
-    looksLikeResumeCompany(value) &&
-    followingLines.some((line) => looksLikeCompanyDurationLine(line) || looksLikeResumeRoleTitle(line))
-  );
-}
-
-function looksLikeCompanyDurationLine(value: string) {
-  return /^\d+\s+years?(?:\s+\d+\s+months?)?$|^\d+\s+months?$/i.test(value.trim());
-}
-
-function looksLikeDateRange(value: string) {
-  return /\b(present|current|jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|19\d{2}|20\d{2}|yrs?|years?|mos?|months?)\b/i.test(
-    value,
-  );
-}
-
-function looksLikeResumeLocation(value: string) {
-  return (
-    value.length <= 100 &&
-    /\b(remote|hybrid|united states|united kingdom|uae|dubai|abu dhabi|riyadh|singapore|india|canada|europe|emea|mea|middle east|saudi|london|new york|san francisco)\b/i.test(
-      value,
-    )
-  );
-}
-
-function looksLikeResumeImpactLine(value: string) {
-  return (
-    value.length >= 28 &&
-    !looksLikeDateRange(value) &&
-    !looksLikeResumeSectionBoundary(value) &&
-    /\b(achieved|accelerated|automated|built|consolidated|created|delivered|directed|drove|enabled|established|expanded|grew|improved|increased|instituted|launched|led|managed|optimized|owned|reduced|scaled|saved|shaped|standardized|transformed|governed|advised|mentored|supported|responsible|oversaw|strategy|operations|portfolio|pricing|governance|revenue|margin|profit|cost|customer|team|regional|global)\b/i.test(
-      value,
-    )
-  );
-}
-
-function looksLikeResumeSectionBoundary(value: string) {
-  return /^(summary|experience|professional experience|employment|work history|education|licenses?|certifications?|skills?|projects?|volunteer|recommendations?|awards?|honou?rs?|languages|contact)$/i.test(
-    value.trim(),
-  );
+  return merged.slice(0, MAX_RESUME_EXPERIENCE_SECTIONS);
 }
 
 function stripJsonFence(value: string) {
@@ -1066,6 +877,8 @@ or outcomes.
 
 The resume should feel polished and human, not generic AI output. Preserve a
 hint of the user's voice by keeping language clear, candid, and grounded.
+Never include internal interface labels such as "Draft", "ATS master resume",
+"Master ATS Resume", or "Master resume" inside the resume content itself.
 
 Write for a broad master resume, not a specific job post. Use recruiter-grade
 judgment: strong positioning, supported keywords, evidence-backed bullets, and
@@ -1177,13 +990,34 @@ function formatSourceEvidenceForPrompt(sourceEvidence: SourceEvidence[]) {
       const excerpt = buildResumeSourceExcerpt(source.extracted_text);
       if (!excerpt) return null;
 
-      return `- ${source.original_filename ?? source.source_url ?? source.source_type}: ${excerpt}`;
+      const timeline = buildStructuredExperienceTimelineForPrompt(source.extracted_text);
+
+      return `- ${source.original_filename ?? source.source_url ?? source.source_type}:${timeline ? `\n  Structured role timeline:\n${timeline}` : ""}\n  Source excerpt: ${excerpt}`;
     })
     .filter(Boolean);
 
   return excerpts.length > 0
     ? excerpts.join("\n")
     : "No readable source excerpts available.";
+}
+
+function buildStructuredExperienceTimelineForPrompt(text: string | null) {
+  const sections = extractExperienceSectionsFromText(text ?? "");
+
+  if (sections.length === 0) {
+    return "";
+  }
+
+  return sections
+    .map((section) => {
+      const meta = [section.roleTitle, section.company, section.dates, section.location]
+        .filter(Boolean)
+        .join(" | ");
+      const bullets = section.bullets.slice(0, 5).map((bullet) => `    - ${bullet}`).join("\n");
+
+      return `  - ${meta}${bullets ? `\n${bullets}` : ""}`;
+    })
+    .join("\n");
 }
 
 function buildResumeSourceExcerpt(text: string | null) {
@@ -1193,7 +1027,7 @@ function buildResumeSourceExcerpt(text: string | null) {
     return null;
   }
 
-  if (cleanText.length <= 3600) {
+  if (cleanText.length <= 14000) {
     return cleanText;
   }
 
@@ -1227,7 +1061,7 @@ function buildResumeSourceExcerpt(text: string | null) {
     .map((window) => cleanText.slice(window.start, window.end).trim())
     .filter(Boolean)
     .join(" [...] ")
-    .slice(0, 5200);
+    .slice(0, 14000);
 }
 
 async function createSignedArtifactUrl(path: string | null) {

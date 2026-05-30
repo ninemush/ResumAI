@@ -289,7 +289,7 @@ export function MasterResumePanel({
           <div className="materials-review-header">
             <div>
               <p className="eyebrow">Draft</p>
-              <h2>ATS master resume</h2>
+              <h2>Master resume</h2>
             </div>
             <span className="resume-status-pill">
               <CheckCircle2 size={15} aria-hidden="true" />
