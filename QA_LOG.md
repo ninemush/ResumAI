@@ -325,3 +325,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the visible workspace labels were updated before the older deterministic recovery copy was swept.
 - Fix: changed source recovery copy to point to Sources, removed unnecessary evidence jargon from image recovery, and added a signed-in regression to prevent old source/detail/signal language from returning on the Sources page.
 - Validation: lint and focused signed-in desktop workspace regression passed.
+
+### Fixed: text-file sources were underweighted for master resume context
+
+- Area: master resume generation context.
+- Finding: plain text sources were stored as `txt`, but the master resume source prioritizer checked for `text`.
+- Root cause: accepted file types and resume-context scoring used different labels for the same source class.
+- Fix: aligned the scorer to the stored `txt` source type so dropped text resumes and profile notes are prioritized correctly.
+- Validation: lint, focused signed-in desktop workspace regression, and production build passed.

@@ -952,7 +952,7 @@ function readSourceEvidenceUsefulness(source: SourceEvidence) {
       ? 5
       : source.source_type === "docx"
         ? 4
-        : source.source_type === "text"
+        : source.source_type === "txt"
           ? 3
           : source.source_type === "natural_language"
             ? 2
