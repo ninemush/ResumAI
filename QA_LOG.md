@@ -109,3 +109,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the relaxed retry received a contradictory `Return JSON only` instruction, and the context packet over-weighted recent rows instead of the most useful readable source excerpts. The fallback answer also leaned on generic profile gaps instead of source/resume evidence.
 - Fix: removed the JSON-only contradiction from relaxed retries, prioritized readable PDF/LinkedIn/document sources for advisor context, included substantial source excerpts in the model payload, and strengthened deterministic fallback answers to use saved profile, source, resume, job, application, and artifact context.
 - Validation: lint passed, auth-required advisor API tests passed, and an authenticated QA smoke test asked Pramania what it learned from an uploaded profile PDF, what metrics were missing, and whether a VP+ metric was strong enough. The responses used saved source/resume context and no longer asked the user to re-upload or repeat profile details.
+
+### Fixed: legacy chat noise persisted after advisor improvements
+
+- Area: returning-user chat history.
+- Finding: old low-quality assistant messages such as profile-signal counters, profile-intake failures, and contextless processing notes could remain visible after the live advisor behavior was improved.
+- Root cause: persisted conversation history was rendered exactly as stored, while cleanup only applied to newly appended assistant messages.
+- Fix: normalized assistant history during initial chat render and suppressed known legacy noise messages that do not help users progress.
+- Validation: lint passed and signed-in workspace regression tests passed.

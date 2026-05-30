@@ -1070,12 +1070,20 @@ function buildInitialMessages(
     (item) =>
       !(
         (item.speaker === "assistant" && isLegacyAssistantSeed(item.text)) ||
+        (item.speaker === "assistant" && isLegacyAssistantNoise(item.text)) ||
         (item.speaker === "user" && isLegacyUserTestMessage(item.text))
       ),
   );
 
   if (cleanedMessages.length > 0) {
-    return cleanedMessages;
+    return cleanedMessages.map((item) =>
+      item.speaker === "assistant"
+        ? {
+            ...item,
+            text: cleanPlainChatText(item.text),
+          }
+        : item,
+    );
   }
 
   return [
@@ -1314,6 +1322,14 @@ function cleanPlainChatText(value: string) {
     .replace(/\bstructured AI analysis needs another pass\.?\s*/gi, "the analysis needs another pass. ")
     .replace(/\bFound\s+\d+\s+(?:useful\s+)?profile\s+signals?\.?\s*/gi, "")
     .replace(/\b(?:Saved|stored)\s+\d+\s+(?:new\s+)?profile\s+details?\.?\s*/gi, "")
+    .replace(
+      /\bI could not complete the deeper advisor read right now\. Share the resume, role, or profile point again and I will keep it grounded in your career context\.?/gi,
+      "I had trouble reading the saved workspace context for that reply. Ask again and I will use the profile, sources, resume, jobs, applications, and artifacts already saved.",
+    )
+    .replace(
+      /\bProfile intake is unavailable right now\. Please try again\.?/gi,
+      "I had trouble updating the profile from that message. The saved context is still available, and I can answer from it.",
+    )
     .replace(/^\s*\d+\.\s+(\*\*.*?\*\*:?\s*)/gm, "- $1")
     .replace(/^\s*\d+\.\s+/gm, "- ")
     .replace(/[ \t]+\n/g, "\n")
@@ -2280,6 +2296,17 @@ function isLegacyAssistantSeed(text: string) {
     "i'm here to assist you with building your career profile",
     "tell me about your background, paste a role, or drop a resume here.",
   ].some((phrase) => normalized.includes(phrase));
+}
+
+function isLegacyAssistantNoise(text: string) {
+  const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
+
+  return [
+    "found 0 profile details.",
+    "saved 0 profile details.",
+    "profile intake is unavailable right now. please try again.",
+    "separating a useful career signal from a note that just needs context.",
+  ].some((phrase) => normalized === phrase || normalized.includes(phrase));
 }
 
 function isLegacyUserTestMessage(text: string) {
