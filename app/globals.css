@@ -3713,14 +3713,19 @@ input:focus {
   bottom: 0;
 }
 
-.chat-input input {
+.chat-input textarea {
   background: transparent;
   border: 0;
   font-size: 0.95rem;
+  line-height: 1.35;
+  max-height: 132px;
   min-height: 40px;
+  overflow-y: auto;
+  padding: 9px 0;
+  resize: none;
 }
 
-.chat-input input:focus {
+.chat-input textarea:focus {
   box-shadow: none;
 }
 

@@ -156,6 +156,7 @@ export function ConversationPanel({
 }: ConversationPanelProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const [message, setMessage] = useState("");
@@ -188,6 +189,17 @@ export function ConversationPanel({
 
     messageList.scrollTop = messageList.scrollHeight;
   }, [messages, status, error]);
+
+  useEffect(() => {
+    const input = messageInputRef.current;
+
+    if (!input) {
+      return;
+    }
+
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight}px`;
+  }, [message]);
 
   useEffect(() => {
     return () => {
@@ -1018,9 +1030,16 @@ export function ConversationPanel({
         >
           <Mic size={18} aria-hidden="true" />
         </button>
-        <input
+        <textarea
+          ref={messageInputRef}
           onChange={(event) => handleMessageInput(event.target.value)}
           onInput={(event) => handleMessageInput(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
           onPaste={(event) => {
             const files = event.clipboardData.files;
 
@@ -1030,8 +1049,8 @@ export function ConversationPanel({
             }
           }}
           placeholder="Share background, role, link, or resume..."
+          rows={1}
           suppressHydrationWarning
-          type="text"
           value={message}
         />
         <input
