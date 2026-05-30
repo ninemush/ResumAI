@@ -101,3 +101,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: terms acceptance shipped before the privacy surface was made navigable.
 - Fix: added a Privacy Policy page covering submitted data, derived service data, AI processing, third-party services, retention, user choices, security, cookies, international processing, and contact; linked it from signup, public auth, settings, and the terms document.
 - Validation: added Playwright coverage for `/privacy`.
+
+### Fixed: advisor fallback did not reliably use saved workspace context
+
+- Area: Pramania conversation advisor, saved profile/source/resume context.
+- Finding: when the strict advisor model path failed or retried, Pramania could behave as though profile context was unavailable and ask the user to repeat information already saved.
+- Root cause: the relaxed retry received a contradictory `Return JSON only` instruction, and the context packet over-weighted recent rows instead of the most useful readable source excerpts. The fallback answer also leaned on generic profile gaps instead of source/resume evidence.
+- Fix: removed the JSON-only contradiction from relaxed retries, prioritized readable PDF/LinkedIn/document sources for advisor context, included substantial source excerpts in the model payload, and strengthened deterministic fallback answers to use saved profile, source, resume, job, application, and artifact context.
+- Validation: lint passed, auth-required advisor API tests passed, and an authenticated QA smoke test asked Pramania what it learned from an uploaded profile PDF, what metrics were missing, and whether a VP+ metric was strong enough. The responses used saved source/resume context and no longer asked the user to re-upload or repeat profile details.

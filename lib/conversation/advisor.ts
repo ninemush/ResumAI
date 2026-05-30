@@ -41,6 +41,7 @@ type AdvisorSource = {
   created_at: string;
   extracted_text: string | null;
   extraction_status: string;
+  failure_reason?: string | null;
   original_filename: string | null;
   source_type: string;
   source_url: string | null;
@@ -233,7 +234,7 @@ async function runRelaxedAdvisorAttempt({
 
 Return plain text only. Do not return JSON, markdown tables, or code fences.
 Use short paragraphs and bullets only when they make the career advice clearer.`,
-      input,
+      input: stripJsonOnlyInstruction(input),
       max_output_tokens: 1700,
       metadata: {
         feature: "conversation_advisor",
@@ -355,6 +356,9 @@ Latest master resume exists: ${latestResume ? "yes" : "no"}
 Latest master resume content:
 ${formatLatestResumeForAdvisor(latestResume)}
 
+Most useful source evidence:
+${formatReadableSourcesForAdvisor(workspace.sources.recent)}
+
 Workspace:
 ${formatWorkspaceForAdvisor(workspace)}
 
@@ -381,13 +385,13 @@ async function readAdvisorWorkspaceContext({
       ? supabase
           .from("profile_sources")
           .select(
-            "source_type, source_url, original_filename, extracted_text, extraction_status, created_at",
+            "source_type, source_url, original_filename, extracted_text, extraction_status, failure_reason, created_at",
             { count: "exact" },
           )
           .eq("profile_id", profileId)
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
-          .limit(12)
+          .limit(30)
       : Promise.resolve({ count: 0, data: [] as AdvisorSource[], error: null }),
   ]);
 
@@ -401,10 +405,32 @@ async function readAdvisorWorkspaceContext({
     artifacts: artifacts.status === "fulfilled" ? artifacts.value : null,
     jobs: jobs.status === "fulfilled" ? jobs.value : null,
     sources: {
-      recent: (sourceValue.data ?? []) as AdvisorSource[],
+      recent: prioritizeAdvisorSources((sourceValue.data ?? []) as AdvisorSource[]),
       total: sourceValue.count ?? 0,
     },
   };
+}
+
+function prioritizeAdvisorSources(sources: AdvisorSource[]) {
+  return [...sources]
+    .sort((left, right) => readSourceUsefulness(right) - readSourceUsefulness(left))
+    .slice(0, 14);
+}
+
+function readSourceUsefulness(source: AdvisorSource) {
+  const readableLength = source.extracted_text?.trim().length ?? 0;
+  const readableScore = Math.min(readableLength / 500, 10);
+  const typeScore =
+    source.source_type === "linkedin" || source.source_type === "pdf"
+      ? 4
+      : source.source_type === "docx"
+        ? 3
+        : source.source_type === "natural_language"
+          ? 2
+          : 1;
+  const statusScore = source.extraction_status === "succeeded" ? 4 : 0;
+
+  return readableScore + typeScore + statusScore;
 }
 
 function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
@@ -452,6 +478,34 @@ function formatSourceExcerpt(value: string | null) {
   }
 
   return value.replace(/\s+/g, " ").trim().slice(0, 900);
+}
+
+function formatReadableSourcesForAdvisor(sources: AdvisorSource[]) {
+  const readableSources = sources
+    .filter((source) => source.extracted_text?.trim())
+    .slice(0, 6)
+    .map((source) => {
+      const label = source.original_filename ?? source.source_url ?? source.source_type;
+      const excerpt = source.extracted_text?.replace(/\s+/g, " ").trim().slice(0, 1400);
+
+      return `- ${label} (${source.source_type}, ${source.extraction_status}): ${excerpt}`;
+    });
+
+  if (readableSources.length > 0) {
+    return readableSources.join("\n");
+  }
+
+  const failedSources = sources
+    .filter((source) => source.extraction_status === "failed")
+    .slice(0, 4)
+    .map(
+      (source) =>
+        `- ${source.original_filename ?? source.source_url ?? source.source_type} could not be read yet: ${source.failure_reason ?? "no reason recorded"}`,
+    );
+
+  return failedSources.length > 0
+    ? `No readable source excerpts are available. Recent extraction issues:\n${failedSources.join("\n")}`
+    : "No readable source excerpts are available.";
 }
 
 function formatLatestResumeForAdvisor(latestResume: unknown) {
@@ -537,17 +591,31 @@ function buildContextAwareAdvisorFallback({
     .slice(0, 3);
   const gaps = intelligence?.highValueGaps.slice(0, 4) ?? [];
   const resumeText = formatLatestResumeForAdvisor(latestResume);
+  const metricGuidance = buildMetricGuidance({
+    facts,
+    profile,
+    resumeText,
+    sources: workspace.sources.recent,
+  });
+
+  if (/\b(vp|executive|senior|board|level)\b/.test(normalized) && /\b(metric|impact|cagr|profit|revenue|margin|scale|percentage)\b/.test(normalized)) {
+    const metricClaim = extractMetricClaim(message);
+
+    return `Yes, that can be VP+ level evidence. The issue is not whether the metric is senior enough; it is whether the resume connects it to scope, authority, and business levers.
+
+For ${roleRead}, I would frame ${metricClaim ? `"${metricClaim}"` : "that metric"} around the operating problem, the remit you owned, the levers you controlled, and the business change that followed. A stronger pattern is: "Led [function/scope] through [business situation], delivering [metric/outcome] by changing [levers such as operating model, pricing, portfolio, governance, automation, customer motion, or execution cadence]."`;
+  }
 
   if (normalized.includes("why")) {
     return `You are right to push back. I do have your saved workspace context, so I should not ask you to repeat it.
 
-Based on the current record, the strongest lane is ${roleRead}. The next useful move is to turn the strongest proof into sharper resume evidence, especially around ${formatListForSentence(gaps.map((gap) => gap.label), "scope, measurable outcomes, and role focus")}.`;
+Based on the current record, the strongest lane is ${roleRead}. The useful missing layer is not more background; it is cleaner resume proof around ${formatListForSentence(gaps.map((gap) => gap.label), "scope, measurable outcomes, and role focus")}. I should answer from that context first, then ask only for the one detail that would materially improve the result.`;
   }
 
   if (normalized.includes("metric") || normalized.includes("missing")) {
     return `What I see:
-- Your profile does not need generic metrics; it needs executive-grade proof tied to scope and business value.
-- For ${roleRead}, I would strengthen revenue owned or influenced, margin or profitability movement, customer/portfolio scale, regional or team scope, before-and-after operating improvements, and decision authority.
+- Your profile does not need generic metrics; it needs proof tied to scope, authority, and business value.
+- For ${roleRead}, I would strengthen ${metricGuidance}.
 
 The proof already visible includes ${formatListForSentence(proofThemes ?? [], "transformation, GTM/services leadership, operations, AI/automation, and P&L-adjacent work")}. What is missing is not whether those examples are VP+ level; it is attaching each one to the role, company, scale, and outcome so the master resume reads as board-ready rather than broadly senior.`;
   }
@@ -561,6 +629,81 @@ The saved source material adds this useful evidence: ${formatListForSentence(sou
   return `Based on what I already know, I would position you around ${roleRead}. The strongest evidence to preserve is ${formatListForSentence(proofThemes ?? [], "enterprise transformation, services/GTM leadership, operations, AI/automation, and measurable business outcomes")}.
 
 The next best move is to sharpen the master profile into role-based proof: what you owned, how large it was, what changed, and why it mattered commercially. I will use your saved profile, sources, jobs, applications, and artifacts as context instead of asking you to start over.`;
+}
+
+function stripJsonOnlyInstruction(input: string) {
+  return input.replace(/\n+Return JSON only\.\s*$/i, "").trim();
+}
+
+function buildMetricGuidance({
+  facts,
+  profile,
+  resumeText,
+  sources,
+}: {
+  facts: ConversationFact[];
+  profile: AdvisorProfile | null;
+  resumeText: string;
+  sources: AdvisorSource[];
+}) {
+  const corpus = [
+    profile?.headline,
+    profile?.summary,
+    profile?.target_direction,
+    profile?.target_level,
+    resumeText,
+    ...facts.map((fact) => fact.fact_value),
+    ...sources.map((source) => source.extracted_text),
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+
+  const recommendations: string[] = [];
+
+  if (/\b(gtm|sales|revenue|commercial|pricing|pipeline|services)\b/.test(corpus)) {
+    recommendations.push("revenue or bookings influenced, CAGR, margin/profitability movement, pricing or portfolio impact");
+  }
+
+  if (/\b(customer|client|success|retention|renewal|adoption|service)\b/.test(corpus)) {
+    recommendations.push("customer base served, renewal or retention impact, adoption, CSAT/NPS, time-to-value, escalation reduction");
+  }
+
+  if (/\b(operation|delivery|process|capacity|efficiency|cost|governance|execution)\b/.test(corpus)) {
+    recommendations.push("cycle-time reduction, delivery capacity, operating cost, productivity, governance cadence, execution quality");
+  }
+
+  if (/\b(ai|automation|data|analytics|cloud|platform|api|technology|digital)\b/.test(corpus)) {
+    recommendations.push("automation throughput, data/AI use cases shipped, platform scale, integration scope, deployment speed, adoption");
+  }
+
+  if (/\b(global|regional|emea|mea|board|vp|executive|p&l|budget|team)\b/.test(corpus)) {
+    recommendations.push("team size, geographic scope, budget or P&L exposure, executive stakeholders, decision authority");
+  }
+
+  if (recommendations.length === 0) {
+    return "revenue, cost, customer, risk, speed, quality, scale, and decision-authority evidence";
+  }
+
+  return formatListForSentence(recommendations.slice(0, 4), recommendations[0]);
+}
+
+function extractMetricClaim(message: string) {
+  const quoted = message.match(/["“](.+?)["”]/)?.[1]?.trim();
+
+  if (quoted && quoted.length <= 260) {
+    return quoted;
+  }
+
+  const metricSentence = message
+    .split(/(?<=[.!?])\s+/)
+    .find((sentence) => /\b\d+|%|cagr|revenue|profit|margin|cost|growth|scale|reduced|increased|improved\b/i.test(sentence));
+
+  if (!metricSentence) {
+    return null;
+  }
+
+  return metricSentence.replace(/\s+/g, " ").trim().slice(0, 260);
 }
 
 function formatListForSentence(items: string[], fallback: string) {
