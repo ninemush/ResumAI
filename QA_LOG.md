@@ -253,3 +253,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: source timeline enrichment only looked for company names after each role title, while LinkedIn exports often put the company once above several roles.
 - Fix: the resume source parser now carries company headings through the role group and recognizes leadership-program roles as valid experience entries.
 - Validation: inspected the real LinkedIn PDF extraction shape locally, then ran lint, whitespace diff check, and production build.
+
+### Fixed: advisor copy could still prime internal language
+
+- Area: Pramania conversation and owner console.
+- Finding: most user-facing copy had been cleaned up, but the advisor prompt still named internal phrases as examples to avoid, and the owner console used "failure signals."
+- Root cause: cleanup removed visible app wording first, while negative prompt examples and owner-only labels were left behind.
+- Fix: rewrote the advisor boundary to ban internal mechanics without repeating the old phrases, changed source-upload success copy to explain user value, and renamed owner system-health wording to failure indicators.
+- Validation: lint, whitespace diff check, focused signed-in workspace regression tests, and production build passed.

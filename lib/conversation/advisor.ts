@@ -273,9 +273,9 @@ You are answering inside ${brand.name}'s live conversation panel. This is not a
 generic chatbot reply. Use the saved profile context, recent conversation, and
 current app surface to answer as a senior talent advisor.
 
-Do not expose internal processing language such as "captured signals",
-"profile facts", "schema", "source IDs", "pipeline", or counts of sources/signals.
-Speak naturally and explain the practical career value, not the mechanics.
+Do not expose internal processing language, database terms, schema names,
+operational counts, or pipeline mechanics. Speak naturally and explain the
+practical career value, not the implementation details.
 
 If the user asks for guidance, give pointed, domain-aware hypotheses and a
 small next step. If the profile is thin, say what evidence would unlock better
@@ -625,11 +625,11 @@ function buildContextAwareAdvisorFallback({
     intelligence?.roleTargetRead ||
     profile?.headline ||
     "your current target direction";
-  const proofThemes = intelligence?.proofThemes
+  const impactEvidence = intelligence?.proofThemes
     .flatMap((theme) => theme.evidence)
     .filter(Boolean)
     .slice(0, 5);
-  const proofThemeFallback = [
+  const impactEvidenceFallback = [
     profile?.headline,
     profile?.target_direction,
     profile?.target_level,
@@ -668,7 +668,7 @@ Based on the current record, the strongest lane is ${roleRead}. The useful missi
 - Your profile does not need generic metrics; it needs evidence tied to scope, authority, and business value.
 - For ${roleRead}, I would strengthen ${metricGuidance}.
 
-The evidence already visible includes ${formatListForSentence(proofThemes ?? [], proofThemeFallback || "the strongest saved impact themes in your profile")}. What is missing is not whether those examples are senior enough; it is attaching each one to the role, company, scale, and outcome so the master resume reads as precise rather than broadly senior.`;
+The evidence already visible includes ${formatListForSentence(impactEvidence ?? [], impactEvidenceFallback || "the strongest saved impact themes in your profile")}. What is missing is not whether those examples are senior enough; it is attaching each one to the role, company, scale, and outcome so the master resume reads as precise rather than broadly senior.`;
   }
 
   if (normalized.includes("resume") || normalized.includes("profile pdf") || normalized.includes("learn")) {
@@ -677,7 +677,7 @@ The evidence already visible includes ${formatListForSentence(proofThemes ?? [],
 The saved source material adds this useful evidence: ${formatListForSentence(sourceEvidence, "role history, scope, skills, and positioning evidence from the uploaded source")}. What I would improve next is the experience architecture: group the evidence by role, attach dates and scope, and turn each role into outcome-led bullets. That is the difference between a senior activity list and a resume that reads like credible executive value.`;
   }
 
-  return `Based on what I already know, I would position you around ${roleRead}. The strongest evidence to preserve is ${formatListForSentence(proofThemes ?? [], proofThemeFallback || "the clearest evidence already saved in your profile")}.
+  return `Based on what I already know, I would position you around ${roleRead}. The strongest evidence to preserve is ${formatListForSentence(impactEvidence ?? [], impactEvidenceFallback || "the clearest evidence already saved in your profile")}.
 
 The next best move is to sharpen the master profile into role-based evidence: what you owned, how large it was, what changed, and why it mattered commercially. I will use your saved profile, sources, jobs, applications, and artifacts as context instead of asking you to start over.`;
 }
@@ -769,7 +769,7 @@ function formatListForSentence(items: string[], fallback: string) {
 
 function normalizeAdvisorMessage(message: string) {
   const sectionLabels =
-    "What I see|What I learned|What is missing|What to fix first|Best next move|Next step|Next question|Why it matters|Recommendation|My recommendation|Conservative|Balanced|Executive\\/board-ready|Board-ready|Headline improvement|Summary clarity|Proof of impact|Leadership depth|Experience structure|Role fit|Resume impact|Missing metrics|Useful evidence|What I would do next";
+    "What I see|What I learned|What is missing|What to fix first|Best next move|Next step|Next question|Why it matters|Recommendation|My recommendation|Conservative|Balanced|Executive\\/board-ready|Board-ready|Headline improvement|Summary clarity|Impact evidence|Leadership depth|Experience structure|Role fit|Resume impact|Missing metrics|Useful evidence|What I would do next";
   const normalized = message
     .replace(/\r\n/g, "\n")
     .replace(/\*\*([^*\n:]{2,80}):\*\*:/g, "**$1:**")

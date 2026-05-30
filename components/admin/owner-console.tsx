@@ -57,7 +57,7 @@ export function OwnerConsole({ metrics }: OwnerConsoleProps) {
         <div className="owner-detail-panel">
           <div className="section-heading">
             <p className="eyebrow">System health</p>
-            <h2>Failure signals</h2>
+            <h2>Failure indicators</h2>
           </div>
           <dl className="metric-list">
             <div>
