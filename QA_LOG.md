@@ -341,3 +341,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: not a new defect in this pass; this was a confirmation check on the currently deployed export path after resume-template and validation improvements.
 - Fix: no code change required.
 - Validation: authenticated demo session POSTed `/api/resume/master/export`; response returned 200 with PDF and DOCX URLs and resume status `ready`.
+
+### Fixed: job fit copy used database-style language
+
+- Area: job fit review.
+- Finding: one fit-risk message said fit was based on "profile facts only," which is implementation language and feels mechanical to users.
+- Root cause: early fit analysis copy mirrored internal data structures.
+- Fix: changed the risk message to "saved profile details" so the user sees plain career language.
+- Validation: lint and focused job-fit/authenticated workspace regression passed.

@@ -370,7 +370,7 @@ function readFitRisks({
   }
 
   if (!masterResume) {
-    risks.push("No master resume exists yet, so fit is based on profile facts only.");
+    risks.push("No master resume exists yet, so fit is based on saved profile details for now.");
   }
 
   if (score < 28 && jobKeywords.length > 0) {
