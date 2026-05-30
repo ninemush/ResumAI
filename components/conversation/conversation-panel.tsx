@@ -1473,6 +1473,11 @@ function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
       continue;
     }
 
+    if (/^\d+\.$/.test(line)) {
+      flushList();
+      continue;
+    }
+
     const bullet = line.match(/^(?:[-•]|\d+\.)\s+(.+)$/);
 
     if (bullet) {

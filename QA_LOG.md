@@ -269,3 +269,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: early cockpit and context packets were designed around system measurement instead of a user's next decision.
 - Fix: changed the cockpit profile metric to a plain action state and removed the raw source count from the advisor context payload.
 - Validation: lint, whitespace diff check, focused signed-in workspace regression tests, and production build passed.
+
+### Fixed: legacy numbered advisor fragments could show in chat
+
+- Area: Pramania chat formatting.
+- Finding: user-style screenshot QA showed an old numbered advisor answer rendering a standalone "3." before a labelled section.
+- Root cause: the chat parser handled numbered list items with text, but did not discard orphan list markers left by older model output.
+- Fix: taught the renderer to drop standalone numeric list markers while preserving real numbered items.
+- Validation: lint, whitespace diff check, focused signed-in workspace regression tests, authenticated screenshot sweep, and production build passed.
