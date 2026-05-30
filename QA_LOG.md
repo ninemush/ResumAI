@@ -229,3 +229,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: early prototype copy had been reused in deterministic recovery paths and loading messages after the main chat renderer was improved.
 - Fix: replaced remaining user-facing proof wording with career evidence, impact themes, and measurable outcome language.
 - Validation: lint, whitespace diff check, and production build passed.
+
+### Added: advisor context regression
+
+- Area: Pramania conversation advisor.
+- Finding: manual QA caught advisor responses that could ignore saved context or fall into a dead-end recovery message.
+- Root cause: existing tests covered authentication and layout, but not the signed-in advisor route with real saved workspace context.
+- Fix: added a signed-in Playwright regression that asks a broad career-advice question and rejects internal/dead-end language.
+- Validation: focused signed-in workspace regression, lint, whitespace diff check, and production build passed.

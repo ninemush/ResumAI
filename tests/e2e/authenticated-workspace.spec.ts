@@ -81,6 +81,38 @@ test.describe("authenticated workspace", () => {
     );
   });
 
+  test("answers broad advisor questions from saved workspace context", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Advisor quality is viewport-independent and only needs one signed-in probe.");
+    test.setTimeout(75_000);
+
+    await page.goto("/");
+
+    const response = await page.evaluate(async () => {
+      const request = await fetch("/api/conversation/advisor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message:
+            "Based on what you already know about me, what career advice would you give and what metrics am I missing?",
+          surface: "profile",
+        }),
+      });
+
+      return {
+        body: await request.json(),
+        status: request.status,
+      };
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.ok).toBe(true);
+    expect(response.body.assistantMessage).toEqual(expect.any(String));
+    expect(response.body.assistantMessage.length).toBeGreaterThan(160);
+    expect(response.body.assistantMessage).not.toMatch(
+      /deeper advisor read|profile intake is unavailable|share the resume, role, or profile point again|captured signals|profile facts/i,
+    );
+  });
+
   test("keeps record-heavy desktop surfaces compact and action oriented", async ({ page, isMobile }) => {
     test.skip(isMobile, "Desktop record density is covered separately from mobile focus.");
 
