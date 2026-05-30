@@ -1778,18 +1778,18 @@ function processSourceExplanationQuestion(text: string) {
 
 function buildLinkedInBlockedMessage(reason: string) {
   return [
-    `I saved the LinkedIn link and tried the public read, but LinkedIn did not return readable profile content to Pramania's server: ${reason}`,
-    "This can happen even when the page looks public in your browser, because LinkedIn may return a sign-in wall or stripped page to server requests.",
-    "Fastest path: on desktop LinkedIn, open your profile, choose Resources or More, select Save to PDF, then drag that PDF into this chat.",
-    "For the richest import, use Settings & Privacy -> Data privacy -> Get a copy of your data, request the profile archive, and upload the downloaded files when LinkedIn emails them to you. Screenshots and pasted sections still work, but the PDF or archive is cleaner.",
+    `I saved the LinkedIn link and tried to read the public profile, but I could not get enough trustworthy public career detail yet: ${reason}`,
+    "I can only use information that is visible on the public web. If the profile is private, not indexed, or only visible after sign-in, I will not guess or invent the missing history.",
+    "Fastest fallback: on desktop LinkedIn, open the profile, choose Resources or More, select Save to PDF, then drag that PDF into this chat.",
+    "For the fullest import, use LinkedIn Settings & Privacy -> Data privacy -> Get a copy of your data, request the profile archive, and upload the downloaded files when LinkedIn emails them to you.",
   ].join(" ");
 }
 
 function buildLinkedInExplanation() {
   return [
-    "LinkedIn sign-in confirms identity, but it does not give Pramania your full profile history.",
-    "For V1, I will always try a public LinkedIn URL first. If LinkedIn returns readable public content, I can extract it. If LinkedIn returns a sign-in wall or stripped response to Pramania's server, I will not fake browser access or use scraping workarounds.",
-    "The reliable import path is still easy: on desktop LinkedIn, open your profile, choose Resources or More, select Save to PDF, then drag the PDF here. For a fuller archive, go to Settings & Privacy -> Data privacy -> Get a copy of your data and request the profile files. I can parse those immediately and show the evidence Pramania captured.",
+    "I can try a public LinkedIn URL first and use only what is visible on the public web.",
+    "If the profile is private, not indexed, or only visible after sign-in, I will not guess, scrape behind access controls, or pretend I saw the full history.",
+    "The reliable backup is still simple: on desktop LinkedIn, open the profile, choose Resources or More, select Save to PDF, then drag the PDF here. For a fuller archive, go to Settings & Privacy -> Data privacy -> Get a copy of your data and request the profile files.",
   ].join(" ");
 }
 

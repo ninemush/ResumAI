@@ -25,6 +25,7 @@ const FETCH_TIMEOUT_MS = 8000;
 const IMAGE_OCR_MAX_ATTEMPTS = 3;
 const PDF_TEXT_MAX_ATTEMPTS = 3;
 const PDF_AI_MAX_ATTEMPTS = 2;
+const LINKEDIN_WEB_SEARCH_MAX_ATTEMPTS = 2;
 const blockedHostnames = new Set(["localhost", "localhost.localdomain"]);
 const supportedOcrMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -120,6 +121,8 @@ export async function extractProfileSourceText({
               filename: source.original_filename,
               storagePath: source.storage_path,
             })
+          : source.source_type === "linkedin" && source.source_url
+            ? await extractLinkedInPublicProfileWithSearch(source.source_url)
           : await extractPublicProfilePage(source.source_url ?? "");
     const normalizedText = normalizeExtractedText(extractedText);
 
@@ -668,6 +671,161 @@ async function extractPublicProfilePage(sourceUrl: string) {
   return text;
 }
 
+async function extractLinkedInPublicProfileWithSearch(sourceUrl: string) {
+  assertSafeProfileUrl(sourceUrl);
+
+  if (!isLinkedInUrl(sourceUrl)) {
+    throw new Error("LINKEDIN_URL_REQUIRED");
+  }
+
+  let lastFailureCode = "LINKEDIN_PUBLIC_PROFILE_SEARCH_FAILED";
+
+  for (let attempt = 1; attempt <= LINKEDIN_WEB_SEARCH_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await createOpenAIResponse({
+        model: getProfileIntakeModel(),
+        instructions: [
+          "You are Pramania's public-profile extraction service.",
+          "Use web search to read only career information that is publicly visible for the exact LinkedIn profile URL provided by the user.",
+          "Do not use private, logged-in, guessed, inferred, or unrelated information. Do not scrape around access controls.",
+          "If the profile is private, not indexed, blocked, unrelated, or does not expose enough public career detail, return exactly PUBLIC_PROFILE_NOT_READABLE.",
+          "Return plain text in a LinkedIn-export-like structure that a resume/profile parser can trust. Do not use markdown fences.",
+        ].join(" "),
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: buildLinkedInPublicProfileSearchPrompt(sourceUrl),
+              },
+            ],
+          },
+        ],
+        tools: [
+          buildLinkedInWebSearchTool(attempt),
+        ],
+        include: ["web_search_call.action.sources"],
+        max_output_tokens: 5000,
+        metadata: {
+          feature: "linkedin_public_profile_web_search",
+          source_type: "linkedin",
+          attempt: String(attempt),
+        },
+        store: false,
+      });
+
+      if (response.error) {
+        lastFailureCode = "LINKEDIN_PUBLIC_PROFILE_SEARCH_PROVIDER_ERROR";
+        logLinkedInWebSearchAttemptFailure({ attempt, code: lastFailureCode });
+        continue;
+      }
+
+      if (response.incomplete_details) {
+        lastFailureCode = "LINKEDIN_PUBLIC_PROFILE_SEARCH_INCOMPLETE";
+        logLinkedInWebSearchAttemptFailure({ attempt, code: lastFailureCode });
+        continue;
+      }
+
+      const text = response.output_text.trim();
+
+      if (text === "PUBLIC_PROFILE_NOT_READABLE" || text.includes("PUBLIC_PROFILE_NOT_READABLE")) {
+        throw new Error("LINKEDIN_PUBLIC_PROFILE_NOT_READABLE");
+      }
+
+      if (!looksLikeUsableLinkedInProfileExtract(text, sourceUrl)) {
+        lastFailureCode = "LINKEDIN_PUBLIC_PROFILE_TEXT_TOO_SHORT";
+        logLinkedInWebSearchAttemptFailure({ attempt, code: lastFailureCode });
+        continue;
+      }
+
+      return text;
+    } catch (error) {
+      if (error instanceof Error && error.message === "LINKEDIN_PUBLIC_PROFILE_NOT_READABLE") {
+        throw error;
+      }
+
+      lastFailureCode = toLinkedInWebSearchFailureCode(error);
+      logLinkedInWebSearchAttemptFailure({ attempt, code: lastFailureCode });
+    }
+  }
+
+  throw new Error(lastFailureCode);
+}
+
+function buildLinkedInPublicProfileSearchPrompt(sourceUrl: string) {
+  return [
+    `LinkedIn public profile URL: ${sourceUrl}`,
+    "",
+    "Search for this exact public LinkedIn profile URL and extract the public career profile only.",
+    "The output must follow this structure when public information is available:",
+    "",
+    `Public LinkedIn profile source: ${sourceUrl}`,
+    "Visibility: public information only",
+    "Name:",
+    "Headline:",
+    "Location:",
+    "Contact:",
+    `- LinkedIn: ${sourceUrl}`,
+    "About/Summary:",
+    "Experience:",
+    "- Title | Company | Start date - End date | Location",
+    "  - Public responsibility, achievement, scope, or metric",
+    "Education:",
+    "Licenses & certifications:",
+    "Skills:",
+    "Honors/Awards:",
+    "Projects/Publications:",
+    "Public source notes:",
+    "- Only public web information was used.",
+    "",
+    "Rules:",
+    "- Keep dates, company names, titles, schools, credentials, skills, and metrics as close to the public source as possible.",
+    "- Do not invent email, phone, employers, degrees, dates, achievements, or endorsements.",
+    "- Omit empty sections.",
+    "- If you cannot verify the profile from public web results, return exactly PUBLIC_PROFILE_NOT_READABLE.",
+  ].join("\n");
+}
+
+function buildLinkedInWebSearchTool(attempt: number) {
+  if (attempt === 1) {
+    return {
+      type: "web_search" as const,
+      filters: {
+        allowed_domains: ["linkedin.com", "www.linkedin.com", "ae.linkedin.com"],
+      },
+      search_context_size: "high" as const,
+    };
+  }
+
+  return {
+    type: "web_search" as const,
+    search_context_size: "high" as const,
+  };
+}
+
+function looksLikeUsableLinkedInProfileExtract(text: string, sourceUrl: string) {
+  const normalized = text.toLowerCase();
+
+  if (text.length < 160) {
+    return false;
+  }
+
+  if (!normalized.includes("public linkedin profile source") && !normalized.includes("linkedin")) {
+    return false;
+  }
+
+  const url = new URL(sourceUrl);
+  const pathTokens = url.pathname
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 3);
+  const hasProfileToken = pathTokens.some((token) => normalized.includes(token));
+  const hasCareerSection = /\b(experience|headline|summary|about|skills|education)\b/i.test(text);
+
+  return hasProfileToken && hasCareerSection;
+}
+
 async function downloadProfileSource(storagePath: string) {
   const supabase = await createClient();
   const { data, error } = await supabase.storage
@@ -1038,6 +1196,27 @@ function toPdfAiProviderFailureCode(error: unknown) {
   return "PDF_AI_PROVIDER_UNAVAILABLE";
 }
 
+function toLinkedInWebSearchFailureCode(error: unknown) {
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? Number((error as { status?: unknown }).status)
+      : null;
+
+  if (status === 401 || status === 403) {
+    return "LINKEDIN_PUBLIC_PROFILE_SEARCH_AUTH_FAILED";
+  }
+
+  if (status === 400 || status === 422) {
+    return "LINKEDIN_PUBLIC_PROFILE_SEARCH_REJECTED";
+  }
+
+  if (status === 408 || status === 409 || status === 429 || (status !== null && status >= 500)) {
+    return "LINKEDIN_PUBLIC_PROFILE_SEARCH_TEMPORARY_FAILURE";
+  }
+
+  return "LINKEDIN_PUBLIC_PROFILE_SEARCH_UNAVAILABLE";
+}
+
 function logPdfExtractionFallback(code: string) {
   console.warn(
     JSON.stringify({
@@ -1075,6 +1254,17 @@ function logOcrAttemptFailure({ attempt, code }: { attempt: number; code: string
       event: "profile_source_ocr_attempt_failed",
       attempt,
       maxAttempts: IMAGE_OCR_MAX_ATTEMPTS,
+      code,
+    }),
+  );
+}
+
+function logLinkedInWebSearchAttemptFailure({ attempt, code }: { attempt: number; code: string }) {
+  console.warn(
+    JSON.stringify({
+      event: "profile_source_linkedin_web_search_attempt_failed",
+      attempt,
+      maxAttempts: LINKEDIN_WEB_SEARCH_MAX_ATTEMPTS,
       code,
     }),
   );

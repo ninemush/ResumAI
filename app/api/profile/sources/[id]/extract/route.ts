@@ -106,6 +106,15 @@ function toApiError(error: unknown) {
       };
     }
 
+    if (error.message === "LINKEDIN_URL_REQUIRED") {
+      return {
+        category: "validation",
+        code: "source.linkedin_url_required",
+        message: "That LinkedIn source needs a valid LinkedIn profile URL.",
+        status: 400,
+      };
+    }
+
     if (error.message === "SOURCE_ALREADY_PROCESSING") {
       return {
         category: "conflict",
@@ -274,8 +283,28 @@ function toApiError(error: unknown) {
         category: "validation",
         code: "source.linkedin_public_profile_blocked",
         message:
-          "LinkedIn did not return readable profile content to the server. Use a LinkedIn PDF export, screenshot, or pasted profile text for reliable enrichment.",
+          "I could not read enough public information from that LinkedIn profile. Some profiles are private, not indexed, or only visible when signed in. I can only use public information; upload a LinkedIn PDF/export or paste visible profile text for reliable enrichment.",
         status: 422,
+      };
+    }
+
+    if (
+      [
+        "LINKEDIN_PUBLIC_PROFILE_NOT_READABLE",
+        "LINKEDIN_PUBLIC_PROFILE_SEARCH_FAILED",
+        "LINKEDIN_PUBLIC_PROFILE_SEARCH_PROVIDER_ERROR",
+        "LINKEDIN_PUBLIC_PROFILE_SEARCH_INCOMPLETE",
+        "LINKEDIN_PUBLIC_PROFILE_TEXT_TOO_SHORT",
+        "LINKEDIN_PUBLIC_PROFILE_SEARCH_AUTH_FAILED",
+        "LINKEDIN_PUBLIC_PROFILE_SEARCH_REJECTED",
+        "LINKEDIN_PUBLIC_PROFILE_SEARCH_TEMPORARY_FAILURE",
+        "LINKEDIN_PUBLIC_PROFILE_SEARCH_UNAVAILABLE",
+      ].includes(error.message)
+    ) {
+      const errorDetails = getLinkedInPublicProfileSearchApiError(error.message);
+
+      return {
+        ...errorDetails,
       };
     }
 
@@ -294,6 +323,87 @@ function toApiError(error: unknown) {
     message: "Unable to extract that source right now.",
     status: 500,
   };
+}
+
+function getLinkedInPublicProfileSearchApiError(code: string) {
+  const retryMessage =
+    "I could not complete the public LinkedIn profile read right now. The link is saved, and you can retry from Sources. I can only use information visible on the public web; if the profile is private or not indexed, upload a LinkedIn PDF/export or paste the visible profile text.";
+
+  const errors: Record<
+    string,
+    {
+      category: string;
+      code: string;
+      message: string;
+      status: number;
+    }
+  > = {
+    LINKEDIN_PUBLIC_PROFILE_NOT_READABLE: {
+      category: "validation",
+      code: "source.linkedin_public_profile_not_readable",
+      message:
+        "I could not read enough public information from that LinkedIn profile. Some profiles are private, not indexed, or only visible when signed in. I can only use public information; upload a LinkedIn PDF/export or paste visible profile text for reliable enrichment.",
+      status: 422,
+    },
+    LINKEDIN_PUBLIC_PROFILE_TEXT_TOO_SHORT: {
+      category: "validation",
+      code: "source.linkedin_public_profile_text_too_short",
+      message:
+        "The public LinkedIn results did not include enough career detail to build a trustworthy profile. I can only use public information; upload a LinkedIn PDF/export or paste visible profile text for reliable enrichment.",
+      status: 422,
+    },
+    LINKEDIN_PUBLIC_PROFILE_SEARCH_REJECTED: {
+      category: "validation",
+      code: "source.linkedin_public_profile_search_rejected",
+      message: retryMessage,
+      status: 422,
+    },
+    LINKEDIN_PUBLIC_PROFILE_SEARCH_AUTH_FAILED: {
+      category: "server",
+      code: "source.linkedin_public_profile_search_auth_failed",
+      message: "Public web profile search is not configured correctly. The LinkedIn link is saved.",
+      status: 502,
+    },
+    LINKEDIN_PUBLIC_PROFILE_SEARCH_TEMPORARY_FAILURE: {
+      category: "server",
+      code: "source.linkedin_public_profile_search_temporary_failure",
+      message: retryMessage,
+      status: 502,
+    },
+    LINKEDIN_PUBLIC_PROFILE_SEARCH_UNAVAILABLE: {
+      category: "server",
+      code: "source.linkedin_public_profile_search_unavailable",
+      message: retryMessage,
+      status: 502,
+    },
+    LINKEDIN_PUBLIC_PROFILE_SEARCH_FAILED: {
+      category: "server",
+      code: "source.linkedin_public_profile_search_failed",
+      message: retryMessage,
+      status: 502,
+    },
+    LINKEDIN_PUBLIC_PROFILE_SEARCH_PROVIDER_ERROR: {
+      category: "server",
+      code: "source.linkedin_public_profile_search_provider_error",
+      message: retryMessage,
+      status: 502,
+    },
+    LINKEDIN_PUBLIC_PROFILE_SEARCH_INCOMPLETE: {
+      category: "server",
+      code: "source.linkedin_public_profile_search_incomplete",
+      message: retryMessage,
+      status: 502,
+    },
+  };
+
+  return (
+    errors[code] ?? {
+      category: "server",
+      code: "source.linkedin_public_profile_search_failed",
+      message: retryMessage,
+      status: 502,
+    }
+  );
 }
 
 function getPdfExtractionApiError(code: string) {
