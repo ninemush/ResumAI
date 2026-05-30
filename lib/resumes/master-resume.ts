@@ -1017,7 +1017,7 @@ function readMissingEvidence({
   const missing: string[] = [];
 
   if (confirmedFacts.length < 3 && !hasSourceText) {
-    missing.push("At least 3 proof points");
+    missing.push("Role outcomes or achievement evidence");
   }
 
   if (!hasWorkEvidence) {
@@ -1086,7 +1086,7 @@ facts. A gap prompt should become a pointed question, not an invented metric.
 
 For senior transformation, GTM, professional services, operations, AI/
 automation, customer success, technology, and advisory profiles, look for and
-surface these proof points when present:
+surface these evidence types when present:
 - revenue/bookings/growth, margin/profitability, cost reduction, utilization,
   delivery capacity, pipeline/backlog, portfolio/pricing, customer adoption,
   time-to-value, NPS/retention/renewal, automation throughput, deployment time,

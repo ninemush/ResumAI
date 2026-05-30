@@ -181,3 +181,19 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the chat renderer handled headings, bullets, and labels, but did not break dense plain paragraphs when the model returned prose without markdown structure.
 - Fix: added sentence-boundary paragraph grouping for long chat paragraphs while preserving existing heading and list rendering.
 - Validation: lint, whitespace diff check, signed-in workspace regression tests, and production build passed.
+
+### Verified: brand PNG surfaces use validated transparent assets
+
+- Area: brand assets.
+- Finding: older generated PNG logo surfaces risked background artifacts and inconsistent transparency across the landing page, navigation, and workspace shell.
+- Root cause: the repository had accumulated several brand-export iterations, and not all were true transparent PNGs.
+- Fix: confirmed the active transparent logo, lockup, wordmark, and mark assets match the validated RGBA transparent PNG set and ignored older non-transparent exports.
+- Validation: active public brand PNGs report as RGBA transparent assets and lint passed.
+
+### Fixed: remaining internal evidence language
+
+- Area: chat wait states, resume readiness, job fit, and AI prompts.
+- Finding: a few user-facing paths still used internal language such as proof points or career signal, which does not help a stressed job seeker know what to do.
+- Root cause: early implementation copy mirrored the data model and prompt terminology.
+- Fix: replaced remaining user-facing/internal-leak phrasing with role evidence, outcomes, achievements, and evidence-gap language.
+- Validation: lint, whitespace diff check, profile/master-resume API auth checks, signed-in workspace regression tests, and production build passed.

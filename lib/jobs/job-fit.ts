@@ -366,7 +366,7 @@ function readFitRisks({
   const risks: string[] = [];
 
   if (profileFacts.length < 3) {
-    risks.push("The profile has too few proof points for a confident fit call.");
+    risks.push("The profile has too little role evidence for a confident fit call.");
   }
 
   if (!masterResume) {

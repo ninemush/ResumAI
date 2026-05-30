@@ -345,7 +345,7 @@ Return:
 - resume.summary: concise professional summary.
 - resume.skills: high-value ATS skills that are supported by profile evidence.
 - resume.experienceBullets: rewritten bullets that align evidence to the role.
-- resume.keywordGaps: important job keywords or proof points missing from the
+- resume.keywordGaps: important job keywords or evidence gaps missing from the
   captured profile/master resume evidence. Do not hide gaps.
 - resume.reviewerNotes: candid recruiter-style notes about fit, unsupported
   claims to avoid, risk, and what the user should verify before export.

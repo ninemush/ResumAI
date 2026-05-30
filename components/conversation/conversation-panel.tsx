@@ -1139,7 +1139,7 @@ function getProcessingMessage(mode: ProcessingMode, step: number, activeView: Ap
       hasFileIntent
         ? `Reading ${intent.split(",")[0]} and looking for career context.`
         : "Reading the file and looking for career context...",
-      "Pulling out roles, scope, skills, credentials, and proof points...",
+      "Pulling out roles, scope, skills, credentials, and useful career evidence...",
       "Separating useful evidence from formatting noise...",
       "Checking whether this is resume text, profile text, or screenshot text...",
       "Looking for the details a recruiter would actually screen for...",
@@ -2363,7 +2363,7 @@ function isLegacyAssistantNoise(text: string) {
     "found 0 profile details.",
     "saved 0 profile details.",
     "profile intake is unavailable right now. please try again.",
-    "separating a useful career signal from a note that just needs context.",
+    "separating useful career evidence from a note that just needs context.",
   ].some((phrase) => normalized === phrase || normalized.includes(phrase));
 }
 
