@@ -117,3 +117,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: persisted conversation history was rendered exactly as stored, while cleanup only applied to newly appended assistant messages.
 - Fix: normalized assistant history during initial chat render and suppressed known legacy noise messages that do not help users progress.
 - Validation: lint passed and signed-in workspace regression tests passed.
+
+### Fixed: cockpit and settings repeated low-value workspace status
+
+- Area: signed-in cockpit and Settings.
+- Finding: the cockpit repeated readiness/status language after the main next-best-move card, while Settings could overflow long identity values.
+- Root cause: empty-gap states rendered a second readiness support card, and settings cards did not force long account text to wrap inside the card.
+- Fix: removed the redundant support card when there are no actionable gaps, renamed the resume cockpit metric around the user action, and added wrapping/min-width safeguards to settings cards.
+- Validation: lint passed, signed-in workspace regression tests passed, and production build passed.

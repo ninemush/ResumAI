@@ -976,6 +976,10 @@ input:focus {
   padding: 20px;
 }
 
+.next-action-panel.single-column {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .next-action-panel h2 {
   color: var(--foreground);
   font-family: var(--font-pr-brand), Georgia, serif;
@@ -2530,6 +2534,10 @@ input:focus {
   padding: 18px;
 }
 
+.settings-section-card > div {
+  min-width: 0;
+}
+
 .settings-section-card svg {
   color: var(--sage-strong);
   margin-top: 2px;
@@ -2551,6 +2559,7 @@ input:focus {
   display: block;
   font-size: 1.02rem;
   margin-bottom: 6px;
+  overflow-wrap: anywhere;
 }
 
 .settings-section-card p {
@@ -2558,6 +2567,7 @@ input:focus {
   font-size: 0.9rem;
   line-height: 1.5;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .settings-card-note {

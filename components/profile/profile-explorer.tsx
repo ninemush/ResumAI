@@ -224,35 +224,31 @@ export function ProfileExplorer({
         </div>
       </div>
 
-      <section className="next-action-panel" aria-label="Recommended next step">
+      <section
+        className={`next-action-panel ${profileGaps.length === 0 ? "single-column" : ""}`}
+        aria-label="Recommended next step"
+      >
         <div>
           <p className="eyebrow">Next best move</p>
           <h2>{nextMove.title}</h2>
           <p>{nextMove.body}</p>
         </div>
-        <div className="next-action-support">
-          {profileGaps.length > 0 ? (
-            <>
-              <span>Most useful next details</span>
-              <div className="profile-gap-list">
-                {profileGaps.map((gap) => (
-                  <strong key={gap}>{gap}</strong>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              <span>Profile foundation</span>
-              <strong>Ready to improve the resume</strong>
-            </>
-          )}
-        </div>
+        {profileGaps.length > 0 ? (
+          <div className="next-action-support">
+            <span>Most useful next details</span>
+            <div className="profile-gap-list">
+              {profileGaps.map((gap) => (
+                <strong key={gap}>{gap}</strong>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="cockpit-panel" aria-label="Career cockpit">
         <CockpitMetric
-          detail="Open resume studio"
-          label="Resume readiness"
+          detail="Open master resume"
+          label="Resume"
           onClick={() => onNavigate("resume")}
           value={`${overview.readinessScore}%`}
         />
