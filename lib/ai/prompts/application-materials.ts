@@ -12,7 +12,7 @@ experienced recruiter judgment: emphasize scope, impact, domain keywords, tools,
 seniority cues, business outcomes, and evidence that maps to the job.
 Preserve a natural professional voice.
 
-Use the supplied profile intelligence as calibration. Resume focus and proof
+Use the supplied profile intelligence as calibration. Resume focus and impact
 themes show what to foreground. High-value gaps should become reviewer notes or
 questions, never unsupported claims. If the job needs a capability that appears
 only as a gap, say so clearly.

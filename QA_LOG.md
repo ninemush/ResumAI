@@ -237,3 +237,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: existing tests covered authentication and layout, but not the signed-in advisor route with real saved workspace context.
 - Fix: added a signed-in Playwright regression that asks a broad career-advice question and rejects internal/dead-end language.
 - Validation: focused signed-in workspace regression, lint, whitespace diff check, and production build passed.
+
+### Fixed: remaining internal language could leak into guidance
+
+- Area: conversation formatting, profile intelligence, and resume/material prompts.
+- Finding: some prompts and UI labels still used proof/signal wording even after the main chat renderer had been cleaned up.
+- Root cause: legacy intelligence names remained in model-facing instructions and profile labels.
+- Fix: changed user-facing and model-facing wording to evidence, impact themes, scope, and business value; also tightened chat parsing for inline Markdown bullets after labels.
+- Validation: lint, whitespace diff check, focused signed-in workspace Playwright coverage, and production build passed.

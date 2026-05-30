@@ -34,7 +34,7 @@ const signalGroups = [
     label: "Commercial impact",
     terms: ["revenue", "bookings", "growth", "margin", "profit", "pipeline", "sales", "renewal"],
     prompt:
-      "Can we prove revenue, bookings, margin, pipeline, renewal, pricing, or commercial-growth impact?",
+      "Can we attach revenue, bookings, margin, pipeline, renewal, pricing, or commercial-growth impact?",
   },
   {
     label: "Operational scale",
@@ -58,7 +58,7 @@ const signalGroups = [
     label: "Executive scope",
     terms: ["executive", "board", "vp", "global", "regional", "stakeholder", "transformation", "strategy"],
     prompt:
-      "Can we prove executive stakeholder level, geography, team size, budget, governance, or decision authority?",
+      "Can we attach executive stakeholder level, geography, team size, budget, governance, or decision authority?",
   },
   {
     label: "Risk and control",
@@ -163,7 +163,7 @@ function readBaselineGaps({
 
   if (!factTypes.has("experience") && !factTypes.has("project")) {
     gaps.push({
-      label: "Work proof",
+      label: "Role evidence",
       prompt: "Add role, project, or initiative evidence with scope, ownership, and outcome.",
       severity: "critical",
     });
@@ -222,7 +222,7 @@ function readResumeFocus({
   const focus = [
     profile.target_direction ? `Position toward ${profile.target_direction}` : null,
     profile.target_level ? `Calibrate language for ${profile.target_level}` : null,
-    ...proofThemes.map((theme) => `Prove ${theme.label.toLowerCase()}`),
+    ...proofThemes.map((theme) => `Show ${theme.label.toLowerCase()}`),
     "Convert responsibilities into measurable business value where evidence supports it",
     "Keep gaps and metric prompts out of final resume claims until the user substantiates them",
   ].filter(Boolean);

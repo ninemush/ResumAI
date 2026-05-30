@@ -625,7 +625,7 @@ function formatEvidenceStrength(value: ProfileOverview["intelligence"]["evidence
   const labels: Record<ProfileOverview["intelligence"]["evidenceStrength"], string> = {
     developing: "Taking shape",
     strong: "Well supported",
-    thin: "Needs more proof",
+    thin: "Needs more evidence",
   };
 
   return labels[value];

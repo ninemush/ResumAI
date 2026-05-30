@@ -1080,7 +1080,7 @@ financial/commercial impact, customer impact, risk/control outcomes, adoption,
 delivery capacity, cycle time, or productivity when the evidence supports it.
 
 Use the supplied profile intelligence to decide what to foreground, what to
-ask about, and what to keep out of final claims. Treat proof themes as strong
+ask about, and what to keep out of final claims. Treat impact themes as strong
 resume direction. Treat high-value gaps as reviewerNotes or keywordGaps, not as
 facts. A gap prompt should become a pointed question, not an invented metric.
 
@@ -1139,7 +1139,7 @@ Profile intelligence:
 - Role target read: ${intelligence.roleTargetRead}
 - Positioning context: ${intelligence.positioningSignals.join(", ") || "None yet"}
 - Resume focus: ${intelligence.resumeFocus.join(" | ") || "None yet"}
-- Proof themes:
+- Impact themes:
 ${intelligence.proofThemes.length > 0 ? intelligence.proofThemes.map((theme) => `  - ${theme.label}: ${theme.evidence.join(" / ")}`).join("\n") : "  - None yet"}
 - High-value gaps to resolve:
 ${intelligence.highValueGaps.length > 0 ? intelligence.highValueGaps.map((gap) => `  - [${gap.severity}] ${gap.label}: ${gap.prompt}`).join("\n") : "  - None"}
