@@ -22,7 +22,7 @@ import {
 import { extractExperienceSectionsFromText } from "@/lib/resumes/source-experience";
 import { createClient } from "@/lib/supabase/server";
 
-export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v3";
+export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v4";
 const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
 const PDF_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
@@ -495,7 +495,7 @@ function enrichMasterResumeWithSourceEvidence(
     },
     experienceSections:
       sourceSections.length > 0
-        ? mergeExperienceSections(sourceSections, resume.experienceSections)
+        ? mergeExperienceSections(resume.experienceSections, sourceSections)
         : resume.experienceSections,
     reviewerNotes: [
       ...resume.reviewerNotes,

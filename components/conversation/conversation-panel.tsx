@@ -268,6 +268,22 @@ export function ConversationPanel({
     const summaries: string[] = [];
 
     if (urls.length === 0) {
+      const approvedFollowUpAction = await processApprovedFollowUpAction(text);
+
+      if (approvedFollowUpAction) {
+        appendAssistantMessage(approvedFollowUpAction, true);
+        router.refresh();
+        return;
+      }
+
+      const resumeAction = await processResumeAction(text);
+
+      if (resumeAction) {
+        appendAssistantMessage(resumeAction, true);
+        router.refresh();
+        return;
+      }
+
       if (shouldRouteToAdvisor(text)) {
         appendAssistantMessage(await processAdvisorQuestion(text), true);
         return;
@@ -277,14 +293,6 @@ export function ConversationPanel({
 
       if (profileEditAction) {
         appendAssistantMessage(profileEditAction, true);
-        router.refresh();
-        return;
-      }
-
-      const resumeAction = await processResumeAction(text);
-
-      if (resumeAction) {
-        appendAssistantMessage(resumeAction, true);
         router.refresh();
         return;
       }
@@ -338,6 +346,28 @@ export function ConversationPanel({
     }
   }
 
+  async function processApprovedFollowUpAction(text: string) {
+    if (!looksLikeFollowUpApproval(text)) {
+      return null;
+    }
+
+    const lastAssistantMessage = [...messages]
+      .reverse()
+      .find((item) => item.speaker === "assistant" && item.text.trim().length > 0)?.text;
+
+    if (!lastAssistantMessage) {
+      return null;
+    }
+
+    if (lastAssistantMessageSuggestsMasterResumeAction(lastAssistantMessage)) {
+      return processResumeAction(
+        "Rebuild the master resume as a true ATS-friendly chronological resume from saved source evidence. Use company, role, dates, location, and role-specific impact bullets. Preserve the user's profile PDF and saved sources as the primary structure.",
+      );
+    }
+
+    return null;
+  }
+
   async function processResumeAction(text: string) {
     if (looksLikeMasterResumeExportRequest(text)) {
       const response = await fetch("/api/resume/master/export", {
@@ -372,7 +402,7 @@ export function ConversationPanel({
       return payload.error?.message ?? "I could not generate the master resume yet.";
     }
 
-    return `${payload.summary} I saved it in Resume Studio so you can review the wording, remove anything that does not sound like you, and keep unsupported claims out.`;
+    return `${payload.summary} I saved the rebuilt draft in Profile & Resume. It should now use a role-by-role ATS chronology when the saved source evidence contains employers, titles, dates, and locations.`;
   }
 
   async function processApplicationAction(text: string) {
@@ -2322,11 +2352,32 @@ function looksLikeMasterResumeRequest(text: string) {
   }
 
   return (
+    /\b(rebuild|restructure|rework|fix|refresh|regenerate)\b.*\b(master resume|base resume|core resume|resume|cv|chronology|role-by-role|work history)\b/.test(normalized) ||
+    /\b(master resume|base resume|core resume|resume|cv|chronology|role-by-role|work history)\b.*\b(rebuild|restructure|rework|fix|refresh|regenerate)\b/.test(normalized) ||
     /\b(make|sound|tone|voice|rewrite|revise|adjust)\b.*\b(senior|executive|less ai|more human|voice|resume|cv)\b/.test(normalized) ||
     /\b(more senior|less ai|more human|my voice)\b/.test(normalized) ||
     /\b(master resume|base resume|core resume)\b/.test(normalized) ||
     /\b(generate|create|draft|build|make)\b.*\b(resume|cv)\b/.test(normalized) ||
     /\b(resume|cv)\b.*\b(generate|create|draft|build|make)\b/.test(normalized)
+  );
+}
+
+function looksLikeFollowUpApproval(text: string) {
+  const normalized = text.toLowerCase().trim();
+
+  return /^(ok|okay|yes|yep|sure|please|go ahead|do it|go do it|proceed|continue|make it so|sounds good)[\s.!]*$/.test(
+    normalized,
+  );
+}
+
+function lastAssistantMessageSuggestsMasterResumeAction(text: string) {
+  const normalized = text.toLowerCase();
+
+  return (
+    /\b(master resume|ats|resume)\b/.test(normalized) &&
+    /\b(rebuild|restructure|rework|regenerate|refresh|role-by-role|chronolog|work history|professional experience)\b/.test(
+      normalized,
+    )
   );
 }
 

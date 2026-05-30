@@ -392,57 +392,6 @@ export function MasterResumePanel({
             </section>
             <section>
               <div className="resume-section-heading-row">
-                <h3>Selected Highlights</h3>
-              </div>
-              <div className="resume-bullet-editor">
-                {draft.experienceBullets.map((bullet, index) => (
-                  <div className="resume-bullet-row" key={`${bullet}-${index}`}>
-                    <span aria-hidden="true">•</span>
-                    <textarea
-                      aria-label={`Selected highlight ${index + 1}`}
-                      onChange={(event) =>
-                        setDraft({
-                          ...draft,
-                          experienceBullets: draft.experienceBullets.map((item, itemIndex) =>
-                            itemIndex === index ? event.target.value : item,
-                          ),
-                        })
-                      }
-                      rows={Math.max(1, Math.ceil(bullet.length / 88))}
-                      value={bullet}
-                    />
-                    <button
-                      aria-label={`Remove selected highlight ${index + 1}`}
-                      className="icon-only-action"
-                      onClick={() =>
-                        setDraft({
-                          ...draft,
-                          experienceBullets: draft.experienceBullets.filter((_, itemIndex) => itemIndex !== index),
-                        })
-                      }
-                      type="button"
-                    >
-                      <Trash2 size={14} aria-hidden="true" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  className="resume-inline-action"
-                  onClick={() =>
-                    setDraft({
-                      ...draft,
-                      experienceBullets: [...draft.experienceBullets, ""],
-                    })
-                  }
-                  type="button"
-                >
-                  <Plus size={14} aria-hidden="true" />
-                  Add highlight
-                </button>
-              </div>
-            </section>
-            <section>
-              <div className="resume-section-heading-row">
                 <h3>Professional Experience</h3>
                 <button
                   className="resume-inline-action"
@@ -578,6 +527,57 @@ export function MasterResumePanel({
                   then regenerate this master resume.
                 </p>
               )}
+            </section>
+            <section>
+              <div className="resume-section-heading-row">
+                <h3>Selected Highlights</h3>
+              </div>
+              <div className="resume-bullet-editor">
+                {draft.experienceBullets.map((bullet, index) => (
+                  <div className="resume-bullet-row" key={`${bullet}-${index}`}>
+                    <span aria-hidden="true">•</span>
+                    <textarea
+                      aria-label={`Selected highlight ${index + 1}`}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          experienceBullets: draft.experienceBullets.map((item, itemIndex) =>
+                            itemIndex === index ? event.target.value : item,
+                          ),
+                        })
+                      }
+                      rows={Math.max(1, Math.ceil(bullet.length / 88))}
+                      value={bullet}
+                    />
+                    <button
+                      aria-label={`Remove selected highlight ${index + 1}`}
+                      className="icon-only-action"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          experienceBullets: draft.experienceBullets.filter((_, itemIndex) => itemIndex !== index),
+                        })
+                      }
+                      type="button"
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  className="resume-inline-action"
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      experienceBullets: [...draft.experienceBullets, ""],
+                    })
+                  }
+                  type="button"
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  Add highlight
+                </button>
+              </div>
             </section>
           </div>
 

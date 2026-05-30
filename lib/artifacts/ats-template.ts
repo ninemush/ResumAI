@@ -77,8 +77,8 @@ export async function buildAtsResumePdf(input: ResumeTemplateInput) {
   drawRule(document);
   drawSection(document, "Professional Summary", [input.resume.summary]);
   drawSection(document, "Core Skills", [formatSkills(input.resume.skills)]);
-  drawSelectedHighlights(document, input.resume);
   drawExperience(document, input.resume);
+  drawSelectedHighlights(document, input.resume);
 
   return pdf.save();
 }
@@ -130,8 +130,8 @@ export async function buildAtsResumeDocx(input: ResumeTemplateInput) {
     docxParagraph(input.resume.summary, { spacingAfter: 160 }),
     docxSectionHeading("Core Skills"),
     docxParagraph(formatSkills(input.resume.skills), { spacingAfter: 160 }),
-    ...buildDocxSelectedHighlights(input.resume),
     ...buildDocxExperience(input.resume),
+    ...buildDocxSelectedHighlights(input.resume),
   );
 
   return Packer.toBuffer(createDocx(children, "ATS resume"));

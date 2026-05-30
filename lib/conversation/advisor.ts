@@ -302,6 +302,12 @@ or source, summarize the concrete career evidence visible in saved context first
 Then explain what should change in the master profile or resume. Do not respond
 as though the source cannot be used unless the context truly has no readable
 source excerpt.
+
+Do not claim that you have rebuilt, regenerated, saved, exported, logged,
+retried, or updated anything unless the current request is being handled by an
+actual app command. In this advisor-only route, phrase operational next steps as
+"I can rebuild it if you want me to" or "The rebuild should..." rather than "I
+will rebuild it" or "I can proceed." Advice must not pretend to be execution.
 `.trim();
 }
 
