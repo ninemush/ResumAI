@@ -131,20 +131,22 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         </p>
       </div>
 
-      <div className="record-filter-strip" aria-label="Job review filters">
-        {jobFilters.map((filter) => (
-          <button
-            aria-pressed={activeJobFilter === filter}
-            className={`record-filter-chip ${activeJobFilter === filter ? "active" : ""}`}
-            key={filter}
-            onClick={() => setActiveJobFilter(filter)}
-            type="button"
-          >
-            <strong>{filterCounts[filter]}</strong>
-            <span>{filter}</span>
-          </button>
-        ))}
-      </div>
+      {overview.recentJobs.length > 0 ? (
+        <div className="record-filter-strip" aria-label="Job review filters">
+          {jobFilters.map((filter) => (
+            <button
+              aria-pressed={activeJobFilter === filter}
+              className={`record-filter-chip ${activeJobFilter === filter ? "active" : ""}`}
+              key={filter}
+              onClick={() => setActiveJobFilter(filter)}
+              type="button"
+            >
+              <strong>{filterCounts[filter]}</strong>
+              <span>{filter}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="record-list job-record-list">
         {message ? <p className="system-note success">{message}</p> : null}

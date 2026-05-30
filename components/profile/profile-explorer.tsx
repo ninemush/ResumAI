@@ -247,61 +247,68 @@ export function ProfileExplorer({
 
       <section className="cockpit-panel" aria-label="Career cockpit">
         <CockpitMetric
-          detail="Open profile and resume"
-          label="Profile"
+          detail="Master profile and resume"
+          label="Resume"
           onClick={() => onNavigate("resume")}
-          value={readProfileState(overview)}
+          value="Open"
         />
         <CockpitMetric
-          detail={`${applicationOverview.summary.needsReview} need review`}
+          detail="Pipeline and materials"
           label="Applications"
           onClick={() => onNavigate("applications")}
           value={applicationOverview.summary.total}
         />
         <CockpitMetric
-          detail="Track active loops"
+          detail="Follow-ups and outcomes"
           label="Interviewing"
           onClick={() => onNavigate("applications")}
           value={applicationOverview.summary.interviewing}
         />
         <CockpitMetric
-          detail={`${jobOverview.summary.identified} saved roles`}
+          detail="Role fit decisions"
           label="Jobs to review"
           onClick={() => onNavigate("jobs")}
           value={jobOverview.summary.readyForReview}
         />
         <div className="stage-progress-card">
           <div>
-            <span>Application stages</span>
+            <span>Application outcomes</span>
             <strong>
               {applicationOverview.summary.total === 0
-                ? "No applications yet"
+                ? "No active pipeline yet"
                 : `${applicationOverview.summary.selected} selected`}
             </strong>
           </div>
-          <div className="stage-progress" aria-label="Application status distribution">
-            {applicationOverview.summary.byStage.map((stage) => (
-              <button
-                key={stage.label}
-                onClick={() => onNavigate("applications")}
-                title={`${stage.label}: ${stage.value}`}
-                type="button"
-              >
-                <i
-                  style={
-                    {
-                      "--stage-width": `${readStageWidth(
-                        stage.value,
-                        applicationOverview.summary.total,
-                      )}%`,
-                    } as CSSProperties & Record<"--stage-width", string>
-                  }
-                />
-                <em>{stage.value}</em>
-                {stage.label}
-              </button>
-            ))}
-          </div>
+          {applicationOverview.summary.total > 0 ? (
+            <div className="stage-progress" aria-label="Application status distribution">
+              {applicationOverview.summary.byStage.map((stage) => (
+                <button
+                  key={stage.label}
+                  onClick={() => onNavigate("applications")}
+                  title={`${stage.label}: ${stage.value}`}
+                  type="button"
+                >
+                  <i
+                    style={
+                      {
+                        "--stage-width": `${readStageWidth(
+                          stage.value,
+                          applicationOverview.summary.total,
+                        )}%`,
+                      } as CSSProperties & Record<"--stage-width", string>
+                    }
+                  />
+                  <em>{stage.value}</em>
+                  {stage.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="stage-empty-note">
+              When you choose to pursue a role, Pramania will track it from review
+              through interviews and outcomes here.
+            </p>
+          )}
         </div>
       </section>
 
@@ -336,16 +343,16 @@ export function ProfileExplorer({
       <section className="profile-intelligence-panel" aria-label="Profile intelligence">
         <div className="section-heading">
           <p className="eyebrow">Career read</p>
-          <h2>What is already strong</h2>
+          <h2>Strengths Pramania can use</h2>
         </div>
         <div className="profile-signal-grid">
           <article>
-            <span>Positioning strength</span>
+            <span>Positioning read</span>
             <strong>{formatEvidenceStrength(overview.intelligence.evidenceStrength)}</strong>
             <p>{overview.intelligence.roleTargetRead}</p>
           </article>
           <article>
-            <span>Resume focus</span>
+            <span>Resume emphasis</span>
             <ul>
               {overview.intelligence.resumeFocus.slice(0, 4).map((item) => (
                 <li key={item}>{item}</li>
@@ -507,18 +514,6 @@ function readStageWidth(value: number, total: number) {
   }
 
   return Math.max(8, Math.round((value / total) * 100));
-}
-
-function readProfileState(overview: ProfileOverview) {
-  if (overview.readinessScore >= 80) {
-    return "Ready";
-  }
-
-  if (overview.sourceCount > 0 || overview.factCount > 0) {
-    return "Building";
-  }
-
-  return "Start";
 }
 
 function readProfileGaps(overview: ProfileOverview) {

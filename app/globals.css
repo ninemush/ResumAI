@@ -1125,6 +1125,16 @@ input:focus {
   line-height: 1;
 }
 
+.stage-empty-note {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
+  padding: 12px;
+}
+
 .owner-console {
   display: grid;
   gap: 22px;
@@ -2636,6 +2646,12 @@ input:focus {
 
 .inline-link:hover {
   text-decoration: underline;
+}
+
+.settings-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .job-list {

@@ -65,12 +65,14 @@ export function SettingsPanel({ session }: SettingsPanelProps) {
                 ? `Accepted ${formatDate(session.legal.termsAcceptedAt)}.`
                 : "Please accept the current Terms and Conditions to continue using Pramania."}
             </p>
-            <a className="inline-link" href="/terms" target="_blank" rel="noreferrer">
-              Review terms
-            </a>
-            <a className="inline-link" href="/privacy" target="_blank" rel="noreferrer">
-              Review privacy policy
-            </a>
+            <div className="settings-link-row">
+              <a className="inline-link" href="/terms" target="_blank" rel="noreferrer">
+                Review terms
+              </a>
+              <a className="inline-link" href="/privacy" target="_blank" rel="noreferrer">
+                Review privacy policy
+              </a>
+            </div>
           </div>
         </article>
 

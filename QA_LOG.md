@@ -30,6 +30,14 @@ This log records product-quality issues found during user-style validation. Fixe
 
 ## 2026-05-29
 
+### Fixed: empty workspace surfaces still spent space on non-actions
+
+- Area: authenticated workspace, Cockpit, Jobs, Applications, Settings.
+- Finding: empty Jobs and Applications showed filter controls before there was anything to filter, the cockpit repeated readiness-like status instead of giving clear actions, and Settings legal links could visually run together.
+- Root cause: empty states inherited the same record controls as populated states, which made the workspace feel busy without giving the user a useful next action.
+- Fix: hid record filters until records exist, made cockpit cards action-oriented, replaced the empty application-stage grid with a compact explanation, and grouped legal links with explicit spacing.
+- Validation: lint, diff check, signed-in Playwright regression for advisor context, compact records, resume overflow, and unsaved edit protection.
+
 ### Fixed: workspace record pages did not scale to real user volume
 
 - Area: authenticated workspace, Jobs, Applications, Artifacts, Sources, Settings.

@@ -229,29 +229,31 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
         </p>
       </div>
 
-      <div className="record-filter-strip" aria-label="Application stage filters">
-        <button
-          aria-pressed={activeStageFilter === "All"}
-          className={`record-filter-chip ${activeStageFilter === "All" ? "active" : ""}`}
-          onClick={() => setActiveStageFilter("All")}
-          type="button"
-        >
-          <strong>{overview.summary.total}</strong>
-          <span>All</span>
-        </button>
-        {overview.summary.byStage.map((stage) => (
+      {overview.recentApplications.length > 0 ? (
+        <div className="record-filter-strip" aria-label="Application stage filters">
           <button
-            aria-pressed={activeStageFilter === stage.label}
-            className={`record-filter-chip ${activeStageFilter === stage.label ? "active" : ""}`}
-            key={stage.label}
-            onClick={() => setActiveStageFilter(stage.label as StageFilter)}
+            aria-pressed={activeStageFilter === "All"}
+            className={`record-filter-chip ${activeStageFilter === "All" ? "active" : ""}`}
+            onClick={() => setActiveStageFilter("All")}
             type="button"
           >
-            <strong>{stage.value}</strong>
-            <span>{stage.label}</span>
+            <strong>{overview.summary.total}</strong>
+            <span>All</span>
           </button>
-        ))}
-      </div>
+          {overview.summary.byStage.map((stage) => (
+            <button
+              aria-pressed={activeStageFilter === stage.label}
+              className={`record-filter-chip ${activeStageFilter === stage.label ? "active" : ""}`}
+              key={stage.label}
+              onClick={() => setActiveStageFilter(stage.label as StageFilter)}
+              type="button"
+            >
+              <strong>{stage.value}</strong>
+              <span>{stage.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="record-list application-record-list">
         {message ? <p className="system-note success">{message}</p> : null}
