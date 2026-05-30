@@ -948,8 +948,17 @@ function buildProfileAnalysisFallback({
   code: string;
   inputLabel: string;
 }): ProfileIntakeResult {
+  const retryable =
+    code.includes("TEMPORARY") ||
+    code.includes("UNAVAILABLE") ||
+    code.includes("INCOMPLETE") ||
+    code.includes("SCHEMA") ||
+    code.includes("FAILED");
+
   return {
-    assistantMessage: `I read and saved the text from ${inputLabel}, but profile analysis did not complete after retrying. The source text is preserved, and I can try the profile analysis again without asking you to re-upload it. Root cause: ${code}.`,
+    assistantMessage: retryable
+      ? `I read and saved ${inputLabel}. I could not finish turning it into profile updates on this pass, but the source text is preserved and I can retry the profile read without asking you to upload it again.`
+      : `I saved ${inputLabel}, but I need another pass before I can safely turn it into profile updates. The source is preserved in your Sources area.`,
     facts: [],
     followUpQuestions: [],
     inScope: true,

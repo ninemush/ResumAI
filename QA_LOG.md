@@ -69,3 +69,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the test harness stopped at public/auth-required surfaces, while the real app experience depends on Supabase SSR session cookies and authenticated layout state. Chat rendering also handled bullets better than numbered LLM advice.
 - Fix: added a reusable demo-auth helper for Playwright, added signed-in cockpit/mobile workspace regression tests, made mobile record views take focus when selected from nav, gave cockpit metrics explicit action labels, softened user-facing gap copy from proof-point language to outcome evidence, fixed mobile application-stage wrapping, and taught chat rendering to format numbered advice as structured list content.
 - Validation: lint, production build, full Playwright suite passed with 41 passing tests and 1 intentional desktop skip for a mobile-only assertion, and manual authenticated screenshots were captured for desktop cockpit/profile and mobile cockpit/jobs. A direct authenticated advisor API smoke test with the QA account also returned a contextual answer using saved profile context.
+
+### Fixed: source/profile failures leaked engineering language
+
+- Area: chat ingestion, source extraction, master resume generation.
+- Finding: a rich PDF/source could be saved, but if downstream profile analysis failed the chat could expose root-cause codes or imply the user needed to re-upload material. Master resume generation also had a single strict schema path, so useful source text could be discarded when the model returned valid substance in a slightly imperfect shape.
+- Root cause: extraction, profile analysis, and resume generation were treated as one happy-path operation instead of a resilient pipeline with recoverable downstream steps.
+- Fix: kept source extraction success separate from profile-analysis failure, replaced internal root-cause copy with recoverable user language, added a relaxed JSON fallback for master resume generation, and expanded master resume context to use more recent readable sources.
+- Validation: lint, production build, and full Playwright suite passed with 41 passing tests and 1 intentional desktop skip.

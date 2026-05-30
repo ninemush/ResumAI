@@ -1257,7 +1257,7 @@ function formatSourceIntakeReply({
   const sourceRead =
     savedFactCount > 0 || extractedFactCount > 0
       ? `${label}. I updated the profile foundation from it.`
-      : `${label}. I saved it as source material, but I do not see anything new enough to change the profile yet.`;
+      : `${label}. I saved it as source material. The profile read needs another pass before I change your master profile, so I will keep the source available instead of asking you to upload it again.`;
 
   return [sourceRead, advisorRead, direction, nextQuestion]
     .filter(Boolean)

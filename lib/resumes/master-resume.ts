@@ -138,7 +138,7 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
         .eq("user_id", userId)
         .not("extracted_text", "is", null)
         .order("created_at", { ascending: false })
-        .limit(8),
+        .limit(12),
     ]);
 
   if (factsError) {
@@ -177,105 +177,15 @@ export async function generateMasterResume(
   }
 
   const model = getMaterialsModel();
-  const response = await createOpenAIResponse({
+  const resume = await generateMasterResumeDraft({
+    confirmedFacts,
+    instruction: parsed.instruction,
     model,
-    instructions: buildMasterResumeInstructions(),
-    input: buildMasterResumeInput({
-      confirmedFacts,
-      intelligence: buildProfileIntelligence({
-        facts: confirmedFacts,
-        profile,
-      }),
-      instruction: parsed.instruction,
-      profile,
-      sourceEvidence,
-    }),
-    max_output_tokens: 3000,
-    metadata: {
-      feature: "master_resume",
-      profile_id: profile.id,
-      prompt_version: MASTER_RESUME_PROMPT_VERSION,
-    },
-    safety_identifier: hashUserId(userId),
-    store: false,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "master_resume",
-        strict: true,
-        schema: {
-          type: "object",
-          additionalProperties: false,
-          required: [
-            "headline",
-            "summary",
-            "skills",
-            "experienceSections",
-            "experienceBullets",
-            "keywordGaps",
-            "reviewerNotes",
-          ],
-          properties: {
-            headline: { type: "string" },
-            summary: { type: "string" },
-            skills: {
-              type: "array",
-              maxItems: 24,
-              items: { type: "string" },
-            },
-            experienceSections: {
-              type: "array",
-              maxItems: 8,
-              items: {
-                type: "object",
-                additionalProperties: false,
-                required: ["roleTitle", "company", "location", "dates", "bullets"],
-                properties: {
-                  roleTitle: { type: "string" },
-                  company: {
-                    anyOf: [{ type: "string" }, { type: "null" }],
-                  },
-                  location: {
-                    anyOf: [{ type: "string" }, { type: "null" }],
-                  },
-                  dates: {
-                    anyOf: [{ type: "string" }, { type: "null" }],
-                  },
-                  bullets: {
-                    type: "array",
-                    maxItems: 7,
-                    items: { type: "string" },
-                  },
-                },
-              },
-            },
-            experienceBullets: {
-              type: "array",
-              maxItems: 14,
-              items: { type: "string" },
-            },
-            keywordGaps: {
-              type: "array",
-              maxItems: 16,
-              items: { type: "string" },
-            },
-            reviewerNotes: {
-              type: "array",
-              maxItems: 8,
-              items: { type: "string" },
-            },
-          },
-        },
-      },
-      verbosity: "medium",
-    },
+    profile,
+    sourceEvidence,
+    userId,
   });
 
-  if (response.error || response.incomplete_details) {
-    throw new Error("AI_MASTER_RESUME_FAILED");
-  }
-
-  const resume = normalizeResumeContent(resumeContentSchema.parse(JSON.parse(response.output_text)));
   const { data: generatedResume, error: resumeError } = await supabase
     .from("generated_resumes")
     .insert({
@@ -311,6 +221,257 @@ export async function generateMasterResume(
     resumeId: generatedResume.id,
     summary: "Generated a master resume draft from your current career foundation.",
   };
+}
+
+async function generateMasterResumeDraft({
+  confirmedFacts,
+  instruction,
+  model,
+  profile,
+  sourceEvidence,
+  userId,
+}: {
+  confirmedFacts: ConfirmedFact[];
+  instruction: string | undefined;
+  model: string;
+  profile: ProfileRecord;
+  sourceEvidence: SourceEvidence[];
+  userId: string;
+}) {
+  const masterResumeInput = buildMasterResumeInput({
+    confirmedFacts,
+    intelligence: buildProfileIntelligence({
+      facts: confirmedFacts,
+      profile,
+    }),
+    instruction,
+    profile,
+    sourceEvidence,
+  });
+  let strictFailureCode: string | null = null;
+
+  try {
+    const response = await createOpenAIResponse({
+      model,
+      instructions: buildMasterResumeInstructions(),
+      input: masterResumeInput,
+      max_output_tokens: 3000,
+      metadata: {
+        feature: "master_resume",
+        profile_id: profile.id,
+        prompt_version: MASTER_RESUME_PROMPT_VERSION,
+      },
+      safety_identifier: hashUserId(userId),
+      store: false,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "master_resume",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: [
+              "headline",
+              "summary",
+              "skills",
+              "experienceSections",
+              "experienceBullets",
+              "keywordGaps",
+              "reviewerNotes",
+            ],
+            properties: {
+              headline: { type: "string" },
+              summary: { type: "string" },
+              skills: {
+                type: "array",
+                maxItems: 24,
+                items: { type: "string" },
+              },
+              experienceSections: {
+                type: "array",
+                maxItems: 8,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["roleTitle", "company", "location", "dates", "bullets"],
+                  properties: {
+                    roleTitle: { type: "string" },
+                    company: {
+                      anyOf: [{ type: "string" }, { type: "null" }],
+                    },
+                    location: {
+                      anyOf: [{ type: "string" }, { type: "null" }],
+                    },
+                    dates: {
+                      anyOf: [{ type: "string" }, { type: "null" }],
+                    },
+                    bullets: {
+                      type: "array",
+                      maxItems: 7,
+                      items: { type: "string" },
+                    },
+                  },
+                },
+              },
+              experienceBullets: {
+                type: "array",
+                maxItems: 14,
+                items: { type: "string" },
+              },
+              keywordGaps: {
+                type: "array",
+                maxItems: 16,
+                items: { type: "string" },
+              },
+              reviewerNotes: {
+                type: "array",
+                maxItems: 8,
+                items: { type: "string" },
+              },
+            },
+          },
+        },
+        verbosity: "medium",
+      },
+    });
+
+    if (response.error || response.incomplete_details) {
+      strictFailureCode = "AI_MASTER_RESUME_INCOMPLETE";
+    } else {
+      return parseMasterResumeModelOutput(response.output_text);
+    }
+  } catch (error) {
+    strictFailureCode = toMasterResumeFailureCode(error);
+  }
+
+  console.warn(
+    JSON.stringify({
+      event: "master_resume_strict_generation_failed",
+      code: strictFailureCode ?? "AI_MASTER_RESUME_FAILED",
+      promptVersion: MASTER_RESUME_PROMPT_VERSION,
+    }),
+  );
+
+  const relaxedResume = await runRelaxedMasterResumeModel({
+    input: masterResumeInput,
+    model,
+    profileId: profile.id,
+    userId,
+  });
+
+  if (!relaxedResume) {
+    throw new Error(strictFailureCode ?? "AI_MASTER_RESUME_FAILED");
+  }
+
+  return relaxedResume;
+}
+
+async function runRelaxedMasterResumeModel({
+  input,
+  model,
+  profileId,
+  userId,
+}: {
+  input: string;
+  model: string;
+  profileId: string;
+  userId: string;
+}) {
+  try {
+    const response = await createOpenAIResponse({
+      model,
+      instructions: `${buildMasterResumeInstructions()}
+
+Return valid JSON only. Do not wrap it in markdown or code fences.
+Use this exact object shape:
+{
+  "headline": "concise positioning headline under 95 characters",
+  "summary": "resume summary grounded in evidence",
+  "skills": ["skill"],
+  "experienceSections": [
+    {
+      "roleTitle": "role title",
+      "company": "company or null",
+      "location": "location or null",
+      "dates": "dates or null",
+      "bullets": ["evidence-backed impact bullet"]
+    }
+  ],
+  "experienceBullets": ["fallback selected highlight"],
+  "keywordGaps": ["specific missing keyword or evidence gap"],
+  "reviewerNotes": ["specific review prompt"]
+}
+If dates or employers are present in the source excerpts, preserve them in role-based experienceSections.
+If the source is a LinkedIn profile PDF or archive, use its role history as the primary structure.`,
+      input,
+      max_output_tokens: 3400,
+      metadata: {
+        feature: "master_resume",
+        profile_id: profileId,
+        prompt_version: MASTER_RESUME_PROMPT_VERSION,
+        response_mode: "relaxed_json",
+      },
+      safety_identifier: hashUserId(userId),
+      store: false,
+      text: {
+        verbosity: "medium",
+      },
+    });
+
+    if (response.error || response.incomplete_details || !response.output_text.trim()) {
+      return null;
+    }
+
+    return parseMasterResumeModelOutput(stripJsonFence(response.output_text));
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "master_resume_relaxed_generation_failed",
+        code: toMasterResumeFailureCode(error),
+        promptVersion: MASTER_RESUME_PROMPT_VERSION,
+      }),
+    );
+
+    return null;
+  }
+}
+
+function parseMasterResumeModelOutput(outputText: string) {
+  return normalizeResumeContent(resumeContentSchema.parse(JSON.parse(stripJsonFence(outputText))));
+}
+
+function stripJsonFence(value: string) {
+  return value
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function toMasterResumeFailureCode(error: unknown) {
+  if (error instanceof SyntaxError || error instanceof z.ZodError) {
+    return "AI_MASTER_RESUME_SCHEMA_FAILED";
+  }
+
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? Number((error as { status?: unknown }).status)
+      : null;
+
+  if (status === 401 || status === 403) {
+    return "AI_MASTER_RESUME_PROVIDER_AUTH_FAILED";
+  }
+
+  if (status === 400 || status === 422) {
+    return "AI_MASTER_RESUME_PROVIDER_REJECTED_INPUT";
+  }
+
+  if (status === 408 || status === 409 || status === 429 || (status !== null && status >= 500)) {
+    return "AI_MASTER_RESUME_PROVIDER_TEMPORARY_FAILURE";
+  }
+
+  return "AI_MASTER_RESUME_PROVIDER_UNAVAILABLE";
 }
 
 export async function updateMasterResume(
@@ -493,7 +654,7 @@ async function readMasterResumeContext(userId: string) {
     .eq("user_id", userId)
     .not("extracted_text", "is", null)
     .order("created_at", { ascending: false })
-    .limit(8);
+    .limit(12);
 
   if (factsError) {
     throw new Error("PROFILE_FACTS_READ_FAILED");
