@@ -157,3 +157,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the advisor payload used the first excerpt of each readable source, which can miss role history in long profile exports.
 - Fix: mirrored the master-resume source-windowing strategy for advisor context so Pramania sees the beginning plus targeted windows around experience, skills, education, certifications, projects, and related sections.
 - Validation: lint, whitespace diff check, production build, profile/advisor API auth checks, and signed-in workspace regression tests passed.
+
+### Fixed: correction wait states felt generic
+
+- Area: Pramania conversation wait states.
+- Finding: when a user challenged a poor answer or asked why Pramania was not using saved context, the in-progress copy could still sound like a generic processing loop.
+- Root cause: wait-state messages were keyed only to the route mode, not to the user's sentiment or correction intent.
+- Fix: added recovery-aware wait-state copy for frustrated or corrective prompts so Pramania explicitly checks saved profile, resume, sources, and recent conversation before answering.
+- Validation: lint, whitespace diff check, signed-in workspace regression tests, and production build passed.

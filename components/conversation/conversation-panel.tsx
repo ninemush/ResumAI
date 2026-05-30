@@ -1097,6 +1097,21 @@ function buildInitialMessages(
 function getProcessingMessage(mode: ProcessingMode, step: number, activeView: AppView, intent: string) {
   const surface = formatActiveViewForMessage(activeView);
   const hasFileIntent = /\.(pdf|docx?|txt|png|jpe?g|webp|csv|zip)\b/i.test(intent);
+  const recoveryMessages = isFrustratedOrCorrectionIntent(intent)
+    ? [
+        "You're right to expect this to use what is already saved. I'm checking the profile, resume, sources, and recent conversation together.",
+        "I’m retracing the saved evidence before answering, so you do not have to repeat yourself.",
+        "Checking the source history and latest resume before I respond. The answer should be grounded, not generic.",
+        "I’m looking for the missed context first, then I’ll give you the practical answer.",
+        "Recovering the thread from your saved profile and source evidence.",
+        "Checking what Pramania already knows and where the earlier answer fell short.",
+      ]
+    : null;
+
+  if (recoveryMessages && ["advisor", "profile", "resume", "source"].includes(mode)) {
+    return recoveryMessages[step % recoveryMessages.length];
+  }
+
   const messages: Record<ProcessingMode, string[]> = {
     advisor: [
       `Reading your question against what I know from your ${surface}.`,
@@ -1187,6 +1202,12 @@ function getProcessingMessage(mode: ProcessingMode, step: number, activeView: Ap
   const modeMessages = messages[mode];
 
   return modeMessages[step % modeMessages.length];
+}
+
+function isFrustratedOrCorrectionIntent(intent: string) {
+  return /\b(why not|why didn't|why did not|why can't|why couldnt|why couldn't|not working|doesnt work|doesn't work|failed|wrong|irrelevant|already have|you have all|you have my|use what you know|repeat myself|unacceptable|poor|bad|awful|horrible|makes no sense|shouldnt|shouldn't)\b/i.test(
+    intent,
+  );
 }
 
 function inferProcessingMode(text: string): ProcessingMode {
