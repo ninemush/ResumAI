@@ -154,6 +154,26 @@ test.describe("authenticated workspace", () => {
 
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 2);
   });
+
+  test("warns before leaving unsaved master resume edits", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop navigation guard is covered here; mobile uses the same view switch handler.");
+
+    await page.goto("/");
+    await page.locator(".side-nav").getByRole("button", { name: /Profile & Resume/i }).click();
+    await expect(page.getByRole("heading", { name: /Master profile and resume/i })).toBeVisible();
+
+    const headline = page.getByLabel("Resume headline");
+    await expect(headline).toBeVisible();
+    await headline.fill("Temporary QA headline");
+
+    page.once("dialog", async (dialog) => {
+      expect(dialog.message()).toMatch(/unsaved resume edits/i);
+      await dialog.dismiss();
+    });
+
+    await page.locator(".side-nav").getByRole("button", { name: /^Cockpit$/i }).click();
+    await expect(page.getByRole("heading", { name: /Master profile and resume/i })).toBeVisible();
+  });
 });
 
 async function expectCompactRecordIfPresent(page: Page, heading: string, rowSelector: string) {

@@ -19,11 +19,16 @@ import type { MasterResumeOverview } from "@/lib/resumes/master-resume";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
 type MasterResumePanelProps = {
+  onDirtyChange?: (isDirty: boolean) => void;
   overview: MasterResumeOverview;
   profileOverview: ProfileOverview;
 };
 
-export function MasterResumePanel({ overview, profileOverview }: MasterResumePanelProps) {
+export function MasterResumePanel({
+  onDirtyChange,
+  overview,
+  profileOverview,
+}: MasterResumePanelProps) {
   const router = useRouter();
   const resumePreviewRef = useRef<HTMLDivElement | null>(null);
   const [currentOverview, setCurrentOverview] = useState(overview);
@@ -41,7 +46,9 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
     () => JSON.stringify(draft) !== JSON.stringify(savedDraft),
     [draft, savedDraft],
   );
+  const hasDraft = Boolean(draft);
   const reviewItems = useMemo(() => {
+    const visibleLimit = hasDraft ? 4 : 8;
     const items = [
       ...currentOverview.missingEvidence.map((text) => ({
         severity: "critical" as const,
@@ -58,10 +65,16 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
     ];
 
     return {
-      hasMore: items.length > 8,
-      visible: items.slice(0, 8),
+      hiddenCount: Math.max(0, items.length - visibleLimit),
+      visible: items.slice(0, visibleLimit),
     };
-  }, [currentOverview.missingEvidence, draft?.keywordGaps, draft?.reviewerNotes]);
+  }, [currentOverview.missingEvidence, draft?.keywordGaps, draft?.reviewerNotes, hasDraft]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+
+    return () => onDirtyChange?.(false);
+  }, [isDirty, onDirtyChange]);
 
   useEffect(() => {
     if (!isDirty) {
@@ -286,10 +299,10 @@ export function MasterResumePanel({ overview, profileOverview }: MasterResumePan
               />
             ))}
           </div>
-          {reviewItems.hasMore ? (
+          {reviewItems.hiddenCount > 0 ? (
             <p className="resume-review-note">
-              More refinement prompts are preserved in the advanced editor. The resume
-              draft stays visible so you can edit the actual document first.
+              {reviewItems.hiddenCount} more refinement prompt{reviewItems.hiddenCount === 1 ? "" : "s"} are
+              preserved in the advanced editor so the resume itself stays easy to work on.
             </p>
           ) : null}
         </section>

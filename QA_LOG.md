@@ -277,3 +277,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the chat parser handled numbered list items with text, but did not discard orphan list markers left by older model output.
 - Fix: taught the renderer to drop standalone numeric list markers while preserving real numbered items.
 - Validation: lint, whitespace diff check, focused signed-in workspace regression tests, authenticated screenshot sweep, and production build passed.
+
+### Fixed: master resume edits could be lost by changing workspace views
+
+- Area: Profile & Resume Studio.
+- Finding: a user could edit the master resume and click another workspace tab without an in-app warning, which made the editor feel unsafe.
+- Root cause: the unsaved-edit guard only covered browser unload, not app-level navigation between workspace surfaces.
+- Fix: lifted resume dirty state into the workspace shell and prompt before leaving the resume studio; also compacted review prompts when a draft exists so the resume stays central.
+- Validation: lint, whitespace diff check, and focused signed-in Playwright regression for the unsaved-edit guard passed.

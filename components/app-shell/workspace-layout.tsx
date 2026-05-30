@@ -65,6 +65,7 @@ export function WorkspaceLayout({
     navCollapsed: false,
     navWidth: DEFAULT_NAV_WIDTH,
   });
+  const [hasUnsavedResumeChanges, setHasUnsavedResumeChanges] = useState(false);
 
   const shellStyle = useMemo(
     () =>
@@ -114,17 +115,28 @@ export function WorkspaceLayout({
 
   const mobileFocusClass = layout.activeView === "profile" ? "conversation-first" : "workspace-first";
 
+  function selectView(activeView: AppView) {
+    if (
+      hasUnsavedResumeChanges &&
+      layout.activeView === "resume" &&
+      activeView !== "resume" &&
+      !window.confirm("You have unsaved resume edits. Leave without saving?")
+    ) {
+      return;
+    }
+
+    setLayout((currentLayout) => ({
+      ...currentLayout,
+      activeView,
+    }));
+  }
+
   return (
     <div className={`workspace-shell ${mobileFocusClass}`} style={shellStyle}>
       <SideNav
         activeView={layout.activeView}
         collapsed={layout.navCollapsed}
-        onSelectView={(activeView) =>
-          setLayout((currentLayout) => ({
-            ...currentLayout,
-            activeView,
-          }))
-        }
+        onSelectView={selectView}
         onToggleCollapsed={() =>
           setLayout((currentLayout) => ({
             ...currentLayout,
@@ -150,11 +162,8 @@ export function WorkspaceLayout({
           jobOverview,
           masterResumeOverview,
           ownerMetrics,
-          onSelectView: (activeView) =>
-            setLayout((currentLayout) => ({
-              ...currentLayout,
-              activeView,
-            })),
+          onResumeDirtyChange: setHasUnsavedResumeChanges,
+          onSelectView: selectView,
           profileOverview,
           session,
         })}
@@ -188,6 +197,7 @@ function renderWorkspaceView({
   jobOverview,
   masterResumeOverview,
   ownerMetrics,
+  onResumeDirtyChange,
   onSelectView,
   profileOverview,
   session,
@@ -198,6 +208,7 @@ function renderWorkspaceView({
   jobOverview: JobOverview;
   masterResumeOverview: MasterResumeOverview;
   ownerMetrics: OwnerMetrics | null;
+  onResumeDirtyChange: (isDirty: boolean) => void;
   onSelectView: (view: AppView) => void;
   profileOverview: ProfileOverview;
   session: WorkspaceSession;
@@ -226,6 +237,7 @@ function renderWorkspaceView({
     return (
       <MasterResumePanel
         overview={masterResumeOverview}
+        onDirtyChange={onResumeDirtyChange}
         profileOverview={profileOverview}
       />
     );
