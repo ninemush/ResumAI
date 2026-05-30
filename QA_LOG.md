@@ -173,3 +173,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: the generator schema requested role sections, but there was no deterministic recovery path when saved source text clearly contained role titles, companies, dates, locations, and impact lines.
 - Fix: added a source-timeline enrichment pass that extracts recognizable role history from saved source text and uses it to preserve professional experience sections when the model output is too shallow.
 - Validation: lint, whitespace diff check, production build, master-resume API auth checks, and signed-in workspace regression tests passed.
+
+### Fixed: long advisor prose could render as a wall of text
+
+- Area: Pramania chat rendering.
+- Finding: even when the advisor answer contained useful guidance, long plain-text paragraphs could render as one dense block and feel hard to read on mobile.
+- Root cause: the chat renderer handled headings, bullets, and labels, but did not break dense plain paragraphs when the model returned prose without markdown structure.
+- Fix: added sentence-boundary paragraph grouping for long chat paragraphs while preserving existing heading and list rendering.
+- Validation: lint, whitespace diff check, signed-in workspace regression tests, and production build passed.

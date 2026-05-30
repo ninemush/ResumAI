@@ -1505,12 +1505,49 @@ function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
     }
 
     flushList();
-    blocks.push({ kind: "paragraph", text: line });
+    for (const paragraph of splitDenseChatParagraph(line)) {
+      blocks.push({ kind: "paragraph", text: paragraph });
+    }
   }
 
   flushList();
 
   return blocks;
+}
+
+function splitDenseChatParagraph(line: string) {
+  if (line.length < 340) {
+    return [line];
+  }
+
+  const sentences = line
+    .split(/(?<=[.!?])\s+(?=[A-Z])/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  if (sentences.length < 3) {
+    return [line];
+  }
+
+  const paragraphs: string[] = [];
+  let current = "";
+
+  for (const sentence of sentences) {
+    const next = current ? `${current} ${sentence}` : sentence;
+
+    if (next.length > 280 && current) {
+      paragraphs.push(current);
+      current = sentence;
+    } else {
+      current = next;
+    }
+  }
+
+  if (current) {
+    paragraphs.push(current);
+  }
+
+  return paragraphs;
 }
 
 function cleanChatListItem(value: string) {
