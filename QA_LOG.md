@@ -365,3 +365,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: not a defect; this was the broad validation pass after the latest UX and language tightening.
 - Fix: no code change required.
 - Validation: `npm run test:e2e -- --workers=1` passed with 48 tests passing and 6 viewport-scoped tests intentionally skipped.
+
+### Fixed: advisor context still used "not available" fallback wording
+
+- Area: Pramania advisor context.
+- Finding: missing workspace excerpts were still described as "not available" inside the context sent to the advisor model, which could leak into blunt chat replies.
+- Root cause: internal context formatting used provider-style fallback labels instead of calm user-language.
+- Fix: replaced those labels with "no readable excerpt saved" and clearer no-record wording for jobs, applications, artifacts, and master resume content.
+- Validation: lint, focused signed-in desktop workspace regression, and production build passed.

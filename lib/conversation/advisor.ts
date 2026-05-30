@@ -300,7 +300,7 @@ to give a better answer.
 If the user asks what you learned from an uploaded resume, LinkedIn export, PDF,
 or source, summarize the concrete career evidence visible in saved context first.
 Then explain what should change in the master profile or resume. Do not respond
-as though the source is unavailable unless the context truly has no readable
+as though the source cannot be used unless the context truly has no readable
 source excerpt.
 `.trim();
 }
@@ -442,7 +442,7 @@ function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
             `- Application: ${application.jobTitle ?? "Untitled role"} at ${application.companyName}; status ${application.status}; latest resume ${application.latestResumeStatus ?? "not generated"}; latest cover letter ${application.latestCoverLetterStatus ?? "not generated"}.`,
         ),
       ]
-    : ["Applications: unavailable."];
+    : ["Applications: no application records were loaded for this reply."];
   const jobLines = workspace.jobs
     ? [
         `Jobs: ${workspace.jobs.summary.identified} saved, ${workspace.jobs.summary.readyForReview} ready for review, ${workspace.jobs.summary.failed} failed.`,
@@ -451,7 +451,7 @@ function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
             `- Job: ${job.title ?? "Untitled role"} at ${job.company ?? "unknown company"}; status ${job.ingestion_status}; review ${job.review_status}; fit ${job.fitSnapshot.score ?? "unknown"}%; matched ${job.fitSnapshot.matchedKeywords.slice(0, 8).join(", ") || "none"}; gaps ${job.fitSnapshot.missingKeywords.slice(0, 8).join(", ") || "none"}.`,
         ),
       ]
-    : ["Jobs: unavailable."];
+    : ["Jobs: no job records were loaded for this reply."];
   const sourceLines = [
     "Saved source material:",
     ...workspace.sources.recent.slice(0, 8).map(
@@ -467,14 +467,14 @@ function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
             `- Artifact: ${artifact.label}; kind ${artifact.kind}; status ${artifact.status}; role ${artifact.roleTitle ?? "master/general"}; company ${artifact.companyName ?? "none"}.`,
         ),
       ]
-    : ["Artifacts: unavailable."];
+    : ["Artifacts: no generated material records were loaded for this reply."];
 
   return [...applicationLines, ...jobLines, ...sourceLines, ...artifactLines].join("\n");
 }
 
 function formatSourceExcerpt(value: string | null) {
   if (!value?.trim()) {
-    return "not available";
+    return "no readable excerpt saved";
   }
 
   return value.replace(/\s+/g, " ").trim().slice(0, 900);
@@ -512,7 +512,7 @@ function buildAdvisorSourceExcerpt(text: string | null) {
   const cleanText = text?.replace(/\s+/g, " ").trim();
 
   if (!cleanText) {
-    return "not available";
+    return "no readable excerpt saved";
   }
 
   if (cleanText.length <= 2200) {
@@ -559,7 +559,7 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
 
   const content = (latestResume as { content_json?: unknown }).content_json;
   if (!content || typeof content !== "object") {
-    return "Master resume exists, but readable content was not available.";
+    return "Master resume exists, but readable content has not been saved in a usable format yet.";
   }
 
   const read = (key: string) => {
@@ -638,7 +638,7 @@ function buildContextAwareAdvisorFallback({
     .join(", ");
   const sourceEvidence = workspace.sources.recent
     .map((source) => formatSourceExcerpt(source.extracted_text))
-    .filter((excerpt) => excerpt !== "not available")
+    .filter((excerpt) => excerpt !== "no readable excerpt saved")
     .slice(0, 3);
   const gaps = intelligence?.highValueGaps.slice(0, 4) ?? [];
   const resumeText = formatLatestResumeForAdvisor(latestResume);
