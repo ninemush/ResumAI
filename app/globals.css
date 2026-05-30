@@ -1650,6 +1650,19 @@ input:focus {
   word-break: break-word;
 }
 
+.resume-contact-grid {
+  display: grid;
+  gap: 8px 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.resume-contact-grid input {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 650;
+  padding: 4px 0 7px;
+}
+
 .resume-preview-helper {
   color: var(--muted);
   font-family: var(--font-pr-mono), monospace;
@@ -1843,6 +1856,13 @@ input:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.resume-empty-note {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin: 0;
 }
 
 .resume-inline-action,
@@ -4258,6 +4278,7 @@ input:focus {
 
   .resume-role-card-header,
   .resume-role-meta-row,
+  .resume-contact-grid,
   .resume-bullet-row {
     grid-template-columns: 1fr;
   }

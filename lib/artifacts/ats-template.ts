@@ -55,6 +55,16 @@ export async function buildAtsResumePdf(input: ResumeTemplateInput) {
     });
   }
 
+  const contactLine = formatContactLine(input.resume);
+  if (contactLine) {
+    drawTextBlock(document, contactLine, {
+      color: taupe,
+      font: regular,
+      lineGap: 3,
+      size: 9.2,
+    });
+  }
+
   if (input.contextLine) {
     drawTextBlock(document, input.contextLine, {
       color: taupe,
@@ -67,6 +77,7 @@ export async function buildAtsResumePdf(input: ResumeTemplateInput) {
   drawRule(document);
   drawSection(document, "Professional Summary", [input.resume.summary]);
   drawSection(document, "Core Skills", [formatSkills(input.resume.skills)]);
+  drawSelectedHighlights(document, input.resume);
   drawExperience(document, input.resume);
 
   return pdf.save();
@@ -93,6 +104,17 @@ export async function buildAtsResumeDocx(input: ResumeTemplateInput) {
     );
   }
 
+  const contactLine = formatContactLine(input.resume);
+  if (contactLine) {
+    children.push(
+      docxParagraph(contactLine, {
+        color: "6F6252",
+        size: 18,
+        spacingAfter: 60,
+      }),
+    );
+  }
+
   if (input.contextLine) {
     children.push(
       docxParagraph(input.contextLine, {
@@ -108,6 +130,7 @@ export async function buildAtsResumeDocx(input: ResumeTemplateInput) {
     docxParagraph(input.resume.summary, { spacingAfter: 160 }),
     docxSectionHeading("Core Skills"),
     docxParagraph(formatSkills(input.resume.skills), { spacingAfter: 160 }),
+    ...buildDocxSelectedHighlights(input.resume),
     ...buildDocxExperience(input.resume),
   );
 
@@ -214,11 +237,6 @@ function drawExperience(document: PdfLayout, resume: ResumeContent) {
   const sections = resume.experienceSections ?? [];
 
   if (sections.length === 0) {
-    drawSection(
-      document,
-      "Selected Experience",
-      resume.experienceBullets.map((bullet) => `- ${bullet}`),
-    );
     return;
   }
 
@@ -258,19 +276,25 @@ function drawExperience(document: PdfLayout, resume: ResumeContent) {
   }
 }
 
+function drawSelectedHighlights(document: PdfLayout, resume: ResumeContent) {
+  const bullets = resume.experienceBullets.filter(Boolean).slice(0, 6);
+
+  if (bullets.length === 0) {
+    return;
+  }
+
+  drawSection(
+    document,
+    "Selected Highlights",
+    bullets.map((bullet) => `- ${bullet}`),
+  );
+}
+
 function buildDocxExperience(resume: ResumeContent) {
   const sections = resume.experienceSections ?? [];
 
   if (sections.length === 0) {
-    return [
-      docxSectionHeading("Selected Experience"),
-      ...resume.experienceBullets.map((bullet) =>
-        docxParagraph(bullet, {
-          bullet: true,
-          spacingAfter: 70,
-        }),
-      ),
-    ];
+    return [];
   }
 
   return [
@@ -304,6 +328,24 @@ function buildDocxExperience(resume: ResumeContent) {
   ];
 }
 
+function buildDocxSelectedHighlights(resume: ResumeContent) {
+  const bullets = resume.experienceBullets.filter(Boolean).slice(0, 6);
+
+  if (bullets.length === 0) {
+    return [];
+  }
+
+  return [
+    docxSectionHeading("Selected Highlights"),
+    ...bullets.map((bullet) =>
+      docxParagraph(bullet, {
+        bullet: true,
+        spacingAfter: 70,
+      }),
+    ),
+  ];
+}
+
 function formatResumeHeadline(headline: string) {
   const normalized = headline.replace(/\s*\|\s*/g, " / ").replace(/\s+/g, " ").trim();
   const segments = normalized.split(/\s+\/\s+/).filter(Boolean);
@@ -317,6 +359,13 @@ function formatResumeHeadline(headline: string) {
 
 function formatSkills(skills: string[]) {
   return skills.filter(Boolean).join(", ");
+}
+
+function formatContactLine(resume: ResumeContent) {
+  const contact = resume.contact;
+  return [contact.email, contact.phone, contact.linkedin, contact.website, contact.location]
+    .filter(Boolean)
+    .join(" | ");
 }
 
 function drawTextBlock(

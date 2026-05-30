@@ -97,6 +97,13 @@ test("extracts a LinkedIn-style role timeline without flattening companies or da
 
 test("keeps internal resume UI labels out of generated resume content", () => {
   const normalized = normalizeResumeContent({
+    contact: {
+      email: "candidate@example.com",
+      linkedin: "https://www.linkedin.com/in/example",
+      location: "Dubai",
+      phone: null,
+      website: null,
+    },
     experienceBullets: [],
     experienceSections: [
       {
@@ -115,6 +122,7 @@ test("keeps internal resume UI labels out of generated resume content", () => {
   });
 
   expect(normalized.headline).toBe("Enterprise Transformation Executive / GTM");
+  expect(normalized.contact.linkedin).toBe("https://www.linkedin.com/in/example");
   expect(normalized.summary).toBe("Builds operating models and measurable value.");
   expect(normalized.experienceSections[0].roleTitle).toBe("Global VP");
 });

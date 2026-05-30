@@ -340,6 +340,32 @@ export function MasterResumePanel({
                 rows={2}
                 value={normalizeHeadlineInput(draft.headline)}
               />
+              <div className="resume-contact-grid" aria-label="Resume contact details">
+                <input
+                  aria-label="Email"
+                  onChange={(event) => updateResumeContact(draft, setDraft, "email", event.target.value)}
+                  placeholder="Email"
+                  value={draft.contact.email ?? ""}
+                />
+                <input
+                  aria-label="Phone"
+                  onChange={(event) => updateResumeContact(draft, setDraft, "phone", event.target.value)}
+                  placeholder="Phone"
+                  value={draft.contact.phone ?? ""}
+                />
+                <input
+                  aria-label="LinkedIn profile"
+                  onChange={(event) => updateResumeContact(draft, setDraft, "linkedin", event.target.value)}
+                  placeholder="LinkedIn"
+                  value={draft.contact.linkedin ?? ""}
+                />
+                <input
+                  aria-label="Location"
+                  onChange={(event) => updateResumeContact(draft, setDraft, "location", event.target.value)}
+                  placeholder="Location"
+                  value={draft.contact.location ?? ""}
+                />
+              </div>
             </header>
             <section>
               <h3>Professional Summary</h3>
@@ -366,7 +392,58 @@ export function MasterResumePanel({
             </section>
             <section>
               <div className="resume-section-heading-row">
-                <h3>{draft.experienceSections.length > 0 ? "Professional Experience" : "Selected Experience"}</h3>
+                <h3>Selected Highlights</h3>
+              </div>
+              <div className="resume-bullet-editor">
+                {draft.experienceBullets.map((bullet, index) => (
+                  <div className="resume-bullet-row" key={`${bullet}-${index}`}>
+                    <span aria-hidden="true">•</span>
+                    <textarea
+                      aria-label={`Selected highlight ${index + 1}`}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          experienceBullets: draft.experienceBullets.map((item, itemIndex) =>
+                            itemIndex === index ? event.target.value : item,
+                          ),
+                        })
+                      }
+                      rows={Math.max(1, Math.ceil(bullet.length / 88))}
+                      value={bullet}
+                    />
+                    <button
+                      aria-label={`Remove selected highlight ${index + 1}`}
+                      className="icon-only-action"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          experienceBullets: draft.experienceBullets.filter((_, itemIndex) => itemIndex !== index),
+                        })
+                      }
+                      type="button"
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  className="resume-inline-action"
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      experienceBullets: [...draft.experienceBullets, ""],
+                    })
+                  }
+                  type="button"
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  Add highlight
+                </button>
+              </div>
+            </section>
+            <section>
+              <div className="resume-section-heading-row">
+                <h3>Professional Experience</h3>
                 <button
                   className="resume-inline-action"
                   onClick={() =>
@@ -496,52 +573,10 @@ export function MasterResumePanel({
                   ))}
                 </div>
               ) : (
-                <div className="resume-bullet-editor">
-                  {draft.experienceBullets.map((bullet, index) => (
-                    <div className="resume-bullet-row" key={`${bullet}-${index}`}>
-                      <span aria-hidden="true">•</span>
-                      <textarea
-                        aria-label={`Selected experience bullet ${index + 1}`}
-                        onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            experienceBullets: draft.experienceBullets.map((item, itemIndex) =>
-                              itemIndex === index ? event.target.value : item,
-                            ),
-                          })
-                        }
-                        rows={Math.max(1, Math.ceil(bullet.length / 88))}
-                        value={bullet}
-                      />
-                      <button
-                        aria-label={`Remove selected experience bullet ${index + 1}`}
-                        className="icon-only-action"
-                        onClick={() =>
-                          setDraft({
-                            ...draft,
-                            experienceBullets: draft.experienceBullets.filter((_, itemIndex) => itemIndex !== index),
-                          })
-                        }
-                        type="button"
-                      >
-                        <Trash2 size={14} aria-hidden="true" />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    className="resume-inline-action"
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        experienceBullets: [...draft.experienceBullets, ""],
-                      })
-                    }
-                    type="button"
-                  >
-                    <Plus size={14} aria-hidden="true" />
-                    Add bullet
-                  </button>
-                </div>
+                <p className="resume-empty-note">
+                  No role-by-role work history yet. Drop a resume, LinkedIn PDF, or work history note into Pramania,
+                  then regenerate this master resume.
+                </p>
               )}
             </section>
           </div>
@@ -671,6 +706,21 @@ function normalizeHeadlineInput(headline: string) {
   }
 
   return segments.slice(0, 2).join(" / ");
+}
+
+function updateResumeContact(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  field: keyof ResumeContent["contact"],
+  value: string,
+) {
+  setDraft({
+    ...draft,
+    contact: {
+      ...draft.contact,
+      [field]: value,
+    },
+  });
 }
 
 function autoGrowTextArea(field: HTMLTextAreaElement) {

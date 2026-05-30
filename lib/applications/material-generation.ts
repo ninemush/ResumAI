@@ -215,6 +215,7 @@ export async function generateApplicationMaterials(
   }
 
   const generated = generatedMaterialsSchema.parse(JSON.parse(response.output_text));
+  const generatedResume = normalizeGeneratedApplicationResume(generated.resume, masterResume);
   const [{ data: resume, error: resumeError }, { data: coverLetter, error: coverLetterError }] =
     await Promise.all([
       supabase
@@ -226,7 +227,7 @@ export async function generateApplicationMaterials(
           resume_type: "application",
           prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
           model,
-          content_json: generated.resume,
+          content_json: generatedResume,
           status: "ready",
         })
         .select("id")
@@ -393,14 +394,36 @@ function formatMasterResume(masterResume: ResumeContent | null) {
   }
 
   return [
+    `- Contact: ${[masterResume.contact.email, masterResume.contact.phone, masterResume.contact.linkedin, masterResume.contact.website, masterResume.contact.location].filter(Boolean).join(" | ") || "None captured"}`,
     `- Headline: ${masterResume.headline}`,
     `- Summary: ${masterResume.summary}`,
     `- Skills: ${masterResume.skills.join(", ")}`,
-    "- Experience bullets:",
+    "- Selected highlights:",
     ...masterResume.experienceBullets.map((bullet) => `  - ${bullet}`),
+    "- Role-based work history:",
+    ...masterResume.experienceSections.flatMap((section) => {
+      const heading = [section.roleTitle, section.company, section.dates, section.location]
+        .filter(Boolean)
+        .join(" | ");
+      return [heading ? `  - ${heading}` : "  - Role", ...section.bullets.map((bullet) => `    - ${bullet}`)];
+    }),
     "- Existing gaps/notes:",
     ...[...masterResume.keywordGaps, ...masterResume.reviewerNotes].map((note) => `  - ${note}`),
   ].join("\n");
+}
+
+function normalizeGeneratedApplicationResume(resume: ResumeContent, masterResume: ResumeContent | null) {
+  return resumeContentSchema.parse({
+    ...resume,
+    contact: {
+      ...masterResume?.contact,
+      ...resume.contact,
+    },
+    experienceSections:
+      resume.experienceSections.length > 0
+        ? resume.experienceSections
+        : (masterResume?.experienceSections ?? []),
+  });
 }
 
 function normalizeApplicationContext(application: RawApplicationContext): ApplicationContext {

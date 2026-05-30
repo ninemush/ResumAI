@@ -10,7 +10,24 @@ export const resumeExperienceSectionSchema = z.object({
   roleTitle: z.string().trim().min(1).max(140),
 });
 
+export const resumeContactSchema = z.object({
+  email: z.string().trim().max(160).nullable().default(null),
+  linkedin: z.string().trim().max(240).nullable().default(null),
+  location: z.string().trim().max(160).nullable().default(null),
+  phone: z.string().trim().max(80).nullable().default(null),
+  website: z.string().trim().max(240).nullable().default(null),
+});
+
+export const emptyResumeContact = {
+  email: null,
+  linkedin: null,
+  location: null,
+  phone: null,
+  website: null,
+} satisfies z.infer<typeof resumeContactSchema>;
+
 export const resumeContentSchema = z.object({
+  contact: resumeContactSchema.default(emptyResumeContact),
   experienceBullets: z.array(z.string().trim().min(1).max(320)).max(14),
   experienceSections: z.array(resumeExperienceSectionSchema).max(MAX_RESUME_EXPERIENCE_SECTIONS).default([]),
   headline: z.string().trim().min(1).max(220),
@@ -21,6 +38,7 @@ export const resumeContentSchema = z.object({
 });
 
 export type ResumeContent = z.infer<typeof resumeContentSchema>;
+export type ResumeContact = z.infer<typeof resumeContactSchema>;
 
 export function parseResumeContent(value: unknown): ResumeContent {
   return resumeContentSchema.parse(value);
@@ -43,6 +61,13 @@ export function normalizeResumeContent(value: ResumeContent): ResumeContent {
     .slice(0, 14);
 
   return resumeContentSchema.parse({
+    contact: {
+      email: cleanNullableText(value.contact?.email ?? null),
+      linkedin: cleanNullableText(value.contact?.linkedin ?? null),
+      location: cleanNullableText(value.contact?.location ?? null),
+      phone: cleanNullableText(value.contact?.phone ?? null),
+      website: cleanNullableText(value.contact?.website ?? null),
+    },
     experienceBullets:
       experienceBullets.length > 0
         ? experienceBullets

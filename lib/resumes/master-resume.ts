@@ -274,6 +274,7 @@ async function generateMasterResumeDraft({
             type: "object",
             additionalProperties: false,
             required: [
+              "contact",
               "headline",
               "summary",
               "skills",
@@ -283,6 +284,18 @@ async function generateMasterResumeDraft({
               "reviewerNotes",
             ],
             properties: {
+              contact: {
+                type: "object",
+                additionalProperties: false,
+                required: ["email", "phone", "linkedin", "website", "location"],
+                properties: {
+                  email: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  phone: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  linkedin: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  website: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  location: { anyOf: [{ type: "string" }, { type: "null" }] },
+                },
+              },
               headline: { type: "string" },
               summary: { type: "string" },
               skills: {
@@ -341,7 +354,7 @@ async function generateMasterResumeDraft({
     if (response.error || response.incomplete_details) {
       strictFailureCode = "AI_MASTER_RESUME_INCOMPLETE";
     } else {
-      return enrichMasterResumeWithSourceTimeline(
+      return enrichMasterResumeWithSourceEvidence(
         parseMasterResumeModelOutput(response.output_text),
         sourceEvidence,
       );
@@ -394,6 +407,13 @@ async function runRelaxedMasterResumeModel({
 Return valid JSON only. Do not wrap it in markdown or code fences.
 Use this exact object shape:
 {
+  "contact": {
+    "email": "email from evidence or null",
+    "phone": "phone from evidence or null",
+    "linkedin": "LinkedIn URL from evidence or null",
+    "website": "website from evidence or null",
+    "location": "location from evidence or null"
+  },
   "headline": "concise positioning headline under 95 characters",
   "summary": "resume summary grounded in evidence",
   "skills": ["skill"],
@@ -431,7 +451,7 @@ If the source is a LinkedIn profile PDF or archive, use its role history as the 
       return null;
     }
 
-    return enrichMasterResumeWithSourceTimeline(
+    return enrichMasterResumeWithSourceEvidence(
       parseMasterResumeModelOutput(stripJsonFence(response.output_text)),
       sourceEvidence,
     );
@@ -452,24 +472,67 @@ function parseMasterResumeModelOutput(outputText: string) {
   return normalizeResumeContent(resumeContentSchema.parse(JSON.parse(stripJsonFence(outputText))));
 }
 
-function enrichMasterResumeWithSourceTimeline(
+function enrichMasterResumeWithSourceEvidence(
   resume: ResumeContent,
   sourceEvidence: SourceEvidence[],
 ) {
   const sourceSections = extractExperienceSectionsFromSources(sourceEvidence);
+  const sourceContact = extractResumeContactFromSources(sourceEvidence);
 
-  if (sourceSections.length === 0) {
+  if (sourceSections.length === 0 && Object.values(sourceContact).every((value) => !value)) {
     return resume;
   }
 
   return normalizeResumeContent({
     ...resume,
-    experienceSections: mergeExperienceSections(sourceSections, resume.experienceSections),
+    contact: {
+      ...resume.contact,
+      email: resume.contact.email ?? sourceContact.email,
+      linkedin: resume.contact.linkedin ?? sourceContact.linkedin,
+      location: resume.contact.location ?? sourceContact.location,
+      phone: resume.contact.phone ?? sourceContact.phone,
+      website: resume.contact.website ?? sourceContact.website,
+    },
+    experienceSections:
+      sourceSections.length > 0
+        ? mergeExperienceSections(sourceSections, resume.experienceSections)
+        : resume.experienceSections,
     reviewerNotes: [
       ...resume.reviewerNotes,
-      "Review the imported role timeline for exact dates, company names, and ownership scope before exporting.",
+      ...(sourceSections.length > 0
+        ? ["Review the imported role timeline for exact dates, company names, and ownership scope before exporting."]
+        : []),
     ].slice(0, 8),
   });
+}
+
+function extractResumeContactFromSources(sourceEvidence: SourceEvidence[]) {
+  const text = sourceEvidence
+    .map((source) => [source.source_url, source.extracted_text].filter(Boolean).join("\n"))
+    .join("\n");
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  const email = cleaned.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ?? null;
+  const linkedinMatch =
+    cleaned.match(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[^\s),;]+/i)?.[0] ?? null;
+  const websiteMatch =
+    cleaned.match(/https?:\/\/(?![^/\s]*linkedin\.com)[^\s),;]+\.[^\s),;]+/i)?.[0] ?? null;
+  const phone = cleaned.match(/(?:\+?\d[\d\s().-]{7,}\d)/)?.[0] ?? null;
+  const location =
+    cleaned.match(/\b(?:Dubai|Abu Dhabi|United Arab Emirates|UAE|Riyadh|London|New York|Toronto|Singapore)\b[^|,\n]*/i)?.[0] ??
+    null;
+
+  return {
+    email,
+    linkedin: linkedinMatch ? normalizeLinkedInUrl(linkedinMatch) : null,
+    location,
+    phone,
+    website: websiteMatch,
+  };
+}
+
+function normalizeLinkedInUrl(value: string) {
+  const cleanValue = value.replace(/[).,;]+$/g, "");
+  return cleanValue.startsWith("http") ? cleanValue : `https://${cleanValue}`;
 }
 
 function extractExperienceSectionsFromSources(sourceEvidence: SourceEvidence[]) {
@@ -614,7 +677,11 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
     throw new Error("PROFILE_NOT_FOUND");
   }
 
-  const { data: latestResume, error: resumeReadError } = await supabase
+  const [
+    { data: latestResume, error: resumeReadError },
+    { data: sourceEvidence, error: sourceError },
+  ] = await Promise.all([
+    supabase
     .from("generated_resumes")
     .select("id, content_json")
     .eq("profile_id", profile.id)
@@ -623,7 +690,16 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
     .is("application_id", null)
     .order("created_at", { ascending: false })
     .limit(1)
-    .maybeSingle();
+      .maybeSingle(),
+    supabase
+      .from("profile_sources")
+      .select("source_type, source_url, original_filename, extracted_text")
+      .eq("profile_id", profile.id)
+      .eq("user_id", userId)
+      .not("extracted_text", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(30),
+  ]);
 
   if (resumeReadError) {
     throw new Error("MASTER_RESUME_READ_FAILED");
@@ -633,8 +709,18 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
     throw new Error("MASTER_RESUME_NOT_FOUND");
   }
 
+  if (sourceError) {
+    console.warn("master_resume.export_source_evidence_read_failed", {
+      profileId: profile.id,
+      userIdHash: hashUserId(userId),
+    });
+  }
+
   const resume = parseResumeContent(latestResume.content_json);
-  const normalizedResume = normalizeResumeContent(resume);
+  const normalizedResume = enrichMasterResumeWithSourceEvidence(
+    normalizeResumeContent(resume),
+    sourceError ? [] : prioritizeSourceEvidence(sourceEvidence ?? []),
+  );
   const templateInput = {
     contextLine: [profile.target_direction, profile.target_level].filter(Boolean).join(" | "),
     displayName: profile.display_name,
@@ -789,7 +875,10 @@ async function buildOverview({
     confirmedFactCount: confirmedFacts.length,
     latestResume: latestResume
       ? {
-          content: parseResumeContent(latestResume.content_json),
+          content: enrichMasterResumeWithSourceEvidence(
+            parseResumeContent(latestResume.content_json),
+            sourceEvidence,
+          ),
           docxDownloadUrl: await createSignedArtifactUrl(latestResume.docx_storage_path),
           id: latestResume.id,
           model: latestResume.model,
@@ -889,6 +978,10 @@ positioning line under 95 characters, not a pipe-delimited keyword list. Put
 keyword breadth into skills and experience, not the title. The summary should
 be tight enough for a resume preview, usually 90-140 words.
 
+Include a contact object for email, phone, LinkedIn URL, website, and location
+when those details appear in the profile or readable source evidence. Use null
+for missing contact fields. Do not invent contact details.
+
 The work history must be organized into role-based experienceSections whenever
 the evidence names employers, roles, dates, scope, or repeated role context.
 Order experienceSections from current/most recent to oldest based on the source
@@ -901,7 +994,9 @@ Each role section should contain resume bullets that combine action, scope, and
 business value. Keep bullets tied to that role. Do not flatten rich work history
 into a generic highlights list unless the source evidence is too thin to attach
 work to employers. Also provide experienceBullets as fallback selected
-highlights, but role-based experienceSections are the primary resume content.
+highlights. experienceBullets should be an AI-curated highlight reel across the
+most relevant roles and should support the user's likely target direction; it
+does not replace the role-by-role work history.
 
 Treat the master resume as the reusable source of truth. Do not overfit it to
 one narrow role. Capture the user's broader leadership pattern, domain depth,
