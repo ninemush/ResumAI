@@ -38,6 +38,14 @@ This log records product-quality issues found during user-style validation. Fixe
 - Fix: hid record filters until records exist, made cockpit cards action-oriented, replaced the empty application-stage grid with a compact explanation, and grouped legal links with explicit spacing.
 - Validation: lint, diff check, signed-in Playwright regression for advisor context, compact records, resume overflow, and unsaved edit protection.
 
+### Fixed: advisor labels could render as dense paragraph text
+
+- Area: conversation advisor, chat rendering.
+- Finding: labeled advice such as "Headline Improvement" and "Leadership Depth" could stay inside one dense paragraph when the model varied capitalization.
+- Root cause: some chat-normalization passes split known section labels case-sensitively, while LLM output naturally changes title case.
+- Fix: made section-label splitting case-insensitive across cleanup and render parsing so labeled career advice becomes readable headings and paragraphs.
+- Validation: lint and authenticated visual QA screenshot of the signed-in cockpit chat pane.
+
 ### Fixed: workspace record pages did not scale to real user volume
 
 - Area: authenticated workspace, Jobs, Applications, Artifacts, Sources, Settings.

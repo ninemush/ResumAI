@@ -1330,7 +1330,7 @@ function cleanPlainChatText(value: string) {
     .replace(/\b([A-Z][A-Za-z0-9 /&+()'-]{2,54})::/g, "$1:")
     .replace(/^\s{0,3}#{1,6}\s+/gm, "")
     .replace(
-      new RegExp(`\\s+((?:${CHAT_SECTION_LABELS})\\s*:)`, "g"),
+      new RegExp(`\\s+((?:${CHAT_SECTION_LABELS})\\s*:)`, "gi"),
       "\n\n$1",
     )
     .replace(/:\s+[-•]\s+(?=(?:\*\*)?[A-Z0-9])/g, ":\n- ")
@@ -1438,13 +1438,13 @@ function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
     .replace(/\b([A-Z][A-Za-z0-9 /&+()'-]{2,54})::/g, "$1:")
     .replace(/^\s{0,3}#{1,6}\s+(.+)$/gm, "\n\n**$1**\n")
     .replace(
-      new RegExp(`\\s+((?:${CHAT_SECTION_LABELS})\\s*:)`, "g"),
+      new RegExp(`\\s+((?:${CHAT_SECTION_LABELS})\\s*:)`, "gi"),
       "\n\n$1",
     )
     .replace(/:\s+[-•]\s+(?=(?:\*\*)?[A-Z0-9])/g, ":\n- ")
     .replace(/(\S)\s+(\*\*[A-Z][^*]{2,64}\*\*:)/g, "$1\n\n$2")
     .replace(
-      new RegExp(`([.!?])\\s+((?:${CHAT_SECTION_LABELS})\\s*:)`, "g"),
+      new RegExp(`([.!?])\\s+((?:${CHAT_SECTION_LABELS})\\s*:)`, "gi"),
       "$1\n\n$2",
     )
     .replace(/\s+(\d+\.\s+(?:\*\*)?[A-Z][^.!?\n]{2,90}:)/g, "\n$1")
