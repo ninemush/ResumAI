@@ -526,9 +526,18 @@ function extractExperienceSectionsFromText(text: string) {
   const experienceText = readExperienceText(text);
   const lines = readResumeSourceLines(experienceText || text);
   const sections: ResumeContent["experienceSections"] = [];
+  let currentCompany: string | null = null;
 
   for (let index = 0; index < lines.length; index += 1) {
-    const roleTitle = lines[index];
+    const line = lines[index];
+    const followingLines = lines.slice(index + 1, index + 4);
+
+    if (looksLikeResumeCompanyHeading(line, followingLines)) {
+      currentCompany = line;
+      continue;
+    }
+
+    const roleTitle = line;
 
     if (!looksLikeResumeRoleTitle(roleTitle)) {
       continue;
@@ -542,7 +551,7 @@ function extractExperienceSectionsFromText(text: string) {
       continue;
     }
 
-    const company = companyIndex >= 0 ? nextLines[companyIndex] : null;
+    const company = companyIndex >= 0 ? nextLines[companyIndex] : currentCompany;
     const dates = dateIndex >= 0 ? nextLines[dateIndex] : null;
     const location = nextLines.find((line, lineIndex) =>
       lineIndex !== companyIndex &&
@@ -634,7 +643,7 @@ function decodeResumeSourceText(value: string) {
 function looksLikeResumeRoleTitle(value: string) {
   return (
     value.length <= 140 &&
-    /\b(chief|founder|president|vice president|\bvp\b|director|head|manager|lead|leader|consultant|advisor|officer|architect|engineer|analyst|specialist|partner|principal|owner|executive)\b/i.test(
+    /\b(chief|founder|president|vice president|\bvp\b|director|head|manager|lead|leader|leadership program|consultant|advisor|officer|architect|engineer|analyst|specialist|partner|principal|owner|executive)\b/i.test(
       value,
     ) &&
     !looksLikeDateRange(value) &&
@@ -651,6 +660,17 @@ function looksLikeResumeCompany(value: string) {
     !looksLikeResumeSectionBoundary(value) &&
     /^[A-Z0-9][A-Za-z0-9&.,'’() -]{1,100}$/.test(value)
   );
+}
+
+function looksLikeResumeCompanyHeading(value: string, followingLines: string[]) {
+  return (
+    looksLikeResumeCompany(value) &&
+    followingLines.some((line) => looksLikeCompanyDurationLine(line) || looksLikeResumeRoleTitle(line))
+  );
+}
+
+function looksLikeCompanyDurationLine(value: string) {
+  return /^\d+\s+years?(?:\s+\d+\s+months?)?$|^\d+\s+months?$/i.test(value.trim());
 }
 
 function looksLikeDateRange(value: string) {

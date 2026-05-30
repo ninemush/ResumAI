@@ -245,3 +245,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: legacy intelligence names remained in model-facing instructions and profile labels.
 - Fix: changed user-facing and model-facing wording to evidence, impact themes, scope, and business value; also tightened chat parsing for inline Markdown bullets after labels.
 - Validation: lint, whitespace diff check, focused signed-in workspace Playwright coverage, and production build passed.
+
+### Fixed: LinkedIn PDF role history could lose company context
+
+- Area: master resume generation from LinkedIn PDFs and resume-like source files.
+- Finding: the parser could read role titles and dates from a LinkedIn PDF but fail to attach company headings such as UiPath, GE, or GE Capital to the roles below them.
+- Root cause: source timeline enrichment only looked for company names after each role title, while LinkedIn exports often put the company once above several roles.
+- Fix: the resume source parser now carries company headings through the role group and recognizes leadership-program roles as valid experience entries.
+- Validation: inspected the real LinkedIn PDF extraction shape locally, then ran lint, whitespace diff check, and production build.
