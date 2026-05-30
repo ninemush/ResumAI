@@ -138,7 +138,7 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
         .eq("user_id", userId)
         .not("extracted_text", "is", null)
         .order("created_at", { ascending: false })
-        .limit(12),
+        .limit(30),
     ]);
 
   if (factsError) {
@@ -160,7 +160,7 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
     confirmedFacts: facts ?? [],
     latestResume,
     profile,
-    sourceEvidence: sourceError ? [] : (sourceEvidence ?? []),
+    sourceEvidence: sourceError ? [] : prioritizeSourceEvidence(sourceEvidence ?? []),
   });
 }
 
@@ -654,7 +654,7 @@ async function readMasterResumeContext(userId: string) {
     .eq("user_id", userId)
     .not("extracted_text", "is", null)
     .order("created_at", { ascending: false })
-    .limit(12);
+    .limit(30);
 
   if (factsError) {
     throw new Error("PROFILE_FACTS_READ_FAILED");
@@ -670,8 +670,31 @@ async function readMasterResumeContext(userId: string) {
   return {
     confirmedFacts: confirmedFacts ?? [],
     profile,
-    sourceEvidence: sourceError ? [] : (sourceEvidence ?? []),
+    sourceEvidence: sourceError ? [] : prioritizeSourceEvidence(sourceEvidence ?? []),
   };
+}
+
+function prioritizeSourceEvidence(sourceEvidence: SourceEvidence[]) {
+  return [...sourceEvidence]
+    .sort((left, right) => readSourceEvidenceUsefulness(right) - readSourceEvidenceUsefulness(left))
+    .slice(0, 10);
+}
+
+function readSourceEvidenceUsefulness(source: SourceEvidence) {
+  const readableLength = source.extracted_text?.replace(/\s+/g, " ").trim().length ?? 0;
+  const readableScore = Math.min(readableLength / 700, 12);
+  const typeScore =
+    source.source_type === "linkedin" || source.source_type === "pdf"
+      ? 5
+      : source.source_type === "docx"
+        ? 4
+        : source.source_type === "text"
+          ? 3
+          : source.source_type === "natural_language"
+            ? 2
+            : 1;
+
+  return readableScore + typeScore;
 }
 
 async function buildOverview({

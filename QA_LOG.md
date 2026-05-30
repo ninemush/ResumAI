@@ -125,3 +125,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: empty-gap states rendered a second readiness support card, and settings cards did not force long account text to wrap inside the card.
 - Fix: removed the redundant support card when there are no actionable gaps, renamed the resume cockpit metric around the user action, and added wrapping/min-width safeguards to settings cards.
 - Validation: lint passed, signed-in workspace regression tests passed, and production build passed.
+
+### Fixed: master resume source selection could under-weight rich uploads
+
+- Area: master resume generation.
+- Finding: a rich LinkedIn PDF or resume could be diluted by several newer but weaker sources, making the master resume feel shallow after the user had already provided strong evidence.
+- Root cause: master resume context selected the most recent readable sources, not the most useful readable sources.
+- Fix: expanded the source window and ranked sources by readable text volume and evidence type so PDF, LinkedIn, DOCX, and other rich documents are prioritized over thin notes or screenshots.
+- Validation: lint passed and master-resume API regression tests passed.
