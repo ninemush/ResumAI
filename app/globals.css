@@ -214,6 +214,13 @@ input:disabled {
   max-width: 760px;
 }
 
+.profile-pane .pane-heading h1,
+.workspace-main .pane-heading h1 {
+  font-size: clamp(1.85rem, 3vw, 3.1rem);
+  line-height: 1.02;
+  margin: 8px 0 10px;
+}
+
 .auth-copy h1 {
   font-size: clamp(2.65rem, 4.65vw, 4.12rem);
   margin: 0 0 14px;
@@ -1617,16 +1624,18 @@ input:focus {
   font-weight: 700;
   max-width: 100%;
   overflow-wrap: anywhere;
+  overflow-x: hidden;
   padding: 6px 0 12px;
   width: 100%;
+  word-break: break-word;
 }
 
 .resume-headline-field {
   line-height: 1.28;
   overflow: hidden;
   resize: none;
-  white-space: normal;
-  word-break: normal;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .resume-preview-helper {
@@ -1671,9 +1680,11 @@ input:focus {
   line-height: 1.58;
   min-height: 0;
   overflow: hidden;
+  overflow-wrap: anywhere;
   padding: 0;
   resize: none;
   width: 100%;
+  word-break: break-word;
 }
 
 .resume-document-preview .resume-role-title-field textarea {
@@ -2177,7 +2188,12 @@ input:focus {
 }
 
 .compact-pane-heading {
-  margin-bottom: 18px;
+  margin-bottom: 0;
+}
+
+.profile-pane:has(.compact-pane-heading),
+.workspace-main:has(.compact-pane-heading) {
+  gap: 12px;
 }
 
 .record-list {
@@ -2224,12 +2240,16 @@ input:focus {
 }
 
 .record-title {
+  display: -webkit-box;
   color: var(--foreground);
   font-size: 0.98rem;
   font-weight: 750;
   line-height: 1.25;
   margin: 0;
+  overflow: hidden;
   overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .record-meta,
@@ -2440,7 +2460,11 @@ input:focus {
 }
 
 .artifact-record {
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(180px, auto);
+}
+
+.artifact-actions {
+  flex-wrap: nowrap;
 }
 
 .artifact-viewer {

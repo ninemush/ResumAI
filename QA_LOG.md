@@ -133,3 +133,11 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: master resume context selected the most recent readable sources, not the most useful readable sources.
 - Fix: expanded the source window and ranked sources by readable text volume and evidence type so PDF, LinkedIn, DOCX, and other rich documents are prioritized over thin notes or screenshots.
 - Validation: lint passed and master-resume API regression tests passed.
+
+### Fixed: advisor fallback and resume preview overflow
+
+- Area: Pramania chat and master resume editor.
+- Finding: fallback advisor responses could sound narrowly tailored to a prior example, and long resume headlines could visually spill or feel clipped in the editor.
+- Root cause: fallback copy contained example-heavy default language, and resume textareas did not fully constrain long unbroken heading text inside the digital document surface.
+- Fix: made fallback wording profile-derived and generic across industries, tightened advisor response length, and added wrapping safeguards for the resume headline and document fields.
+- Validation: lint, production build, whitespace diff check, focused signed-in workspace Playwright coverage, and the full Playwright suite passed with 45 passing tests and 3 intentional viewport-specific skips.

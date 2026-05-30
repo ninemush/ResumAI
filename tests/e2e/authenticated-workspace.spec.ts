@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 import { authenticateDemoUser, hasDemoAuthEnv } from "./helpers/demo-auth";
 
@@ -41,4 +42,58 @@ test.describe("authenticated workspace", () => {
 
     expect(jobsBox?.y ?? 0).toBeLessThan(advisorBox?.y ?? Number.POSITIVE_INFINITY);
   });
+
+  test("keeps record-heavy desktop surfaces compact and action oriented", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop record density is covered separately from mobile focus.");
+
+    await page.goto("/");
+
+    await page.locator(".side-nav").getByRole("button", { name: /^Jobs$/i }).click();
+    await expect(page.getByRole("heading", { name: /Role decisions/i })).toBeVisible();
+    await expect(page.getByText("Roles under review")).toHaveCount(0);
+    await expectCompactRecordIfPresent(page, "Role decisions", ".job-record");
+
+    await page.locator(".side-nav").getByRole("button", { name: /^Applications$/i }).click();
+    await expect(page.getByRole("heading", { name: /Application pipeline/i })).toBeVisible();
+    await expect(page.getByText("Follow-up tracker")).toHaveCount(0);
+    await expectCompactRecordIfPresent(page, "Application pipeline", ".application-record");
+
+    await page.locator(".side-nav").getByRole("button", { name: /^Artifacts$/i }).click();
+    await expect(page.getByRole("heading", { name: /Generated materials/i })).toBeVisible();
+    await expectCompactRecordIfPresent(page, "Generated materials", ".artifact-record");
+
+    await page.locator(".side-nav").getByRole("button", { name: /^Settings$/i }).click();
+    await expect(page.getByRole("heading", { name: /Account and privacy/i })).toBeVisible();
+    await expect(page.getByText("Workspace controls")).toHaveCount(0);
+  });
+
+  test("keeps the master resume document from horizontal overflow", async ({ page, isMobile }) => {
+    test.skip(isMobile, "The mobile resume layout has its own responsive constraints.");
+
+    await page.goto("/");
+    await page.locator(".side-nav").getByRole("button", { name: /Profile & Resume/i }).click();
+    await expect(page.getByRole("heading", { name: /Master profile and resume/i })).toBeVisible();
+
+    const preview = page.locator(".resume-document-preview").first();
+    await expect(preview).toBeVisible();
+
+    const overflow = await preview.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 2);
+  });
 });
+
+async function expectCompactRecordIfPresent(page: Page, heading: string, rowSelector: string) {
+  if ((await page.locator(rowSelector).count()) === 0) {
+    return;
+  }
+
+  const headingBox = await page.getByRole("heading", { name: new RegExp(heading, "i") }).boundingBox();
+  const rowBox = await page.locator(rowSelector).first().boundingBox();
+
+  expect(rowBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan((headingBox?.y ?? 0) + 260);
+  expect(rowBox?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(190);
+}

@@ -20,7 +20,7 @@ export const conversationAdvisorRequestSchema = z.object({
 });
 
 const advisorResponseSchema = z.object({
-  assistantMessage: z.string().min(1).max(2600),
+  assistantMessage: z.string().min(1).max(1900),
 });
 
 type ConversationFact = {
@@ -146,7 +146,7 @@ export async function runConversationAdvisor(
       model,
       instructions,
       input: inputPayload,
-      max_output_tokens: 1700,
+      max_output_tokens: 1200,
       metadata: {
         feature: "conversation_advisor",
         surface: input.surface,
@@ -235,7 +235,7 @@ async function runRelaxedAdvisorAttempt({
 Return plain text only. Do not return JSON, markdown tables, or code fences.
 Use short paragraphs and bullets only when they make the career advice clearer.`,
       input: stripJsonOnlyInstruction(input),
-      max_output_tokens: 1700,
+      max_output_tokens: 1200,
       metadata: {
         feature: "conversation_advisor",
         response_mode: "relaxed_text",
@@ -585,6 +585,13 @@ function buildContextAwareAdvisorFallback({
     .flatMap((theme) => theme.evidence)
     .filter(Boolean)
     .slice(0, 5);
+  const proofThemeFallback = [
+    profile?.headline,
+    profile?.target_direction,
+    profile?.target_level,
+  ]
+    .filter((item): item is string => Boolean(item?.trim()))
+    .join(", ");
   const sourceEvidence = workspace.sources.recent
     .map((source) => formatSourceExcerpt(source.extracted_text))
     .filter((excerpt) => excerpt !== "not available")
@@ -617,7 +624,7 @@ Based on the current record, the strongest lane is ${roleRead}. The useful missi
 - Your profile does not need generic metrics; it needs proof tied to scope, authority, and business value.
 - For ${roleRead}, I would strengthen ${metricGuidance}.
 
-The proof already visible includes ${formatListForSentence(proofThemes ?? [], "transformation, GTM/services leadership, operations, AI/automation, and P&L-adjacent work")}. What is missing is not whether those examples are VP+ level; it is attaching each one to the role, company, scale, and outcome so the master resume reads as board-ready rather than broadly senior.`;
+The proof already visible includes ${formatListForSentence(proofThemes ?? [], proofThemeFallback || "the strongest saved proof themes in your profile")}. What is missing is not whether those examples are senior enough; it is attaching each one to the role, company, scale, and outcome so the master resume reads as precise rather than broadly senior.`;
   }
 
   if (normalized.includes("resume") || normalized.includes("profile pdf") || normalized.includes("learn")) {
@@ -626,7 +633,7 @@ The proof already visible includes ${formatListForSentence(proofThemes ?? [], "t
 The saved source material adds this useful evidence: ${formatListForSentence(sourceEvidence, "role history, scope, skills, and positioning evidence from the uploaded source")}. What I would improve next is the experience architecture: group the proof by role, attach dates and scope, and turn each role into outcome-led bullets. That is the difference between a senior activity list and a resume that reads like credible executive value.`;
   }
 
-  return `Based on what I already know, I would position you around ${roleRead}. The strongest evidence to preserve is ${formatListForSentence(proofThemes ?? [], "enterprise transformation, services/GTM leadership, operations, AI/automation, and measurable business outcomes")}.
+  return `Based on what I already know, I would position you around ${roleRead}. The strongest evidence to preserve is ${formatListForSentence(proofThemes ?? [], proofThemeFallback || "the clearest proof already saved in your profile")}.
 
 The next best move is to sharpen the master profile into role-based proof: what you owned, how large it was, what changed, and why it mattered commercially. I will use your saved profile, sources, jobs, applications, and artifacts as context instead of asking you to start over.`;
 }
@@ -737,15 +744,15 @@ function normalizeAdvisorMessage(message: string) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  if (normalized.length <= 1500) {
+  if (normalized.length <= 1200) {
     return normalized;
   }
 
-  const naturalBreak = normalized.lastIndexOf("\n", 1500);
-  const sentenceBreak = normalized.lastIndexOf(". ", 1500);
+  const naturalBreak = normalized.lastIndexOf("\n", 1200);
+  const sentenceBreak = normalized.lastIndexOf(". ", 1200);
   const cutAt = Math.max(naturalBreak, sentenceBreak);
 
-  return `${normalized.slice(0, cutAt > 900 ? cutAt + 1 : 1500).trim()} I can keep going from here.`;
+  return `${normalized.slice(0, cutAt > 780 ? cutAt + 1 : 1200).trim()} I can keep going from here.`;
 }
 
 function hashUserId(userId: string) {
