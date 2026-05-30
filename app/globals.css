@@ -2199,6 +2199,14 @@ input:focus {
   padding: 18px;
 }
 
+.applications-panel .section-heading {
+  gap: 4px;
+}
+
+.applications-panel .section-heading h2 {
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
+}
+
 .compact-pane-heading {
   margin-bottom: 0;
 }
@@ -2211,6 +2219,10 @@ input:focus {
 .record-list {
   display: grid;
   gap: 8px;
+}
+
+.applications-panel .record-list {
+  gap: 6px;
 }
 
 .record-empty-panel {
@@ -2384,7 +2396,9 @@ input:focus {
 }
 
 .application-record {
-  grid-template-columns: minmax(0, 1fr) minmax(150px, auto) auto;
+  grid-template-columns:
+    minmax(210px, 1fr) minmax(220px, 1.15fr) minmax(142px, 0.42fr)
+    minmax(210px, auto);
 }
 
 .application-record > .record-subnote {
@@ -2393,9 +2407,39 @@ input:focus {
   padding-top: 8px;
 }
 
+.compact-application-row {
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.application-title-cell,
+.application-material-cell {
+  align-content: center;
+}
+
+.application-material-cell .record-summary {
+  -webkit-line-clamp: 1;
+}
+
+.application-stage-cell {
+  align-content: center;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.application-stage-cell span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
 .compact-status-select {
-  max-width: 180px;
-  min-width: 150px;
+  max-width: 150px;
+  min-height: 34px;
+  min-width: 142px;
+  padding-inline: 10px;
 }
 
 .record-filter-strip,
@@ -2404,7 +2448,7 @@ input:focus {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .record-filter-chip,
@@ -2417,8 +2461,8 @@ input:focus {
   display: inline-grid;
   gap: 4px;
   min-height: 0;
-  min-width: 98px;
-  padding: 8px 10px;
+  min-width: 82px;
+  padding: 7px 9px;
 }
 
 .record-filter-chip {
@@ -2429,7 +2473,7 @@ input:focus {
 
 .record-filter-chip span {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -2450,8 +2494,34 @@ input:focus {
 .artifact-filter-chip strong {
   color: var(--foreground);
   font-family: var(--font-pr-brand), Georgia, serif;
-  font-size: 1.12rem;
+  font-size: 1rem;
   line-height: 1;
+}
+
+.applications-panel .record-filter-strip {
+  gap: 6px;
+}
+
+.applications-panel .record-filter-chip {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 7px;
+  min-height: 34px;
+  min-width: 0;
+  padding: 7px 11px;
+}
+
+.applications-panel .record-filter-chip strong {
+  font-family: var(--font-pr-sans);
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.applications-panel .record-filter-chip span {
+  font-size: 0.74rem;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .material-pill {

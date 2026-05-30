@@ -1030,6 +1030,7 @@ export function ConversationPanel({
             }
           }}
           placeholder="Share background, role, link, or resume..."
+          suppressHydrationWarning
           type="text"
           value={message}
         />
@@ -1044,6 +1045,7 @@ export function ConversationPanel({
             }
             event.currentTarget.value = "";
           }}
+          suppressHydrationWarning
           type="file"
         />
         <button disabled={message.trim().length < 3} type="submit" aria-label="Send message">

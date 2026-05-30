@@ -270,46 +270,56 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
           <p className="empty-state">No applications in this stage yet.</p>
         ) : null}
         {visibleApplications.map((application) => (
-          <article className="record-row application-record" key={application.id}>
+          <article className="record-row application-record compact-application-row" key={application.id}>
             <button
-              className="record-main-button"
+              className="record-main-button application-title-cell"
               onClick={() => loadReview(application.id)}
               title="Open tailored materials and application details"
               type="button"
             >
-              <span className="record-title">{application.jobTitle ?? "Application"}</span>
+              <span className="record-title">{cleanDisplayText(application.jobTitle ?? "Application")}</span>
               <span className="record-meta">
-                {application.companyName} · Created {formatDate(application.createdAt)} · Updated{" "}
-                {formatDate(application.updatedAt)}
+                {cleanDisplayText(application.companyName)} · Updated {formatShortDate(application.updatedAt)}
               </span>
+            </button>
+
+            <button
+              className="record-main-button application-material-cell"
+              onClick={() => loadReview(application.id)}
+              title="Open tailored resume and cover letter"
+              type="button"
+            >
               <span className="record-summary">
-                {application.latestResumeHeadline ??
-                  `Materials: resume ${formatMaterialStatus(application.latestResumeStatus)}, cover letter ${formatMaterialStatus(application.latestCoverLetterStatus)}`}
+                {application.latestResumeHeadline
+                  ? cleanDisplayText(application.latestResumeHeadline)
+                  : "Materials not fully ready"}
               </span>
               <span className="record-material-row">
                 <span className={materialPillClass(application.latestResumeStatus)}>
                   Resume {formatMaterialStatus(application.latestResumeStatus)}
                 </span>
                 <span className={materialPillClass(application.latestCoverLetterStatus)}>
-                  Cover letter {formatMaterialStatus(application.latestCoverLetterStatus)}
+                  Letter {formatMaterialStatus(application.latestCoverLetterStatus)}
                 </span>
-                <span>{formatLatestActivity(application)}</span>
               </span>
             </button>
 
-            <select
-              aria-label={`Update ${application.companyName} application status`}
-              className="status-select compact-status-select"
-              disabled={pendingApplicationId === application.id}
-              onChange={(event) => updateStatus(application.id, event.target.value)}
-              value={application.status}
-            >
-              {applicationStatuses.map((status) => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
-            </select>
+            <div className="application-stage-cell">
+              <select
+                aria-label={`Update ${application.companyName} application status`}
+                className="status-select compact-status-select"
+                disabled={pendingApplicationId === application.id}
+                onChange={(event) => updateStatus(application.id, event.target.value)}
+                value={application.status}
+              >
+                {applicationStatuses.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+              <span>{formatLatestActivity(application)}</span>
+            </div>
 
             <div className="record-actions">
               <a
@@ -541,10 +551,10 @@ function formatLatestActivity(
 ) {
   const latestEvent = application.statusEvents[0];
   if (!latestEvent) {
-    return `Current status: ${formatStatus(application.status)}`;
+    return `Created ${formatShortDate(application.createdAt)}`;
   }
 
-  return `Latest: ${formatStatus(latestEvent.newStatus)} on ${formatDate(latestEvent.createdAt)}`;
+  return `${formatStatus(latestEvent.newStatus)} · ${formatShortDate(latestEvent.createdAt)}`;
 }
 
 function formatMaterialStatus(status: string | null) {
@@ -584,11 +594,19 @@ function formatExportStatus(status: MaterialReview["exportReadiness"]["status"])
   return labels[status];
 }
 
-function formatDate(value: string) {
+function formatShortDate(value: string) {
   return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
+    day: "numeric",
+    month: "short",
   }).format(new Date(value));
+}
+
+function cleanDisplayText(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function splitLines(value: string) {
