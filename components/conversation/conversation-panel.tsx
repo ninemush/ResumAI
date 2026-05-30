@@ -1369,7 +1369,7 @@ function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
       /([.!?])\s+((?:Conservative|Balanced|Executive\/board-ready|Board-ready|My recommendation|Recommendation|What to fix first|Why it matters|What I learned|What is missing|Next step|Next question):)/g,
       "$1\n\n$2",
     )
-    .replace(/\s+(\d+\.\s+\*\*?[A-Z][^*]{2,64}\*\*:)/g, "\n$1")
+    .replace(/\s+(\d+\.\s+(?:\*\*)?[A-Z][^.!?\n]{2,90}:)/g, "\n$1")
     .replace(/\s+-\s+(?=\*\*?[A-Z0-9])/g, "\n- ")
     .replace(/\s+[-•]\s+(?=[A-Z][^.!?]{2,80}:)/g, "\n- ")
     .replace(/\n{3,}/g, "\n\n")

@@ -4002,6 +4002,26 @@ input:focus {
     justify-items: start;
   }
 
+  .stage-progress-card > div:first-child {
+    align-items: start;
+    display: grid;
+    gap: 6px;
+    justify-content: stretch;
+  }
+
+  .stage-progress-card strong {
+    font-size: 1.45rem;
+  }
+
+  .stage-progress {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-height: 0;
+  }
+
+  .stage-progress button {
+    min-height: 66px;
+  }
+
   .compact-status-select {
     max-width: none;
     width: 100%;
