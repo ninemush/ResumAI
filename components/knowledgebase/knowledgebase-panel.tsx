@@ -12,13 +12,29 @@ type KnowledgebasePanelProps = {
   overview: ProfileOverview;
 };
 
+const sourceFilters = [
+  "All",
+  "Read",
+  "Needs attention",
+  "Files",
+  "Links",
+  "Images",
+] as const;
+
+type SourceFilter = (typeof sourceFilters)[number];
+
 export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
   const router = useRouter();
+  const [activeFilter, setActiveFilter] = useState<SourceFilter>("All");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<ProfileOverview["recentSources"][number] | null>(
     null,
   );
+  const visibleSources = overview.recentSources.filter((source) =>
+    sourceMatchesFilter(source, activeFilter),
+  );
+  const filterCounts = buildSourceFilterCounts(overview.recentSources);
 
   async function retrySourceExtraction(sourceId: string) {
     setPendingId(sourceId);
@@ -83,8 +99,27 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
           <h2>Timeline</h2>
         </div>
         {overview.recentSources.length > 0 ? (
+          <div className="record-filter-strip" aria-label="Source filters">
+            {sourceFilters.map((filter) => (
+              <button
+                aria-pressed={activeFilter === filter}
+                className={`record-filter-chip ${activeFilter === filter ? "active" : ""}`}
+                key={filter}
+                onClick={() => setActiveFilter(filter)}
+                type="button"
+              >
+                <strong>{filterCounts[filter]}</strong>
+                <span>{filter}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {overview.recentSources.length > 0 ? (
           <div className="source-list">
-            {overview.recentSources.map((source) => (
+            {visibleSources.length === 0 ? (
+              <p className="empty-state">No sources match this filter yet.</p>
+            ) : null}
+            {visibleSources.map((source) => (
               <article className="source-row" key={source.id}>
                 <div className="source-main">
                   <SourcePreviewThumb source={source} onOpen={() => setActiveSource(source)} />
@@ -408,4 +443,48 @@ function formatSourceGuidance(source: ProfileOverview["recentSources"][number]) 
   }
 
   return "Saved as profile source.";
+}
+
+function sourceMatchesFilter(
+  source: ProfileOverview["recentSources"][number],
+  filter: SourceFilter,
+) {
+  if (filter === "All") {
+    return true;
+  }
+
+  if (filter === "Read") {
+    return source.extraction_status === "succeeded";
+  }
+
+  if (filter === "Needs attention") {
+    return source.extraction_status === "failed";
+  }
+
+  if (filter === "Files") {
+    return ["docx", "pdf", "txt", "linkedin"].includes(source.source_type);
+  }
+
+  if (filter === "Links") {
+    return ["link", "portfolio"].includes(source.source_type);
+  }
+
+  return source.source_type === "image";
+}
+
+function buildSourceFilterCounts(sources: ProfileOverview["recentSources"]) {
+  return sourceFilters.reduce<Record<SourceFilter, number>>(
+    (counts, filter) => {
+      counts[filter] = sources.filter((source) => sourceMatchesFilter(source, filter)).length;
+      return counts;
+    },
+    {
+      All: 0,
+      Files: 0,
+      Images: 0,
+      Links: 0,
+      "Needs attention": 0,
+      Read: 0,
+    },
+  );
 }

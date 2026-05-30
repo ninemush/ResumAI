@@ -286,6 +286,14 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
         {overview.recentApplications.length > 0 && visibleApplications.length === 0 ? (
           <p className="empty-state">No applications in this stage yet.</p>
         ) : null}
+        {visibleApplications.length > 0 ? (
+          <div className="record-table-header application-record-header" aria-hidden="true">
+            <span>Role</span>
+            <span>Materials</span>
+            <span>Stage</span>
+            <span>Actions</span>
+          </div>
+        ) : null}
         {visibleApplications.map((application) => (
           <article className="record-row application-record compact-application-row" key={application.id}>
             <button

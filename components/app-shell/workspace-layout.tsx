@@ -275,6 +275,7 @@ function renderWorkspaceView({
   return (
     <ProfileExplorer
       applicationOverview={applicationOverview}
+      artifactOverview={artifactOverview}
       jobOverview={jobOverview}
       onNavigate={onSelectView}
       overview={profileOverview}

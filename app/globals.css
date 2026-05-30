@@ -949,7 +949,7 @@ input:focus {
 .cockpit-panel {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .next-action-panel,
@@ -2215,7 +2215,7 @@ input:focus {
 .applications-panel {
   align-content: start;
   display: grid;
-  gap: 14px;
+  gap: 12px;
   padding: 18px;
 }
 
@@ -2238,7 +2238,7 @@ input:focus {
 
 .record-list {
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .applications-panel .record-list {
@@ -2281,7 +2281,7 @@ input:focus {
   gap: 10px 12px;
   grid-template-columns: minmax(0, 1fr) auto auto;
   min-height: 0;
-  padding: 11px 12px;
+  padding: 10px 12px;
 }
 
 .record-row:hover {
@@ -2294,6 +2294,33 @@ input:focus {
   display: grid;
   gap: 5px;
   min-width: 0;
+}
+
+.record-table-header {
+  align-items: center;
+  color: var(--muted);
+  display: grid;
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.66rem;
+  font-weight: 800;
+  gap: 10px 12px;
+  letter-spacing: 0.11em;
+  padding: 0 12px 2px;
+  text-transform: uppercase;
+}
+
+.job-record-header {
+  grid-template-columns: minmax(0, 1fr) minmax(82px, auto) minmax(78px, auto) minmax(210px, auto);
+}
+
+.application-record-header {
+  grid-template-columns:
+    minmax(210px, 1fr) minmax(220px, 1.15fr) minmax(142px, 0.42fr)
+    minmax(210px, auto);
+}
+
+.artifact-record-header {
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(180px, auto);
 }
 
 .record-main-button {
@@ -4196,6 +4223,7 @@ input:focus {
   .resume-review-grid,
   .profile-editor-grid,
   .record-row,
+  .record-table-header,
   .job-record,
   .application-record,
   .artifact-record,
@@ -4206,6 +4234,10 @@ input:focus {
   .artifact-metadata-grid,
   .fact-groups {
     grid-template-columns: 1fr;
+  }
+
+  .record-table-header {
+    display: none;
   }
 
   .record-actions,

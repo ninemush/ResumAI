@@ -162,6 +162,14 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         {overview.recentJobs.length > 0 && visibleJobs.length === 0 ? (
           <p className="empty-state">No roles match this filter yet.</p>
         ) : null}
+        {visibleJobs.length > 0 ? (
+          <div className="record-table-header job-record-header" aria-hidden="true">
+            <span>Role</span>
+            <span>Decision</span>
+            <span>Fit</span>
+            <span>Actions</span>
+          </div>
+        ) : null}
         {visibleJobs.map((job) => (
           <article className="record-row job-record" key={job.id}>
             <button

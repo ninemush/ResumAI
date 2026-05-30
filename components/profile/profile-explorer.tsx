@@ -14,14 +14,16 @@ import { useRouter } from "next/navigation";
 
 import { brand } from "@/lib/brand";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 import { createClient } from "@/lib/supabase/browser";
 
 type ProfileExplorerProps = {
   applicationOverview: ApplicationOverview;
+  artifactOverview: ArtifactOverview;
   jobOverview: JobOverview;
-  onNavigate: (view: "applications" | "jobs" | "knowledgebase" | "resume") => void;
+  onNavigate: (view: "applications" | "artifacts" | "jobs" | "knowledgebase" | "resume") => void;
   overview: ProfileOverview;
 };
 
@@ -40,6 +42,7 @@ const acceptedProfilePhotoTypes = new Set(["image/jpeg", "image/png", "image/web
 
 export function ProfileExplorer({
   applicationOverview,
+  artifactOverview,
   jobOverview,
   onNavigate,
   overview,
@@ -247,13 +250,13 @@ export function ProfileExplorer({
 
       <section className="cockpit-panel" aria-label="Career cockpit">
         <CockpitMetric
-          detail="Master profile and resume"
+          detail="Review the master resume and profile direction"
           label="Resume"
           onClick={() => onNavigate("resume")}
           value="Open"
         />
         <CockpitMetric
-          detail="Pipeline and materials"
+          detail="Track roles you chose to pursue"
           label="Applications"
           onClick={() => onNavigate("applications")}
           value={applicationOverview.summary.total}
@@ -265,10 +268,22 @@ export function ProfileExplorer({
           value={applicationOverview.summary.interviewing}
         />
         <CockpitMetric
-          detail="Role fit decisions"
+          detail="Decide whether to pursue these roles"
           label="Jobs to review"
           onClick={() => onNavigate("jobs")}
           value={jobOverview.summary.readyForReview}
+        />
+        <CockpitMetric
+          detail="Audit the files, links, and notes that shaped your profile"
+          label="Sources"
+          onClick={() => onNavigate("knowledgebase")}
+          value={overview.sourceCount}
+        />
+        <CockpitMetric
+          detail="Open generated resumes and cover letters"
+          label="Artifacts"
+          onClick={() => onNavigate("artifacts")}
+          value={artifactOverview.summary.total}
         />
         <div className="stage-progress-card">
           <div>

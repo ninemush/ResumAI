@@ -48,64 +48,77 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
 
       <section className="record-list artifact-record-list" aria-label="Generated artifact list">
         {filteredArtifacts.length > 0 ? (
-          filteredArtifacts.map((artifact) => (
-            <article className="record-row artifact-record" key={`${artifact.kind}-${artifact.id}`}>
-              <div className="artifact-icon">
-                {artifact.kind === "resume" ? (
-                  <FileText size={18} aria-hidden="true" />
-                ) : (
-                  <Layers3 size={18} aria-hidden="true" />
-                )}
-              </div>
-              <div className="record-main">
-                <h3 className="record-title">{artifact.label}</h3>
-                <p className="record-meta">
-                  {formatArtifactKind(artifact.kind)} v{artifact.version}
-                  {artifact.companyName ? ` · ${artifact.companyName}` : ""}
-                  {artifact.roleTitle ? ` · ${artifact.roleTitle}` : ""}
-                </p>
-                <p className="record-summary">
-                  Created {formatDate(artifact.createdAt)} · Updated {formatDate(artifact.updatedAt)}
-                </p>
-              </div>
-              <span className={`source-pill ${artifact.status}`}>{artifact.status}</span>
-              <div className="record-actions artifact-actions" aria-label={`${artifact.label} downloads`}>
+          <>
+            <div className="record-table-header artifact-record-header" aria-hidden="true">
+              <span />
+              <span>Material</span>
+              <span>Status</span>
+              <span>Downloads</span>
+            </div>
+            {filteredArtifacts.map((artifact) => (
+              <article className="record-row artifact-record" key={`${artifact.kind}-${artifact.id}`}>
+                <div className="artifact-icon">
+                  {artifact.kind === "resume" ? (
+                    <FileText size={18} aria-hidden="true" />
+                  ) : (
+                    <Layers3 size={18} aria-hidden="true" />
+                  )}
+                </div>
                 <button
-                  className="secondary-action compact-action"
+                  className="record-main-button"
                   onClick={() => setActiveArtifact(artifact)}
+                  title="Open artifact details"
                   type="button"
                 >
-                  <ExternalLink size={13} aria-hidden="true" />
-                  Open
+                  <span className="record-title">{artifact.label}</span>
+                  <span className="record-meta">
+                    {formatArtifactKind(artifact.kind)} v{artifact.version}
+                    {artifact.companyName ? ` · ${artifact.companyName}` : ""}
+                    {artifact.roleTitle ? ` · ${artifact.roleTitle}` : ""}
+                  </span>
+                  <span className="record-summary">
+                    Created {formatDate(artifact.createdAt)} · Updated {formatDate(artifact.updatedAt)}
+                  </span>
                 </button>
-                {artifact.pdfDownloadUrl ? (
-                  <a
+                <span className={`source-pill ${artifact.status}`}>{artifact.status}</span>
+                <div className="record-actions artifact-actions" aria-label={`${artifact.label} downloads`}>
+                  <button
                     className="secondary-action compact-action"
-                    href={artifact.pdfDownloadUrl}
-                    rel="noreferrer"
-                    target="_blank"
+                    onClick={() => setActiveArtifact(artifact)}
+                    type="button"
                   >
-                    <Download size={13} aria-hidden="true" />
-                    PDF
-                  </a>
-                ) : null}
-                {artifact.docxDownloadUrl ? (
-                  <a
-                    className="secondary-action compact-action"
-                    href={artifact.docxDownloadUrl}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <Download size={13} aria-hidden="true" />
-                    DOCX
-                  </a>
-                ) : null}
-                {!artifact.pdfDownloadUrl && !artifact.docxDownloadUrl ? (
-                  <span className="source-pill muted">Not exported</span>
-                ) : null}
-              </div>
-            </article>
-          ))
+                    <ExternalLink size={13} aria-hidden="true" />
+                    Details
+                  </button>
+                  {artifact.pdfDownloadUrl ? (
+                    <a
+                      className="secondary-action compact-action"
+                      href={artifact.pdfDownloadUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <Download size={13} aria-hidden="true" />
+                      PDF
+                    </a>
+                  ) : null}
+                  {artifact.docxDownloadUrl ? (
+                    <a
+                      className="secondary-action compact-action"
+                      href={artifact.docxDownloadUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <Download size={13} aria-hidden="true" />
+                      DOCX
+                    </a>
+                  ) : null}
+                  {!artifact.pdfDownloadUrl && !artifact.docxDownloadUrl ? (
+                    <span className="source-pill muted">Not exported</span>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </>
         ) : (
           <p className="empty-state">
             No artifacts match this filter yet. Generate or export a resume or cover
