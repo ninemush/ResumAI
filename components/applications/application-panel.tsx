@@ -124,10 +124,27 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
         return;
       }
 
-      setMessage(payload.summary ?? "Generated targeted resume and cover-letter materials.");
-      if (activeReview?.application.id === applicationId) {
+      const exportResponse = await fetch(`/api/applications/${applicationId}/materials/export`, {
+        method: "POST",
+      });
+      const exportPayload = await exportResponse.json();
+
+      if (!exportResponse.ok) {
+        setMessage(
+          `${payload.summary ?? "Generated targeted resume and cover-letter materials."} ${
+            exportPayload.error?.message ??
+            "Review the drafts, then export PDF and DOCX files from the review panel."
+          }`,
+        );
         await loadReview(applicationId);
+        router.refresh();
+        return;
       }
+
+      setActiveReview(exportPayload.review);
+      setResumeDraft(exportPayload.review.resume?.content ?? null);
+      setCoverLetterDraft(exportPayload.review.coverLetter?.content ?? "");
+      setMessage("Generated, validated, and exported resume and cover-letter PDF/DOCX files.");
       router.refresh();
     } finally {
       setGeneratingApplicationId(null);
@@ -301,6 +318,12 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
                 <span className={materialPillClass(application.latestCoverLetterStatus)}>
                   Letter {formatMaterialStatus(application.latestCoverLetterStatus)}
                 </span>
+                {application.latestResumeHasPdf && application.latestResumeHasDocx ? (
+                  <span className="material-pill ready">Resume files</span>
+                ) : null}
+                {application.latestCoverLetterHasPdf && application.latestCoverLetterHasDocx ? (
+                  <span className="material-pill ready">Letter files</span>
+                ) : null}
               </span>
             </button>
 
@@ -336,9 +359,17 @@ export function ApplicationPanel({ overview, showEmptyState = false }: Applicati
                 disabled={generatingApplicationId === application.id}
                 onClick={() => generateMaterials(application.id)}
                 type="button"
+                title="Generate tailored resume and cover letter, then export PDF and DOCX files"
               >
                 <WandSparkles size={14} aria-hidden="true" />
-                {generatingApplicationId === application.id ? "Generating" : "Generate"}
+                {generatingApplicationId === application.id
+                  ? "Generating files"
+                  : application.latestResumeHasPdf &&
+                      application.latestResumeHasDocx &&
+                      application.latestCoverLetterHasPdf &&
+                      application.latestCoverLetterHasDocx
+                    ? "Regenerate files"
+                    : "Generate files"}
               </button>
               <button
                 className="secondary-action compact-action"

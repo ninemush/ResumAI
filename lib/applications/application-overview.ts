@@ -9,7 +9,11 @@ export type ApplicationOverview = {
     jobTitle: string | null;
     jobUrl: string;
     latestCoverLetterExcerpt: string | null;
+    latestCoverLetterHasDocx: boolean;
+    latestCoverLetterHasPdf: boolean;
     latestCoverLetterStatus: string | null;
+    latestResumeHasDocx: boolean;
+    latestResumeHasPdf: boolean;
     latestResumeHeadline: string | null;
     latestResumeStatus: string | null;
     statusEvents: {
@@ -74,8 +78,14 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
           }),
         ])
       : [
-          new Map<string, { headline: string | null; status: string }>(),
-          new Map<string, { excerpt: string | null; status: string }>(),
+          new Map<
+            string,
+            { hasDocx: boolean; hasPdf: boolean; headline: string | null; status: string }
+          >(),
+          new Map<
+            string,
+            { excerpt: string | null; hasDocx: boolean; hasPdf: boolean; status: string }
+          >(),
           new Map<string, ApplicationOverview["recentApplications"][number]["statusEvents"]>(),
         ];
 
@@ -85,7 +95,11 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
     jobTitle: application.job_title,
     jobUrl: application.job_url,
     latestCoverLetterExcerpt: coverLetterArtifacts.get(application.id)?.excerpt ?? null,
+    latestCoverLetterHasDocx: coverLetterArtifacts.get(application.id)?.hasDocx ?? false,
+    latestCoverLetterHasPdf: coverLetterArtifacts.get(application.id)?.hasPdf ?? false,
     latestCoverLetterStatus: coverLetterArtifacts.get(application.id)?.status ?? null,
+    latestResumeHasDocx: resumeArtifacts.get(application.id)?.hasDocx ?? false,
+    latestResumeHasPdf: resumeArtifacts.get(application.id)?.hasPdf ?? false,
     latestResumeHeadline: resumeArtifacts.get(application.id)?.headline ?? null,
     latestResumeStatus: resumeArtifacts.get(application.id)?.status ?? null,
     statusEvents: statusEvents.get(application.id) ?? [],
@@ -170,7 +184,7 @@ async function readLatestResumeArtifacts({ applicationIds }: { applicationIds: s
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("generated_resumes")
-    .select("application_id, status, content_json, created_at")
+    .select("application_id, status, content_json, pdf_storage_path, docx_storage_path, created_at")
     .in("application_id", applicationIds)
     .order("created_at", { ascending: false });
 
@@ -178,12 +192,16 @@ async function readLatestResumeArtifacts({ applicationIds }: { applicationIds: s
     throw new Error("APPLICATION_ARTIFACTS_READ_FAILED");
   }
 
-  return (data ?? []).reduce<Map<string, { headline: string | null; status: string }>>((artifacts, artifact) => {
+  return (data ?? []).reduce<
+    Map<string, { hasDocx: boolean; hasPdf: boolean; headline: string | null; status: string }>
+  >((artifacts, artifact) => {
     if (!artifact.application_id || artifacts.has(artifact.application_id)) {
       return artifacts;
     }
 
     artifacts.set(artifact.application_id, {
+      hasDocx: Boolean(artifact.docx_storage_path),
+      hasPdf: Boolean(artifact.pdf_storage_path),
       headline: readResumeHeadline(artifact.content_json),
       status: artifact.status,
     });
@@ -195,7 +213,7 @@ async function readLatestCoverLetterArtifacts({ applicationIds }: { applicationI
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("generated_cover_letters")
-    .select("application_id, status, content, created_at")
+    .select("application_id, status, content, pdf_storage_path, docx_storage_path, created_at")
     .in("application_id", applicationIds)
     .order("created_at", { ascending: false });
 
@@ -203,13 +221,17 @@ async function readLatestCoverLetterArtifacts({ applicationIds }: { applicationI
     throw new Error("APPLICATION_ARTIFACTS_READ_FAILED");
   }
 
-  return (data ?? []).reduce<Map<string, { excerpt: string | null; status: string }>>((artifacts, artifact) => {
+  return (data ?? []).reduce<
+    Map<string, { excerpt: string | null; hasDocx: boolean; hasPdf: boolean; status: string }>
+  >((artifacts, artifact) => {
     if (!artifact.application_id || artifacts.has(artifact.application_id)) {
       return artifacts;
     }
 
     artifacts.set(artifact.application_id, {
       excerpt: artifact.content ? `${artifact.content.slice(0, 180)}...` : null,
+      hasDocx: Boolean(artifact.docx_storage_path),
+      hasPdf: Boolean(artifact.pdf_storage_path),
       status: artifact.status,
     });
     return artifacts;
