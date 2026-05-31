@@ -176,6 +176,28 @@ test.describe("authenticated workspace", () => {
     }));
 
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 2);
+
+    const sectionOrder = await preview.evaluate((element) =>
+      Array.from(element.querySelectorAll("h3")).map((heading) => heading.textContent?.trim()),
+    );
+    const skillsIndex = sectionOrder.indexOf("Core Skills");
+    const highlightsIndex = sectionOrder.indexOf("Selected Highlights");
+    const experienceIndex = sectionOrder.indexOf("Professional Experience");
+
+    expect(skillsIndex).toBeGreaterThanOrEqual(0);
+    expect(highlightsIndex).toBeGreaterThan(skillsIndex);
+    expect(experienceIndex).toBeGreaterThan(highlightsIndex);
+
+    const roleMetaOverflow = await preview.locator(".resume-role-meta-row").evaluateAll((rows) =>
+      rows.map((row) => ({
+        clientWidth: row.clientWidth,
+        scrollWidth: row.scrollWidth,
+      })),
+    );
+
+    for (const row of roleMetaOverflow) {
+      expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth + 2);
+    }
   });
 
   test("shows an operational owner console when the signed-in account is an owner", async ({ page, isMobile }) => {

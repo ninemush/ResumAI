@@ -17,7 +17,7 @@ export function extractExperienceSectionsFromText(text: string) {
 
     const roleTitle = line;
 
-    if (!looksLikeResumeRoleTitle(roleTitle)) {
+    if (!looksLikeResumeRoleTitle(roleTitle) || looksLikeRecommendationOrTestimonial(roleTitle)) {
       continue;
     }
 
@@ -64,7 +64,7 @@ export function extractExperienceSectionsFromText(text: string) {
       }
     }
 
-    sections.push({
+    const section = {
       bullets: bulletLines.length > 0
         ? bulletLines
         : [`Held ${roleTitle}${company ? ` at ${company}` : ""}${dates ? ` (${dates})` : ""}. Add measurable scope and outcomes.`],
@@ -72,7 +72,13 @@ export function extractExperienceSectionsFromText(text: string) {
       dates,
       location,
       roleTitle,
-    });
+    };
+
+    if (looksLikeRecommendationSection(section)) {
+      continue;
+    }
+
+    sections.push(section);
 
     if (sections.length >= MAX_RESUME_EXPERIENCE_SECTIONS) {
       break;
@@ -196,7 +202,8 @@ function looksLikeResumeRoleTitle(value: string) {
       value,
     ) &&
     !looksLikeDateRange(value) &&
-    !looksLikeResumeSectionBoundary(value)
+    !looksLikeResumeSectionBoundary(value) &&
+    !looksLikeRecommendationOrTestimonial(value)
   );
 }
 
@@ -247,9 +254,24 @@ function looksLikeResumeImpactLine(value: string) {
     value.length >= 28 &&
     !looksLikeStandaloneDateOrDuration(value) &&
     !looksLikeResumeSectionBoundary(value) &&
+    !looksLikeRecommendationOrTestimonial(value) &&
     /\b(achieved|accelerated|automated|built|consolidated|created|delivered|directed|drove|enabled|established|expanded|grew|improved|increased|instituted|launched|led|managed|optimized|owned|reduced|scaled|saved|shaped|standardized|transformed|governed|advised|mentored|supported|responsible|oversaw|strategy|operations|portfolio|pricing|governance|revenue|margin|profit|cost|customer|team|regional|global)\b/i.test(
       value,
     )
+  );
+}
+
+function looksLikeRecommendationSection(section: ResumeContent["experienceSections"][number]) {
+  const combined = [section.roleTitle, section.company, section.dates, ...section.bullets]
+    .filter(Boolean)
+    .join(" ");
+
+  return looksLikeRecommendationOrTestimonial(combined);
+}
+
+function looksLikeRecommendationOrTestimonial(value: string) {
+  return /\b(recommendation|testimonial|endorsement|reference|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed)?\b|he is an?|she is an?)\b/i.test(
+    value,
   );
 }
 

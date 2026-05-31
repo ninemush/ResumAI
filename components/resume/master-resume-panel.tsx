@@ -2,8 +2,10 @@
 
 import {
   AlertCircle,
+  Building2,
   CheckCircle2,
   Download,
+  ExternalLink,
   FileText,
   Plus,
   RotateCcw,
@@ -390,145 +392,7 @@ export function MasterResumePanel({
                 value={draft.skills.join(", ")}
               />
             </section>
-            <section>
-              <div className="resume-section-heading-row">
-                <h3>Professional Experience</h3>
-                <button
-                  className="resume-inline-action"
-                  onClick={() =>
-                    setDraft({
-                      ...draft,
-                      experienceSections: [
-                        ...draft.experienceSections,
-                        {
-                          bullets: [""],
-                          company: "",
-                          dates: "",
-                          location: "",
-                          roleTitle: "New role",
-                        },
-                      ],
-                    })
-                  }
-                  type="button"
-                >
-                  <Plus size={14} aria-hidden="true" />
-                  Add role
-                </button>
-              </div>
-              {draft.experienceSections.length > 0 ? (
-                <div className="resume-experience-section-list">
-                  {draft.experienceSections.map((section, index) => (
-                    <article className="resume-experience-section" key={`${section.roleTitle}-${index}`}>
-                      <div className="resume-role-card-header">
-                        <label className="resume-role-title-field">
-                          <span className="sr-only">Role</span>
-                          <textarea
-                            aria-label={`Role title for experience ${index + 1}`}
-                            onChange={(event) =>
-                              updateExperienceSection(draft, setDraft, index, {
-                                roleTitle: event.target.value,
-                              })
-                            }
-                            placeholder="Role title"
-                            rows={Math.max(1, Math.ceil(section.roleTitle.length / 54))}
-                            value={section.roleTitle}
-                          />
-                        </label>
-                        <label className="resume-role-company-field">
-                          <span className="sr-only">Company</span>
-                          <input
-                            aria-label={`Company for ${section.roleTitle}`}
-                            onChange={(event) =>
-                              updateExperienceSection(draft, setDraft, index, {
-                                company: event.target.value,
-                              })
-                            }
-                            placeholder="Company"
-                            value={section.company ?? ""}
-                          />
-                        </label>
-                      </div>
-                      <div className="resume-role-meta-row">
-                        <label>
-                          <span className="sr-only">Dates</span>
-                          <input
-                            aria-label={`Dates for ${section.roleTitle}`}
-                            onChange={(event) =>
-                              updateExperienceSection(draft, setDraft, index, {
-                                dates: event.target.value,
-                              })
-                            }
-                            placeholder="Jan 2021 - Present"
-                            value={section.dates ?? ""}
-                          />
-                        </label>
-                        <label>
-                          <span className="sr-only">Location</span>
-                          <input
-                            aria-label={`Location for ${section.roleTitle}`}
-                            onChange={(event) =>
-                              updateExperienceSection(draft, setDraft, index, {
-                                location: event.target.value,
-                              })
-                            }
-                            placeholder="Location"
-                            value={section.location ?? ""}
-                          />
-                        </label>
-                      </div>
-                      <div className="resume-bullet-editor">
-                        {section.bullets.map((bullet, bulletIndex) => (
-                          <div className="resume-bullet-row" key={`${section.roleTitle}-${bulletIndex}`}>
-                            <span aria-hidden="true">•</span>
-                            <textarea
-                              aria-label={`Bullet ${bulletIndex + 1} for ${section.roleTitle}`}
-                              onChange={(event) =>
-                                updateExperienceBullet(draft, setDraft, index, bulletIndex, event.target.value)
-                              }
-                              rows={Math.max(1, Math.ceil(bullet.length / 88))}
-                              value={bullet}
-                            />
-                            <button
-                              aria-label={`Remove bullet ${bulletIndex + 1}`}
-                              className="icon-only-action"
-                              onClick={() => removeExperienceBullet(draft, setDraft, index, bulletIndex)}
-                              type="button"
-                            >
-                              <Trash2 size={14} aria-hidden="true" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="resume-role-actions">
-                        <button
-                          className="resume-inline-action"
-                          onClick={() => addExperienceBullet(draft, setDraft, index)}
-                          type="button"
-                        >
-                          <Plus size={14} aria-hidden="true" />
-                          Add bullet
-                        </button>
-                        <button
-                          className="resume-inline-action danger"
-                          onClick={() => removeExperienceSection(draft, setDraft, index)}
-                          type="button"
-                        >
-                          <Trash2 size={14} aria-hidden="true" />
-                          Remove role
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p className="resume-empty-note">
-                  No role-by-role work history yet. Drop a resume, LinkedIn PDF, or work history note into Pramania,
-                  then regenerate this master resume.
-                </p>
-              )}
-            </section>
-            <section>
+            <section className="resume-highlight-section">
               <div className="resume-section-heading-row">
                 <h3>Selected Highlights</h3>
               </div>
@@ -578,6 +442,169 @@ export function MasterResumePanel({
                   Add highlight
                 </button>
               </div>
+            </section>
+            <section>
+              <div className="resume-section-heading-row">
+                <h3>Professional Experience</h3>
+                <button
+                  className="resume-inline-action"
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      experienceSections: [
+                        ...draft.experienceSections,
+                        {
+                          bullets: [""],
+                          company: "",
+                          dates: "",
+                          location: "",
+                          roleTitle: "New role",
+                        },
+                      ],
+                    })
+                  }
+                  type="button"
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  Add role
+                </button>
+              </div>
+              {draft.experienceSections.length > 0 ? (
+                <div className="resume-experience-section-list">
+                  {draft.experienceSections.map((section, index) => {
+                    const companyBrand = readCompanyBrand(section.company);
+
+                    return (
+                      <article className="resume-experience-section" key={`${section.roleTitle}-${index}`}>
+                        <div className="resume-role-card-header">
+                          <label className="resume-role-title-field">
+                            <span className="sr-only">Role</span>
+                            <textarea
+                              aria-label={`Role title for experience ${index + 1}`}
+                              onChange={(event) =>
+                                updateExperienceSection(draft, setDraft, index, {
+                                  roleTitle: event.target.value,
+                                })
+                              }
+                              placeholder="Role title"
+                              rows={Math.max(1, Math.ceil(section.roleTitle.length / 54))}
+                              value={section.roleTitle}
+                            />
+                          </label>
+                          <div className="resume-role-company-field">
+                            {companyBrand ? (
+                              <a
+                                aria-label={`Open ${companyBrand.label} website`}
+                                className="resume-company-link"
+                                href={companyBrand.url}
+                                rel="noreferrer"
+                                target="_blank"
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className="resume-company-logo"
+                                  style={{ backgroundImage: `url(${companyBrand.logoUrl})` }}
+                                />
+                                <ExternalLink size={13} aria-hidden="true" />
+                              </a>
+                            ) : (
+                              <span className="resume-company-placeholder" aria-hidden="true">
+                                <Building2 size={15} />
+                              </span>
+                            )}
+                            <input
+                              aria-label={`Company for ${section.roleTitle}`}
+                              onChange={(event) =>
+                                updateExperienceSection(draft, setDraft, index, {
+                                  company: event.target.value,
+                                })
+                              }
+                              placeholder="Company"
+                              value={section.company ?? ""}
+                            />
+                          </div>
+                        </div>
+                        <div className="resume-role-meta-row">
+                          <label>
+                            <span className="sr-only">Dates</span>
+                            <textarea
+                              aria-label={`Dates for ${section.roleTitle}`}
+                              onChange={(event) =>
+                                updateExperienceSection(draft, setDraft, index, {
+                                  dates: event.target.value,
+                                })
+                              }
+                              placeholder="Jan 2021 - Present"
+                              rows={Math.max(1, Math.ceil((section.dates ?? "").length / 42))}
+                              value={section.dates ?? ""}
+                            />
+                          </label>
+                          <label>
+                            <span className="sr-only">Location</span>
+                            <textarea
+                              aria-label={`Location for ${section.roleTitle}`}
+                              onChange={(event) =>
+                                updateExperienceSection(draft, setDraft, index, {
+                                  location: event.target.value,
+                                })
+                              }
+                              placeholder="Location"
+                              rows={Math.max(1, Math.ceil((section.location ?? "").length / 42))}
+                              value={section.location ?? ""}
+                            />
+                          </label>
+                        </div>
+                        <div className="resume-bullet-editor">
+                          {section.bullets.map((bullet, bulletIndex) => (
+                            <div className="resume-bullet-row" key={`${section.roleTitle}-${bulletIndex}`}>
+                              <span aria-hidden="true">•</span>
+                              <textarea
+                                aria-label={`Bullet ${bulletIndex + 1} for ${section.roleTitle}`}
+                                onChange={(event) =>
+                                  updateExperienceBullet(draft, setDraft, index, bulletIndex, event.target.value)
+                                }
+                                rows={Math.max(1, Math.ceil(bullet.length / 88))}
+                                value={bullet}
+                              />
+                              <button
+                                aria-label={`Remove bullet ${bulletIndex + 1}`}
+                                className="icon-only-action"
+                                onClick={() => removeExperienceBullet(draft, setDraft, index, bulletIndex)}
+                                type="button"
+                              >
+                                <Trash2 size={14} aria-hidden="true" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="resume-role-actions">
+                          <button
+                            className="resume-inline-action"
+                            onClick={() => addExperienceBullet(draft, setDraft, index)}
+                            type="button"
+                          >
+                            <Plus size={14} aria-hidden="true" />
+                            Add bullet
+                          </button>
+                          <button
+                            className="resume-inline-action danger"
+                            onClick={() => removeExperienceSection(draft, setDraft, index)}
+                            type="button"
+                          >
+                            <Trash2 size={14} aria-hidden="true" />
+                            Remove role
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="resume-empty-note">
+                  No role-by-role work history yet. Drop a resume, LinkedIn PDF, or work history note into Pramania,
+                  then regenerate this master resume.
+                </p>
+              )}
             </section>
           </div>
 
@@ -706,6 +733,46 @@ function normalizeHeadlineInput(headline: string) {
   }
 
   return segments.slice(0, 2).join(" / ");
+}
+
+function readCompanyBrand(company: string | null) {
+  const normalized = company?.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const brandMap: Array<{ domain: string; label: string; patterns: string[] }> = [
+    { domain: "uipath.com", label: "UiPath", patterns: ["uipath"] },
+    { domain: "ge.com", label: "GE", patterns: ["ge", "general electric", "ge capital"] },
+    { domain: "linkedin.com", label: "LinkedIn", patterns: ["linkedin"] },
+    { domain: "microsoft.com", label: "Microsoft", patterns: ["microsoft"] },
+    { domain: "oracle.com", label: "Oracle", patterns: ["oracle"] },
+    { domain: "salesforce.com", label: "Salesforce", patterns: ["salesforce"] },
+    { domain: "servicenow.com", label: "ServiceNow", patterns: ["servicenow", "service now"] },
+    { domain: "sap.com", label: "SAP", patterns: ["sap"] },
+    { domain: "accenture.com", label: "Accenture", patterns: ["accenture"] },
+    { domain: "deloitte.com", label: "Deloitte", patterns: ["deloitte"] },
+    { domain: "pwc.com", label: "PwC", patterns: ["pwc", "pricewaterhousecoopers"] },
+    { domain: "ey.com", label: "EY", patterns: ["ey", "ernst young"] },
+  ];
+  const match = brandMap.find((item) =>
+    item.patterns.some((pattern) => normalized === pattern || new RegExp(`(^| )${escapeRegExp(pattern)}( |$)`).test(normalized)),
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    label: match.label,
+    logoUrl: `https://logo.clearbit.com/${match.domain}`,
+    url: `https://${match.domain}`,
+  };
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function updateResumeContact(

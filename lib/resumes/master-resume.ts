@@ -22,7 +22,7 @@ import {
 import { extractExperienceSectionsFromText } from "@/lib/resumes/source-experience";
 import { createClient } from "@/lib/supabase/server";
 
-export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v4";
+export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v5";
 const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
 const PDF_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
@@ -495,7 +495,7 @@ function enrichMasterResumeWithSourceEvidence(
     },
     experienceSections:
       sourceSections.length > 0
-        ? mergeExperienceSections(resume.experienceSections, sourceSections)
+        ? mergeExperienceSections(sourceSections, resume.experienceSections)
         : resume.experienceSections,
     reviewerNotes: [
       ...resume.reviewerNotes,
@@ -537,7 +537,7 @@ function normalizeLinkedInUrl(value: string) {
 
 function extractExperienceSectionsFromSources(sourceEvidence: SourceEvidence[]) {
   const sections = sourceEvidence
-    .flatMap((source) => extractExperienceSectionsFromText(source.extracted_text ?? ""))
+    .flatMap((source) => extractExperienceSectionsFromText(stripRecommendationSourceSections(source.extracted_text ?? "")))
     .filter((section) => section.roleTitle && (section.company || section.dates || section.bullets.length > 0));
 
   const seen = new Set<string>();
@@ -973,6 +973,11 @@ Write for a broad master resume, not a specific job post. Use recruiter-grade
 judgment: strong positioning, supported keywords, evidence-backed bullets, and
 clear gaps the user should fill before using this as an application source.
 
+Never treat LinkedIn Recommendations, testimonials, references, endorsements,
+third-party praise, or "worked with" sections as work experience. Those sources
+can inform reviewerNotes only if useful, but they must not become roleTitle,
+company, dates, location, or work-history bullets.
+
 Use a standard ATS structure. The headline must be a concise title or
 positioning line under 95 characters, not a pipe-delimited keyword list. Put
 keyword breadth into skills and experience, not the title. The summary should
@@ -1116,7 +1121,7 @@ function buildStructuredExperienceTimelineForPrompt(text: string | null) {
 }
 
 function buildResumeSourceExcerpt(text: string | null) {
-  const cleanText = text?.replace(/\s+/g, " ").trim();
+  const cleanText = stripRecommendationSourceSections(text ?? "").replace(/\s+/g, " ").trim();
 
   if (!cleanText) {
     return null;
@@ -1128,7 +1133,7 @@ function buildResumeSourceExcerpt(text: string | null) {
 
   const windows: Array<{ end: number; start: number }> = [{ start: 0, end: 1300 }];
   const sectionPattern =
-    /\b(summary|experience|employment|work history|professional experience|projects?|skills?|education|certifications?|licenses?|awards?|honou?rs?|publications?|volunteer|recommendations?)\b/gi;
+    /\b(summary|experience|employment|work history|professional experience|projects?|skills?|education|certifications?|licenses?|awards?|honou?rs?|publications?|volunteer)\b/gi;
   let match: RegExpExecArray | null;
 
   while ((match = sectionPattern.exec(cleanText)) && windows.length < 7) {
@@ -1157,6 +1162,25 @@ function buildResumeSourceExcerpt(text: string | null) {
     .filter(Boolean)
     .join(" [...] ")
     .slice(0, 14000);
+}
+
+function stripRecommendationSourceSections(value: string) {
+  const decoded = value
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  const recommendationMatch = /(?:^|\n|\r)\s*(recommendations?|testimonials?|endorsements?|references?)\s*(?:\n|\r|$)/i.exec(
+    decoded,
+  );
+
+  if (!recommendationMatch) {
+    return decoded;
+  }
+
+  return decoded.slice(0, recommendationMatch.index).trim();
 }
 
 async function createSignedArtifactUrl(path: string | null) {

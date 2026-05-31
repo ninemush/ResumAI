@@ -54,6 +54,7 @@ export function normalizeResumeContent(value: ResumeContent): ResumeContent {
       roleTitle: stripResumeUiLabels(cleanResumeText(section.roleTitle, 140)) || "Role",
     }))
     .filter((section) => section.bullets.length > 0 || section.roleTitle !== "Role")
+    .filter((section) => !looksLikeRecommendationExperienceSection(section))
     .slice(0, MAX_RESUME_EXPERIENCE_SECTIONS);
   const experienceBullets = value.experienceBullets
     .map((bullet) => cleanResumeText(bullet, 320))
@@ -87,7 +88,11 @@ function cleanNullableText(value: string | null, maxLength: number) {
 }
 
 function cleanResumeText(value: string, maxLength = 320) {
-  return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
+  return value
+    .replace(/\*\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
 }
 
 function cleanResumeHeadline(value: string) {
@@ -106,4 +111,50 @@ function stripResumeUiLabels(value: string) {
     .replace(/^(?:draft|final|saved)\s*[:\-–—]\s*/i, "")
     .replace(/^(?:master\s+ats\s+resume|ats\s+master\s+resume|master\s+resume)\s*[:\-–—]?\s*/i, "")
     .trim();
+}
+
+function looksLikeRecommendationExperienceSection(
+  section: Pick<ResumeContent["experienceSections"][number], "bullets" | "company" | "dates" | "roleTitle">,
+) {
+  const combined = [section.roleTitle, section.company, section.dates, ...section.bullets]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const roleAndCompany = [section.roleTitle, section.company].filter(Boolean).join(" ");
+
+  if (
+    /\b(recommendation|testimonial|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed)?\b|he is an?|she is an?)\b/i.test(
+      combined,
+    )
+  ) {
+    return true;
+  }
+
+  if (/^\*|\*$/.test(section.roleTitle.trim())) {
+    return true;
+  }
+
+  if (
+    looksLikePersonName(roleAndCompany) &&
+    /\b(vice president|director|manager|leader|executive|specialist|consultant|advisor)\b/i.test(
+      section.roleTitle,
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function looksLikePersonName(value: string) {
+  const words = value.trim().split(/\s+/);
+
+  return (
+    words.length >= 2 &&
+    words.length <= 5 &&
+    words.every((word) => /^[A-Z][a-z.'-]+$/.test(word)) &&
+    !/\b(Inc|LLC|Ltd|Limited|Group|Company|Corp|Corporation|Capital|Services|Technologies|Technology|Systems|Bank|University)\b/.test(
+      value,
+    )
+  );
 }

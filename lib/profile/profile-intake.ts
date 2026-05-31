@@ -808,6 +808,7 @@ function buildDeterministicProfileIntakeResult({
     "Education",
     "Licenses",
     "Skills",
+    "Recommendations",
   ]);
   const experience = readSectionText(normalizedText, "Experience", [
     "Education",
@@ -815,6 +816,12 @@ function buildDeterministicProfileIntakeResult({
     "Certifications",
     "Skills",
     "Projects",
+    "Recommendations",
+    "Endorsements",
+    "Testimonials",
+    "Honors",
+    "Awards",
+    "Volunteer",
   ]);
   const education = readSectionText(normalizedText, "Education", [
     "Licenses",
@@ -1028,6 +1035,10 @@ function addFact(
     return;
   }
 
+  if (type === "experience" && looksLikeRecommendationOrTestimonial(normalized)) {
+    return;
+  }
+
   const key = buildFactKey(type, normalized);
 
   if (facts.some((fact) => buildFactKey(fact.type, fact.value) === key)) {
@@ -1141,7 +1152,7 @@ function readGeneralCareerHighlights(text: string) {
       highlights.push(`${line} at ${nextLine}`);
     }
 
-    if (looksLikeCareerHighlight(line)) {
+    if (looksLikeCareerHighlight(line) && !looksLikeRecommendationOrTestimonial(line)) {
       highlights.push(line.replace(/^•\s*/, ""));
     }
 
@@ -1151,6 +1162,12 @@ function readGeneralCareerHighlights(text: string) {
   }
 
   return highlights;
+}
+
+function looksLikeRecommendationOrTestimonial(value: string) {
+  return /\b(recommendation|testimonial|endorsement|reference|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed)?\b|he is an?|she is an?)\b/i.test(
+    value,
+  );
 }
 
 function readEducationHighlights(education: string) {

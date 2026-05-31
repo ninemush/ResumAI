@@ -2082,8 +2082,8 @@ input:focus {
 .resume-role-card-header {
   align-items: baseline;
   display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(220px, 0.72fr);
 }
 
 .resume-role-card-header label,
@@ -2093,11 +2093,48 @@ input:focus {
   gap: 4px;
 }
 
+.resume-role-company-field {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
 .resume-role-company-field input {
   color: var(--foreground);
   font-size: 0.96rem;
   font-weight: 700;
   text-align: right;
+}
+
+.resume-company-link,
+.resume-company-placeholder {
+  align-items: center;
+  border: 1px solid rgba(185, 155, 103, 0.28);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  gap: 5px;
+  height: 30px;
+  justify-content: center;
+  text-decoration: none;
+  width: 52px;
+}
+
+.resume-company-link:hover {
+  border-color: rgba(185, 155, 103, 0.48);
+  color: var(--foreground);
+}
+
+.resume-company-logo {
+  background-color: rgba(185, 155, 103, 0.08);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  border-radius: 50%;
+  display: inline-block;
+  height: 18px;
+  width: 18px;
 }
 
 .resume-role-meta-row {
@@ -2106,12 +2143,16 @@ input:focus {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.resume-role-meta-row input {
+.resume-role-meta-row textarea {
+  border-bottom: 1px solid rgba(185, 155, 103, 0.28);
   color: var(--muted);
   font-size: 0.86rem;
+  line-height: 1.38;
+  min-height: 28px;
+  padding: 3px 0 5px;
 }
 
-.resume-role-meta-row label:last-child input {
+.resume-role-meta-row label:last-child textarea {
   text-align: right;
 }
 
@@ -4695,8 +4736,12 @@ input:focus {
     grid-template-columns: 1fr;
   }
 
+  .resume-role-company-field {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
   .resume-role-company-field input,
-  .resume-role-meta-row label:last-child input {
+  .resume-role-meta-row label:last-child textarea {
     text-align: left;
   }
 

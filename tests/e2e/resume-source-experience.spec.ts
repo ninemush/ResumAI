@@ -68,6 +68,12 @@ Nov 2008 - Jun 2010
 United States
 Strengthened security controls and supported enterprise risk remediation.
 
+Recommendations
+Juan Pajon
+Global Innovation Customer Success Services Senior Vice President
+April 1, 2019, Juan worked with Sumeet on the same team and had the pleasure
+to share time at GE with Sumeet. He is an excellent professional and I recommend him.
+
 Education
 Example University
 `;
@@ -93,6 +99,10 @@ test("extracts a LinkedIn-style role timeline without flattening companies or da
       "Information Security Specialist",
     ]),
   );
+  expect(sections.map((section) => section.roleTitle)).not.toContain(
+    "Global Innovation Customer Success Services Senior Vice President",
+  );
+  expect(JSON.stringify(sections)).not.toMatch(/Juan Pajon|worked with Sumeet|recommend/i);
 });
 
 test("keeps internal resume UI labels out of generated resume content", () => {
@@ -113,6 +123,13 @@ test("keeps internal resume UI labels out of generated resume content", () => {
         location: "Dubai",
         roleTitle: "Master ATS Resume: Global VP",
       },
+      {
+        bullets: ["Juan worked with Sumeet on the same team and recommended him."],
+        company: "Juan Pajon",
+        dates: "April 1, 2019, Juan worked with Sumeet on the same team",
+        location: null,
+        roleTitle: "Global Innovation Customer Success Services Senior Vice President",
+      },
     ],
     headline: "Master ATS Resume: Enterprise Transformation Executive | GTM",
     keywordGaps: [],
@@ -125,4 +142,5 @@ test("keeps internal resume UI labels out of generated resume content", () => {
   expect(normalized.contact.linkedin).toBe("https://www.linkedin.com/in/example");
   expect(normalized.summary).toBe("Builds operating models and measurable value.");
   expect(normalized.experienceSections[0].roleTitle).toBe("Global VP");
+  expect(normalized.experienceSections).toHaveLength(1);
 });
