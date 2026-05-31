@@ -397,6 +397,46 @@ input:focus {
   color: var(--danger);
 }
 
+.auth-secondary-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.auth-secondary-actions a,
+.auth-secondary-actions button {
+  background: transparent;
+  border: 0;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: rgba(185, 155, 103, 0.55);
+  text-underline-offset: 3px;
+}
+
+.auth-secondary-actions button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.centered-auth-page {
+  align-items: center;
+  display: grid;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.email-mfa-card {
+  margin-inline: auto;
+  max-width: 520px;
+}
+
 .terms-consent {
   align-items: start;
   color: var(--muted);

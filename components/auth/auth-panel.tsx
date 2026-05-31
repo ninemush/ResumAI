@@ -17,7 +17,7 @@ import { brand } from "@/lib/brand";
 import { TERMS_VERSION } from "@/lib/legal/terms";
 import { createClient } from "@/lib/supabase/browser";
 
-type AuthMode = "sign-in" | "sign-up";
+type AuthMode = "sign-in" | "sign-up" | "reset-password";
 type OAuthProviderId = Provider;
 
 const oauthProviders: Array<{
@@ -71,6 +71,8 @@ const pageLinks = ["Overview", "Features", "Pricing"];
 export function AuthPanel() {
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailCodeTarget, setEmailCodeTarget] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -83,6 +85,16 @@ export function AuthPanel() {
     setError(null);
     setStatus(null);
 
+    if (emailCodeTarget) {
+      await handleEmailCodeSubmit();
+      return;
+    }
+
+    if (mode === "reset-password") {
+      await handlePasswordResetRequest();
+      return;
+    }
+
     if (mode === "sign-up" && !termsAccepted) {
       setError("You need to accept the Terms and Conditions before creating an account.");
       return;
@@ -90,12 +102,19 @@ export function AuthPanel() {
 
     setIsSubmitting(true);
 
-    const supabase = createClient();
     const termsAcceptedAt = new Date().toISOString();
     const result =
       mode === "sign-in"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({
+        ? await fetch("/api/auth/password-sign-in", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => ({
+            data: await response.json(),
+            ok: response.ok,
+          }))
+        : await createClient()
+          .auth.signUp({
             email,
             password,
             options: {
@@ -106,12 +125,23 @@ export function AuthPanel() {
                 terms_version: TERMS_VERSION,
               },
             },
-          });
+          })
+          .then((response) => ({
+            data: response,
+            ok: !response.error,
+          }));
 
     setIsSubmitting(false);
 
-    if (result.error) {
-      setError(result.error.message);
+    if (!result.ok) {
+      setError(readAuthErrorMessage(result.data));
+      return;
+    }
+
+    if (mode === "sign-in" && readRequiresEmailCode(result.data)) {
+      setEmailCodeTarget(readEmailCodeTarget(result.data) ?? email);
+      setPassword("");
+      setStatus("I sent a 6-digit code to your email. Enter it to finish signing in.");
       return;
     }
 
@@ -121,10 +151,72 @@ export function AuthPanel() {
         termsAcceptedAt,
         termsVersion: TERMS_VERSION,
       });
-      setStatus("Account created. Check your inbox if email confirmation is enabled.");
+      await createClient().auth.signOut();
+      setMode("sign-in");
+      setPassword("");
+      setStatus("Account created. Sign in now and I will send an email code to verify this device.");
+      return;
     }
 
     window.location.reload();
+  }
+
+  async function handlePasswordResetRequest() {
+    setIsSubmitting(true);
+
+    const supabase = createClient();
+    const redirectTo = new URL("/auth/callback", window.location.origin);
+    redirectTo.searchParams.set("next", "/auth/reset-password");
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectTo.toString(),
+    });
+
+    setIsSubmitting(false);
+
+    if (resetError) {
+      setError(resetError.message);
+      return;
+    }
+
+    setStatus("Check your email for a secure password reset link.");
+  }
+
+  async function handleEmailCodeSubmit() {
+    setIsSubmitting(true);
+
+    const response = await fetch("/api/auth/verify-email-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: emailCode }),
+    });
+    const payload = await response.json().catch(() => null);
+
+    setIsSubmitting(false);
+
+    if (!response.ok) {
+      setError(readAuthErrorMessage(payload));
+      return;
+    }
+
+    window.location.reload();
+  }
+
+  async function resendEmailCode() {
+    setError(null);
+    setStatus(null);
+    setIsSubmitting(true);
+
+    const response = await fetch("/api/auth/resend-email-code", { method: "POST" });
+    const payload = await response.json().catch(() => null);
+
+    setIsSubmitting(false);
+
+    if (!response.ok) {
+      setError(readAuthErrorMessage(payload));
+      return;
+    }
+
+    setStatus("I sent a fresh code to your email.");
   }
 
   async function handleOAuthSignIn(provider: OAuthProviderId) {
@@ -217,31 +309,45 @@ export function AuthPanel() {
 
       <form className="auth-card" onSubmit={handleSubmit}>
         <div className="auth-card-intro">
-          <h2>{mode === "sign-in" ? "Welcome back" : "Create your workspace"}</h2>
+          <h2>
+            {emailCodeTarget
+              ? "Check your email"
+              : mode === "reset-password"
+                ? "Reset your password"
+                : mode === "sign-in"
+                  ? "Welcome back"
+                  : "Create your workspace"}
+          </h2>
           <p>
-            {mode === "sign-in"
-              ? "Pick up where your profile, applications, and career context left off."
-              : "Start with a resume, LinkedIn link, or career note. Pramania will shape it with you."}
+            {emailCodeTarget
+              ? `Enter the 6-digit code sent to ${emailCodeTarget}.`
+              : mode === "reset-password"
+                ? "Enter your email and we will send a secure reset link."
+                : mode === "sign-in"
+                  ? "Pick up where your profile, applications, and career context left off."
+                  : "Start with a resume, LinkedIn link, or career note. Pramania will shape it with you."}
           </p>
         </div>
-        <div className="segmented-control" aria-label="Authentication mode">
-          <button
-            className={mode === "sign-in" ? "active" : ""}
-            type="button"
-            onClick={() => setMode("sign-in")}
-          >
-            Sign in
-          </button>
-          <button
-            className={mode === "sign-up" ? "active" : ""}
-            type="button"
-            onClick={() => setMode("sign-up")}
-          >
-            Create account
-          </button>
-        </div>
+        {!emailCodeTarget && mode !== "reset-password" ? (
+          <div className="segmented-control" aria-label="Authentication mode">
+            <button
+              className={mode === "sign-in" ? "active" : ""}
+              type="button"
+              onClick={() => setMode("sign-in")}
+            >
+              Sign in
+            </button>
+            <button
+              className={mode === "sign-up" ? "active" : ""}
+              type="button"
+              onClick={() => setMode("sign-up")}
+            >
+              Create account
+            </button>
+          </div>
+        ) : null}
 
-        {mode === "sign-up" ? (
+        {!emailCodeTarget && mode === "sign-up" ? (
           <label>
             Full name
             <input
@@ -256,7 +362,8 @@ export function AuthPanel() {
           </label>
         ) : null}
 
-        <label>
+        {!emailCodeTarget ? (
+          <label>
           Email
           <input
             autoComplete="email"
@@ -268,23 +375,44 @@ export function AuthPanel() {
             type="email"
             value={email}
           />
-        </label>
+          </label>
+        ) : null}
 
-        <label>
-          Password
-          <input
-            autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
-            minLength={8}
-            name="password"
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="At least 8 characters"
-            required
-            type="password"
-            value={password}
-          />
-        </label>
+        {!emailCodeTarget && mode !== "reset-password" ? (
+          <label>
+            Password
+            <input
+              autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
+              minLength={8}
+              name="password"
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="At least 8 characters"
+              required
+              type="password"
+              value={password}
+            />
+          </label>
+        ) : null}
 
-        {mode === "sign-up" ? (
+        {emailCodeTarget ? (
+          <label>
+            Email code
+            <input
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              maxLength={6}
+              name="email-code"
+              onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              pattern="[0-9]{6}"
+              placeholder="6-digit code"
+              required
+              type="text"
+              value={emailCode}
+            />
+          </label>
+        ) : null}
+
+        {!emailCodeTarget && mode === "sign-up" ? (
           <label className="terms-consent">
             <input
               checked={termsAccepted}
@@ -311,33 +439,88 @@ export function AuthPanel() {
 
         <button className="primary-action" disabled={isSubmitting} type="submit">
           {isSubmitting ? <Loader2 className="spin" size={18} /> : null}
-          {mode === "sign-in" ? "Enter workspace" : "Start my private profile"}
+          {emailCodeTarget
+            ? "Verify code"
+            : mode === "reset-password"
+              ? "Send reset link"
+              : mode === "sign-in"
+                ? "Enter workspace"
+                : "Start my private profile"}
           <ArrowRight size={18} aria-hidden="true" />
         </button>
+
+        <div className="auth-secondary-actions">
+          {emailCodeTarget ? (
+            <>
+              <button disabled={isSubmitting} onClick={() => void resendEmailCode()} type="button">
+                Resend code
+              </button>
+              <button
+                disabled={isSubmitting}
+                onClick={() => {
+                  setEmailCodeTarget(null);
+                  setEmailCode("");
+                  setStatus(null);
+                }}
+                type="button"
+              >
+                Back to sign in
+              </button>
+            </>
+          ) : mode === "sign-in" ? (
+            <button
+              disabled={isSubmitting}
+              onClick={() => {
+                setMode("reset-password");
+                setError(null);
+                setStatus(null);
+              }}
+              type="button"
+            >
+              Forgot password?
+            </button>
+          ) : mode === "reset-password" ? (
+            <button
+              disabled={isSubmitting}
+              onClick={() => {
+                setMode("sign-in");
+                setError(null);
+                setStatus(null);
+              }}
+              type="button"
+            >
+              Back to sign in
+            </button>
+          ) : null}
+        </div>
 
         <p className="auth-card-note">
           Built around how recruiters screen: clarity, fit, evidence, keywords, and momentum.
         </p>
 
-        <div className="auth-divider">
-          <span>or continue with</span>
-        </div>
+        {!emailCodeTarget && mode !== "reset-password" ? (
+          <>
+            <div className="auth-divider">
+              <span>or continue with</span>
+            </div>
 
-        <div className="oauth-grid" aria-label="Social sign in options">
-          {oauthProviders.map((provider) => (
-            <button
-              aria-label={`Continue with ${provider.label}`}
-              className="oauth-button"
-              disabled={isSubmitting}
-              key={provider.label}
-              onClick={() => void handleOAuthSignIn(provider.id)}
-              type="button"
-            >
-              <ProviderIcon icon={provider.icon} />
-              <span>{provider.label}</span>
-            </button>
-          ))}
-        </div>
+            <div className="oauth-grid" aria-label="Social sign in options">
+              {oauthProviders.map((provider) => (
+                <button
+                  aria-label={`Continue with ${provider.label}`}
+                  className="oauth-button"
+                  disabled={isSubmitting}
+                  key={provider.label}
+                  onClick={() => void handleOAuthSignIn(provider.id)}
+                  type="button"
+                >
+                  <ProviderIcon icon={provider.icon} />
+                  <span>{provider.label}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
         <p className="auth-legal-links">
           <a href="/terms" target="_blank" rel="noreferrer">
             Terms
@@ -385,6 +568,38 @@ export function AuthPanel() {
       </section>
     </div>
   );
+}
+
+function readAuthErrorMessage(payload: unknown) {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "error" in payload &&
+    payload.error &&
+    typeof payload.error === "object" &&
+    "message" in payload.error &&
+    typeof payload.error.message === "string"
+  ) {
+    return payload.error.message;
+  }
+
+  return "Authentication could not be completed. Please try again.";
+}
+
+function readRequiresEmailCode(payload: unknown) {
+  if (!payload || typeof payload !== "object" || !("requiresEmailCode" in payload)) {
+    return false;
+  }
+
+  return payload.requiresEmailCode === true;
+}
+
+function readEmailCodeTarget(payload: unknown) {
+  if (!payload || typeof payload !== "object" || !("email" in payload)) {
+    return null;
+  }
+
+  return typeof payload.email === "string" ? payload.email : null;
 }
 
 async function saveSignupProfileName({

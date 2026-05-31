@@ -313,7 +313,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         <section className="owner-detail-panel owner-wide-panel" aria-label="Support tickets">
           <SectionHeading
             eyebrow="Support"
-            title="Issue queue"
+            title="Support queue"
             body="Each issue has a plain-English summary, likely root cause, suggested fix, supporting logs, status, and owner notes. Use this to decide whether to fix, resolve, cancel, or escalate."
           />
           {metrics.supportTickets.length > 0 ? (

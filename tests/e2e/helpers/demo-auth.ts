@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createHmac } from "node:crypto";
 import { join } from "node:path";
 
 import { createChunks } from "@supabase/ssr";
@@ -67,18 +68,46 @@ export async function authenticateDemoUser({
   const cookieName = `sb-${projectRef}-auth-token`;
   const cookieValue = `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`;
   const chunks = createChunks(cookieName, cookieValue);
+  const mfaCookieValue = signMfaCookie({
+    email,
+    userId: session.user.id,
+  });
 
   await context.addCookies(
-    chunks.map(({ name, value }) => ({
-      domain: "localhost",
-      httpOnly: false,
-      name,
-      path: "/",
-      sameSite: "Lax" as const,
-      secure: false,
-      value,
-    })),
+    [
+      ...chunks.map(({ name, value }) => ({
+        domain: "localhost",
+        httpOnly: false,
+        name,
+        path: "/",
+        sameSite: "Lax" as const,
+        secure: false,
+        value,
+      })),
+      {
+        domain: "localhost",
+        httpOnly: true,
+        name: "pramania_email_mfa",
+        path: "/",
+        sameSite: "Lax" as const,
+        secure: false,
+        value: mfaCookieValue,
+      },
+    ],
   );
+}
+
+function signMfaCookie({ email, userId }: { email: string; userId: string }) {
+  const payload = {
+    email: email.trim().toLowerCase(),
+    exp: Math.floor(Date.now() / 1000) + 8 * 60 * 60,
+    userId,
+  };
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const secret = process.env.AUTH_MFA_COOKIE_SECRET ?? "local-pramania-auth-cookie-secret";
+  const signature = createHmac("sha256", secret).update(encodedPayload).digest("base64url");
+
+  return `${encodedPayload}.${signature}`;
 }
 
 function requireEnv(key: string) {

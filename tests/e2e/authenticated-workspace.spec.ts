@@ -215,18 +215,20 @@ test.describe("authenticated workspace", () => {
     await expect(page.getByRole("button", { name: /30 days/i })).toBeVisible();
     await expect(page.getByText("Monitor acquisition, activation")).toBeVisible();
 
-    await expect(page.getByRole("button", { name: /Users/i })).toBeVisible();
-    await page.getByRole("button", { name: /^Users$/i }).click();
+    await expect(page.getByRole("button", { name: /^Users$/i })).toBeVisible();
+    const ownerTabs = page.getByLabel("Owner console sections");
+
+    await ownerTabs.getByRole("button", { name: /^Users$/i }).click();
     await expect(page.getByRole("heading", { name: /User operating list/i })).toBeVisible();
     await expect(page.getByPlaceholder(/Search users/i)).toBeVisible();
 
-    await page.getByRole("button", { name: /^Errors$/i }).click();
+    await ownerTabs.getByRole("button", { name: /^Errors$/i }).click();
     await expect(page.getByRole("heading", { name: /Errors and root-cause review/i })).toBeVisible();
 
-    await page.getByRole("button", { name: /^Support$/i }).click();
+    await ownerTabs.getByRole("button", { name: /^Support$/i }).click();
     await expect(page.getByRole("heading", { name: /Support queue/i })).toBeVisible();
 
-    await page.getByRole("button", { name: /^Outcomes$/i }).click();
+    await ownerTabs.getByRole("button", { name: /^Outcomes$/i }).click();
     await expect(page.getByRole("heading", { name: /Outcome by tier/i })).toBeVisible();
   });
 

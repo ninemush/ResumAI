@@ -2,16 +2,13 @@
 
 import { LogOut } from "lucide-react";
 
-import { createClient } from "@/lib/supabase/browser";
-
 type SignOutButtonProps = {
   compact?: boolean;
 };
 
 export function SignOutButton({ compact = false }: SignOutButtonProps) {
   async function signOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await fetch("/api/auth/sign-out", { method: "POST" });
     window.location.reload();
   }
 

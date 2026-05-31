@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
+  const nextPath = readSafeNextPath(requestUrl);
 
   if (code) {
     const supabase = await createClient();
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(new URL("/", requestUrl.origin));
+  return NextResponse.redirect(new URL(nextPath, requestUrl.origin));
 }
 
 async function ensureProfileFromAuthMetadata({
@@ -101,4 +102,14 @@ function readTermsAcceptance(requestUrl: URL, metadata: Record<string, unknown>)
 
 function isValidIsoDate(value: string | null) {
   return Boolean(value && !Number.isNaN(Date.parse(value)));
+}
+
+function readSafeNextPath(requestUrl: URL) {
+  const next = requestUrl.searchParams.get("next");
+
+  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return "/";
+  }
+
+  return next;
 }

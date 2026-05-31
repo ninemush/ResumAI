@@ -93,7 +93,7 @@ export function SideNav({ activeView, collapsed, onSelectView, onToggleCollapsed
           return (
             <button
               aria-current={isActive ? "page" : undefined}
-              aria-label={collapsed ? item.label : undefined}
+              aria-label={item.label}
               className={isActive ? "nav-item active" : "nav-item"}
               key={item.label}
               onClick={() => onSelectView(item.view)}
@@ -110,7 +110,7 @@ export function SideNav({ activeView, collapsed, onSelectView, onToggleCollapsed
         {session.admin.isOwner ? (
           <button
             aria-current={activeView === "owner" ? "page" : undefined}
-            aria-label={collapsed ? "Owner Console" : undefined}
+            aria-label="Owner Console"
             className={activeView === "owner" ? "nav-item active" : "nav-item"}
             onClick={() => onSelectView("owner")}
             title="Owner Console"

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export type WorkspaceSession = {
   user: {
+    authProvider: string | null;
     id: string;
     email: string | null;
     fullName: string | null;
@@ -43,6 +44,7 @@ export async function getWorkspaceSession(): Promise<WorkspaceSession | null> {
 
   return {
     user: {
+      authProvider: readAuthProvider(user.app_metadata),
       id: user.id,
       email: user.email ?? null,
       fullName,
@@ -155,4 +157,10 @@ function readTermsAcceptance(metadata: Record<string, unknown> | null | undefine
     acceptedAt: acceptedAt && !Number.isNaN(Date.parse(acceptedAt)) ? acceptedAt : null,
     version,
   };
+}
+
+function readAuthProvider(metadata: Record<string, unknown> | null | undefined) {
+  const provider = metadata?.provider;
+
+  return typeof provider === "string" ? provider : null;
 }
