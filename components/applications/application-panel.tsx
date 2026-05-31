@@ -316,32 +316,55 @@ export function ApplicationPanel({
               </span>
             </button>
 
-            <button
-              className="record-main-button application-material-cell"
-              onClick={() => loadReview(application.id)}
-              title="Open tailored resume and cover letter"
-              type="button"
-            >
-              <span className="record-summary">
-                {application.latestResumeHeadline
-                  ? cleanDisplayText(application.latestResumeHeadline)
-                  : "Materials not fully ready"}
-              </span>
-              <span className="record-material-row">
-                <span className={materialPillClass(application.latestResumeStatus)}>
-                  Resume {formatMaterialStatus(application.latestResumeStatus)}
+            <div className="application-material-cell">
+              <button
+                className="record-main-button"
+                onClick={() => loadReview(application.id)}
+                title="Open tailored resume and cover letter"
+                type="button"
+              >
+                <span className="record-summary">
+                  {application.latestResumeHeadline
+                    ? cleanDisplayText(application.latestResumeHeadline)
+                    : "Materials not fully ready"}
                 </span>
-                <span className={materialPillClass(application.latestCoverLetterStatus)}>
-                  Letter {formatMaterialStatus(application.latestCoverLetterStatus)}
+                <span className="record-material-row">
+                  <span className={materialPillClass(application.latestResumeStatus)}>
+                    Resume {formatMaterialStatus(application.latestResumeStatus)}
+                  </span>
+                  <span className={materialPillClass(application.latestCoverLetterStatus)}>
+                    Letter {formatMaterialStatus(application.latestCoverLetterStatus)}
+                  </span>
                 </span>
-                {application.latestResumeHasPdf && application.latestResumeHasDocx ? (
-                  <span className="material-pill ready">Resume files</span>
-                ) : null}
-                {application.latestCoverLetterHasPdf && application.latestCoverLetterHasDocx ? (
-                  <span className="material-pill ready">Letter files</span>
-                ) : null}
-              </span>
-            </button>
+              </button>
+              {application.latestResumePdfUrl ||
+              application.latestResumeDocxUrl ||
+              application.latestCoverLetterPdfUrl ||
+              application.latestCoverLetterDocxUrl ? (
+                <span className="record-download-row">
+                  {application.latestResumePdfUrl ? (
+                    <a href={application.latestResumePdfUrl} rel="noreferrer" target="_blank">
+                      Resume PDF
+                    </a>
+                  ) : null}
+                  {application.latestResumeDocxUrl ? (
+                    <a href={application.latestResumeDocxUrl} rel="noreferrer" target="_blank">
+                      Resume DOCX
+                    </a>
+                  ) : null}
+                  {application.latestCoverLetterPdfUrl ? (
+                    <a href={application.latestCoverLetterPdfUrl} rel="noreferrer" target="_blank">
+                      Letter PDF
+                    </a>
+                  ) : null}
+                  {application.latestCoverLetterDocxUrl ? (
+                    <a href={application.latestCoverLetterDocxUrl} rel="noreferrer" target="_blank">
+                      Letter DOCX
+                    </a>
+                  ) : null}
+                </span>
+              ) : null}
+            </div>
 
             <div className="application-stage-cell">
               <select
@@ -379,13 +402,13 @@ export function ApplicationPanel({
               >
                 <WandSparkles size={14} aria-hidden="true" />
                 {generatingApplicationId === application.id
-                  ? "Generating files"
+                  ? "Generating"
                   : application.latestResumeHasPdf &&
                       application.latestResumeHasDocx &&
                       application.latestCoverLetterHasPdf &&
                       application.latestCoverLetterHasDocx
-                    ? "Regenerate files"
-                    : "Generate files"}
+                    ? "Regenerate"
+                    : "Generate"}
               </button>
               <button
                 className="secondary-action compact-action"

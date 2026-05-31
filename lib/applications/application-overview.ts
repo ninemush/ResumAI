@@ -2,6 +2,9 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 
+const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
+const ARTIFACT_SIGNED_URL_TTL_SECONDS = 10 * 60;
+
 export type ApplicationOverview = {
   recentApplications: {
     id: string;
@@ -9,12 +12,16 @@ export type ApplicationOverview = {
     jobTitle: string | null;
     jobUrl: string;
     latestCoverLetterExcerpt: string | null;
+    latestCoverLetterDocxUrl: string | null;
     latestCoverLetterHasDocx: boolean;
     latestCoverLetterHasPdf: boolean;
+    latestCoverLetterPdfUrl: string | null;
     latestCoverLetterStatus: string | null;
+    latestResumeDocxUrl: string | null;
     latestResumeHasDocx: boolean;
     latestResumeHasPdf: boolean;
     latestResumeHeadline: string | null;
+    latestResumePdfUrl: string | null;
     latestResumeStatus: string | null;
     statusEvents: {
       createdAt: string;
@@ -87,11 +94,25 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
       : [
           new Map<
             string,
-            { hasDocx: boolean; hasPdf: boolean; headline: string | null; status: string }
+            {
+              docxUrl: string | null;
+              hasDocx: boolean;
+              hasPdf: boolean;
+              headline: string | null;
+              pdfUrl: string | null;
+              status: string;
+            }
           >(),
           new Map<
             string,
-            { excerpt: string | null; hasDocx: boolean; hasPdf: boolean; status: string }
+            {
+              docxUrl: string | null;
+              excerpt: string | null;
+              hasDocx: boolean;
+              hasPdf: boolean;
+              pdfUrl: string | null;
+              status: string;
+            }
           >(),
           new Map<string, ApplicationOverview["recentApplications"][number]["statusEvents"]>(),
         ];
@@ -101,13 +122,17 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
     companyName: application.company_name,
     jobTitle: application.job_title,
     jobUrl: application.job_url,
+    latestCoverLetterDocxUrl: coverLetterArtifacts.get(application.id)?.docxUrl ?? null,
     latestCoverLetterExcerpt: coverLetterArtifacts.get(application.id)?.excerpt ?? null,
     latestCoverLetterHasDocx: coverLetterArtifacts.get(application.id)?.hasDocx ?? false,
     latestCoverLetterHasPdf: coverLetterArtifacts.get(application.id)?.hasPdf ?? false,
+    latestCoverLetterPdfUrl: coverLetterArtifacts.get(application.id)?.pdfUrl ?? null,
     latestCoverLetterStatus: coverLetterArtifacts.get(application.id)?.status ?? null,
+    latestResumeDocxUrl: resumeArtifacts.get(application.id)?.docxUrl ?? null,
     latestResumeHasDocx: resumeArtifacts.get(application.id)?.hasDocx ?? false,
     latestResumeHasPdf: resumeArtifacts.get(application.id)?.hasPdf ?? false,
     latestResumeHeadline: resumeArtifacts.get(application.id)?.headline ?? null,
+    latestResumePdfUrl: resumeArtifacts.get(application.id)?.pdfUrl ?? null,
     latestResumeStatus: resumeArtifacts.get(application.id)?.status ?? null,
     statusEvents: statusEvents.get(application.id) ?? [],
     status: application.status,
@@ -216,21 +241,34 @@ async function readLatestResumeArtifacts({ applicationIds }: { applicationIds: s
     throw new Error("APPLICATION_ARTIFACTS_READ_FAILED");
   }
 
-  return (data ?? []).reduce<
-    Map<string, { hasDocx: boolean; hasPdf: boolean; headline: string | null; status: string }>
-  >((artifacts, artifact) => {
+  const artifacts = new Map<
+    string,
+    {
+      docxUrl: string | null;
+      hasDocx: boolean;
+      hasPdf: boolean;
+      headline: string | null;
+      pdfUrl: string | null;
+      status: string;
+    }
+  >();
+
+  for (const artifact of data ?? []) {
     if (!artifact.application_id || artifacts.has(artifact.application_id)) {
-      return artifacts;
+      continue;
     }
 
     artifacts.set(artifact.application_id, {
+      docxUrl: await createSignedArtifactUrl(supabase, artifact.docx_storage_path),
       hasDocx: Boolean(artifact.docx_storage_path),
       hasPdf: Boolean(artifact.pdf_storage_path),
       headline: readResumeHeadline(artifact.content_json),
+      pdfUrl: await createSignedArtifactUrl(supabase, artifact.pdf_storage_path),
       status: artifact.status,
     });
-    return artifacts;
-  }, new Map());
+  }
+
+  return artifacts;
 }
 
 async function readLatestCoverLetterArtifacts({ applicationIds }: { applicationIds: string[] }) {
@@ -245,21 +283,53 @@ async function readLatestCoverLetterArtifacts({ applicationIds }: { applicationI
     throw new Error("APPLICATION_ARTIFACTS_READ_FAILED");
   }
 
-  return (data ?? []).reduce<
-    Map<string, { excerpt: string | null; hasDocx: boolean; hasPdf: boolean; status: string }>
-  >((artifacts, artifact) => {
+  const artifacts = new Map<
+    string,
+    {
+      docxUrl: string | null;
+      excerpt: string | null;
+      hasDocx: boolean;
+      hasPdf: boolean;
+      pdfUrl: string | null;
+      status: string;
+    }
+  >();
+
+  for (const artifact of data ?? []) {
     if (!artifact.application_id || artifacts.has(artifact.application_id)) {
-      return artifacts;
+      continue;
     }
 
     artifacts.set(artifact.application_id, {
+      docxUrl: await createSignedArtifactUrl(supabase, artifact.docx_storage_path),
       excerpt: artifact.content ? `${artifact.content.slice(0, 180)}...` : null,
       hasDocx: Boolean(artifact.docx_storage_path),
       hasPdf: Boolean(artifact.pdf_storage_path),
+      pdfUrl: await createSignedArtifactUrl(supabase, artifact.pdf_storage_path),
       status: artifact.status,
     });
-    return artifacts;
-  }, new Map());
+  }
+
+  return artifacts;
+}
+
+async function createSignedArtifactUrl(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  path: string | null,
+) {
+  if (!path) {
+    return null;
+  }
+
+  const { data, error } = await supabase.storage
+    .from(GENERATED_ARTIFACT_BUCKET)
+    .createSignedUrl(path, ARTIFACT_SIGNED_URL_TTL_SECONDS);
+
+  if (error || !data?.signedUrl) {
+    return null;
+  }
+
+  return data.signedUrl;
 }
 
 function readResumeHeadline(contentJson: unknown) {
