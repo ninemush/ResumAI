@@ -132,7 +132,6 @@ const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image" | "li
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "docx",
   ],
-  ["application/msword", "docx"],
   ["text/plain", "txt"],
   ["text/csv", "linkedin"],
   ["application/csv", "linkedin"],
@@ -141,8 +140,6 @@ const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image" | "li
   ["image/jpeg", "image"],
   ["image/png", "image"],
   ["image/webp", "image"],
-  ["image/heic", "image"],
-  ["image/heif", "image"],
 ]);
 
 export function ConversationPanel({
@@ -800,10 +797,16 @@ export function ConversationPanel({
   }
 
   async function processFile(file: File) {
+    const unsupportedReason = getUnsupportedFileReason(file);
+
+    if (unsupportedReason) {
+      return unsupportedReason;
+    }
+
     const sourceType = inferFileSourceType(file);
 
     if (!sourceType) {
-      return `${file.name} is not a supported profile source yet.`;
+      return `${file.name} is not a supported profile source yet. Drop a PDF, DOCX, TXT file, JPG/PNG/WebP image, LinkedIn CSV/ZIP export, or paste the text/link directly into Pramania.`;
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
@@ -1085,7 +1088,7 @@ export function ConversationPanel({
         />
         <input
           ref={fileInputRef}
-          accept=".pdf,.doc,.docx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp,.heic,.heif"
+          accept=".pdf,.docx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp"
           className="sr-only"
           multiple
           onChange={(event) => {
@@ -2498,11 +2501,26 @@ function inferFileSourceType(file: File) {
   }
 
   if (extension === "pdf") return "pdf";
-  if (extension === "doc" || extension === "docx") return "docx";
+  if (extension === "docx") return "docx";
   if (extension === "txt") return "txt";
   if (extension === "zip" || extension === "csv") return "linkedin";
-  if (["jpg", "jpeg", "png", "webp", "heic", "heif"].includes(extension ?? "")) {
+  if (["jpg", "jpeg", "png", "webp"].includes(extension ?? "")) {
     return "image";
+  }
+
+  return null;
+}
+
+function getUnsupportedFileReason(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  const mimeType = file.type.toLowerCase();
+
+  if (extension === "doc" || mimeType === "application/msword") {
+    return `${file.name} is an older Word .doc file. For reliable intake, save or export it as PDF or DOCX and drop it here. I will read that directly from the chat.`;
+  }
+
+  if (extension === "heic" || extension === "heif" || mimeType === "image/heic" || mimeType === "image/heif") {
+    return `${file.name} is a HEIC/HEIF image. Convert it to JPG, PNG, or WebP and drop it here so OCR can read it cleanly.`;
   }
 
   return null;

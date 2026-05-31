@@ -108,7 +108,10 @@ export async function extractProfileSourceText({
             storagePath: source.storage_path ?? "",
           })
         : source.source_type === "docx"
-          ? await extractDocxFromStorage(source.storage_path ?? "")
+          ? await extractDocxFromStorage({
+              filename: source.original_filename,
+              storagePath: source.storage_path ?? "",
+            })
         : source.source_type === "txt"
           ? await extractTxtFromStorage(source.storage_path ?? "")
         : source.source_type === "image"
@@ -250,7 +253,17 @@ async function extractPdfFromStorage({
   });
 }
 
-async function extractDocxFromStorage(storagePath: string) {
+async function extractDocxFromStorage({
+  filename,
+  storagePath,
+}: {
+  filename: string | null;
+  storagePath: string;
+}) {
+  if (filename?.toLowerCase().endsWith(".doc")) {
+    throw new Error("DOC_UNSUPPORTED");
+  }
+
   const data = await downloadProfileSource(storagePath);
 
   if (data.size > MAX_DOCX_BYTES) {
@@ -617,14 +630,7 @@ async function extractPublicProfilePage(sourceUrl: string) {
   assertSafeProfileUrl(sourceUrl);
   const isLinkedInProfile = isLinkedInUrl(sourceUrl);
 
-  const response = await fetch(sourceUrl, {
-    headers: {
-      accept: "text/html,application/xhtml+xml",
-      "user-agent": "PramaniaProfileIngestion/0.1",
-    },
-    redirect: "follow",
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
+  const response = await fetchPublicProfilePage(sourceUrl);
 
   if (!response.ok) {
     if (isLinkedInProfile) {
@@ -669,6 +675,35 @@ async function extractPublicProfilePage(sourceUrl: string) {
   }
 
   return text;
+}
+
+async function fetchPublicProfilePage(sourceUrl: string) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      return await fetch(sourceUrl, {
+        headers: {
+          accept: "text/html,application/xhtml+xml",
+          "user-agent": "PramaniaProfileIngestion/0.1",
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+    } catch (error) {
+      lastError = error;
+      logProfileLinkFetchAttemptFailure({
+        attempt,
+        code: error instanceof Error ? error.name || error.message : "PROFILE_LINK_FETCH_FAILED",
+      });
+    }
+  }
+
+  if (lastError) {
+    throw new Error("PROFILE_LINK_FETCH_FAILED");
+  }
+
+  throw new Error("PROFILE_LINK_FETCH_FAILED");
 }
 
 async function extractLinkedInPublicProfileWithSearch(sourceUrl: string) {
@@ -1254,6 +1289,17 @@ function logOcrAttemptFailure({ attempt, code }: { attempt: number; code: string
       event: "profile_source_ocr_attempt_failed",
       attempt,
       maxAttempts: IMAGE_OCR_MAX_ATTEMPTS,
+      code,
+    }),
+  );
+}
+
+function logProfileLinkFetchAttemptFailure({ attempt, code }: { attempt: number; code: string }) {
+  console.warn(
+    JSON.stringify({
+      event: "profile_source_public_link_fetch_attempt_failed",
+      attempt,
+      maxAttempts: 2,
       code,
     }),
   );

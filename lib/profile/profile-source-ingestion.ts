@@ -156,6 +156,10 @@ function validateSourceShape(input: ProfileSourceRequest) {
     throw new Error("STORAGE_PATH_REQUIRED");
   }
 
+  if (input.sourceType === "docx" && input.originalFilename?.toLowerCase().endsWith(".doc")) {
+    throw new Error("DOC_UNSUPPORTED");
+  }
+
   if (input.sourceType === "linkedin" && input.sourceUrl) {
     const hostname = new URL(input.sourceUrl).hostname.replace(/^www\./, "");
 

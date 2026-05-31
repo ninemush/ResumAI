@@ -56,6 +56,7 @@ export function SideNav({ activeView, collapsed, onSelectView, onToggleCollapsed
           className="side-nav-logo side-nav-logo-icon"
           height={56}
           src={brand.appIconPath}
+          style={{ height: 56, width: 56 }}
           width={56}
         />
         <Image

@@ -188,6 +188,15 @@ function toApiError(error: unknown) {
       };
     }
 
+    if (error.message === "DOC_UNSUPPORTED") {
+      return {
+        category: "validation",
+        code: "source.doc_unsupported",
+        message: "Older .doc files are not reliable for profile intake. Save or export the file as PDF or DOCX and drop it into Pramania.",
+        status: 422,
+      };
+    }
+
     if (error.message === "DOCX_TEXT_EMPTY") {
       return {
         category: "validation",

@@ -12,8 +12,8 @@ This backlog captures approved direction that should be designed and implemented
 
 ## Profile Build And Intake
 
-- Make Pramania the primary interaction surface for links, files, and natural-language profile notes.
-- Harden ingestion for PDF, DOC, DOCX, TXT, image/OCR, LinkedIn public links, portfolio links, and profile pages.
+- Done: Make Pramania the primary interaction surface for links, files, and natural-language profile notes.
+- Done: Harden ingestion for PDF, DOC, DOCX, TXT, image/OCR, LinkedIn public links, portfolio links, and profile pages.
 - Add clear source capability/status indicators so users know what was read, what failed, and what needs permission or a different file.
 - Maintain a dedicated Knowledgebase/wiki for source material, extraction status, timestamps, and curated profile evidence instead of burying sources in the profile cockpit.
 - Add authenticated LinkedIn and job-site integrations only after separate provider terms, privacy, and security review.

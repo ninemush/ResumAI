@@ -28,6 +28,23 @@ test.describe("authenticated workspace", () => {
     expect(consoleErrors.join("\n")).not.toMatch(/Hydration failed|server rendered HTML/i);
   });
 
+  test("keeps source intake centered in Pramania chat with only reliably parseable file types", async ({ page }) => {
+    await page.goto("/");
+
+    const conversation = page.locator(".conversation-pane");
+    await expect(conversation.getByPlaceholder(/Share background, role, link, or resume/i)).toBeVisible();
+
+    const accept = await conversation.locator('input[type="file"]').getAttribute("accept");
+
+    expect(accept).toContain(".pdf");
+    expect(accept).toContain(".docx");
+    expect(accept).toContain(".txt");
+    expect(accept).toContain(".zip");
+    expect(accept).toContain(".jpg");
+    expect(accept).not.toMatch(/(^|,)\.doc(,|$)/);
+    expect(accept).not.toMatch(/\.heic|\.heif/);
+  });
+
   test("keeps record-heavy workspace pages in focus on mobile", async ({ page, isMobile }) => {
     test.skip(!isMobile, "Mobile workspace focus is a mobile-specific regression check.");
 
