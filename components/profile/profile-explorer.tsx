@@ -70,6 +70,7 @@ export function ProfileExplorer({
   });
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const activeDirection = overview.profile?.targetDirection?.trim().toLowerCase() ?? "";
 
   async function saveDraft() {
     setPendingId("profile");
@@ -490,7 +491,15 @@ export function ProfileExplorer({
           </div>
           <div className="role-list">
             {overview.roleRecommendations.map((recommendation) => (
-              <article className="role-card" key={recommendation.id}>
+              <article
+                className={`role-card ${
+                  recommendation.user_acknowledged ||
+                  recommendation.role_family.trim().toLowerCase() === activeDirection
+                    ? "selected"
+                    : ""
+                }`}
+                key={recommendation.id}
+              >
                 <div className="role-card-header">
                   <div>
                     <h3>{recommendation.role_family}</h3>
@@ -510,6 +519,14 @@ export function ProfileExplorer({
                   </div>
                 ) : null}
                 <p>{recommendation.rationale}</p>
+                {recommendation.user_acknowledged ||
+                recommendation.role_family.trim().toLowerCase() === activeDirection ? (
+                  <p className="role-selected-note">
+                    <CheckCircle2 size={15} aria-hidden="true" />
+                    Current working direction for profile positioning, resume focus,
+                    job-fit reviews, and application materials.
+                  </p>
+                ) : null}
                 {recommendation.open_questions.length > 0 ? (
                   <ul>
                     {recommendation.open_questions.map((question) => (
@@ -519,16 +536,22 @@ export function ProfileExplorer({
                 ) : null}
                 <button
                   className="secondary-action"
-                  disabled={pendingId === recommendation.id || recommendation.user_acknowledged}
+                  disabled={
+                    pendingId === recommendation.id ||
+                    recommendation.user_acknowledged ||
+                    recommendation.role_family.trim().toLowerCase() === activeDirection
+                  }
                   onClick={() => acknowledgeRecommendation(recommendation.id)}
                   title="Sets this as your working target direction for profile positioning, resume focus, job fit, and application materials."
                   type="button"
                 >
-                  {recommendation.user_acknowledged ? (
+                  {recommendation.user_acknowledged ||
+                  recommendation.role_family.trim().toLowerCase() === activeDirection ? (
                     <CheckCircle2 size={15} aria-hidden="true" />
                   ) : null}
-                  {recommendation.user_acknowledged
-                    ? "Using as target"
+                  {recommendation.user_acknowledged ||
+                  recommendation.role_family.trim().toLowerCase() === activeDirection
+                    ? "Current target"
                     : pendingId === recommendation.id
                       ? "Saving..."
                       : "Set as target direction"}

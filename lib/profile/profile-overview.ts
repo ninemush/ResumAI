@@ -20,6 +20,7 @@ type ProfileSource = {
   source_type: string;
   source_url: string | null;
   storage_path: string | null;
+  downloadUrl: string | null;
   extractedTextPreview: string | null;
   readableCharacterCount: number;
   previewUrl: string | null;
@@ -221,13 +222,17 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
 
 async function addSourcePreviewUrls(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  sources: (Omit<ProfileSource, "extractedTextPreview" | "previewUrl" | "readableCharacterCount"> & {
+  sources: (Omit<
+    ProfileSource,
+    "downloadUrl" | "extractedTextPreview" | "previewUrl" | "readableCharacterCount"
+  > & {
     extracted_text?: string | null;
   })[],
 ) {
   return Promise.all(
     sources.map(async ({ extracted_text: extractedText, ...source }) => ({
       ...source,
+      downloadUrl: source.storage_path ? `/api/profile/sources/${source.id}/download` : null,
       extractedTextPreview: formatSourceTextPreview(extractedText),
       readableCharacterCount: extractedText?.replace(/\s+/g, " ").trim().length ?? 0,
       previewUrl: ["docx", "image", "pdf", "txt", "linkedin"].includes(source.source_type)

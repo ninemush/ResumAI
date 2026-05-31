@@ -2793,6 +2793,12 @@ input:focus {
   padding: 16px;
 }
 
+.role-card.selected {
+  background: rgba(247, 242, 232, 0.98);
+  border-color: rgba(185, 155, 103, 0.62);
+  box-shadow: 0 12px 28px rgba(37, 29, 18, 0.08);
+}
+
 .role-card-header {
   align-items: start;
   display: flex;
@@ -2833,6 +2839,25 @@ input:focus {
   line-height: 1.45;
   margin: 0;
   padding-left: 18px;
+}
+
+.role-selected-note {
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(185, 155, 103, 0.34);
+  border-radius: var(--pr-radius-sm);
+  color: var(--ink-soft);
+  display: flex;
+  gap: 8px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.role-selected-note svg {
+  color: var(--sage-strong);
+  flex: 0 0 auto;
+  margin-top: 2px;
 }
 
 .jobs-panel,

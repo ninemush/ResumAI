@@ -199,11 +199,11 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
                   <span className={`source-pill ${source.extraction_status}`}>
                     {source.extraction_status.replace("_", " ")}
                   </span>
-                  {source.previewUrl ? (
+                  {source.downloadUrl ? (
                     <a
                       className="secondary-action compact-action"
                       download={source.original_filename ?? true}
-                      href={source.previewUrl}
+                      href={source.downloadUrl}
                       rel="noreferrer"
                       target="_blank"
                       title="Download the original uploaded source file"
@@ -326,11 +326,11 @@ function SourceViewer({
             <span>{formatSourceType(source.source_type)} · {formatSourceTimestamp(source.created_at)}</span>
           </div>
           <div className="source-viewer-actions">
-            {source.previewUrl ? (
+            {source.downloadUrl ? (
               <a
                 className="secondary-action compact-action"
                 download={source.original_filename ?? true}
-                href={source.previewUrl}
+                href={source.downloadUrl}
                 rel="noreferrer"
                 target="_blank"
                 title="Download the original uploaded source file"

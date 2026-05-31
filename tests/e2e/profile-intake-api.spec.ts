@@ -93,6 +93,16 @@ test("requires authentication before extracting profile sources", async ({ reque
   expect(payload.error.code).toBe("auth.required");
 });
 
+test("requires authentication before downloading original profile sources", async ({ request }) => {
+  const response = await request.get(
+    "/api/profile/sources/00000000-0000-4000-8000-000000000000/download",
+  );
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});
+
 test("requires authentication before editing profile facts", async ({ request }) => {
   const response = await request.patch(
     "/api/profile/facts/00000000-0000-4000-8000-000000000000/confirm",

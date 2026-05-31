@@ -455,7 +455,10 @@ export function ConversationPanel({
       .reverse()
       .find((item) => item.speaker === "assistant" && item.text.trim().length > 0)?.text;
 
-    if (!lastAssistantMessage || !assistantAskedForTargetDirection(lastAssistantMessage)) {
+    if (
+      (!lastAssistantMessage || !assistantAskedForTargetDirection(lastAssistantMessage)) &&
+      !shouldAcceptStandaloneTargetDirectionAnswer(answer, profileOverview)
+    ) {
       return null;
     }
 
@@ -470,7 +473,7 @@ export function ConversationPanel({
       return payload.error?.message ?? "I understood the direction, but could not save it to your profile yet.";
     }
 
-    return `Got it. I’ll use **${answer}** as your working target direction. You should see it reflected in Profile & Resume, and I’ll use it when shaping your master resume, role fit, and job recommendations.`;
+    return `Got it. I’ll use **${answer}** as your working target direction. I saved it to Profile & Resume, and I’ll use it when shaping your master resume, role fit, and job recommendations.`;
   }
 
   async function processApplicationAction(text: string) {
@@ -1956,6 +1959,40 @@ function assistantAskedForTargetDirection(text: string) {
     /\btarget market positioning\b/.test(normalized) ||
     /\bshould i optimize\b/.test(normalized)
   );
+}
+
+function shouldAcceptStandaloneTargetDirectionAnswer(
+  text: string,
+  profileOverview: ProfileOverview,
+) {
+  const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
+
+  if (profileOverview.profile?.targetDirection) {
+    return false;
+  }
+
+  if (!normalized || normalized.length > 140) {
+    return false;
+  }
+
+  if (/\b(i|i'm|i am|my|we|we're|we are|our)\b/.test(normalized)) {
+    return false;
+  }
+
+  if (/[.!?]/.test(text) || extractUrls(text).length > 0) {
+    return false;
+  }
+
+  const hasDirectionLanguage =
+    /\b(strategy|operations?|commercial|coo|gtm|revenue|sales|product|customer|success|leadership|leader|director|vp|executive|manager|engineering|finance|marketing|people|hr|talent|data|ai|automation|transformation|consulting|services?)\b/.test(
+      normalized,
+    );
+  const hasReadableShape =
+    /\b(role|lane|path|leader|leadership|operations?|strategy|commercial|coo|gtm|revenue)\b/.test(
+      normalized,
+    ) || /[-/]/.test(text);
+
+  return hasDirectionLanguage && hasReadableShape;
 }
 
 function isSafeDirectProfileField(value: string, maxLength: number) {
