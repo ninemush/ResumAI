@@ -876,7 +876,7 @@ async function buildOverview({
     latestResume: latestResume
       ? {
           content: enrichMasterResumeWithSourceEvidence(
-            parseResumeContent(latestResume.content_json),
+            normalizeResumeContent(parseResumeContent(latestResume.content_json)),
             sourceEvidence,
           ),
           docxDownloadUrl: await createSignedArtifactUrl(latestResume.docx_storage_path),
