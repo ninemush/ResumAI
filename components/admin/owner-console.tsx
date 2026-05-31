@@ -31,6 +31,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [metrics, setMetrics] = useState(initialMetrics);
   const [periodDays, setPeriodDays] = useState(initialMetrics.period.days);
   const [activeTab, setActiveTab] = useState("overview");
+  const [issueNotes, setIssueNotes] = useState<Record<string, string>>({});
+  const [issueUpdatingId, setIssueUpdatingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -68,6 +70,34 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         setMetrics(payload.metrics);
       }
     });
+  }
+
+  async function updateIssue(
+    issueId: string,
+    patch: {
+      closedReason?: string;
+      fixStatus?: string;
+      ownerNotes?: string;
+      status?: string;
+    },
+  ) {
+    setIssueUpdatingId(issueId);
+
+    try {
+      const response = await fetch(`/api/admin/issues/${issueId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadPeriod(periodDays);
+    } finally {
+      setIssueUpdatingId(null);
+    }
   }
 
   return (
@@ -275,42 +305,135 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         <section className="owner-detail-panel owner-wide-panel" aria-label="Support tickets">
           <SectionHeading
             eyebrow="Support"
-            title="Support queue"
-            body="V1 support starts here: ticket state, user temperament, L1 disposition, and whether a human L2 escalation is needed."
+            title="Issue queue"
+            body="Each issue has a plain-English summary, likely root cause, suggested fix, supporting logs, status, and owner notes. Use this to decide whether to fix, resolve, cancel, or escalate."
           />
           {metrics.supportTickets.length > 0 ? (
-            <div className="owner-table support-table" role="table" aria-label="Support tickets">
-              <div className="owner-table-row owner-table-head" role="row">
-                <span>Ticket</span>
-                <span>User</span>
-                <span>Status</span>
-                <span>L1/L2</span>
-              </div>
+            <div className="support-issue-list" aria-label="Support issues">
               {metrics.supportTickets.map((ticket) => (
-                <div className="owner-table-row" key={ticket.id} role="row">
-                  <span>
-                    <strong>{ticket.subject}</strong>
-                    <small>{ticket.summary || "No summary yet"}</small>
-                  </span>
-                  <span>
-                    <strong>{ticket.userEmail || "No user attached"}</strong>
-                    <small>{formatDateTime(ticket.createdAt)}</small>
-                  </span>
-                  <span>
-                    <Pill tone={ticket.priority === "urgent" || ticket.priority === "high" ? "danger" : "neutral"}>
-                      {formatLabel(ticket.priority)}
-                    </Pill>
-                    <small>{formatLabel(ticket.status)} · {formatLabel(ticket.sentiment)}</small>
-                  </span>
-                  <span>
-                    <strong>{formatLabel(ticket.l1Disposition)}</strong>
-                    <small>{ticket.escalatedToL2 ? ticket.escalationReason || "Escalated" : "No L2 escalation"}</small>
-                  </span>
-                </div>
+                <article className="support-issue-card" key={ticket.id}>
+                  <div className="support-issue-header">
+                    <div>
+                      <span className="owner-pill">{ticket.id.slice(0, 8).toUpperCase()}</span>
+                      <h3>{ticket.subject}</h3>
+                      <p>{ticket.summary || "No summary yet."}</p>
+                    </div>
+                    <div className="support-issue-status">
+                      <Pill tone={ticket.priority === "urgent" || ticket.priority === "high" ? "danger" : "neutral"}>
+                        {formatLabel(ticket.priority)}
+                      </Pill>
+                      <small>
+                        {formatLabel(ticket.status)} · {formatLabel(ticket.fixStatus)} · {formatDateTime(ticket.updatedAt)}
+                      </small>
+                    </div>
+                  </div>
+
+                  <div className="support-issue-grid">
+                    <div>
+                      <span>Plain-English root cause</span>
+                      <p>{ticket.rootCause}</p>
+                    </div>
+                    <div>
+                      <span>Suggested fix</span>
+                      <p>{ticket.suggestedFix || "No suggested fix captured yet."}</p>
+                    </div>
+                    <div>
+                      <span>User and area</span>
+                      <p>
+                        {ticket.userEmail || "No user attached"} · {formatLabel(ticket.area)} ·{" "}
+                        {ticket.errorCode || "No error code"}
+                      </p>
+                    </div>
+                    <div>
+                      <span>Owner notes</span>
+                      <p>{ticket.ownerNotes || "No owner notes yet."}</p>
+                    </div>
+                  </div>
+
+                  <details className="support-log-details">
+                    <summary>Supporting logs ({ticket.supportingLogs.length})</summary>
+                    {ticket.supportingLogs.length > 0 ? (
+                      <ul>
+                        {ticket.supportingLogs.map((log) => (
+                          <li key={log.id}>
+                            <strong>{log.code}</strong>
+                            <span>{formatLabel(log.area)} · {formatDateTime(log.createdAt)}</span>
+                            <p>{log.message}</p>
+                            <small>
+                              Root cause: {formatLabel(log.rootCause)} ·{" "}
+                              {log.fixRequired ? "Fix required" : "Monitor"}
+                            </small>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>No linked error logs yet. Review recent conversation and app events for this user.</p>
+                    )}
+                  </details>
+
+                  <div className="support-issue-actions">
+                    <label>
+                      Status
+                      <select
+                        disabled={issueUpdatingId === ticket.id}
+                        onChange={(event) => updateIssue(ticket.id, { status: event.target.value })}
+                        value={ticket.status}
+                      >
+                        <option value="open">Open</option>
+                        <option value="in_progress">Investigating</option>
+                        <option value="waiting_on_user">Waiting on user</option>
+                        <option value="escalated">Escalated</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="closed">Cancelled/closed</option>
+                      </select>
+                    </label>
+                    <label>
+                      Fix disposition
+                      <select
+                        disabled={issueUpdatingId === ticket.id}
+                        onChange={(event) => updateIssue(ticket.id, { fixStatus: event.target.value })}
+                        value={ticket.fixStatus}
+                      >
+                        <option value="not_started">Not started</option>
+                        <option value="investigating">Investigating</option>
+                        <option value="needs_code_fix">Needs product fix</option>
+                        <option value="fixed">Fixed</option>
+                        <option value="wont_fix">Will not fix</option>
+                        <option value="user_action_required">User action required</option>
+                      </select>
+                    </label>
+                    <label className="support-issue-notes">
+                      Owner notes
+                      <textarea
+                        disabled={issueUpdatingId === ticket.id}
+                        onChange={(event) =>
+                          setIssueNotes((current) => ({
+                            ...current,
+                            [ticket.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="What was investigated? What fix was applied, or why was it cancelled?"
+                        value={issueNotes[ticket.id] ?? ticket.ownerNotes}
+                      />
+                    </label>
+                    <button
+                      className="secondary-action"
+                      disabled={issueUpdatingId === ticket.id}
+                      onClick={() =>
+                        updateIssue(ticket.id, {
+                          ownerNotes: issueNotes[ticket.id] ?? ticket.ownerNotes,
+                        })
+                      }
+                      type="button"
+                    >
+                      Save notes
+                    </button>
+                  </div>
+                </article>
               ))}
             </div>
           ) : (
-            <p className="empty-state">No support tickets in this period. The ticket foundation is configured and ready for intake.</p>
+            <p className="empty-state">No support issues in this period. Chat failures and user-reported issues will appear here with supporting logs.</p>
           )}
         </section>
       ) : null}

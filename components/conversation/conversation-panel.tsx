@@ -75,6 +75,16 @@ type SourceListResponse = {
   };
 };
 
+type SupportIssueResponse = {
+  issue?: {
+    shortId: string;
+    status: string;
+    subject: string;
+    summary: string;
+  };
+  ok: boolean;
+};
+
 type SourceExtractionResult =
   | {
       assistantMessage: string | null;
@@ -273,6 +283,14 @@ export function ConversationPanel({
         return;
       }
 
+      const supportIssueAction = await processSupportIssueAction(text);
+
+      if (supportIssueAction) {
+        appendAssistantMessage(supportIssueAction, true);
+        router.refresh();
+        return;
+      }
+
       const resumeAction = await processResumeAction(text);
 
       if (resumeAction) {
@@ -372,8 +390,16 @@ export function ConversationPanel({
       });
       const payload = await response.json();
 
-      if (!response.ok) {
-        return payload.error?.message ?? "I could not export the master resume PDF yet.";
+    if (!response.ok) {
+        return logSupportIssueAndReply({
+          area: "master_resume",
+          errorCode: payload.error?.code ?? "MASTER_RESUME_EXPORT_FAILED",
+          errorMessage: payload.error?.message ?? "Master resume export failed.",
+          source: "chat_command_failure",
+          systemResponse: payload.error?.message ?? "I could not export the master resume PDF yet.",
+          title: "Master resume export failed",
+          userMessage: text,
+        });
       }
 
       const pdfUrl = payload.overview?.latestResume?.pdfDownloadUrl;
@@ -396,7 +422,15 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
-      return payload.error?.message ?? "I could not generate the master resume yet.";
+      return logSupportIssueAndReply({
+        area: "master_resume",
+        errorCode: payload.error?.code ?? "MASTER_RESUME_GENERATION_FAILED",
+        errorMessage: payload.error?.message ?? "Master resume generation failed.",
+        source: "chat_command_failure",
+        systemResponse: payload.error?.message ?? "I could not generate the master resume yet.",
+        title: "Master resume update failed",
+        userMessage: text,
+      });
     }
 
     return `${payload.summary} I saved the rebuilt draft in Profile & Resume. It should now use a role-by-role ATS chronology when the saved source evidence contains employers, titles, dates, and locations.`;
@@ -559,10 +593,17 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
-      return (
-        payload.error?.message ??
-        "I hit a processing issue while reading your saved workspace context. I still have your profile, sources, jobs, applications, and artifacts on record; try the question again in a moment and I will use what is already saved."
-      );
+      return logSupportIssueAndReply({
+        area: "advisor",
+        errorCode: payload.error?.code ?? "ADVISOR_CONTEXT_FAILED",
+        errorMessage: payload.error?.message ?? "Advisor context read failed.",
+        source: "chat_command_failure",
+        systemResponse:
+          payload.error?.message ??
+          "I hit a processing issue while reading your saved workspace context.",
+        title: "Advisor response failed",
+        userMessage: text,
+      });
     }
 
     return payload.assistantMessage as string;
@@ -935,14 +976,111 @@ export function ConversationPanel({
           return;
         }
 
-        setStatus("I updated the profile evidence. The master resume can be refreshed from Profile & Resume.");
+        const issueMessage = await logSupportIssue({
+          area: "master_resume",
+          errorCode: payload.error?.code ?? "MASTER_RESUME_REFRESH_FAILED",
+          errorMessage: payload.error?.message ?? "Master resume refresh failed after source intake.",
+          source: "background_refresh_failure",
+          systemResponse: "The profile evidence saved, but the master resume refresh did not complete.",
+          title: "Master resume refresh failed",
+          userMessage: processingIntent,
+        });
+        setStatus(
+          issueMessage ??
+            "I updated the profile evidence. The master resume can be refreshed from Profile & Resume.",
+        );
         return;
       }
 
       setStatus("I refreshed the master resume draft from the new source. Open Profile & Resume to review it.");
       router.refresh();
     } catch {
-      setStatus("I updated the profile evidence. The master resume refresh needs another attempt.");
+      const issueMessage = await logSupportIssue({
+        area: "master_resume",
+        errorCode: "MASTER_RESUME_REFRESH_EXCEPTION",
+        errorMessage: "Master resume refresh threw an exception after profile evidence intake.",
+        source: "background_refresh_failure",
+        systemResponse: "The profile evidence saved, but the master resume refresh did not complete.",
+        title: "Master resume refresh failed",
+        userMessage: processingIntent,
+      });
+      setStatus(issueMessage ?? "I updated the profile evidence. The master resume refresh needs another attempt.");
+    }
+  }
+
+  async function processSupportIssueAction(text: string) {
+    if (!looksLikeSupportIssueReport(text)) {
+      return null;
+    }
+
+    const issueMessage = await logSupportIssue({
+      area: inferSupportIssueArea(text),
+      errorCode: "USER_REPORTED_ISSUE",
+      source: "chat_user_report",
+      systemResponse: "User reported a product issue from the conversation.",
+      title: inferSupportIssueTitle(text),
+      userMessage: text,
+    });
+
+    return (
+      issueMessage ??
+      "I could not log the issue cleanly yet. I still understand this is product friction and the owner should review it."
+    );
+  }
+
+  async function logSupportIssueAndReply(input: {
+    area: string;
+    errorCode: string;
+    errorMessage?: string;
+    source: string;
+    systemResponse: string;
+    title: string;
+    userMessage: string;
+  }) {
+    const logged = await logSupportIssue(input);
+
+    return (
+      logged ??
+      "I could not complete that action, and I could not log the issue cleanly. Your saved profile context is still intact."
+    );
+  }
+
+  async function logSupportIssue(input: {
+    area: string;
+    errorCode?: string;
+    errorMessage?: string;
+    source: string;
+    systemResponse?: string;
+    title: string;
+    userMessage?: string;
+  }) {
+    try {
+      const response = await fetch("/api/support/issues", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          area: input.area,
+          errorCode: input.errorCode,
+          errorMessage: input.errorMessage,
+          metadata: {
+            activeView,
+            path: window.location.pathname,
+          },
+          source: input.source,
+          systemResponse: input.systemResponse,
+          title: input.title,
+          userMessage: input.userMessage,
+        }),
+      });
+      const payload = (await response.json()) as SupportIssueResponse;
+
+      if (!response.ok || !payload.issue) {
+        return null;
+      }
+
+      return `I could not complete that cleanly, so I logged issue ${payload.issue.shortId} for owner review. You do not need to repeat yourself; the issue includes this conversation context, the likely area, and supporting logs.`;
+    } catch {
+      return null;
     }
   }
 
@@ -1790,6 +1928,37 @@ function inferRequestedSourceType(text: string) {
   }
 
   return null;
+}
+
+function looksLikeSupportIssueReport(text: string) {
+  const normalized = text.toLowerCase();
+
+  return (
+    /\b(issue|bug|error|failed|failure|broken|not working|wrong|not right|support|help with)\b/.test(normalized) &&
+    /\b(app|pramania|resume|profile|job|application|source|chat|master|ats|upload|pdf|docx|linkedin)\b/.test(normalized)
+  );
+}
+
+function inferSupportIssueArea(text: string) {
+  const normalized = text.toLowerCase();
+
+  if (/\b(master|ats|resume)\b/.test(normalized)) return "master_resume";
+  if (/\b(profile|source|upload|pdf|docx|linkedin|file)\b/.test(normalized)) return "profile_intake";
+  if (/\b(job|application|apply|cover letter|materials)\b/.test(normalized)) return "job_application";
+  if (/\b(chat|conversation|response|advisor|pramania)\b/.test(normalized)) return "advisor";
+
+  return "general";
+}
+
+function inferSupportIssueTitle(text: string) {
+  const area = inferSupportIssueArea(text);
+
+  if (area === "master_resume") return "Master resume issue reported";
+  if (area === "profile_intake") return "Profile intake issue reported";
+  if (area === "job_application") return "Job/application issue reported";
+  if (area === "advisor") return "Advisor conversation issue reported";
+
+  return "User-reported product issue";
 }
 
 function processSourceExplanationQuestion(text: string) {

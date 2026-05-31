@@ -1545,6 +1545,128 @@ input:focus {
   grid-template-columns: 1.4fr 1fr 0.8fr 1fr;
 }
 
+.support-issue-list {
+  display: grid;
+  gap: 14px;
+}
+
+.support-issue-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-lg);
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.support-issue-header {
+  align-items: start;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.support-issue-header h3 {
+  font-size: 1.1rem;
+  margin: 10px 0 6px;
+}
+
+.support-issue-header p,
+.support-issue-grid p,
+.support-log-details p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.support-issue-status {
+  align-items: flex-end;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  min-width: 220px;
+  text-align: right;
+}
+
+.support-issue-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.support-issue-grid > div {
+  border-top: 1px solid rgba(215, 204, 188, 0.72);
+  padding-top: 10px;
+}
+
+.support-issue-grid span,
+.support-issue-actions label,
+.support-log-details summary {
+  color: var(--foreground);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.support-log-details {
+  border: 1px solid rgba(215, 204, 188, 0.72);
+  border-radius: var(--pr-radius-md);
+  padding: 12px 14px;
+}
+
+.support-log-details summary {
+  cursor: pointer;
+}
+
+.support-log-details ul {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.support-log-details li {
+  border-top: 1px solid rgba(215, 204, 188, 0.72);
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+}
+
+.support-log-details span,
+.support-log-details small {
+  color: var(--muted);
+}
+
+.support-issue-actions {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(180px, 1fr) minmax(240px, 1.8fr) auto;
+}
+
+.support-issue-actions label {
+  display: grid;
+  gap: 8px;
+}
+
+.support-issue-actions select,
+.support-issue-actions textarea {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-md);
+  color: var(--foreground);
+  font: inherit;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.support-issue-actions textarea {
+  min-height: 76px;
+  resize: vertical;
+  text-transform: none;
+}
+
 .owner-pill {
   border: 1px solid var(--line);
   border-radius: var(--pr-radius-pill);
@@ -4654,6 +4776,24 @@ input:focus {
   .error-table .owner-table-row,
   .support-table .owner-table-row {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .support-issue-header,
+  .support-issue-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .support-issue-status {
+    align-items: start;
+    justify-items: start;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .support-issue-grid {
     grid-template-columns: 1fr;
   }
 

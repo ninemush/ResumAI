@@ -139,3 +139,29 @@ test("requires owner access before reading operating metrics", async ({ request 
   expect(response.status()).toBe(403);
   expect(payload.error.code).toBe("admin.required");
 });
+
+test("requires authentication before logging support issues", async ({ request }) => {
+  const response = await request.post("/api/support/issues", {
+    data: {
+      area: "master_resume",
+      title: "Master resume issue",
+      userMessage: "The recommendations are appearing as work experience.",
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});
+
+test("requires owner access before updating support issues", async ({ request }) => {
+  const response = await request.patch("/api/admin/issues/00000000-0000-4000-8000-000000000000", {
+    data: {
+      status: "resolved",
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});

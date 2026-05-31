@@ -55,16 +55,39 @@ const adminErrorDetailSchema = z.object({
   userEmail: z.string().nullable(),
 });
 const adminSupportTicketSchema = z.object({
+  area: z.string().default("general"),
+  closedReason: z.string().nullable().optional(),
   createdAt: isoDateSchema,
+  errorCode: z.string().nullable().optional(),
   escalatedToL2: z.boolean(),
   escalationReason: z.string().nullable(),
+  fixStatus: z.string().default("not_started"),
   id: z.string(),
   l1Disposition: z.string(),
+  ownerNotes: z.string().default(""),
   priority: z.string(),
+  rootCause: z.string().default("Needs owner review."),
+  rootCauseCategory: z.string().default("needs_triage"),
   sentiment: z.string(),
+  source: z.string().default("user_report"),
   status: z.string(),
   subject: z.string(),
   summary: z.string(),
+  suggestedFix: z.string().default(""),
+  supportingLogs: z
+    .array(
+      z.object({
+        area: z.string(),
+        code: z.string(),
+        createdAt: isoDateSchema,
+        fixRequired: z.boolean(),
+        id: z.string(),
+        message: z.string(),
+        rootCause: z.string(),
+        source: z.string(),
+      }),
+    )
+    .default([]),
   updatedAt: isoDateSchema,
   userEmail: z.string().nullable(),
 });
@@ -180,7 +203,10 @@ export async function getOwnerMetrics(periodDays = 30): Promise<OwnerMetrics> {
     throw new Error(mapOwnerMetricsError(error?.message));
   }
 
-  return ownerMetricsSchema.parse(data);
+  const metrics = ownerMetricsSchema.parse(data);
+  const supportTickets = await readSupportIssues(supabase, metrics.period.startedAt, metrics.usersList);
+
+  return supportTickets.length > 0 ? { ...metrics, supportTickets } : metrics;
 }
 
 function mapOwnerMetricsError(message: string | undefined) {
@@ -189,4 +215,127 @@ function mapOwnerMetricsError(message: string | undefined) {
   }
 
   return "OWNER_METRICS_READ_FAILED";
+}
+
+async function readSupportIssues(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  startedAt: string,
+  usersList: OwnerMetrics["usersList"],
+): Promise<OwnerMetrics["supportTickets"]> {
+  const { data: tickets, error } = await supabase
+    .from("support_tickets")
+    .select(
+      [
+        "id",
+        "user_id",
+        "created_at",
+        "updated_at",
+        "status",
+        "priority",
+        "sentiment",
+        "subject",
+        "summary",
+        "l1_disposition",
+        "escalated_to_l2",
+        "escalation_reason",
+        "area",
+        "source",
+        "error_code",
+        "root_cause_category",
+        "root_cause",
+        "suggested_fix",
+        "fix_status",
+        "owner_notes",
+        "closed_reason",
+      ].join(", "),
+    )
+    .gte("created_at", startedAt)
+    .order("updated_at", { ascending: false })
+    .limit(80);
+
+  if (error || !tickets) {
+    return [];
+  }
+
+  type SupportTicketRow = {
+    area: string | null;
+    closed_reason: string | null;
+    created_at: string;
+    error_code: string | null;
+    escalated_to_l2: boolean;
+    escalation_reason: string | null;
+    fix_status: string | null;
+    id: string;
+    l1_disposition: string;
+    owner_notes: string | null;
+    priority: string;
+    root_cause: string | null;
+    root_cause_category: string | null;
+    sentiment: string;
+    source: string | null;
+    status: string;
+    subject: string;
+    suggested_fix: string | null;
+    summary: string;
+    updated_at: string;
+    user_id: string | null;
+  };
+  const ticketRows = tickets as unknown as SupportTicketRow[];
+  const userIds = Array.from(
+    new Set(ticketRows.map((ticket) => ticket.user_id).filter((value): value is string => Boolean(value))),
+  );
+
+  const { data: logs } =
+    userIds.length > 0
+      ? await supabase
+          .from("error_events")
+          .select("id, user_id, area, error_code, message, root_cause_category, fix_required, created_at")
+          .in("user_id", userIds)
+          .gte("created_at", startedAt)
+          .order("created_at", { ascending: false })
+          .limit(200)
+      : { data: [] };
+
+  const emailByUserId = new Map(usersList.map((profile) => [profile.userId, profile.email]));
+
+  return ticketRows.map((ticket) => {
+    const supportingLogs = (logs ?? [])
+      .filter((log) => log.user_id === ticket.user_id)
+      .slice(0, 8)
+      .map((log) => ({
+        area: log.area,
+        code: log.error_code,
+        createdAt: log.created_at,
+        fixRequired: log.fix_required,
+        id: log.id,
+        message: log.message,
+        rootCause: log.root_cause_category,
+        source: "error_event",
+      }));
+
+    return {
+      area: ticket.area ?? "general",
+      closedReason: ticket.closed_reason ?? null,
+      createdAt: ticket.created_at,
+      errorCode: ticket.error_code ?? null,
+      escalatedToL2: ticket.escalated_to_l2,
+      escalationReason: ticket.escalation_reason ?? null,
+      fixStatus: ticket.fix_status ?? "not_started",
+      id: ticket.id,
+      l1Disposition: ticket.l1_disposition,
+      ownerNotes: ticket.owner_notes ?? "",
+      priority: ticket.priority,
+      rootCause: ticket.root_cause ?? "Needs owner review.",
+      rootCauseCategory: ticket.root_cause_category ?? "needs_triage",
+      sentiment: ticket.sentiment,
+      source: ticket.source ?? "user_report",
+      status: ticket.status,
+      subject: ticket.subject,
+      summary: ticket.summary,
+      suggestedFix: ticket.suggested_fix ?? "",
+      supportingLogs,
+      updatedAt: ticket.updated_at,
+      userEmail: ticket.user_id ? emailByUserId.get(ticket.user_id) ?? null : null,
+    };
+  });
 }
