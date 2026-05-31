@@ -44,6 +44,8 @@ export function MasterResumePanel({
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [variantFocus, setVariantFocus] = useState("");
+  const [isGeneratingVariant, setIsGeneratingVariant] = useState(false);
   const isDirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(savedDraft),
     [draft, savedDraft],
@@ -129,6 +131,46 @@ export function MasterResumePanel({
       router.refresh();
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function generateFocusedVariant() {
+    const focus = variantFocus.trim();
+
+    if (!focus) {
+      setMessage("Add a target role, role family, or positioning lane before generating a focused variant.");
+      return;
+    }
+
+    if (isDirty && !window.confirm("Generating a focused variant will replace unsaved resume edits. Continue?")) {
+      return;
+    }
+
+    setIsGeneratingVariant(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/resume/master", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instruction: `Create a focused master resume variant for ${focus}. Keep the standard ATS chronology, preserve verified facts, retain contact details and role-by-role work history, and only adjust positioning, selected highlights, skill emphasis, and summary language for this target.`,
+        }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to generate that focused variant.");
+        return;
+      }
+
+      setCurrentOverview(payload.overview);
+      setDraft(payload.overview.latestResume?.content ?? null);
+      setSavedDraft(payload.overview.latestResume?.content ?? null);
+      setMessage(`Generated a focused master resume variant for ${focus}. Review it before exporting.`);
+      router.refresh();
+    } finally {
+      setIsGeneratingVariant(false);
     }
   }
 
@@ -285,6 +327,58 @@ export function MasterResumePanel({
       </section>
 
       {message ? <p className="system-note success">{message}</p> : null}
+
+      <section className="resume-variant-panel" aria-label="Focused resume variants">
+        <div>
+          <p className="eyebrow">Focused variant</p>
+          <h2>Shape the master resume for a target lane</h2>
+          <p>
+            Use this for a role family such as “VP GTM Operations” or “CIO /
+            Digital Transformation.” It keeps the same ATS template and verified
+            chronology, then shifts emphasis without overwriting your source record.
+          </p>
+        </div>
+        <div className="resume-variant-actions">
+          <input
+            aria-label="Focused resume target"
+            onChange={(event) => setVariantFocus(event.target.value)}
+            placeholder="Target role or lane"
+            value={variantFocus}
+          />
+          <button
+            className="secondary-action"
+            disabled={!currentOverview.canGenerate || isGeneratingVariant}
+            onClick={generateFocusedVariant}
+            type="button"
+          >
+            <WandSparkles size={15} aria-hidden="true" />
+            {isGeneratingVariant ? "Generating..." : "Generate focused variant"}
+          </button>
+        </div>
+      </section>
+
+      <section className="resume-export-panel" aria-label="Resume export readiness">
+        <article>
+          <span>Template</span>
+          <strong>Standard ATS</strong>
+          <p>Fixed layout. Pramania changes content and emphasis, not the ATS structure.</p>
+        </article>
+        <article>
+          <span>PDF</span>
+          <strong>{currentOverview.latestResume?.pdfDownloadUrl ? "Validated export" : "Not exported"}</strong>
+          <p>{currentOverview.latestResume?.pdfDownloadUrl ? "Readable PDF file is stored for this draft." : "Export after review to create the PDF."}</p>
+        </article>
+        <article>
+          <span>DOCX</span>
+          <strong>{currentOverview.latestResume?.docxDownloadUrl ? "Ready" : "Not exported"}</strong>
+          <p>{currentOverview.latestResume?.docxDownloadUrl ? "Editable Word file is stored for this draft." : "Export after review to create the DOCX."}</p>
+        </article>
+        <article>
+          <span>Photo-safe</span>
+          <strong>Separate format</strong>
+          <p>ATS-first exports stay photo-free. Profile-photo formats will use a separate template.</p>
+        </article>
+      </section>
 
       {draft ? (
         <section className="materials-review master-resume-editor resume-studio-surface" aria-label="Master resume editor">

@@ -8,6 +8,110 @@ import {
 } from "@/lib/support/issues";
 import { createClient } from "@/lib/supabase/server";
 
+export async function GET() {
+  const requestId = crypto.randomUUID();
+
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: { code: "auth.required", message: "Sign in is required." },
+        },
+        { status: 401 },
+      );
+    }
+
+    const { data: issues, error } = await supabase
+      .from("support_tickets")
+      .select(
+        [
+          "id",
+          "area",
+          "created_at",
+          "updated_at",
+          "status",
+          "priority",
+          "subject",
+          "summary",
+          "root_cause",
+          "root_cause_category",
+          "suggested_fix",
+          "fix_status",
+          "owner_notes",
+        ].join(", "),
+      )
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(25);
+
+    if (error) {
+      throw new Error("SUPPORT_ISSUES_READ_FAILED");
+    }
+
+    return NextResponse.json({
+      ok: true,
+      requestId,
+      issues: (issues ?? []).map((issue) => {
+        const ticket = issue as unknown as {
+          area: string;
+          created_at: string;
+          fix_status: string;
+          id: string;
+          owner_notes: string | null;
+          priority: string;
+          root_cause: string | null;
+          root_cause_category: string | null;
+          status: string;
+          subject: string;
+          suggested_fix: string | null;
+          summary: string;
+          updated_at: string;
+        };
+
+        return {
+          area: ticket.area,
+          created_at: ticket.created_at,
+          fix_status: ticket.fix_status,
+          id: ticket.id,
+          owner_notes: ticket.owner_notes,
+          priority: ticket.priority,
+          root_cause: ticket.root_cause,
+          root_cause_category: ticket.root_cause_category,
+          shortId: supportIssueShortId(ticket.id),
+          status: ticket.status,
+          subject: ticket.subject,
+          suggested_fix: ticket.suggested_fix,
+          summary: ticket.summary,
+          updated_at: ticket.updated_at,
+        };
+      }),
+    });
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "support_issues_read_failed",
+        code: error instanceof Error ? error.message : "UNKNOWN_SUPPORT_ISSUES_ERROR",
+      }),
+    );
+
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: { code: "support.issues_failed", message: "Support issues could not be loaded." },
+      },
+      { status: 500 },
+    );
+  }
+}
+
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
 

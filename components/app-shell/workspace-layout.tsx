@@ -16,6 +16,7 @@ import { KnowledgebasePanel } from "@/components/knowledgebase/knowledgebase-pan
 import { ProfileExplorer } from "@/components/profile/profile-explorer";
 import { MasterResumePanel } from "@/components/resume/master-resume-panel";
 import { SettingsPanel } from "@/components/settings/settings-panel";
+import { SupportPanel } from "@/components/support/support-panel";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
@@ -285,6 +286,7 @@ function renderWorkspaceView({
       <SettingsPanel
         applicationOverview={applicationOverview}
         artifactOverview={artifactOverview}
+        onNavigate={onSelectView}
         profileOverview={profileOverview}
         session={session}
       />
@@ -292,13 +294,7 @@ function renderWorkspaceView({
   }
 
   if (activeView === "support") {
-    return (
-      <WorkspacePlaceholder
-        eyebrow="Support"
-        title="Help and cases"
-        body="V1 will start with a simple support case flow and internal docs. We will avoid promising an autonomous support agent until the core product workflows are stable."
-      />
-    );
+    return <SupportPanel />;
   }
 
   return (

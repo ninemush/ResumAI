@@ -154,6 +154,14 @@ test("requires authentication before logging support issues", async ({ request }
   expect(payload.error.code).toBe("auth.required");
 });
 
+test("requires authentication before reading support issues", async ({ request }) => {
+  const response = await request.get("/api/support/issues");
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});
+
 test("requires owner access before updating support issues", async ({ request }) => {
   const response = await request.patch("/api/admin/issues/00000000-0000-4000-8000-000000000000", {
     data: {

@@ -724,7 +724,7 @@ input:focus {
   flex-direction: column;
   gap: 28px;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   padding: 24px 22px;
 }
 
@@ -832,6 +832,38 @@ input:focus {
   min-height: 42px;
   padding: 0 12px;
   text-align: left;
+}
+
+.nav-item {
+  position: relative;
+}
+
+.nav-tooltip {
+  background: var(--foreground);
+  border-radius: 999px;
+  color: var(--background);
+  font-size: 0.72rem;
+  font-weight: 850;
+  left: calc(100% + 10px);
+  opacity: 0;
+  padding: 6px 9px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  white-space: nowrap;
+  z-index: 20;
+}
+
+.side-nav:not(.collapsed) .nav-tooltip {
+  display: none;
+}
+
+.side-nav.collapsed .nav-item:hover .nav-tooltip,
+.side-nav.collapsed .nav-item:focus-visible .nav-tooltip {
+  opacity: 1;
+  transform: translate(4px, -50%);
 }
 
 .side-nav.collapsed .nav-item,
@@ -1205,9 +1237,12 @@ input:focus {
 .profile-intelligence-panel,
 .profile-draft-panel,
 .resume-empty-panel,
+.resume-export-panel article,
 .resume-gap-panel,
 .resume-readiness-panel,
+.resume-variant-panel,
 .roles-panel,
+.source-health-card,
 .sources-panel {
   background: rgba(255, 250, 243, 0.68);
   border: var(--pr-border-subtle);
@@ -2695,6 +2730,217 @@ input:focus {
   gap: 6px;
 }
 
+.source-health-grid,
+.resume-export-panel,
+.support-user-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.resume-export-panel {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.support-user-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.source-health-card,
+.resume-export-panel article,
+.support-user-card {
+  min-width: 0;
+  padding: 16px;
+}
+
+.source-health-card span,
+.resume-export-panel span {
+  color: var(--sage-strong);
+  display: block;
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.source-health-card strong,
+.resume-export-panel strong {
+  color: var(--foreground);
+  display: block;
+  font-size: 1.05rem;
+  margin-bottom: 6px;
+}
+
+.source-health-card p,
+.resume-export-panel p,
+.support-user-card p {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.source-health-card.warning {
+  border-color: rgba(180, 60, 45, 0.28);
+}
+
+.resume-variant-panel {
+  align-items: center;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
+  padding: 18px;
+}
+
+.resume-variant-panel h2 {
+  font-size: clamp(1.1rem, 1.6vw, 1.35rem);
+  margin: 0 0 8px;
+}
+
+.resume-variant-panel p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.resume-variant-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.resume-variant-actions input {
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-pill);
+  color: var(--foreground);
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+.support-user-card {
+  align-items: flex-start;
+  background: rgba(255, 250, 243, 0.72);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.support-user-card svg {
+  color: var(--sage-strong);
+}
+
+.support-user-card strong {
+  color: var(--foreground);
+  display: block;
+  margin-bottom: 5px;
+}
+
+.support-user-list {
+  background: rgba(255, 250, 243, 0.68);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.inline-section-heading {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.support-user-issue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.support-user-issue {
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.support-user-issue > div:first-child {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.support-user-issue h3 {
+  color: var(--foreground);
+  font-size: 1rem;
+  margin: 0;
+}
+
+.support-user-issue p {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.support-user-issue dl {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 4px 0 0;
+}
+
+.support-user-issue dt {
+  color: var(--sage-strong);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.support-user-issue dd {
+  color: var(--foreground);
+  font-size: 0.82rem;
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.support-user-pill,
+.support-user-id {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1;
+  padding: 5px 8px;
+  text-transform: capitalize;
+}
+
+.support-user-pill.open {
+  background: rgba(185, 155, 103, 0.1);
+  border-color: rgba(185, 155, 103, 0.28);
+  color: var(--gold-strong);
+}
+
+.support-user-pill.resolved {
+  background: rgba(57, 98, 88, 0.1);
+  border-color: rgba(57, 98, 88, 0.24);
+  color: var(--sage-strong);
+}
+
+.support-owner-note {
+  align-items: flex-start;
+  background: rgba(185, 155, 103, 0.08);
+  border-radius: var(--pr-radius-sm);
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+}
+
 .record-empty-panel {
   align-items: start;
   background: rgba(255, 255, 255, 0.56);
@@ -3218,6 +3464,14 @@ input:focus {
   margin-top: 8px !important;
 }
 
+.button-link {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
 .inline-link {
   color: var(--sage-strong);
   display: inline-flex;
@@ -3501,6 +3755,18 @@ input:focus {
 }
 
 @media (max-width: 760px) {
+  .source-health-grid,
+  .resume-export-panel,
+  .resume-variant-panel,
+  .support-user-grid,
+  .support-user-issue dl {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-section-heading {
+    display: grid;
+  }
+
   .source-row {
     align-items: stretch;
     grid-template-columns: 1fr;

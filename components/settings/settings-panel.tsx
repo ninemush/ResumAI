@@ -4,17 +4,19 @@ import { CreditCard, FileText, HelpCircle, ShieldCheck, UserRound } from "lucide
 
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
+import type { AppView } from "@/components/app-shell/side-nav";
 import type { WorkspaceSession } from "@/lib/commands/session";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
 type SettingsPanelProps = {
   applicationOverview: ApplicationOverview;
   artifactOverview: ArtifactOverview;
+  onNavigate?: (view: AppView) => void;
   profileOverview: ProfileOverview;
   session: WorkspaceSession;
 };
 
-export function SettingsPanel({ session }: SettingsPanelProps) {
+export function SettingsPanel({ onNavigate, session }: SettingsPanelProps) {
   return (
     <main className="profile-pane" aria-labelledby="settings-title">
       <div className="pane-heading compact-pane-heading">
@@ -92,11 +94,20 @@ export function SettingsPanel({ session }: SettingsPanelProps) {
           <HelpCircle size={18} aria-hidden="true" />
           <div>
             <span>Support</span>
-            <strong>Support desk planned</strong>
+            <strong>Issue history available</strong>
             <p>
-              Self-serve docs and support cases are on the V1 backlog after the core
-              profile, resume, and application flow stabilizes.
+              Use Pramania chat for help. Product issues are logged with context
+              and visible in the Support area.
             </p>
+            <div className="settings-link-row">
+              <button
+                className="inline-link button-link"
+                onClick={() => onNavigate?.("support")}
+                type="button"
+              >
+                Open support
+              </button>
+            </div>
           </div>
         </article>
       </section>

@@ -2,7 +2,9 @@
 
 import {
   BriefcaseBusiness,
+  ClipboardList,
   FileText,
+  HelpCircle,
   Layers3,
   Library,
   PanelLeftClose,
@@ -33,10 +35,11 @@ const primaryItems = [
   { label: "Cockpit", icon: UserRound, view: "profile" },
   { label: "Profile & Resume", icon: FileText, view: "resume" },
   { label: "Jobs", icon: BriefcaseBusiness, view: "jobs" },
-  { label: "Applications", icon: BriefcaseBusiness, view: "applications" },
+  { label: "Applications", icon: ClipboardList, view: "applications" },
   { label: "Sources", icon: Library, view: "knowledgebase" },
   { label: "Artifacts", icon: Layers3, view: "artifacts" },
   { label: "Settings", icon: Settings, view: "settings" },
+  { label: "Support", icon: HelpCircle, view: "support" },
 ] satisfies { label: string; icon: LucideIcon; view: AppView }[];
 
 type SideNavProps = {
@@ -99,6 +102,7 @@ export function SideNav({ activeView, collapsed, onSelectView, onToggleCollapsed
             >
               <Icon size={18} aria-hidden="true" />
               <span className="nav-label">{item.label}</span>
+              <span className="nav-tooltip" role="tooltip">{item.label}</span>
             </button>
           );
         })}
@@ -114,6 +118,7 @@ export function SideNav({ activeView, collapsed, onSelectView, onToggleCollapsed
           >
             <Shield size={18} aria-hidden="true" />
             <span className="nav-label">Owner Console</span>
+            <span className="nav-tooltip" role="tooltip">Owner Console</span>
           </button>
         ) : null}
       </nav>

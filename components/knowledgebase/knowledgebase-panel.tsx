@@ -35,6 +35,7 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
     sourceMatchesFilter(source, activeFilter),
   );
   const filterCounts = buildSourceFilterCounts(overview.recentSources);
+  const sourceHealth = buildSourceHealth(overview.recentSources);
 
   async function retrySourceExtraction(sourceId: string) {
     setPendingId(sourceId);
@@ -91,6 +92,24 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
             reviews grounded in what you actually shared.
           </p>
         </div>
+      </section>
+
+      <section className="source-health-grid" aria-label="Source health summary">
+        <article className="source-health-card ready">
+          <span>Readable</span>
+          <strong>{sourceHealth.read}</strong>
+          <p>Sources Pramania can use for profile, resume, and fit analysis.</p>
+        </article>
+        <article className={sourceHealth.needsAttention > 0 ? "source-health-card warning" : "source-health-card"}>
+          <span>Needs Attention</span>
+          <strong>{sourceHealth.needsAttention}</strong>
+          <p>Items where extraction failed or needs a cleaner file/source.</p>
+        </article>
+        <article className="source-health-card">
+          <span>Preserved Text</span>
+          <strong>{formatCompactNumber(sourceHealth.readableCharacters)}</strong>
+          <p>Readable characters retained so Pramania can avoid asking you to repeat yourself.</p>
+        </article>
       </section>
 
       <section className="sources-panel" aria-label="Profile sources">
@@ -535,4 +554,34 @@ function buildSourceFilterCounts(sources: ProfileOverview["recentSources"]) {
       Read: 0,
     },
   );
+}
+
+function buildSourceHealth(sources: ProfileOverview["recentSources"]) {
+  return sources.reduce(
+    (summary, source) => {
+      if (source.extraction_status === "succeeded") {
+        summary.read += 1;
+      }
+
+      if (source.extraction_status === "failed") {
+        summary.needsAttention += 1;
+      }
+
+      summary.readableCharacters += source.readableCharacterCount ?? 0;
+
+      return summary;
+    },
+    {
+      needsAttention: 0,
+      read: 0,
+      readableCharacters: 0,
+    },
+  );
+}
+
+function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat("en", {
+    maximumFractionDigits: 1,
+    notation: "compact",
+  }).format(value);
 }
