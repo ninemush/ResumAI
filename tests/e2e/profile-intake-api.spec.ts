@@ -117,3 +117,25 @@ test("requires authentication before deleting profile facts", async ({ request }
   expect(response.status()).toBe(401);
   expect(payload.error.code).toBe("auth.required");
 });
+
+test("requires authentication before recording telemetry events", async ({ request }) => {
+  const response = await request.post("/api/telemetry/events", {
+    data: {
+      eventType: "page_view",
+      page: "cockpit",
+      path: "/",
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});
+
+test("requires owner access before reading operating metrics", async ({ request }) => {
+  const response = await request.get("/api/admin/metrics?periodDays=7");
+  const payload = await response.json();
+
+  expect(response.status()).toBe(403);
+  expect(payload.error.code).toBe("admin.required");
+});

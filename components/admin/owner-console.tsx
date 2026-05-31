@@ -1,4 +1,18 @@
-import { Activity, BriefcaseBusiness, FileText, HeartHandshake, UsersRound } from "lucide-react";
+"use client";
+
+import {
+  AlertTriangle,
+  BarChart3,
+  BriefcaseBusiness,
+  Clock3,
+  FileText,
+  HeartHandshake,
+  RefreshCcw,
+  Search,
+  UsersRound,
+} from "lucide-react";
+import type { ReactNode } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
 
@@ -6,23 +20,95 @@ type OwnerConsoleProps = {
   metrics: OwnerMetrics;
 };
 
-export function OwnerConsole({ metrics }: OwnerConsoleProps) {
+const periodOptions = [
+  { label: "Today", value: 1 },
+  { label: "7 days", value: 7 },
+  { label: "30 days", value: 30 },
+  { label: "90 days", value: 90 },
+];
+
+export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
+  const [metrics, setMetrics] = useState(initialMetrics);
+  const [periodDays, setPeriodDays] = useState(initialMetrics.period.days);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [query, setQuery] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const filteredUsers = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return metrics.usersList;
+    }
+
+    return metrics.usersList.filter((user) =>
+      [user.email, user.displayName, user.tier, user.profileStatus]
+        .filter(Boolean)
+        .some((value) => value?.toLowerCase().includes(normalizedQuery)),
+    );
+  }, [metrics.usersList, query]);
+
+  const rootCauseCounts = useMemo(() => {
+    return metrics.errorDetails.reduce<Record<string, number>>((counts, error) => {
+      counts[error.rootCause] = (counts[error.rootCause] ?? 0) + 1;
+      return counts;
+    }, {});
+  }, [metrics.errorDetails]);
+
+  async function loadPeriod(nextPeriodDays: number) {
+    setPeriodDays(nextPeriodDays);
+
+    startTransition(async () => {
+      const response = await fetch(`/api/admin/metrics?periodDays=${nextPeriodDays}`, {
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as { metrics?: OwnerMetrics };
+
+      if (payload.metrics) {
+        setMetrics(payload.metrics);
+      }
+    });
+  }
+
   return (
     <main className="owner-console" aria-labelledby="owner-console-title">
-      <div className="pane-heading">
-        <p className="eyebrow">Owner console</p>
-        <h1 id="owner-console-title">Operating view</h1>
-        <p>
-          Aggregate product health, usage, application outcomes, and support readiness.
-        </p>
+      <div className="owner-console-header">
+        <div className="pane-heading">
+          <p className="eyebrow">Owner console</p>
+          <h1 id="owner-console-title">Operating command center</h1>
+          <p>
+            Monitor acquisition, activation, profile quality, application outcomes, errors,
+            support load, and product friction. This view is designed to answer what needs
+            attention, not just count what happened.
+          </p>
+        </div>
+        <div className="owner-console-controls" aria-label="Owner console filters">
+          <div className="segmented-control compact">
+            {periodOptions.map((option) => (
+              <button
+                className={periodDays === option.value ? "active" : ""}
+                disabled={isPending}
+                key={option.value}
+                onClick={() => loadPeriod(option.value)}
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <button className="secondary-action" disabled={isPending} onClick={() => loadPeriod(periodDays)} type="button">
+            <RefreshCcw size={16} aria-hidden="true" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <section className="owner-metric-grid" aria-label="Operating metrics">
         <MetricCard
           icon={UsersRound}
-          label="Signed up"
+          label="Users"
           value={metrics.users.totalSignedUp}
-          detail={`${metrics.users.active7d} active in 7 days, ${metrics.users.active30d} active in 30 days`}
+          detail={`${metrics.users.newInPeriod} new, ${metrics.users.activeInPeriod} active in selected period`}
         />
         <MetricCard
           icon={FileText}
@@ -34,55 +120,223 @@ export function OwnerConsole({ metrics }: OwnerConsoleProps) {
           icon={BriefcaseBusiness}
           label="Applications"
           value={metrics.applications.logged}
-          detail={`${formatRate(metrics.outcomes.interviewRate)} interview rate, ${formatRate(metrics.outcomes.selectionRate)} selected`}
+          detail={`${formatRate(metrics.outcomes.interviewRate)} interview, ${formatRate(metrics.outcomes.selectionRate)} selected`}
         />
         <MetricCard
-          icon={Activity}
-          label="Materials"
-          value={metrics.materials.generatedResumes + metrics.materials.generatedCoverLetters}
-          detail={`${metrics.materials.resumePdfs + metrics.materials.coverLetterPdfs} PDFs exported`}
+          icon={AlertTriangle}
+          label="Fix required"
+          value={metrics.systemHealth.fixRequired}
+          detail={`${metrics.errorDetails.length} open signals across app, intake, and jobs`}
+          tone={metrics.systemHealth.fixRequired > 0 ? "warning" : "normal"}
         />
         <MetricCard
           icon={HeartHandshake}
           label="Support"
           value={metrics.support.ticketsOpen}
-          detail={metrics.support.status === "not_configured" ? "Support tables not configured yet" : `${metrics.support.ticketsEscalated} escalated`}
+          detail={`${metrics.support.ticketsEscalated} escalated, ${metrics.support.l1Resolved} L1 resolved`}
         />
       </section>
 
-      <section className="owner-detail-grid" aria-label="Detailed operating metrics">
-        <MetricBreakdown title="Application statuses" values={metrics.applications.byStatus} />
-        <OutcomeBreakdown title="Outcome by tier" values={metrics.outcomes.byTier} />
-        <OutcomeBreakdown title="Outcome by role family" values={metrics.outcomes.byRoleFamily} />
-        <OutcomeBreakdown title="Outcome by source" values={metrics.outcomes.bySourceType} />
-        <OutcomeBreakdown title="Outcome by resume type" values={metrics.outcomes.byResumeType} />
-        <MetricBreakdown title="Feature usage" values={metrics.featureUsage} />
-        <MetricBreakdown title="Profile sources" values={metrics.sources} />
-        <div className="owner-detail-panel">
-          <div className="section-heading">
-            <p className="eyebrow">System health</p>
-            <h2>Failure indicators</h2>
-          </div>
-          <dl className="metric-list">
-            <div>
-              <dt>Job ingestion failures</dt>
-              <dd>{metrics.systemHealth.jobIngestionFailures}</dd>
-            </div>
-            <div>
-              <dt>Profile extraction failures</dt>
-              <dd>{metrics.systemHealth.profileExtractionFailures}</dd>
-            </div>
-            <div>
-              <dt>Avg. hours to first response</dt>
-              <dd>{metrics.outcomes.averageHoursToFirstResponse.toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt>Generated at</dt>
-              <dd>{formatTimestamp(metrics.generatedAt)}</dd>
-            </div>
-          </dl>
-        </div>
+      <section className="owner-action-strip" aria-label="Recommended operating actions">
+        {buildOperatingActions(metrics).map((action) => (
+          <article key={action.title}>
+            <span>{action.label}</span>
+            <strong>{action.title}</strong>
+            <p>{action.body}</p>
+          </article>
+        ))}
       </section>
+
+      <nav className="owner-tab-list" aria-label="Owner console sections">
+        {[
+          ["overview", "Overview"],
+          ["users", "Users"],
+          ["errors", "Errors"],
+          ["support", "Support"],
+          ["outcomes", "Outcomes"],
+        ].map(([key, label]) => (
+          <button
+            className={activeTab === key ? "active" : ""}
+            key={key}
+            onClick={() => setActiveTab(key)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === "overview" ? (
+        <section className="owner-detail-grid" aria-label="Operating overview">
+          <TrendPanel title="Daily operating trend" values={metrics.trends.daily} />
+          <PageUsagePanel values={metrics.trends.pageUsage} />
+          <MetricBreakdown title="Feature usage" values={metrics.featureUsage} />
+          <MetricBreakdown title="Profile sources" values={metrics.sources} />
+          <MetricBreakdown title="Application statuses" values={metrics.applications.byStatus} />
+          <MetricBreakdown title="Root causes" values={rootCauseCounts} />
+        </section>
+      ) : null}
+
+      {activeTab === "users" ? (
+        <section className="owner-detail-panel owner-wide-panel" aria-label="Users">
+          <SectionHeading
+            eyebrow="Users"
+            title="User operating list"
+            body="Use this to spot stalled onboarding, users with repeated failures, and high-intent users who may need support."
+          />
+          <label className="owner-search">
+            <Search size={16} aria-hidden="true" />
+            <input
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search users by email, name, tier, or status"
+              value={query}
+            />
+          </label>
+          <div className="owner-table" role="table" aria-label="User list">
+            <div className="owner-table-row owner-table-head" role="row">
+              <span>User</span>
+              <span>Activity</span>
+              <span>Profile</span>
+              <span>Usage</span>
+              <span>Support</span>
+            </div>
+            {filteredUsers.map((user) => (
+              <div className="owner-table-row" key={user.userId} role="row">
+                <span>
+                  <strong>{user.displayName || "Unnamed user"}</strong>
+                  <small>{user.email || "No email"}</small>
+                </span>
+                <span>
+                  <strong>{formatRelativeTime(user.lastActivityAt ?? user.lastSignInAt ?? user.createdAt)}</strong>
+                  <small>Joined {formatDate(user.createdAt)}</small>
+                </span>
+                <span>
+                  <strong>{formatLabel(user.profileStatus ?? "missing")}</strong>
+                  <small>{user.sources} sources</small>
+                </span>
+                <span>
+                  <strong>{user.applications} applications</strong>
+                  <small>{user.resumes} resumes · {user.tier}</small>
+                </span>
+                <span>
+                  <strong>{user.openTickets} open</strong>
+                  <small>tickets</small>
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === "errors" ? (
+        <section className="owner-detail-panel owner-wide-panel" aria-label="Error details">
+          <SectionHeading
+            eyebrow="System health"
+            title="Errors and root-cause review"
+            body="Every row should answer whether this is user guidance, third-party limitation, provider instability, or a product bug requiring a fix."
+          />
+          <div className="owner-table error-table" role="table" aria-label="Error details">
+            <div className="owner-table-row owner-table-head" role="row">
+              <span>Issue</span>
+              <span>Root cause</span>
+              <span>Rationale</span>
+              <span>Action</span>
+            </div>
+            {metrics.errorDetails.length > 0 ? (
+              metrics.errorDetails.map((error) => (
+                <div className="owner-table-row" key={`${error.source}-${error.id}`} role="row">
+                  <span>
+                    <strong>{error.summary}</strong>
+                    <small>{error.area} · {error.code} · {formatDateTime(error.createdAt)}</small>
+                  </span>
+                  <span>
+                    <Pill tone={error.severity === "critical" || error.severity === "high" ? "danger" : "neutral"}>
+                      {formatLabel(error.rootCause)}
+                    </Pill>
+                    <small>{error.userEmail || "No user attached"}</small>
+                  </span>
+                  <span>{error.rationale}</span>
+                  <span>
+                    <Pill tone={error.fixRequired ? "danger" : "neutral"}>
+                      {error.fixRequired ? "Fix required" : "Monitor / guidance"}
+                    </Pill>
+                    <small>{formatLabel(error.status)}</small>
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="empty-state">No error signals in this period.</p>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === "support" ? (
+        <section className="owner-detail-panel owner-wide-panel" aria-label="Support tickets">
+          <SectionHeading
+            eyebrow="Support"
+            title="Support queue"
+            body="V1 support starts here: ticket state, user temperament, L1 disposition, and whether a human L2 escalation is needed."
+          />
+          {metrics.supportTickets.length > 0 ? (
+            <div className="owner-table support-table" role="table" aria-label="Support tickets">
+              <div className="owner-table-row owner-table-head" role="row">
+                <span>Ticket</span>
+                <span>User</span>
+                <span>Status</span>
+                <span>L1/L2</span>
+              </div>
+              {metrics.supportTickets.map((ticket) => (
+                <div className="owner-table-row" key={ticket.id} role="row">
+                  <span>
+                    <strong>{ticket.subject}</strong>
+                    <small>{ticket.summary || "No summary yet"}</small>
+                  </span>
+                  <span>
+                    <strong>{ticket.userEmail || "No user attached"}</strong>
+                    <small>{formatDateTime(ticket.createdAt)}</small>
+                  </span>
+                  <span>
+                    <Pill tone={ticket.priority === "urgent" || ticket.priority === "high" ? "danger" : "neutral"}>
+                      {formatLabel(ticket.priority)}
+                    </Pill>
+                    <small>{formatLabel(ticket.status)} · {formatLabel(ticket.sentiment)}</small>
+                  </span>
+                  <span>
+                    <strong>{formatLabel(ticket.l1Disposition)}</strong>
+                    <small>{ticket.escalatedToL2 ? ticket.escalationReason || "Escalated" : "No L2 escalation"}</small>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="empty-state">No support tickets in this period. The ticket foundation is configured and ready for intake.</p>
+          )}
+        </section>
+      ) : null}
+
+      {activeTab === "outcomes" ? (
+        <section className="owner-detail-grid" aria-label="Outcome analytics">
+          <OutcomeBreakdown title="Outcome by tier" values={metrics.outcomes.byTier} />
+          <OutcomeBreakdown title="Outcome by role family" values={metrics.outcomes.byRoleFamily} />
+          <OutcomeBreakdown title="Outcome by source" values={metrics.outcomes.bySourceType} />
+          <OutcomeBreakdown title="Outcome by resume type" values={metrics.outcomes.byResumeType} />
+          <div className="owner-detail-panel">
+            <SectionHeading
+              eyebrow="Response time"
+              title="Time to first response"
+              body="A lagging indicator of whether Pramania is helping users target roles that create market response."
+            />
+            <strong className="owner-large-number">
+              {metrics.outcomes.averageHoursToFirstResponse.toLocaleString()}h
+            </strong>
+          </div>
+        </section>
+      ) : null}
+
+      <p className="owner-generated-note">
+        Generated {formatDateTime(metrics.generatedAt)} for {metrics.period.days} day period.
+      </p>
     </main>
   );
 }
@@ -91,15 +345,17 @@ function MetricCard({
   detail,
   icon: Icon,
   label,
+  tone = "normal",
   value,
 }: {
   detail: string;
   icon: typeof UsersRound;
   label: string;
+  tone?: "normal" | "warning";
   value: number;
 }) {
   return (
-    <article className="owner-metric-card">
+    <article className={tone === "warning" ? "owner-metric-card warning" : "owner-metric-card"}>
       <div>
         <Icon size={18} aria-hidden="true" />
         <span>{label}</span>
@@ -110,15 +366,88 @@ function MetricCard({
   );
 }
 
+function SectionHeading({ body, eyebrow, title }: { body: string; eyebrow: string; title: string }) {
+  return (
+    <div className="section-heading">
+      <p className="eyebrow">{eyebrow}</p>
+      <h2>{title}</h2>
+      <p>{body}</p>
+    </div>
+  );
+}
+
+function TrendPanel({ title, values }: { title: string; values: OwnerMetrics["trends"]["daily"] }) {
+  const maxValue = Math.max(
+    1,
+    ...values.map((value) => value.pageViews + value.applications + value.errors + value.tickets),
+  );
+
+  return (
+    <div className="owner-detail-panel">
+      <SectionHeading
+        eyebrow="Trend"
+        title={title}
+        body="Shows whether acquisition, usage, errors, and support are moving together or diverging."
+      />
+      <div className="owner-bar-chart" aria-label={title}>
+        {values.map((value) => {
+          const total = value.pageViews + value.applications + value.errors + value.tickets;
+          return (
+            <div key={value.date} title={`${formatDate(value.date)}: ${total} events`}>
+              <span style={{ height: `${Math.max(4, (total / maxValue) * 100)}%` }} />
+              <small>{new Date(value.date).getDate()}</small>
+            </div>
+          );
+        })}
+      </div>
+      <div className="owner-chart-legend">
+        <span><BarChart3 size={14} /> Usage</span>
+        <span><BriefcaseBusiness size={14} /> Applications</span>
+        <span><AlertTriangle size={14} /> Errors</span>
+      </div>
+    </div>
+  );
+}
+
+function PageUsagePanel({ values }: { values: OwnerMetrics["trends"]["pageUsage"] }) {
+  return (
+    <div className="owner-detail-panel">
+      <SectionHeading
+        eyebrow="Behavior"
+        title="Time spent by page"
+        body="Use this to find where users linger, get stuck, or return repeatedly."
+      />
+      {values.length > 0 ? (
+        <dl className="owner-page-usage-list">
+          {values.map((value) => (
+            <div key={value.page}>
+              <dt>
+                <Clock3 size={14} aria-hidden="true" />
+                {formatLabel(value.page)}
+              </dt>
+              <dd>
+                {formatDuration(value.totalSeconds)} · {value.views} views · {value.uniqueUsers} users
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="empty-state">No page timing yet. It will populate as authenticated users move through the app.</p>
+      )}
+    </div>
+  );
+}
+
 function MetricBreakdown({ title, values }: { title: string; values: Record<string, number> }) {
   const entries = Object.entries(values);
 
   return (
     <div className="owner-detail-panel">
-      <div className="section-heading">
-        <p className="eyebrow">Usage</p>
-        <h2>{title}</h2>
-      </div>
+      <SectionHeading
+        eyebrow="Usage"
+        title={title}
+        body="Useful when it points to adoption, friction, or an unexpected concentration."
+      />
       {entries.length > 0 ? (
         <dl className="metric-list">
           {entries.map(([label, value]) => (
@@ -146,10 +475,11 @@ function OutcomeBreakdown({
 
   return (
     <div className="owner-detail-panel">
-      <div className="section-heading">
-        <p className="eyebrow">Outcomes</p>
-        <h2>{title}</h2>
-      </div>
+      <SectionHeading
+        eyebrow="Outcomes"
+        title={title}
+        body="Use this to learn which segments create interviews, selections, and weak response rates."
+      />
       {entries.length > 0 ? (
         <dl className="metric-list">
           {entries.map(([label, metrics]) => (
@@ -174,17 +504,90 @@ function OutcomeBreakdown({
   );
 }
 
+function Pill({ children, tone }: { children: ReactNode; tone: "danger" | "neutral" }) {
+  return <span className={tone === "danger" ? "owner-pill danger" : "owner-pill"}>{children}</span>;
+}
+
+function buildOperatingActions(metrics: OwnerMetrics) {
+  const actions = [];
+
+  if (metrics.systemHealth.fixRequired > 0) {
+    actions.push({
+      body: "Review recurring failures before adding new intake or job features. These are direct trust leaks.",
+      label: "Reliability",
+      title: `${metrics.systemHealth.fixRequired} fixes require owner review`,
+    });
+  }
+
+  if (metrics.users.activeInPeriod < metrics.users.newInPeriod && metrics.users.newInPeriod > 0) {
+    actions.push({
+      body: "New signups are not all returning or generating meaningful activity. Check onboarding and first profile flow.",
+      label: "Activation",
+      title: "Signup-to-activation needs attention",
+    });
+  }
+
+  if (metrics.applications.logged > 0 && metrics.outcomes.interviewRate < 0.15) {
+    actions.push({
+      body: "Low interview conversion means targeting, resume quality, or follow-up tracking may need tightening.",
+      label: "Outcomes",
+      title: "Interview rate is below launch target",
+    });
+  }
+
+  if (actions.length === 0) {
+    actions.push({
+      body: "No urgent reliability or activation signal in this period. Keep watching profile intake quality and application outcomes.",
+      label: "Operating read",
+      title: "No immediate red flags",
+    });
+  }
+
+  return actions.slice(0, 3);
+}
+
 function formatLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
-function formatTimestamp(value: string) {
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
+}
+
+function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
 }
 
+function formatDuration(value: number) {
+  if (value < 60) {
+    return `${Math.round(value)}s`;
+  }
+
+  return `${Math.round(value / 60)}m`;
+}
+
 function formatRate(value: number) {
   return `${Math.round(value * 100)}%`;
+}
+
+function formatRelativeTime(value: string) {
+  const diffMs = Date.now() - new Date(value).getTime();
+  const diffMinutes = Math.max(0, Math.round(diffMs / 60_000));
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 48) {
+    return `${diffHours}h ago`;
+  }
+
+  return `${Math.round(diffHours / 24)}d ago`;
 }

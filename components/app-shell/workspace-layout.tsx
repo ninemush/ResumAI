@@ -6,6 +6,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { OwnerConsole } from "@/components/admin/owner-console";
 import type { AppView } from "@/components/app-shell/side-nav";
 import { SideNav } from "@/components/app-shell/side-nav";
+import { WorkspaceTelemetry } from "@/components/app-shell/workspace-telemetry";
 import { ApplicationPanel } from "@/components/applications/application-panel";
 import type { StageFilter } from "@/components/applications/application-panel";
 import { ArtifactsPanel } from "@/components/artifacts/artifacts-panel";
@@ -151,6 +152,7 @@ export function WorkspaceLayout({
 
   return (
     <div className={`workspace-shell ${mobileFocusClass}`} style={shellStyle}>
+      <WorkspaceTelemetry activeView={layout.activeView} />
       <SideNav
         activeView={layout.activeView}
         collapsed={layout.navCollapsed}

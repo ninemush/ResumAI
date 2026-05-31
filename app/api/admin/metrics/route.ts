@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 
 import { getOwnerMetrics } from "@/lib/admin/owner-metrics";
 
-export async function GET() {
+export async function GET(request: Request) {
   const requestId = crypto.randomUUID();
+  const url = new URL(request.url);
+  const periodDays = parsePeriodDays(url.searchParams.get("periodDays"));
 
   try {
-    const metrics = await getOwnerMetrics();
+    const metrics = await getOwnerMetrics(periodDays);
 
     return NextResponse.json({
       ok: true,
@@ -43,4 +45,14 @@ function toApiError(error: unknown) {
     message: "Unable to load owner metrics right now.",
     status: 500,
   };
+}
+
+function parsePeriodDays(value: string | null) {
+  const parsed = Number(value ?? 30);
+
+  if (!Number.isFinite(parsed)) {
+    return 30;
+  }
+
+  return Math.max(1, Math.min(Math.trunc(parsed), 365));
 }

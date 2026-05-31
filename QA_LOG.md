@@ -381,3 +381,12 @@ This log records product-quality issues found during user-style validation. Fixe
 - Root cause: compact record views inherited early internal statuses and model-facing prompt labels.
 - Fix: changed missing material status to "needs generation" and aligned master/application AI prompts to "profile context."
 - Validation: lint, focused signed-in/material/master-resume regression tests, and production build passed.
+
+### Built: owner operating console foundation
+
+- Area: Owner console, telemetry, error review, support readiness, and operating analytics.
+- Finding: the previous owner console was too shallow for real operations: it showed aggregate counts, but did not expose user lists, root causes, support queues, period filters, page usage, or actionable operating reads.
+- Root cause: admin metrics were originally designed as a lightweight launch dashboard, not an owner command center.
+- Fix: added admin-only telemetry, error-event, support-ticket, and support-message tables with RLS; expanded the owner metrics RPC with period filters, trend data, page usage, user operating rows, error details, root-cause rationale, support tickets, and outcome segmentation; rebuilt the owner console as a tabbed operational view with action recommendations.
+- Validation: remote Supabase migrations were applied, lint passed, production build passed, unauthenticated admin/telemetry API tests passed, and a signed-in owner demo account completed the owner-console E2E path.
+- Remaining operational gap: support intake and server-side route error logging are now structurally supported, but still need workflow-level wiring so tickets can be created by users/Pramania and backend failures are logged consistently without relying only on existing source/job failure tables.

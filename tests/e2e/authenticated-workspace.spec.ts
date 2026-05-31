@@ -178,6 +178,36 @@ test.describe("authenticated workspace", () => {
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 2);
   });
 
+  test("shows an operational owner console when the signed-in account is an owner", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Owner console desktop density is the critical launch surface.");
+
+    await page.goto("/");
+
+    const ownerNav = page.locator(".side-nav").getByRole("button", { name: /^Owner Console$/i });
+    test.skip((await ownerNav.count()) === 0, "Demo account is not configured as owner/admin.");
+
+    await ownerNav.click();
+
+    await expect(page.getByRole("heading", { name: /Operating command center/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Today/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /30 days/i })).toBeVisible();
+    await expect(page.getByText("Monitor acquisition, activation")).toBeVisible();
+
+    await expect(page.getByRole("button", { name: /Users/i })).toBeVisible();
+    await page.getByRole("button", { name: /^Users$/i }).click();
+    await expect(page.getByRole("heading", { name: /User operating list/i })).toBeVisible();
+    await expect(page.getByPlaceholder(/Search users/i)).toBeVisible();
+
+    await page.getByRole("button", { name: /^Errors$/i }).click();
+    await expect(page.getByRole("heading", { name: /Errors and root-cause review/i })).toBeVisible();
+
+    await page.getByRole("button", { name: /^Support$/i }).click();
+    await expect(page.getByRole("heading", { name: /Support queue/i })).toBeVisible();
+
+    await page.getByRole("button", { name: /^Outcomes$/i }).click();
+    await expect(page.getByRole("heading", { name: /Outcome by tier/i })).toBeVisible();
+  });
+
   test("warns before leaving unsaved master resume edits", async ({ page, isMobile }) => {
     test.skip(isMobile, "Desktop navigation guard is covered here; mobile uses the same view switch handler.");
 

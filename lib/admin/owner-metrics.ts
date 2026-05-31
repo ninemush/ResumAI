@@ -9,6 +9,65 @@ const outcomeSegmentSchema = z.record(
   z.string(),
   z.record(z.string(), z.number().nonnegative()),
 );
+const isoDateSchema = z.string();
+const adminTrendPointSchema = z.object({
+  activeUsers: z.number().int().nonnegative(),
+  applications: z.number().int().nonnegative(),
+  date: z.string(),
+  errors: z.number().int().nonnegative(),
+  pageViews: z.number().int().nonnegative(),
+  signups: z.number().int().nonnegative(),
+  tickets: z.number().int().nonnegative(),
+});
+const adminPageUsageSchema = z.object({
+  averageSeconds: z.number().nonnegative(),
+  page: z.string(),
+  totalSeconds: z.number().nonnegative(),
+  uniqueUsers: z.number().int().nonnegative(),
+  views: z.number().int().nonnegative(),
+});
+const adminUserRowSchema = z.object({
+  applications: z.number().int().nonnegative(),
+  createdAt: isoDateSchema,
+  displayName: z.string().nullable(),
+  email: z.string().nullable(),
+  lastActivityAt: isoDateSchema.nullable(),
+  lastSignInAt: isoDateSchema.nullable(),
+  openTickets: z.number().int().nonnegative(),
+  profileStatus: z.string().nullable(),
+  resumes: z.number().int().nonnegative(),
+  sources: z.number().int().nonnegative(),
+  tier: z.string(),
+  userId: z.string(),
+});
+const adminErrorDetailSchema = z.object({
+  area: z.string(),
+  code: z.string(),
+  createdAt: isoDateSchema,
+  fixRequired: z.boolean(),
+  id: z.string(),
+  rationale: z.string(),
+  rootCause: z.string(),
+  severity: z.string(),
+  source: z.string(),
+  status: z.string(),
+  summary: z.string(),
+  userEmail: z.string().nullable(),
+});
+const adminSupportTicketSchema = z.object({
+  createdAt: isoDateSchema,
+  escalatedToL2: z.boolean(),
+  escalationReason: z.string().nullable(),
+  id: z.string(),
+  l1Disposition: z.string(),
+  priority: z.string(),
+  sentiment: z.string(),
+  status: z.string(),
+  subject: z.string(),
+  summary: z.string(),
+  updatedAt: isoDateSchema,
+  userEmail: z.string().nullable(),
+});
 
 export const ownerMetricsSchema = z.object({
   applications: z.object({
@@ -16,6 +75,7 @@ export const ownerMetricsSchema = z.object({
     converted: z.number().int().nonnegative(),
     logged: z.number().int().nonnegative(),
   }),
+  errorDetails: z.array(adminErrorDetailSchema).default([]),
   featureUsage: countRecordSchema,
   generatedAt: z.string(),
   jobs: z.object({
@@ -56,6 +116,17 @@ export const ownerMetricsSchema = z.object({
     needsReview: z.number().int().nonnegative(),
     ready: z.number().int().nonnegative(),
   }),
+  period: z
+    .object({
+      days: z.number().int().positive(),
+      endedAt: isoDateSchema,
+      startedAt: isoDateSchema,
+    })
+    .default({
+      days: 30,
+      endedAt: new Date(0).toISOString(),
+      startedAt: new Date(0).toISOString(),
+    }),
   sources: countRecordSchema,
   support: z.object({
     l1Resolved: z.number().int().nonnegative(),
@@ -63,22 +134,47 @@ export const ownerMetricsSchema = z.object({
     ticketsEscalated: z.number().int().nonnegative(),
     ticketsOpen: z.number().int().nonnegative(),
   }),
+  supportTickets: z.array(adminSupportTicketSchema).default([]),
   systemHealth: z.object({
+    clientErrors: z.number().int().nonnegative().default(0),
+    fixRequired: z.number().int().nonnegative().default(0),
     jobIngestionFailures: z.number().int().nonnegative(),
     profileExtractionFailures: z.number().int().nonnegative(),
   }),
+  trends: z
+    .object({
+      daily: z.array(adminTrendPointSchema).default([]),
+      pageUsage: z.array(adminPageUsageSchema).default([]),
+    })
+    .default({
+      daily: [],
+      pageUsage: [],
+    }),
   users: z.object({
     active7d: z.number().int().nonnegative(),
     active30d: z.number().int().nonnegative(),
+    activeInPeriod: z.number().int().nonnegative().default(0),
+    newInPeriod: z.number().int().nonnegative().default(0),
     totalSignedUp: z.number().int().nonnegative(),
   }),
+  usersList: z.array(adminUserRowSchema).default([]),
 });
 
 export type OwnerMetrics = z.infer<typeof ownerMetricsSchema>;
 
-export async function getOwnerMetrics(): Promise<OwnerMetrics> {
+export async function getOwnerMetrics(periodDays = 30): Promise<OwnerMetrics> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("get_admin_operating_metrics");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("ADMIN_REQUIRED");
+  }
+
+  const { data, error } = await supabase.rpc("get_admin_operating_metrics", {
+    p_period_days: periodDays,
+  });
 
   if (error || !data) {
     throw new Error(mapOwnerMetricsError(error?.message));
