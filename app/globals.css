@@ -4574,6 +4574,13 @@ input:focus {
   font-size: 0.78rem;
 }
 
+.source-viewer-actions {
+  align-items: center !important;
+  display: flex !important;
+  flex-shrink: 0;
+  gap: 8px !important;
+}
+
 .attachment-viewer-body {
   align-items: center;
   background: rgba(255, 255, 255, 0.62);

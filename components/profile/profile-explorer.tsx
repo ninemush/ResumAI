@@ -181,7 +181,7 @@ export function ProfileExplorer({
         return;
       }
 
-      setMessage("Direction acknowledged. I will use this as the working target.");
+      setMessage("Target direction saved. Pramania will use it for your profile read, master resume focus, job-fit reviews, and application materials.");
       router.refresh();
     } finally {
       setPendingId(null);
@@ -521,16 +521,17 @@ export function ProfileExplorer({
                   className="secondary-action"
                   disabled={pendingId === recommendation.id || recommendation.user_acknowledged}
                   onClick={() => acknowledgeRecommendation(recommendation.id)}
+                  title="Sets this as your working target direction for profile positioning, resume focus, job fit, and application materials."
                   type="button"
                 >
                   {recommendation.user_acknowledged ? (
                     <CheckCircle2 size={15} aria-hidden="true" />
                   ) : null}
                   {recommendation.user_acknowledged
-                    ? "Acknowledged"
+                    ? "Using as target"
                     : pendingId === recommendation.id
                       ? "Saving..."
-                      : "Use as direction"}
+                      : "Set as target direction"}
                 </button>
               </article>
             ))}

@@ -283,6 +283,14 @@ export function ConversationPanel({
         return;
       }
 
+      const targetDirectionAnswer = await processTargetDirectionAnswer(text);
+
+      if (targetDirectionAnswer) {
+        appendAssistantMessage(targetDirectionAnswer, true);
+        router.refresh();
+        return;
+      }
+
       const supportIssueAction = await processSupportIssueAction(text);
 
       if (supportIssueAction) {
@@ -434,6 +442,35 @@ export function ConversationPanel({
     }
 
     return `${payload.summary} I saved the rebuilt draft in Profile & Resume. It should now use a role-by-role ATS chronology when the saved source evidence contains employers, titles, dates, and locations.`;
+  }
+
+  async function processTargetDirectionAnswer(text: string) {
+    const answer = text.replace(/\s+/g, " ").trim();
+
+    if (!looksLikeAnswerToDirectionQuestion(answer)) {
+      return null;
+    }
+
+    const lastAssistantMessage = [...messages]
+      .reverse()
+      .find((item) => item.speaker === "assistant" && item.text.trim().length > 0)?.text;
+
+    if (!lastAssistantMessage || !assistantAskedForTargetDirection(lastAssistantMessage)) {
+      return null;
+    }
+
+    const response = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetDirection: answer }),
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      return payload.error?.message ?? "I understood the direction, but could not save it to your profile yet.";
+    }
+
+    return `Got it. I’ll use **${answer}** as your working target direction. You should see it reflected in Profile & Resume, and I’ll use it when shaping your master resume, role fit, and job recommendations.`;
   }
 
   async function processApplicationAction(text: string) {
@@ -1880,6 +1917,45 @@ function inferProfilePatch(text: string) {
   }
 
   return null;
+}
+
+function looksLikeAnswerToDirectionQuestion(text: string) {
+  const normalized = text.toLowerCase().trim();
+
+  if (!normalized || normalized.length > 180) {
+    return false;
+  }
+
+  if (/[?]/.test(text)) {
+    return false;
+  }
+
+  if (extractUrls(text).length > 0) {
+    return false;
+  }
+
+  if (
+    /\b(upload|download|export|generate|resume|cover letter|application|job link|issue|error|why|what|how|when|where)\b/.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+
+  return /\b(strategy|operations?|commercial|coo|gtm|revenue|sales|product|customer|success|leadership|leader|director|vp|executive|manager|engineering|finance|marketing|people|hr|talent|data|ai|automation|transformation|consulting|services?)\b/.test(
+    normalized,
+  );
+}
+
+function assistantAskedForTargetDirection(text: string) {
+  const normalized = text.toLowerCase().replace(/\s+/g, " ");
+
+  return (
+    /\bwhich\b.{0,90}\b(direction|lane|path|positioning|target)\b/.test(normalized) ||
+    /\bfeels most accurate\b/.test(normalized) ||
+    /\btarget market positioning\b/.test(normalized) ||
+    /\bshould i optimize\b/.test(normalized)
+  );
 }
 
 function isSafeDirectProfileField(value: string, maxLength: number) {

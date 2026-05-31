@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, RefreshCw } from "lucide-react";
+import { Download, FileText, RefreshCw } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -199,6 +199,19 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
                   <span className={`source-pill ${source.extraction_status}`}>
                     {source.extraction_status.replace("_", " ")}
                   </span>
+                  {source.previewUrl ? (
+                    <a
+                      className="secondary-action compact-action"
+                      download={source.original_filename ?? true}
+                      href={source.previewUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                      title="Download the original uploaded source file"
+                    >
+                      <Download size={14} aria-hidden="true" />
+                      Download
+                    </a>
+                  ) : null}
                   {source.extraction_status !== "processing" &&
                   source.extraction_status !== "deleted" ? (
                     <button
@@ -312,9 +325,24 @@ function SourceViewer({
             <strong>{source.original_filename ?? formatSourceUrl(source.source_url)}</strong>
             <span>{formatSourceType(source.source_type)} · {formatSourceTimestamp(source.created_at)}</span>
           </div>
-          <button className="secondary-action compact-action" onClick={onClose} type="button">
-            Close
-          </button>
+          <div className="source-viewer-actions">
+            {source.previewUrl ? (
+              <a
+                className="secondary-action compact-action"
+                download={source.original_filename ?? true}
+                href={source.previewUrl}
+                rel="noreferrer"
+                target="_blank"
+                title="Download the original uploaded source file"
+              >
+                <Download size={14} aria-hidden="true" />
+                Download original
+              </a>
+            ) : null}
+            <button className="secondary-action compact-action" onClick={onClose} type="button">
+              Close
+            </button>
+          </div>
         </header>
         <div className="attachment-viewer-body">
           {source.previewUrl && source.source_type === "image" ? (

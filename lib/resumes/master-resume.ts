@@ -14,6 +14,7 @@ import {
 } from "@/lib/profile/profile-intelligence";
 import {
   MAX_RESUME_EXPERIENCE_SECTIONS,
+  dedupeResumeExperienceSections,
   normalizeResumeContent,
   parseResumeContent,
   resumeContentSchema,
@@ -540,21 +541,7 @@ function extractExperienceSectionsFromSources(sourceEvidence: SourceEvidence[]) 
     .flatMap((source) => extractExperienceSectionsFromText(stripRecommendationSourceSections(source.extracted_text ?? "")))
     .filter((section) => section.roleTitle && (section.company || section.dates || section.bullets.length > 0));
 
-  const seen = new Set<string>();
-
-  return sections
-    .filter((section) => {
-      const key = [section.roleTitle, section.company ?? "", section.dates ?? ""]
-        .join("|")
-        .toLowerCase();
-
-      if (seen.has(key)) {
-        return false;
-      }
-
-      seen.add(key);
-      return true;
-    })
+  return dedupeResumeExperienceSections(sections)
     .slice(0, MAX_RESUME_EXPERIENCE_SECTIONS);
 }
 
@@ -562,21 +549,10 @@ function mergeExperienceSections(
   sourceSections: ResumeContent["experienceSections"],
   modelSections: ResumeContent["experienceSections"],
 ) {
-  const merged = [...sourceSections];
-
-  for (const section of modelSections) {
-    const matchesExisting = merged.some((item) =>
-      [item.roleTitle, item.company ?? ""].join(" ").toLowerCase().includes(
-        [section.roleTitle, section.company ?? ""].join(" ").toLowerCase().slice(0, 40),
-      ),
-    );
-
-    if (!matchesExisting) {
-      merged.push(section);
-    }
-  }
-
-  return merged.slice(0, MAX_RESUME_EXPERIENCE_SECTIONS);
+  return dedupeResumeExperienceSections([...sourceSections, ...modelSections]).slice(
+    0,
+    MAX_RESUME_EXPERIENCE_SECTIONS,
+  );
 }
 
 function stripJsonFence(value: string) {

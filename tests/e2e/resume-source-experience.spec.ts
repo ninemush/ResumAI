@@ -144,3 +144,55 @@ test("keeps internal resume UI labels out of generated resume content", () => {
   expect(normalized.experienceSections[0].roleTitle).toBe("Global VP");
   expect(normalized.experienceSections).toHaveLength(1);
 });
+
+test("deduplicates near-identical role sections without collapsing real progression", () => {
+  const normalized = normalizeResumeContent({
+    contact: {
+      email: "candidate@example.com",
+      linkedin: null,
+      location: "Dubai",
+      phone: null,
+      website: null,
+    },
+    experienceBullets: [],
+    experienceSections: [
+      {
+        bullets: ["Scaled EMEA Professional Services revenue approximately 100x over three years."],
+        company: "AutomationCo",
+        dates: "Jun 2020 - Feb 2022",
+        location: "Dubai",
+        roleTitle: "Senior Director Professional Services, EMEA",
+      },
+      {
+        bullets: ["Built a lean GTM team focused on customer outcomes and revenue growth."],
+        company: "AutomationCo",
+        dates: "June 2020 - February 2022",
+        location: "Dubai, United Arab Emirates",
+        roleTitle: "Senior Director, Professional Services EMEA",
+      },
+      {
+        bullets: ["Led global Services GTM and operations across portfolio, pricing, and governance."],
+        company: "AutomationCo",
+        dates: "June 2022 - Present",
+        location: "Dubai",
+        roleTitle: "Global Vice President of Professional Services, GTM & Operations",
+      },
+    ],
+    headline: "Enterprise Transformation Executive",
+    keywordGaps: [],
+    reviewerNotes: [],
+    skills: ["Transformation"],
+    summary: "Builds operating models and measurable value.",
+  });
+
+  expect(normalized.experienceSections).toHaveLength(2);
+  expect(normalized.experienceSections[0].bullets).toEqual(
+    expect.arrayContaining([
+      "Scaled EMEA Professional Services revenue approximately 100x over three years.",
+      "Built a lean GTM team focused on customer outcomes and revenue growth.",
+    ]),
+  );
+  expect(normalized.experienceSections[1].roleTitle).toBe(
+    "Global Vice President of Professional Services, GTM & Operations",
+  );
+});

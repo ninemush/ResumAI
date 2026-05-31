@@ -45,7 +45,8 @@ export function parseResumeContent(value: unknown): ResumeContent {
 }
 
 export function normalizeResumeContent(value: ResumeContent): ResumeContent {
-  const experienceSections = value.experienceSections
+  const experienceSections = dedupeResumeExperienceSections(
+    value.experienceSections
     .map((section) => ({
       bullets: section.bullets.map((bullet) => cleanResumeText(bullet, 320)).filter(Boolean).slice(0, 7),
       company: cleanNullableText(section.company, 120),
@@ -54,7 +55,8 @@ export function normalizeResumeContent(value: ResumeContent): ResumeContent {
       roleTitle: stripResumeUiLabels(cleanResumeText(section.roleTitle, 140)) || "Role",
     }))
     .filter((section) => section.bullets.length > 0 || section.roleTitle !== "Role")
-    .filter((section) => !looksLikeRecommendationExperienceSection(section))
+    .filter((section) => !looksLikeRecommendationExperienceSection(section)),
+  )
     .slice(0, MAX_RESUME_EXPERIENCE_SECTIONS);
   const experienceBullets = value.experienceBullets
     .map((bullet) => cleanResumeText(bullet, 320))
@@ -82,6 +84,37 @@ export function normalizeResumeContent(value: ResumeContent): ResumeContent {
   });
 }
 
+export function dedupeResumeExperienceSections(
+  sections: ResumeContent["experienceSections"],
+): ResumeContent["experienceSections"] {
+  const deduped: ResumeContent["experienceSections"] = [];
+
+  for (const section of sections) {
+    const existingIndex = deduped.findIndex((existing) =>
+      looksLikeSameExperienceSection(existing, section),
+    );
+
+    if (existingIndex === -1) {
+      deduped.push(section);
+      continue;
+    }
+
+    const existing = deduped[existingIndex];
+    deduped[existingIndex] = {
+      bullets: mergeUniqueResumeBullets(existing.bullets, section.bullets).slice(0, 7),
+      company: existing.company || section.company,
+      dates: existing.dates || section.dates,
+      location: existing.location || section.location,
+      roleTitle:
+        existing.roleTitle.length >= section.roleTitle.length
+          ? existing.roleTitle
+          : section.roleTitle,
+    };
+  }
+
+  return deduped;
+}
+
 function cleanNullableText(value: string | null, maxLength: number) {
   const cleanValue = cleanResumeText(value ?? "", maxLength);
   return cleanValue || null;
@@ -93,6 +126,111 @@ function cleanResumeText(value: string, maxLength = 320) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength);
+}
+
+function mergeUniqueResumeBullets(left: string[], right: string[]) {
+  const bullets: string[] = [];
+
+  for (const bullet of [...left, ...right]) {
+    const normalized = normalizeComparableText(bullet);
+
+    if (
+      !normalized ||
+      bullets.some((existing) => {
+        const existingNormalized = normalizeComparableText(existing);
+        return (
+          existingNormalized === normalized ||
+          existingNormalized.includes(normalized.slice(0, 80)) ||
+          normalized.includes(existingNormalized.slice(0, 80))
+        );
+      })
+    ) {
+      continue;
+    }
+
+    bullets.push(bullet);
+  }
+
+  return bullets;
+}
+
+function looksLikeSameExperienceSection(
+  left: ResumeContent["experienceSections"][number],
+  right: ResumeContent["experienceSections"][number],
+) {
+  const leftCompany = normalizeComparableText(left.company ?? "");
+  const rightCompany = normalizeComparableText(right.company ?? "");
+  const companyMatches =
+    !leftCompany ||
+    !rightCompany ||
+    leftCompany === rightCompany ||
+    leftCompany.includes(rightCompany) ||
+    rightCompany.includes(leftCompany);
+
+  if (!companyMatches) {
+    return false;
+  }
+
+  const datesCompatible = datesOverlapOrMissing(left.dates, right.dates);
+  const roleSimilarity = tokenSimilarity(left.roleTitle, right.roleTitle);
+
+  if (datesCompatible && roleSimilarity >= 0.58) {
+    return true;
+  }
+
+  return roleSimilarity >= 0.82 && Boolean(leftCompany && rightCompany);
+}
+
+function datesOverlapOrMissing(left: string | null, right: string | null) {
+  const leftYears = extractYears(left);
+  const rightYears = extractYears(right);
+
+  if (leftYears.length === 0 || rightYears.length === 0) {
+    return true;
+  }
+
+  return leftYears[0] === rightYears[0] && leftYears.at(-1) === rightYears.at(-1);
+}
+
+function extractYears(value: string | null) {
+  return Array.from(new Set(value?.match(/\b(?:19|20)\d{2}\b/g) ?? []));
+}
+
+function tokenSimilarity(left: string, right: string) {
+  const leftTokens = new Set(readComparableTokens(left));
+  const rightTokens = new Set(readComparableTokens(right));
+
+  if (leftTokens.size === 0 || rightTokens.size === 0) {
+    return 0;
+  }
+
+  const intersection = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  return intersection / Math.min(leftTokens.size, rightTokens.size);
+}
+
+function readComparableTokens(value: string) {
+  const stopWords = new Set([
+    "and",
+    "at",
+    "for",
+    "global",
+    "of",
+    "the",
+  ]);
+
+  return normalizeComparableText(value)
+    .split(" ")
+    .filter((token) => token.length > 2 && !stopWords.has(token));
+}
+
+function normalizeComparableText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\b(senior|sr|vice|vp|president|director|lead|leader|head)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function cleanResumeHeadline(value: string) {
