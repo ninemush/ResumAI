@@ -50,6 +50,7 @@ This backlog captures approved direction that should be designed and implemented
 
 - Draft a solid privacy policy before public launch covering data collected, AI processing, source ingestion, OAuth identity data, generated documents, retention, deletion/export rights, subprocessors, cross-border processing, and support/admin access.
 - Done: Decide V1 support implementation: lightweight in-app ticket tables first, with optional integration later if volume or workflow demands it.
+- Done: Make the owner console operational with clickable metrics, ageing, suggested fixes, user-visible issue updates, and support dispositions.
 - Create self-serve L0 support docs after core V1 workflows stabilize.
 - Add L1 autonomous support for platform issues with support-safe logs and escalation boundaries.
 - Escalate refunds, sensitive matters, legal/privacy/security issues, and unresolved support cases to L2 human support with full context.

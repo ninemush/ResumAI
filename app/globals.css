@@ -1257,14 +1257,34 @@ input:focus {
 }
 
 .owner-metric-card {
+  appearance: none;
+  color: inherit;
   display: grid;
   gap: 10px;
   min-width: 0;
   padding: 16px;
+  text-align: left;
+  width: 100%;
 }
 
 .owner-metric-card.warning {
   border-color: rgba(173, 74, 64, 0.32);
+}
+
+.owner-metric-card.interactive {
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.owner-metric-card.interactive:hover,
+.owner-metric-card.interactive:focus-visible {
+  border-color: rgba(188, 144, 78, 0.58);
+  box-shadow: 0 16px 34px rgba(16, 28, 45, 0.08);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .owner-metric-card div {
@@ -1702,6 +1722,19 @@ input:focus {
   text-transform: none;
 }
 
+.support-issue-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+}
+
+.danger-action {
+  border-color: rgba(173, 74, 64, 0.34);
+  color: #9f3f39;
+}
+
 .owner-pill {
   border: 1px solid var(--line);
   border-radius: var(--pr-radius-pill);
@@ -1723,6 +1756,72 @@ input:focus {
   font-family: var(--font-pr-brand), Georgia, serif;
   font-size: clamp(3rem, 8vw, 7rem);
   line-height: 1;
+}
+
+.owner-outcome-bars {
+  display: grid;
+  gap: 12px;
+}
+
+.owner-outcome-row {
+  border-top: 1px solid rgba(215, 204, 188, 0.72);
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.owner-outcome-row > div:first-child {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.owner-outcome-row > div:first-child strong {
+  color: var(--foreground);
+  text-transform: capitalize;
+}
+
+.owner-outcome-row > div:first-child span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.outcome-bar {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 76px minmax(0, 1fr) 42px;
+}
+
+.outcome-bar span,
+.outcome-bar strong {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.outcome-bar strong {
+  color: var(--foreground);
+  text-align: right;
+}
+
+.outcome-bar div {
+  background: rgba(215, 204, 188, 0.45);
+  border-radius: var(--pr-radius-pill);
+  height: 10px;
+  overflow: hidden;
+}
+
+.outcome-bar i {
+  background: linear-gradient(90deg, var(--sage-strong), var(--pr-antique-gold));
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  min-width: 2px;
+}
+
+.outcome-bar.muted i {
+  background: linear-gradient(90deg, rgba(173, 74, 64, 0.72), rgba(173, 74, 64, 0.34));
 }
 
 .owner-generated-note {

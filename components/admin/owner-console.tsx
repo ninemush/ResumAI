@@ -137,24 +137,28 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         <MetricCard
           icon={UsersRound}
           label="Users"
+          onClick={() => setActiveTab("users")}
           value={metrics.users.totalSignedUp}
           detail={`${metrics.users.newInPeriod} new, ${metrics.users.activeInPeriod} active in selected period`}
         />
         <MetricCard
           icon={FileText}
           label="Profiles"
+          onClick={() => setActiveTab("users")}
           value={metrics.profiles.created}
           detail={`${metrics.profiles.ready} ready, ${metrics.profiles.needsReview} need review`}
         />
         <MetricCard
           icon={BriefcaseBusiness}
           label="Applications"
+          onClick={() => setActiveTab("outcomes")}
           value={metrics.applications.logged}
           detail={`${formatRate(metrics.outcomes.interviewRate)} interview, ${formatRate(metrics.outcomes.selectionRate)} selected`}
         />
         <MetricCard
           icon={AlertTriangle}
           label="Fix required"
+          onClick={() => setActiveTab("errors")}
           value={metrics.systemHealth.fixRequired}
           detail={`${metrics.errorDetails.length} open signals across app, intake, and jobs`}
           tone={metrics.systemHealth.fixRequired > 0 ? "warning" : "normal"}
@@ -162,6 +166,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         <MetricCard
           icon={HeartHandshake}
           label="Support"
+          onClick={() => setActiveTab("support")}
           value={metrics.support.ticketsOpen}
           detail={`${metrics.support.ticketsEscalated} escalated, ${metrics.support.l1Resolved} L1 resolved`}
         />
@@ -270,7 +275,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               <span>Issue</span>
               <span>Root cause</span>
               <span>Rationale</span>
-              <span>Action</span>
+              <span>Suggested action</span>
             </div>
             {metrics.errorDetails.length > 0 ? (
               metrics.errorDetails.map((error) => (
@@ -285,12 +290,15 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                     </Pill>
                     <small>{error.userEmail || "No user attached"}</small>
                   </span>
-                  <span>{error.rationale}</span>
+                  <span>
+                    <strong>{error.rationale}</strong>
+                    <small>{formatAge(error.createdAt)} old</small>
+                  </span>
                   <span>
                     <Pill tone={error.fixRequired ? "danger" : "neutral"}>
                       {error.fixRequired ? "Fix required" : "Monitor / guidance"}
                     </Pill>
-                    <small>{formatLabel(error.status)}</small>
+                    <small>{suggestErrorFix(error)}</small>
                   </span>
                 </div>
               ))
@@ -323,7 +331,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                         {formatLabel(ticket.priority)}
                       </Pill>
                       <small>
-                        {formatLabel(ticket.status)} · {formatLabel(ticket.fixStatus)} · {formatDateTime(ticket.updatedAt)}
+                        {formatLabel(ticket.status)} · {formatLabel(ticket.fixStatus)} · age {formatAge(ticket.createdAt)}
                       </small>
                     </div>
                   </div>
@@ -345,8 +353,11 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       </p>
                     </div>
                     <div>
-                      <span>Owner notes</span>
-                      <p>{ticket.ownerNotes || "No owner notes yet."}</p>
+                      <span>User-visible update</span>
+                      <p>
+                        {ticket.ownerNotes ||
+                          "No user-visible update yet. Add a concise note before resolving, cancelling, or asking for more information."}
+                      </p>
                     </div>
                   </div>
 
@@ -403,7 +414,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       </select>
                     </label>
                     <label className="support-issue-notes">
-                      Owner notes
+                      User-visible update / owner notes
                       <textarea
                         disabled={issueUpdatingId === ticket.id}
                         onChange={(event) =>
@@ -428,6 +439,63 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                     >
                       Save notes
                     </button>
+                    <div className="support-issue-quick-actions" aria-label={`Quick actions for ${ticket.subject}`}>
+                      <button
+                        className="secondary-action"
+                        disabled={issueUpdatingId === ticket.id}
+                        onClick={() =>
+                          updateIssue(ticket.id, {
+                            ownerNotes: readIssueNote(
+                              issueNotes,
+                              ticket,
+                              "I need a little more information to finish this cleanly. Please reply in Support with the exact step, file, or page where this happened.",
+                            ),
+                            status: "waiting_on_user",
+                            fixStatus: "user_action_required",
+                          })
+                        }
+                        type="button"
+                      >
+                        Ask user
+                      </button>
+                      <button
+                        className="secondary-action"
+                        disabled={issueUpdatingId === ticket.id}
+                        onClick={() =>
+                          updateIssue(ticket.id, {
+                            ownerNotes: readIssueNote(
+                              issueNotes,
+                              ticket,
+                              "This has been addressed. Please retry the workflow and reopen the issue if it still behaves unexpectedly.",
+                            ),
+                            status: "resolved",
+                            fixStatus: "fixed",
+                          })
+                        }
+                        type="button"
+                      >
+                        Mark fixed
+                      </button>
+                      <button
+                        className="secondary-action danger-action"
+                        disabled={issueUpdatingId === ticket.id}
+                        onClick={() =>
+                          updateIssue(ticket.id, {
+                            closedReason: "not_planned",
+                            ownerNotes: readIssueNote(
+                              issueNotes,
+                              ticket,
+                              "Closed after review. No product change is planned right now, but the issue remains retained for audit and trend review.",
+                            ),
+                            status: "closed",
+                            fixStatus: "wont_fix",
+                          })
+                        }
+                        type="button"
+                      >
+                        Close no fix
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -468,23 +536,46 @@ function MetricCard({
   detail,
   icon: Icon,
   label,
+  onClick,
   tone = "normal",
   value,
 }: {
   detail: string;
   icon: typeof UsersRound;
   label: string;
+  onClick?: () => void;
   tone?: "normal" | "warning";
   value: number;
 }) {
-  return (
-    <article className={tone === "warning" ? "owner-metric-card warning" : "owner-metric-card"}>
+  const className = [
+    "owner-metric-card",
+    tone === "warning" ? "warning" : "",
+    onClick ? "interactive" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const content = (
+    <>
       <div>
         <Icon size={18} aria-hidden="true" />
         <span>{label}</span>
       </div>
       <strong>{value.toLocaleString()}</strong>
       <p>{detail}</p>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button className={className} onClick={onClick} type="button">
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <article className={className}>
+      {content}
     </article>
   );
 }
@@ -595,36 +686,149 @@ function OutcomeBreakdown({
   values: Record<string, Record<string, number>>;
 }) {
   const entries = Object.entries(values);
+  const read = summarizeOutcomePattern(values);
 
   return (
     <div className="owner-detail-panel">
       <SectionHeading
         eyebrow="Outcomes"
         title={title}
-        body="Use this to learn which segments create interviews, selections, and weak response rates."
+        body={read}
       />
       {entries.length > 0 ? (
-        <dl className="metric-list">
+        <div className="owner-outcome-bars">
           {entries.map(([label, metrics]) => (
-            <div key={label}>
-              <dt>{formatLabel(label)}</dt>
-              <dd>
-                {Object.entries(metrics)
-                  .map(([metricLabel, value]) =>
-                    metricLabel.toLowerCase().includes("rate")
-                      ? `${formatLabel(metricLabel)} ${formatRate(value)}`
-                      : `${formatLabel(metricLabel)} ${value.toLocaleString()}`,
-                  )
-                  .join(" · ")}
-              </dd>
+            <div className="owner-outcome-row" key={label}>
+              <div>
+                <strong>{formatLabel(label)}</strong>
+                <span>{formatOutcomeVolume(metrics)}</span>
+              </div>
+              <OutcomeBar label="Interview" value={readOutcomeRate(metrics, "interviewRate")} />
+              <OutcomeBar label="Selected" value={readOutcomeRate(metrics, "selectionRate")} />
+              <OutcomeBar label="Rejected" value={readOutcomeRate(metrics, "rejectionRate")} muted />
             </div>
           ))}
-        </dl>
+        </div>
       ) : (
         <p className="empty-state">No outcome data yet.</p>
       )}
     </div>
   );
+}
+
+function OutcomeBar({ label, muted = false, value }: { label: string; muted?: boolean; value: number }) {
+  return (
+    <div className={muted ? "outcome-bar muted" : "outcome-bar"}>
+      <span>{label}</span>
+      <div aria-label={`${label} ${formatRate(value)}`}>
+        <i style={{ width: `${Math.min(100, Math.max(0, value * 100))}%` }} />
+      </div>
+      <strong>{formatRate(value)}</strong>
+    </div>
+  );
+}
+
+function readOutcomeRate(metrics: Record<string, number>, key: string) {
+  const requestedKey = normalizeMetricKey(key);
+  const match = Object.entries(metrics).find(([metricKey]) => normalizeMetricKey(metricKey) === requestedKey);
+
+  return match?.[1] ?? 0;
+}
+
+function normalizeMetricKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function formatOutcomeVolume(metrics: Record<string, number>) {
+  const count =
+    metrics.total ??
+    metrics.applications ??
+    metrics.logged ??
+    metrics.count ??
+    Object.entries(metrics)
+      .filter(([key]) => !key.toLowerCase().includes("rate"))
+      .reduce((sum, [, value]) => sum + value, 0);
+
+  return `${Math.round(count).toLocaleString()} record${Math.round(count) === 1 ? "" : "s"}`;
+}
+
+function summarizeOutcomePattern(values: Record<string, Record<string, number>>) {
+  const entries = Object.entries(values);
+
+  if (entries.length === 0) {
+    return "No outcome data yet. This will become useful after users log applications and update stages.";
+  }
+
+  const ranked = entries
+    .map(([label, metrics]) => ({
+      interviewRate: readOutcomeRate(metrics, "interviewRate"),
+      label,
+      selectionRate: readOutcomeRate(metrics, "selectionRate"),
+      volume: metrics.total ?? metrics.applications ?? metrics.logged ?? metrics.count ?? 0,
+    }))
+    .sort((a, b) => b.interviewRate + b.selectionRate - (a.interviewRate + a.selectionRate));
+
+  const best = ranked[0];
+  const weakest = [...ranked].sort((a, b) => a.interviewRate + a.selectionRate - (b.interviewRate + b.selectionRate))[0];
+
+  if (!best || best.interviewRate + best.selectionRate === 0) {
+    return "Pattern read: activity exists, but no interview or selection outcomes are showing yet.";
+  }
+
+  if (weakest && weakest.label !== best.label) {
+    return `Pattern read: ${formatLabel(best.label)} is currently strongest; ${formatLabel(weakest.label)} may need targeting, resume quality, or follow-up review.`;
+  }
+
+  return `Pattern read: ${formatLabel(best.label)} is currently the strongest signal.`;
+}
+
+function suggestErrorFix(error: OwnerMetrics["errorDetails"][number]) {
+  if (!error.fixRequired) {
+    return "Monitor recurrence; add user guidance if it repeats.";
+  }
+
+  const rootCause = error.rootCause.toLowerCase();
+
+  if (rootCause.includes("schema") || rootCause.includes("validation")) {
+    return "Fix parser/schema handling, add regression coverage, then mark linked ticket fixed.";
+  }
+
+  if (rootCause.includes("provider") || rootCause.includes("third")) {
+    return "Add provider fallback or clearer user guidance; verify retry behavior.";
+  }
+
+  if (rootCause.includes("ocr") || rootCause.includes("extract")) {
+    return "Review extraction logs, add retry/fallback, and test the source type end to end.";
+  }
+
+  if (rootCause.includes("auth") || rootCause.includes("permission")) {
+    return "Check auth/RLS path and confirm the user-facing message is actionable.";
+  }
+
+  return "Create a root-cause fix, link it to this error, and add a regression test.";
+}
+
+function formatAge(value: string) {
+  const diffMs = Date.now() - new Date(value).getTime();
+  const days = Math.floor(Math.max(0, diffMs) / 86_400_000);
+
+  if (days <= 0) {
+    const hours = Math.floor(Math.max(0, diffMs) / 3_600_000);
+    return hours <= 0 ? "<1h" : `${hours}h`;
+  }
+
+  return `${days}d`;
+}
+
+function readIssueNote(
+  notes: Record<string, string>,
+  ticket: OwnerMetrics["supportTickets"][number],
+  fallback: string,
+) {
+  const draft = notes[ticket.id]?.trim();
+  const existing = ticket.ownerNotes?.trim();
+
+  return draft || existing || fallback;
 }
 
 function Pill({ children, tone }: { children: ReactNode; tone: "danger" | "neutral" }) {
