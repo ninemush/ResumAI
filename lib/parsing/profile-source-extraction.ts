@@ -817,6 +817,7 @@ function buildLinkedInPublicProfileSearchPrompt(sourceUrl: string) {
     "Rules:",
     "- Keep dates, company names, titles, schools, credentials, skills, and metrics as close to the public source as possible.",
     "- Do not invent email, phone, employers, degrees, dates, achievements, or endorsements.",
+    "- Do not include LinkedIn recommendations, testimonials, endorsements, or third-party praise as Experience.",
     "- Omit empty sections.",
     "- If you cannot verify the profile from public web results, return exactly PUBLIC_PROFILE_NOT_READABLE.",
   ].join("\n");

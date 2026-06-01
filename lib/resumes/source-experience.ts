@@ -10,6 +10,10 @@ export function extractExperienceSectionsFromText(text: string) {
     const line = lines[index];
     const followingLines = lines.slice(index + 1, index + 4);
 
+    if (looksLikeRecommendationBoundary(line)) {
+      break;
+    }
+
     if (looksLikeResumeCompanyHeading(line, followingLines)) {
       currentCompany = line;
       continue;
@@ -85,7 +89,7 @@ export function extractExperienceSectionsFromText(text: string) {
     }
   }
 
-  return sections;
+  return sections.sort(compareResumeSectionsByRecency);
 }
 
 function readExperienceText(text: string) {
@@ -137,6 +141,7 @@ function joinWrappedResumeSourceLines(lines: string[]) {
 
 function cleanResumeSourceLine(value: string) {
   return value
+    .replace(/\*\*/g, "")
     .replace(/^[-•*]\s*/, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -214,6 +219,8 @@ function looksLikeResumeCompany(value: string) {
     !looksLikeDateRange(value) &&
     !looksLikeResumeLocation(value) &&
     !looksLikeResumeSectionBoundary(value) &&
+    !looksLikeRecommendationOrTestimonial(value) &&
+    !looksLikePersonName(value) &&
     !/^(?:i|we|my|our|led|built|managed|owned|developed|reduced|scaled|created|established|supported|completed|focused|helped)\b/i.test(
       value,
     ) &&
@@ -226,6 +233,7 @@ function looksLikeResumeCompanyHeading(value: string, followingLines: string[]) 
   return (
     value.length <= 60 &&
     looksLikeResumeCompany(value) &&
+    !looksLikePersonName(value) &&
     followingLines.some((line) => looksLikeCompanyDurationLine(line) || looksLikeResumeRoleTitle(line))
   );
 }
@@ -266,12 +274,22 @@ function looksLikeRecommendationSection(section: ResumeContent["experienceSectio
     .filter(Boolean)
     .join(" ");
 
-  return looksLikeRecommendationOrTestimonial(combined);
+  return (
+    looksLikeRecommendationOrTestimonial(combined) ||
+    looksLikePersonName(section.company ?? "") ||
+    (looksLikePersonName(section.roleTitle) && !section.company)
+  );
 }
 
 function looksLikeRecommendationOrTestimonial(value: string) {
-  return /\b(recommendation|testimonial|endorsement|reference|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed)?\b|he is an?|she is an?)\b/i.test(
+  return /\b(recommendation|recommendations received|testimonial|endorsement|reference|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed)?\b|he is an?|she is an?|pleasure to share|excellent professional|best of the new generation)\b/i.test(
     value,
+  );
+}
+
+function looksLikeRecommendationBoundary(value: string) {
+  return /^(recommendations?|recommendations received|testimonials?|endorsements?|references?)$/i.test(
+    value.trim(),
   );
 }
 
@@ -288,7 +306,41 @@ function looksLikeStandaloneDateOrDuration(value: string) {
 }
 
 function looksLikeResumeSectionBoundary(value: string) {
-  return /^(summary|experience|professional experience|employment|work history|education|licenses?|certifications?|skills?|projects?|volunteer|recommendations?|awards?|honou?rs?|languages|contact)$/i.test(
+  return /^(summary|experience|professional experience|employment|work history|education|licenses?|certifications?|skills?|projects?|volunteer|recommendations?|recommendations received|testimonials?|endorsements?|references?|awards?|honou?rs?|languages|contact)$/i.test(
     value.trim(),
   );
+}
+
+function looksLikePersonName(value: string) {
+  const trimmed = value.trim();
+  const words = trimmed.split(/\s+/);
+
+  return (
+    words.length >= 2 &&
+    words.length <= 5 &&
+    words.every((word) => /^[A-Z][a-z.'-]+$/.test(word)) &&
+    !/\b(Inc|LLC|Ltd|Limited|Group|Company|Corp|Corporation|Capital|Services|Technologies|Technology|Systems|Bank|University|UiPath|GE|Microsoft|Oracle|SAP)\b/.test(
+      trimmed,
+    )
+  );
+}
+
+function compareResumeSectionsByRecency(
+  left: ResumeContent["experienceSections"][number],
+  right: ResumeContent["experienceSections"][number],
+) {
+  return readRecencyScore(right.dates) - readRecencyScore(left.dates);
+}
+
+function readRecencyScore(value: string | null) {
+  if (!value) {
+    return 0;
+  }
+
+  if (/\b(present|current)\b/i.test(value)) {
+    return 9999;
+  }
+
+  const years = value.match(/\b(?:19|20)\d{2}\b/g)?.map(Number) ?? [];
+  return years.length > 0 ? Math.max(...years) : 0;
 }

@@ -48,8 +48,11 @@ export function normalizeResumeContent(value: ResumeContent): ResumeContent {
   const experienceSections = dedupeResumeExperienceSections(
     value.experienceSections
     .map((section) => ({
-      bullets: section.bullets.map((bullet) => cleanResumeText(bullet, 320)).filter(Boolean).slice(0, 7),
-      company: cleanNullableText(section.company, 120),
+      bullets: section.bullets
+        .map((bullet) => cleanResumeText(bullet, 320))
+        .filter((bullet) => bullet && !looksLikeRecommendationOrTestimonial(bullet))
+        .slice(0, 7),
+      company: cleanNullableText(stripResumeUiLabels(section.company ?? ""), 120),
       dates: cleanNullableText(section.dates, 80),
       location: cleanNullableText(section.location, 120),
       roleTitle: stripResumeUiLabels(cleanResumeText(section.roleTitle, 140)) || "Role",
@@ -60,7 +63,7 @@ export function normalizeResumeContent(value: ResumeContent): ResumeContent {
     .slice(0, MAX_RESUME_EXPERIENCE_SECTIONS);
   const experienceBullets = value.experienceBullets
     .map((bullet) => cleanResumeText(bullet, 320))
-    .filter(Boolean)
+    .filter((bullet) => bullet && !looksLikeRecommendationOrTestimonial(bullet))
     .slice(0, 14);
 
   return resumeContentSchema.parse({
@@ -261,7 +264,7 @@ function looksLikeRecommendationExperienceSection(
   const roleAndCompany = [section.roleTitle, section.company].filter(Boolean).join(" ");
 
   if (
-    /\b(recommendation|testimonial|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed)?\b|he is an?|she is an?)\b/i.test(
+    looksLikeRecommendationOrTestimonial(
       combined,
     )
   ) {
@@ -273,15 +276,19 @@ function looksLikeRecommendationExperienceSection(
   }
 
   if (
-    looksLikePersonName(roleAndCompany) &&
-    /\b(vice president|director|manager|leader|executive|specialist|consultant|advisor)\b/i.test(
-      section.roleTitle,
-    )
+    looksLikePersonName(roleAndCompany) ||
+    looksLikePersonName(section.company ?? "")
   ) {
     return true;
   }
 
   return false;
+}
+
+function looksLikeRecommendationOrTestimonial(value: string) {
+  return /\b(recommendation|recommendations received|testimonial|endorsement|reference|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed)?\b|he is an?|she is an?|pleasure to share|excellent professional|best of the new generation)\b/i.test(
+    value,
+  );
 }
 
 function looksLikePersonName(value: string) {

@@ -646,7 +646,7 @@ export function ConversationPanel({
       });
     }
 
-    return payload.assistantMessage as string;
+    return cleanPlainChatText(payload.assistantMessage as string);
   }
 
   async function processProfileEditAction(text: string) {

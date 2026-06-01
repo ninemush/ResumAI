@@ -1165,7 +1165,7 @@ function readGeneralCareerHighlights(text: string) {
 }
 
 function looksLikeRecommendationOrTestimonial(value: string) {
-  return /\b(recommendation|testimonial|endorsement|reference|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed)?\b|he is an?|she is an?)\b/i.test(
+  return /\b(recommendation|recommendations received|testimonial|endorsement|reference|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed)?\b|he is an?|she is an?|pleasure to share|excellent professional|best of the new generation)\b/i.test(
     value,
   );
 }
