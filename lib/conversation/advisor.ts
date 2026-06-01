@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
+import { getOwnerMetrics, type OwnerMetrics } from "@/lib/admin/owner-metrics";
 import { getApplicationOverview, type ApplicationOverview } from "@/lib/applications/application-overview";
 import { getArtifactOverview, type ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import { PROFILE_INTAKE_INSTRUCTIONS } from "@/lib/ai/prompts/profile-intake";
@@ -15,7 +16,7 @@ import { createClient } from "@/lib/supabase/server";
 export const conversationAdvisorRequestSchema = z.object({
   message: z.string().trim().min(3).max(4000),
   surface: z
-    .enum(["applications", "artifacts", "jobs", "profile", "resume", "settings", "sources", "unknown"])
+    .enum(["applications", "artifacts", "jobs", "owner", "profile", "resume", "settings", "sources", "unknown"])
     .default("unknown"),
 });
 
@@ -55,6 +56,7 @@ type AdvisorWorkspaceContext = {
     recent: AdvisorSource[];
     total: number;
   };
+  ownerMetrics: OwnerMetrics | null;
 };
 
 export async function runConversationAdvisor(
@@ -81,10 +83,12 @@ export async function runConversationAdvisor(
 
   const profileId = profile?.id ?? null;
   const [
+    { data: adminRoles, error: adminRolesError },
     { data: facts, error: factsError },
     { data: conversation, error: conversationError },
     { data: latestResume, error: resumeError },
   ] = await Promise.all([
+    supabase.from("admin_roles").select("role").eq("user_id", user.id),
     profileId
       ? supabase
           .from("profile_facts")
@@ -114,10 +118,11 @@ export async function runConversationAdvisor(
       : Promise.resolve({ data: null, error: null }),
   ]);
 
-  if (factsError || conversationError || resumeError) {
+  if (adminRolesError || factsError || conversationError || resumeError) {
     console.warn(
       JSON.stringify({
         event: "conversation_advisor_partial_context",
+        adminRoles: adminRolesError?.message ?? null,
         facts: factsError?.message ?? null,
         conversation: conversationError?.message ?? null,
         resume: resumeError?.message ?? null,
@@ -125,7 +130,9 @@ export async function runConversationAdvisor(
     );
   }
 
+  const isOwner = (adminRoles ?? []).some(({ role }) => role === "owner" || role === "admin");
   const workspace = await readAdvisorWorkspaceContext({
+    includeOwnerMetrics: isOwner && shouldLoadOwnerContext(input),
     profileId,
     userId: user.id,
   });
@@ -308,6 +315,14 @@ retried, or updated anything unless the current request is being handled by an
 actual app command. In this advisor-only route, phrase operational next steps as
 "I can rebuild it if you want me to" or "The rebuild should..." rather than "I
 will rebuild it" or "I can proceed." Advice must not pretend to be execution.
+
+If the current surface is owner or owner operating metrics are present, answer as
+an operational product/support copilot for the owner. Use root causes, support
+tickets, errors, and usage patterns. Be clear about what is actionable in the
+owner console: drill into root causes, review linked tickets/logs, set status,
+write user-visible notes, mark fixed, ask for more information, or close no-fix.
+Do not pretend to deploy code or apply a product fix unless an actual command has
+run.
 `.trim();
 }
 
@@ -368,6 +383,9 @@ ${formatReadableSourcesForAdvisor(workspace.sources.recent)}
 Workspace:
 ${formatWorkspaceForAdvisor(workspace)}
 
+Owner operations:
+${formatOwnerOperationsForAdvisor(workspace.ownerMetrics)}
+
 Recent conversation:
 ${recentConversation.length > 0 ? recentConversation.slice(-12).map((item) => `- ${item.speaker}: ${item.message_text}`).join("\n") : "No recent conversation."}
 
@@ -376,17 +394,20 @@ Return JSON only.
 }
 
 async function readAdvisorWorkspaceContext({
+  includeOwnerMetrics,
   profileId,
   userId,
 }: {
+  includeOwnerMetrics: boolean;
   profileId: string | null;
   userId: string;
 }): Promise<AdvisorWorkspaceContext> {
   const supabase = await createClient();
-  const [applications, artifacts, jobs, sourceResult] = await Promise.allSettled([
+  const [applications, artifacts, jobs, ownerMetrics, sourceResult] = await Promise.allSettled([
     getApplicationOverview(userId),
     getArtifactOverview(userId),
     getJobOverview(userId),
+    includeOwnerMetrics ? getOwnerMetrics(30) : Promise.resolve(null),
     profileId
       ? supabase
           .from("profile_sources")
@@ -410,11 +431,23 @@ async function readAdvisorWorkspaceContext({
     applications: applications.status === "fulfilled" ? applications.value : null,
     artifacts: artifacts.status === "fulfilled" ? artifacts.value : null,
     jobs: jobs.status === "fulfilled" ? jobs.value : null,
+    ownerMetrics: ownerMetrics.status === "fulfilled" ? ownerMetrics.value : null,
     sources: {
       recent: prioritizeAdvisorSources((sourceValue.data ?? []) as AdvisorSource[]),
       total: sourceValue.count ?? 0,
     },
   };
+}
+
+function shouldLoadOwnerContext(input: z.infer<typeof conversationAdvisorRequestSchema>) {
+  const normalized = input.message.toLowerCase();
+
+  return (
+    input.surface === "owner" ||
+    /\b(owner|admin|console|root cause|triage|support ticket|issue|error|fix required|operating|metric|users|logs?)\b/.test(
+      normalized,
+    )
+  );
 }
 
 function prioritizeAdvisorSources(sources: AdvisorSource[]) {
@@ -476,6 +509,36 @@ function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
     : ["Artifacts: no generated material records were loaded for this reply."];
 
   return [...applicationLines, ...jobLines, ...sourceLines, ...artifactLines].join("\n");
+}
+
+function formatOwnerOperationsForAdvisor(metrics: OwnerMetrics | null) {
+  if (!metrics) {
+    return "Owner metrics were not loaded for this reply.";
+  }
+
+  const rootCauses = metrics.errorDetails.reduce<Record<string, number>>((counts, error) => {
+    counts[error.rootCause] = (counts[error.rootCause] ?? 0) + 1;
+    return counts;
+  }, {});
+  const rootCauseLines = Object.entries(rootCauses)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 5)
+    .map(([rootCause, count]) => `- ${rootCause}: ${count} error signal(s)`);
+  const tickets = metrics.supportTickets
+    .slice(0, 5)
+    .map(
+      (ticket) =>
+        `- ${ticket.id.slice(0, 8).toUpperCase()}: ${ticket.subject}; status ${ticket.status}; fix ${ticket.fixStatus}; root ${ticket.rootCauseCategory}; suggested ${ticket.suggestedFix || "none"}.`,
+    );
+
+  return [
+    `Period: ${metrics.period.days} days.`,
+    `Users: ${metrics.users.totalSignedUp} total, ${metrics.users.newInPeriod} new, ${metrics.users.activeInPeriod} active.`,
+    `System health: ${metrics.systemHealth.fixRequired} fix-required signals, ${metrics.systemHealth.clientErrors} client errors, ${metrics.systemHealth.profileExtractionFailures} profile extraction failures, ${metrics.systemHealth.jobIngestionFailures} job ingestion failures.`,
+    `Support: ${metrics.support.ticketsOpen} open, ${metrics.support.ticketsEscalated} escalated, ${metrics.support.l1Resolved} L1 resolved.`,
+    `Root causes:\n${rootCauseLines.length > 0 ? rootCauseLines.join("\n") : "- none"}`,
+    `Recent support tickets:\n${tickets.length > 0 ? tickets.join("\n") : "- none"}`,
+  ].join("\n");
 }
 
 function formatSourceExcerpt(value: string | null) {

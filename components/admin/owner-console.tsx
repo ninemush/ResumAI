@@ -4,11 +4,14 @@ import {
   AlertTriangle,
   BarChart3,
   BriefcaseBusiness,
+  CheckCircle2,
   Clock3,
+  ExternalLink,
   FileText,
   HeartHandshake,
   RefreshCcw,
   Search,
+  Wrench,
   UsersRound,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -31,6 +34,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [metrics, setMetrics] = useState(initialMetrics);
   const [periodDays, setPeriodDays] = useState(initialMetrics.period.days);
   const [activeTab, setActiveTab] = useState("overview");
+  const [selectedRootCause, setSelectedRootCause] = useState<string | null>(null);
   const [issueNotes, setIssueNotes] = useState<Record<string, string>>({});
   const [issueUpdatingId, setIssueUpdatingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -56,6 +60,21 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       return counts;
     }, {});
   }, [metrics.errorDetails]);
+  const filteredErrors = useMemo(() => {
+    return selectedRootCause
+      ? metrics.errorDetails.filter((error) => error.rootCause === selectedRootCause)
+      : metrics.errorDetails;
+  }, [metrics.errorDetails, selectedRootCause]);
+  const filteredSupportTickets = useMemo(() => {
+    return selectedRootCause
+      ? metrics.supportTickets.filter((ticket) => ticket.rootCauseCategory === selectedRootCause)
+      : metrics.supportTickets;
+  }, [metrics.supportTickets, selectedRootCause]);
+
+  function openRootCause(rootCause: string) {
+    setSelectedRootCause(rootCause);
+    setActiveTab("errors");
+  }
 
   async function loadPeriod(nextPeriodDays: number) {
     setPeriodDays(nextPeriodDays);
@@ -208,7 +227,12 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           <MetricBreakdown title="Feature usage" values={metrics.featureUsage} />
           <MetricBreakdown title="Profile sources" values={metrics.sources} />
           <MetricBreakdown title="Application statuses" values={metrics.applications.byStatus} />
-          <MetricBreakdown title="Root causes" values={rootCauseCounts} />
+          <MetricBreakdown
+            actionLabel="Drill down"
+            onSelect={openRootCause}
+            title="Root causes"
+            values={rootCauseCounts}
+          />
         </section>
       ) : null}
 
@@ -270,6 +294,37 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             title="Errors and root-cause review"
             body="Every row should answer whether this is user guidance, third-party limitation, provider instability, or a product bug requiring a fix."
           />
+          {Object.keys(rootCauseCounts).length > 0 ? (
+            <div className="root-cause-filter" aria-label="Root-cause filters">
+              <button
+                className={!selectedRootCause ? "active" : ""}
+                onClick={() => setSelectedRootCause(null)}
+                type="button"
+              >
+                All root causes
+              </button>
+              {Object.entries(rootCauseCounts).map(([rootCause, count]) => (
+                <button
+                  className={selectedRootCause === rootCause ? "active" : ""}
+                  key={rootCause}
+                  onClick={() => setSelectedRootCause(rootCause)}
+                  type="button"
+                >
+                  {formatLabel(rootCause)}
+                  <strong>{count}</strong>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {selectedRootCause ? (
+            <RootCauseDrilldown
+              errors={filteredErrors}
+              onOpenSupport={() => setActiveTab("support")}
+              rootCause={selectedRootCause}
+              tickets={filteredSupportTickets}
+              updateIssue={updateIssue}
+            />
+          ) : null}
           <div className="owner-table error-table" role="table" aria-label="Error details">
             <div className="owner-table-row owner-table-head" role="row">
               <span>Issue</span>
@@ -277,8 +332,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               <span>Rationale</span>
               <span>Suggested action</span>
             </div>
-            {metrics.errorDetails.length > 0 ? (
-              metrics.errorDetails.map((error) => (
+            {filteredErrors.length > 0 ? (
+              filteredErrors.map((error) => (
                 <div className="owner-table-row" key={`${error.source}-${error.id}`} role="row">
                   <span>
                     <strong>{error.summary}</strong>
@@ -316,9 +371,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             title="Support queue"
             body="Each issue has a plain-English summary, likely root cause, suggested fix, supporting logs, status, and owner notes. Use this to decide whether to fix, resolve, cancel, or escalate."
           />
-          {metrics.supportTickets.length > 0 ? (
+          {filteredSupportTickets.length > 0 ? (
             <div className="support-issue-list" aria-label="Support issues">
-              {metrics.supportTickets.map((ticket) => (
+              {filteredSupportTickets.map((ticket) => (
                 <article className="support-issue-card" key={ticket.id}>
                   <div className="support-issue-header">
                     <div>
@@ -501,7 +556,11 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               ))}
             </div>
           ) : (
-            <p className="empty-state">No support issues in this period. Chat failures and user-reported issues will appear here with supporting logs.</p>
+            <p className="empty-state">
+              {selectedRootCause
+                ? `No support tickets linked to ${formatLabel(selectedRootCause)} in this period. Error signals are still visible in System health.`
+                : "No support issues in this period. Chat failures and user-reported issues will appear here with supporting logs."}
+            </p>
           )}
         </section>
       ) : null}
@@ -652,7 +711,17 @@ function PageUsagePanel({ values }: { values: OwnerMetrics["trends"]["pageUsage"
   );
 }
 
-function MetricBreakdown({ title, values }: { title: string; values: Record<string, number> }) {
+function MetricBreakdown({
+  actionLabel,
+  onSelect,
+  title,
+  values,
+}: {
+  actionLabel?: string;
+  onSelect?: (label: string) => void;
+  title: string;
+  values: Record<string, number>;
+}) {
   const entries = Object.entries(values);
 
   return (
@@ -667,7 +736,14 @@ function MetricBreakdown({ title, values }: { title: string; values: Record<stri
           {entries.map(([label, value]) => (
             <div key={label}>
               <dt>{formatLabel(label)}</dt>
-              <dd>{value.toLocaleString()}</dd>
+              <dd>
+                <span>{value.toLocaleString()}</span>
+                {onSelect ? (
+                  <button onClick={() => onSelect(label)} type="button">
+                    {actionLabel ?? "Open"}
+                  </button>
+                ) : null}
+              </dd>
             </div>
           ))}
         </dl>
@@ -675,6 +751,109 @@ function MetricBreakdown({ title, values }: { title: string; values: Record<stri
         <p className="empty-state">No activity recorded yet.</p>
       )}
     </div>
+  );
+}
+
+function RootCauseDrilldown({
+  errors,
+  onOpenSupport,
+  rootCause,
+  tickets,
+  updateIssue,
+}: {
+  errors: OwnerMetrics["errorDetails"];
+  onOpenSupport: () => void;
+  rootCause: string;
+  tickets: OwnerMetrics["supportTickets"];
+  updateIssue: (
+    issueId: string,
+    patch: {
+      closedReason?: string;
+      fixStatus?: string;
+      ownerNotes?: string;
+      status?: string;
+    },
+  ) => Promise<void>;
+}) {
+  const fixRequired = errors.filter((error) => error.fixRequired).length;
+  const newest = errors[0];
+  const suggestedFix = newest ? suggestErrorFix(newest) : "Review linked support tickets and recent user context.";
+  const openTickets = tickets.filter((ticket) => !["resolved", "closed"].includes(ticket.status));
+
+  return (
+    <section className="root-cause-drilldown" aria-label={`${formatLabel(rootCause)} root-cause drilldown`}>
+      <div>
+        <p className="eyebrow">Root cause drilldown</p>
+        <h3>{formatLabel(rootCause)}</h3>
+        <p>
+          {errors.length.toLocaleString()} signal{errors.length === 1 ? "" : "s"} in this period,
+          {" "}{fixRequired.toLocaleString()} requiring a fix, and{" "}
+          {openTickets.length.toLocaleString()} linked open support ticket
+          {openTickets.length === 1 ? "" : "s"}.
+        </p>
+      </div>
+      <div className="root-cause-action-grid">
+        <article>
+          <span>Likely rationale</span>
+          <p>{newest?.rationale || "No rationale captured yet. Treat this as a triage gap."}</p>
+        </article>
+        <article>
+          <span>Recommended fix path</span>
+          <p>{suggestedFix}</p>
+        </article>
+        <article>
+          <span>Owner action</span>
+          <p>
+            Open the linked tickets, review supporting logs, apply the product or guidance fix,
+            then mark the ticket fixed with a user-visible note.
+          </p>
+        </article>
+      </div>
+      <div className="root-cause-actions">
+        <button className="secondary-action" onClick={onOpenSupport} type="button">
+          <ExternalLink size={15} aria-hidden="true" />
+          Open linked tickets
+        </button>
+        {openTickets.slice(0, 3).map((ticket) => (
+          <button
+            className="secondary-action"
+            key={ticket.id}
+            onClick={() =>
+              updateIssue(ticket.id, {
+                fixStatus: "investigating",
+                ownerNotes:
+                  ticket.ownerNotes ||
+                  `Owner triage started for ${formatLabel(rootCause)}. Reviewing supporting logs and applying the appropriate product or guidance fix.`,
+                status: "in_progress",
+              })
+            }
+            type="button"
+          >
+            <Wrench size={15} aria-hidden="true" />
+            Start {ticket.id.slice(0, 8).toUpperCase()}
+          </button>
+        ))}
+        {openTickets.slice(0, 3).map((ticket) => (
+          <button
+            className="secondary-action"
+            key={`${ticket.id}-fixed`}
+            onClick={() =>
+              updateIssue(ticket.id, {
+                fixStatus: "fixed",
+                ownerNotes:
+                  ticket.ownerNotes ||
+                  `Addressed ${formatLabel(rootCause)}. Please retry the workflow and reopen support if it recurs.`,
+                status: "resolved",
+              })
+            }
+            type="button"
+          >
+            <CheckCircle2 size={15} aria-hidden="true" />
+            Mark fixed
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

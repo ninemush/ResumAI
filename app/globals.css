@@ -1890,9 +1890,105 @@ input:focus {
 }
 
 .metric-list dd {
+  align-items: center;
   color: var(--foreground);
+  display: inline-flex;
+  gap: 10px;
   font-weight: 850;
   margin: 0;
+}
+
+.metric-list dd button {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-pill);
+  color: var(--foreground);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 850;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.root-cause-filter {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.root-cause-filter button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-pill);
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  text-transform: capitalize;
+}
+
+.root-cause-filter button.active {
+  background: var(--panel-strong);
+  color: var(--foreground);
+}
+
+.root-cause-filter strong {
+  color: inherit;
+  font-size: 0.8rem;
+}
+
+.root-cause-drilldown {
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(188, 144, 78, 0.3);
+  border-radius: var(--pr-radius-lg);
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.root-cause-drilldown h3 {
+  color: var(--foreground);
+  font-size: 1.3rem;
+  margin: 4px 0;
+  text-transform: capitalize;
+}
+
+.root-cause-drilldown p {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.root-cause-action-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.root-cause-action-grid article {
+  border-top: 1px solid rgba(215, 204, 188, 0.72);
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+}
+
+.root-cause-action-grid span {
+  color: var(--foreground);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.root-cause-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .profile-summary-grid span {

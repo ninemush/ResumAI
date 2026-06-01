@@ -2510,6 +2510,7 @@ function mapActiveViewToAdvisorSurface(activeView: AppView) {
     artifacts: "artifacts",
     jobs: "jobs",
     knowledgebase: "sources",
+    owner: "owner",
     profile: "profile",
     resume: "resume",
     settings: "settings",
