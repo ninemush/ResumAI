@@ -8,6 +8,7 @@ import {
   Compass,
   Save,
   Sparkles,
+  UserRound,
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -208,7 +209,7 @@ export function ProfileExplorer({
                 width={88}
               />
             ) : (
-              <Camera size={30} />
+              <UserRound size={32} />
             )}
           </div>
           <label
