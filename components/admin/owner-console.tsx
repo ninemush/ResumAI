@@ -14,13 +14,26 @@ import {
   Wrench,
   UsersRound,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState, useTransition } from "react";
 
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
 
 type OwnerConsoleProps = {
   metrics: OwnerMetrics;
+};
+
+type PromoCodeRow = {
+  assignedUserEmail: string | null;
+  code: string;
+  createdAt: string;
+  creditAmount: number;
+  description: string;
+  expiresAt: string | null;
+  id: string;
+  isActive: boolean;
+  maxRedemptions: number;
+  redeemedCount: number;
 };
 
 const periodOptions = [
@@ -37,6 +50,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [selectedRootCause, setSelectedRootCause] = useState<string | null>(null);
   const [issueNotes, setIssueNotes] = useState<Record<string, string>>({});
   const [issueUpdatingId, setIssueUpdatingId] = useState<string | null>(null);
+  const [promoCodes, setPromoCodes] = useState<PromoCodeRow[]>([]);
+  const [promoMessage, setPromoMessage] = useState<string | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -116,6 +132,66 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       await loadPeriod(periodDays);
     } finally {
       setIssueUpdatingId(null);
+    }
+  }
+
+  async function loadPromoCodes() {
+    setPromoLoading(true);
+    setPromoMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/promo-codes", { cache: "no-store" });
+      const payload = (await response.json()) as {
+        error?: { message?: string };
+        promoCodes?: PromoCodeRow[];
+      };
+
+      if (!response.ok || !payload.promoCodes) {
+        setPromoMessage(payload.error?.message ?? "Promo codes could not be loaded.");
+        return;
+      }
+
+      setPromoCodes(payload.promoCodes);
+    } finally {
+      setPromoLoading(false);
+    }
+  }
+
+  async function createPromoCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPromoLoading(true);
+    setPromoMessage(null);
+    const formData = new FormData(event.currentTarget);
+    const expiresAt = formData.get("expiresAt")?.toString() ?? "";
+
+    try {
+      const response = await fetch("/api/admin/promo-codes", {
+        body: JSON.stringify({
+          assignedUserEmail: formData.get("assignedUserEmail")?.toString() ?? "",
+          code: formData.get("code")?.toString() ?? "",
+          creditAmount: Number(formData.get("creditAmount") ?? 0),
+          description: formData.get("description")?.toString() ?? "",
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : "",
+          maxRedemptions: Number(formData.get("maxRedemptions") ?? 1),
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const payload = (await response.json()) as {
+        error?: { message?: string };
+        promoCode?: PromoCodeRow;
+      };
+
+      if (!response.ok || !payload.promoCode) {
+        setPromoMessage(payload.error?.message ?? "Promo code could not be created.");
+        return;
+      }
+
+      event.currentTarget.reset();
+      setPromoMessage(`Promo code ${payload.promoCode.code} created.`);
+      await loadPromoCodes();
+    } finally {
+      setPromoLoading(false);
     }
   }
 
@@ -208,11 +284,17 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           ["errors", "Errors"],
           ["support", "Support"],
           ["outcomes", "Outcomes"],
+          ["promos", "Promo codes"],
         ].map(([key, label]) => (
           <button
             className={activeTab === key ? "active" : ""}
             key={key}
-            onClick={() => setActiveTab(key)}
+            onClick={() => {
+              setActiveTab(key);
+              if (key === "promos" && promoCodes.length === 0) {
+                void loadPromoCodes();
+              }
+            }}
             type="button"
           >
             {label}
@@ -580,6 +662,81 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             <strong className="owner-large-number">
               {metrics.outcomes.averageHoursToFirstResponse.toLocaleString()}h
             </strong>
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === "promos" ? (
+        <section className="owner-detail-panel owner-wide-panel" aria-label="Promo codes">
+          <SectionHeading
+            eyebrow="Credits"
+            title="Promo code management"
+            body="Create one-time credit grants for beta testers, launch campaigns, or a specific user. Redemptions are recorded in the credit ledger so usage remains auditable."
+          />
+          <form className="owner-promo-form" onSubmit={createPromoCode}>
+            <label>
+              <span>Code</span>
+              <input name="code" placeholder="BETA-THANKYOU" required />
+            </label>
+            <label>
+              <span>Credits</span>
+              <input name="creditAmount" defaultValue="10" min="1" max="500" required type="number" />
+            </label>
+            <label>
+              <span>Max redemptions</span>
+              <input name="maxRedemptions" defaultValue="1" min="1" max="5000" required type="number" />
+            </label>
+            <label>
+              <span>User email optional</span>
+              <input name="assignedUserEmail" placeholder="specific.user@example.com" type="email" />
+            </label>
+            <label>
+              <span>Expiry optional</span>
+              <input name="expiresAt" type="datetime-local" />
+            </label>
+            <label className="owner-promo-description">
+              <span>Description</span>
+              <input name="description" placeholder="Why this credit grant exists" />
+            </label>
+            <button className="primary-action" disabled={promoLoading} type="submit">
+              Create promo code
+            </button>
+            <button className="secondary-action" disabled={promoLoading} onClick={loadPromoCodes} type="button">
+              Refresh
+            </button>
+          </form>
+          {promoMessage ? <p className="owner-generated-note">{promoMessage}</p> : null}
+          <div className="owner-table" role="table" aria-label="Promo code list">
+            <div className="owner-table-row owner-table-head" role="row">
+              <span>Code</span>
+              <span>Credits</span>
+              <span>Scope</span>
+              <span>Redemptions</span>
+            </div>
+            {promoCodes.length > 0 ? (
+              promoCodes.map((promo) => (
+                <div className="owner-table-row" key={promo.id} role="row">
+                  <span>
+                    <strong>{promo.code}</strong>
+                    <small>{promo.description || "No description"}</small>
+                  </span>
+                  <span>
+                    <strong>{promo.creditAmount}</strong>
+                    <small>{promo.isActive ? "Active" : "Inactive"}</small>
+                  </span>
+                  <span>
+                    <strong>{promo.assignedUserEmail ?? "General"}</strong>
+                    <small>{promo.expiresAt ? `Expires ${formatDateTime(promo.expiresAt)}` : "No expiry"}</small>
+                  </span>
+                  <span>
+                    <strong>{promo.redeemedCount} / {promo.maxRedemptions}</strong>
+                    <small>created {formatDate(promo.createdAt)}</small>
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="empty-state">No promo codes loaded yet.</p>
+            )}
           </div>
         </section>
       ) : null}

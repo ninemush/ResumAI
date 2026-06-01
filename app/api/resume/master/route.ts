@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 
 import {
+  buildCreditsApiError,
+  consumeCredits,
+  requireCredits,
+} from "@/lib/billing/credits";
+import {
   generateMasterResume,
   generateMasterResumeSchema,
   updateMasterResume,
@@ -28,7 +33,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireCredits("masterResumeGenerate");
     const result = await generateMasterResume(parsed.data);
+    await consumeCredits({
+      feature: "masterResumeGenerate",
+      metadata: { instruction: parsed.data.instruction ?? null },
+      resourceId: result.resumeId,
+      resourceType: "master_resume",
+    });
 
     return NextResponse.json({
       ok: true,
@@ -36,6 +48,19 @@ export async function POST(request: Request) {
       ...result,
     });
   } catch (error) {
+    if (isBillingError(error)) {
+      const apiError = buildCreditsApiError(error);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: apiError,
+        },
+        { status: apiError.status },
+      );
+    }
+
     const { category, code, message, status } = toApiError(error);
 
     return NextResponse.json(
@@ -156,4 +181,8 @@ function toApiError(error: unknown) {
     message: "Unable to update the master resume right now.",
     status: 500,
   };
+}
+
+function isBillingError(error: unknown) {
+  return error instanceof Error && error.message.startsWith("CREDITS_");
 }

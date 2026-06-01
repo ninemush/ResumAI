@@ -1,12 +1,23 @@
 import { NextResponse } from "next/server";
 
+import {
+  buildCreditsApiError,
+  consumeCredits,
+  requireCredits,
+} from "@/lib/billing/credits";
 import { exportMasterResumeArtifacts } from "@/lib/resumes/master-resume";
 
 export async function POST() {
   const requestId = crypto.randomUUID();
 
   try {
+    await requireCredits("masterResumeExport");
     const overview = await exportMasterResumeArtifacts();
+    await consumeCredits({
+      feature: "masterResumeExport",
+      resourceId: overview.latestResume?.id,
+      resourceType: "master_resume_export",
+    });
 
     return NextResponse.json({
       ok: true,
@@ -14,6 +25,19 @@ export async function POST() {
       overview,
     });
   } catch (error) {
+    if (isBillingError(error)) {
+      const apiError = buildCreditsApiError(error);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: apiError,
+        },
+        { status: apiError.status },
+      );
+    }
+
     const { category, code, message, status } = toApiError(error);
 
     return NextResponse.json(
@@ -25,6 +49,10 @@ export async function POST() {
       { status },
     );
   }
+}
+
+function isBillingError(error: unknown) {
+  return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
 function toApiError(error: unknown) {

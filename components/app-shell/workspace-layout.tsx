@@ -20,6 +20,7 @@ import { SupportPanel } from "@/components/support/support-panel";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
+import type { CreditSummary } from "@/lib/billing/credits";
 import type { WorkspaceSession } from "@/lib/commands/session";
 import type { ConversationMessage } from "@/lib/conversation/conversation-messages";
 import type { JobOverview } from "@/lib/jobs/job-overview";
@@ -38,6 +39,7 @@ type WorkspaceLayoutProps = {
   applicationOverview: ApplicationOverview;
   artifactOverview: ArtifactOverview;
   conversationMessages: ConversationMessage[];
+  creditSummary: CreditSummary;
   jobOverview: JobOverview;
   masterResumeOverview: MasterResumeOverview;
   ownerMetrics: OwnerMetrics | null;
@@ -64,6 +66,7 @@ export function WorkspaceLayout({
   applicationOverview,
   artifactOverview,
   conversationMessages,
+  creditSummary,
   jobOverview,
   masterResumeOverview,
   ownerMetrics,
@@ -181,6 +184,7 @@ export function WorkspaceLayout({
           applicationStageFilter: layout.applicationStageFilter,
           applicationOverview,
           artifactOverview,
+          creditSummary,
           jobOverview,
           masterResumeOverview,
           ownerMetrics,
@@ -217,6 +221,7 @@ function renderWorkspaceView({
   applicationStageFilter,
   applicationOverview,
   artifactOverview,
+  creditSummary,
   jobOverview,
   masterResumeOverview,
   ownerMetrics,
@@ -229,6 +234,7 @@ function renderWorkspaceView({
   applicationStageFilter: StageFilter;
   applicationOverview: ApplicationOverview;
   artifactOverview: ArtifactOverview;
+  creditSummary: CreditSummary;
   jobOverview: JobOverview;
   masterResumeOverview: MasterResumeOverview;
   ownerMetrics: OwnerMetrics | null;
@@ -286,6 +292,7 @@ function renderWorkspaceView({
       <SettingsPanel
         applicationOverview={applicationOverview}
         artifactOverview={artifactOverview}
+        creditSummary={creditSummary}
         onNavigate={onSelectView}
         profileOverview={profileOverview}
         session={session}

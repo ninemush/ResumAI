@@ -183,3 +183,31 @@ test("requires owner access before updating support issues", async ({ request })
   expect(response.status()).toBe(401);
   expect(payload.error.code).toBe("auth.required");
 });
+
+test("requires authentication before reading credit summary", async ({ request }) => {
+  const response = await request.get("/api/billing/credits");
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});
+
+test("requires authentication before redeeming promo codes", async ({ request }) => {
+  const response = await request.post("/api/billing/promo/redeem", {
+    data: {
+      code: "BETA-TEST",
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});
+
+test("requires owner access before managing promo codes", async ({ request }) => {
+  const response = await request.get("/api/admin/promo-codes");
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});

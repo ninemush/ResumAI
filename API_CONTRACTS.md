@@ -12,7 +12,7 @@ Every route must:
 - Attach a request id.
 - Log status and duration without sensitive personal data.
 - Use the shared command/action layer.
-- Enforce tier/quota rules server-side where applicable.
+- Enforce credit and quota rules server-side where applicable.
 
 ## Error Shape
 
@@ -109,6 +109,7 @@ Response:
 Controls:
 
 - Auth required.
+- Requires 1 available credit.
 - User can only extract owned source records.
 - Storage path must be scoped to the authenticated user's private folder.
 - Non-TXT/PDF/DOCX sources return a typed unsupported-source response until their
@@ -142,6 +143,7 @@ Purpose: generate an ATS-friendly master resume from confirmed profile facts.
 Controls:
 
 - Auth required.
+- Requires 2 available credits.
 - AI output schema validation required.
 - Must not invent facts.
 - Stores generated resume artifact metadata.
@@ -167,6 +169,7 @@ Request:
 Controls:
 
 - Auth required.
+- Requires 1 available credit.
 - URL validation.
 - SSRF protection for obvious local/private targets.
 - Timeout and content-size limits.
@@ -202,6 +205,7 @@ Purpose: generate job-specific resume and cover letter artifacts.
 Controls:
 
 - Auth required.
+- Requires 4 available credits.
 - Application ownership required.
 - AI output schema validation required.
 - Stores PDF and DOCX artifacts in private user-scoped storage.
@@ -237,6 +241,65 @@ Controls:
 - Create/update/disable tiers.
 - No hardcoded tier limits in application logic.
 - Audit all changes.
+
+## Billing And Credits APIs
+
+### `GET /api/billing/credits`
+
+Purpose: return the authenticated user's available credits, total credits,
+credits used, warning threshold, exhaustion state, and configured purchase
+options.
+
+Controls:
+
+- Auth required.
+- Server grants the configured signup credit allowance once.
+- Response never exposes another user's ledger.
+
+### `POST /api/billing/promo/redeem`
+
+Purpose: redeem an owner-created promo code for credits.
+
+Controls:
+
+- Auth required.
+- Promo code validation is database-side.
+- Codes can be general or assigned to a specific user email.
+- One redemption per user per promo code.
+- Redemption writes an append-only ledger entry.
+
+### `GET /api/admin/promo-codes`
+
+Purpose: owner/admin list of promo codes and redemption counts.
+
+Controls:
+
+- Owner/admin only.
+
+### `POST /api/admin/promo-codes`
+
+Purpose: create a one-time or campaign promo code with credit amount, optional
+assigned user email, redemption limit, and optional expiration.
+
+Controls:
+
+- Owner/admin only.
+- Promo code format is constrained to uppercase letters, numbers, dashes, and
+  underscores.
+- Creation is auditable through the database record.
+
+### `POST /api/revenuecat/webhook`
+
+Purpose: receive RevenueCat purchase events and convert mapped product ids into
+credit ledger grants.
+
+Controls:
+
+- Requires `REVENUECAT_WEBHOOK_SECRET` bearer authorization when configured.
+- Requires `SUPABASE_SERVICE_ROLE_KEY` server-side only.
+- Idempotent on RevenueCat event id.
+- Product-to-credit mapping is configuration (`REVENUECAT_CREDIT_PRODUCT_MAP`),
+  not application code.
 
 ## `GET /api/admin/metrics`
 

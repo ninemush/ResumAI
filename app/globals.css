@@ -1587,6 +1587,42 @@ input:focus {
   width: 100%;
 }
 
+.owner-promo-form {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto auto;
+  margin: 18px 0;
+}
+
+.owner-promo-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.owner-promo-form label span {
+  color: var(--sage-strong);
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.owner-promo-form input {
+  background: var(--panel-strong);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-pill);
+  color: var(--foreground);
+  font: inherit;
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+.owner-promo-description {
+  grid-column: span 2;
+}
+
 .owner-table {
   border: var(--pr-border-subtle);
   border-radius: var(--pr-radius-md);
@@ -3797,6 +3833,111 @@ input:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.settings-billing-card,
+.settings-purchase-card {
+  grid-column: span 2;
+}
+
+.credit-meter {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.credit-meter-track {
+  background: rgba(219, 207, 186, 0.48);
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.credit-meter-track span {
+  background: linear-gradient(90deg, var(--gold), var(--sage-strong));
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  margin: 0;
+  transition: width 180ms ease;
+}
+
+.settings-card-note.danger {
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.settings-promo-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 12px;
+}
+
+.settings-promo-row input {
+  background: var(--panel-strong);
+  border: var(--pr-border-subtle);
+  border-radius: 999px;
+  color: var(--foreground);
+  font: inherit;
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.settings-promo-row button,
+.settings-pack {
+  border: var(--pr-border-subtle);
+  border-radius: 999px;
+  color: var(--foreground);
+  font-weight: 900;
+}
+
+.settings-promo-row button {
+  background: var(--foreground);
+  color: var(--panel);
+  cursor: pointer;
+  min-height: 44px;
+  padding: 0 18px;
+}
+
+.settings-promo-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.settings-pack-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.settings-pack {
+  background: var(--panel-strong);
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  text-decoration: none;
+}
+
+.settings-pack.recommended {
+  border-color: rgba(185, 142, 78, 0.55);
+  box-shadow: 0 14px 34px rgba(15, 29, 48, 0.08);
+}
+
+.settings-pack p,
+.settings-pack span,
+.settings-pack strong {
+  margin: 0;
+}
+
+.settings-pack em,
+.settings-pack small {
+  color: var(--sage-strong);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .job-list {

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 
+import {
+  buildCreditsApiError,
+  consumeCredits,
+  requireCredits,
+} from "@/lib/billing/credits";
 import { ingestJobUrl, jobIngestionRequestSchema } from "@/lib/jobs/job-ingestion";
 
 export async function POST(request: Request) {
@@ -41,7 +46,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireCredits("jobIngest");
     const result = await ingestJobUrl(parsed.data);
+    await consumeCredits({
+      feature: "jobIngest",
+      metadata: { job_url: parsed.data.jobUrl },
+      resourceId: result.job.id,
+      resourceType: "job_ingestion",
+    });
 
     return NextResponse.json({
       ok: true,
@@ -49,6 +61,19 @@ export async function POST(request: Request) {
       ...result,
     });
   } catch (error) {
+    if (isBillingError(error)) {
+      const apiError = buildCreditsApiError(error);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: apiError,
+        },
+        { status: apiError.status },
+      );
+    }
+
     const { category, code, message, status } = toApiError(error);
 
     return NextResponse.json(
@@ -64,6 +89,10 @@ export async function POST(request: Request) {
       { status },
     );
   }
+}
+
+function isBillingError(error: unknown) {
+  return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
 function toApiError(error: unknown) {

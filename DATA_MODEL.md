@@ -28,6 +28,10 @@ Admin-only operations use `admin_roles`.
 - `generated_resumes`: master and job-specific resume artifacts.
 - `generated_cover_letters`: job-specific cover letter artifacts.
 - `quota_events`: append-only quota consumption records.
+- `credit_ledger`: append-only credit grants and consumption events.
+- `promo_codes`: owner-created one-time or campaign credit grants.
+- `promo_code_redemptions`: redemption audit records.
+- `revenuecat_events`: idempotent purchase webhook records tied to credit grants.
 - `audit_events`: append-only security/product audit records.
 - `application_status_events`: append-only application status history.
 - Planned support tables: `support_docs`, `support_tickets`, `support_messages`, `support_actions`, and `support_escalations`.
@@ -41,6 +45,34 @@ user-scoped storage and referenced from `profiles.photo_storage_path`.
 ATS-first resume formats must not include profile photos by default.
 
 Applications that consumed quota must retain audit-safe usage evidence. Deletion requests should minimize retained data while preserving the minimum quota/accounting/audit record required by the contract.
+
+## Credits And Pricing
+
+V1 uses credits instead of token-based user billing. Tokens are an internal cost
+input; user pricing should map to clear value moments: profile extraction, job
+analysis, resume generation, application material generation, and validated
+exports.
+
+Initial credit model:
+
+- New account grant: 10 credits.
+- Profile source extraction: 1 credit.
+- Job link ingestion and fit snapshot: 1 credit.
+- Master resume generation: 2 credits.
+- Master resume export: 1 credit.
+- Job-specific resume and cover letter generation: 4 credits.
+- Job-specific PDF/DOCX export: 1 credit.
+
+Purchase packs are intentionally simple:
+
+- Focus Pack: 25 credits for USD 12.
+- Momentum Pack: 75 credits for USD 29, positioned as the better value.
+
+Credits are enforced server-side through `credit_ledger` and stored as an
+append-only audit trail. Promo codes and RevenueCat purchases add positive
+ledger entries; feature use adds negative ledger entries. When credits are
+exhausted, high-cost operations are blocked until the user redeems a promo code
+or purchases credits.
 
 ## Tier Seeds
 

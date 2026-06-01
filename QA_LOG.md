@@ -390,3 +390,12 @@ This log records product-quality issues found during user-style validation. Fixe
 - Fix: added admin-only telemetry, error-event, support-ticket, and support-message tables with RLS; expanded the owner metrics RPC with period filters, trend data, page usage, user operating rows, error details, root-cause rationale, support tickets, and outcome segmentation; rebuilt the owner console as a tabbed operational view with action recommendations.
 - Validation: remote Supabase migrations were applied, lint passed, production build passed, unauthenticated admin/telemetry API tests passed, and a signed-in owner demo account completed the owner-console E2E path.
 - Remaining operational gap: support intake and server-side route error logging are now structurally supported, but still need workflow-level wiring so tickets can be created by users/Pramania and backend failures are logged consistently without relying only on existing source/job failure tables.
+
+### Built: credit ledger, promo codes, and purchase gating
+
+- Area: monetization, credits, owner promo-code management, and RevenueCat readiness.
+- Finding: the existing quota model recorded usage but did not enforce limits or give users a clear credit balance/purchase path.
+- Root cause: launch tiers were placeholders and quota events were audit-only, so high-cost features could continue after the user exhausted their intended allowance.
+- Fix: added an append-only credit ledger, signup credit grant, promo code/redemption tables, RevenueCat webhook event tracking, server-side credit consumption RPCs, user Settings credit balance/promo/purchase UI, owner promo-code creation, and credit gates for source extraction, job ingestion, master resume generation/export, and application material generation/export.
+- Validation: remote Supabase migration was applied; `npm run lint` passed; `npm run build` passed; unauthenticated billing/admin API coverage passed in `tests/e2e/profile-intake-api.spec.ts`; authenticated workspace regression passed with 11 tests passing and 7 viewport-scoped tests skipped.
+- Remaining integration gap: RevenueCat purchase links and webhook secret/service-role environment variables must be configured in Vercel before live purchases can grant credits automatically.

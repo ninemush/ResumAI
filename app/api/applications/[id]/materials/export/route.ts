@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 
+import {
+  buildCreditsApiError,
+  consumeCredits,
+  requireCredits,
+} from "@/lib/billing/credits";
 import { exportMaterialArtifacts, materialReviewSchema } from "@/lib/applications/material-review";
 
 type RouteContext = {
@@ -29,7 +34,13 @@ export async function POST(_request: Request, context: RouteContext) {
   }
 
   try {
+    await requireCredits("applicationMaterialsExport");
     const review = await exportMaterialArtifacts(parsed.data);
+    await consumeCredits({
+      feature: "applicationMaterialsExport",
+      resourceId: params.id,
+      resourceType: "application_materials_export",
+    });
 
     return NextResponse.json({
       ok: true,
@@ -37,6 +48,19 @@ export async function POST(_request: Request, context: RouteContext) {
       review,
     });
   } catch (error) {
+    if (isBillingError(error)) {
+      const apiError = buildCreditsApiError(error);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: apiError,
+        },
+        { status: apiError.status },
+      );
+    }
+
     const { category, code, message, status } = toApiError(error);
 
     return NextResponse.json(
@@ -48,6 +72,10 @@ export async function POST(_request: Request, context: RouteContext) {
       { status },
     );
   }
+}
+
+function isBillingError(error: unknown) {
+  return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
 function toApiError(error: unknown) {
