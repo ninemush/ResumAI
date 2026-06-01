@@ -235,10 +235,22 @@ function CreditMeter({ summary }: { summary: CreditSummary }) {
 }
 
 function buildPurchaseUrl(url: string, userId: string, email: string | null) {
-  const purchaseUrl = new URL(url);
+  const encodedUserId = encodeURIComponent(userId);
+  const encodedEmail = email ? encodeURIComponent(email) : "";
+  const normalizedUrl = url
+    .replaceAll("{app_user_id}", encodedUserId)
+    .replaceAll("{{app_user_id}}", encodedUserId)
+    .replaceAll(":app_user_id", encodedUserId)
+    .replaceAll("APP_USER_ID", encodedUserId)
+    .replaceAll("{email}", encodedEmail)
+    .replaceAll("{{email}}", encodedEmail)
+    .replaceAll(":email", encodedEmail)
+    .replaceAll("EMAIL", encodedEmail);
 
-  if (!purchaseUrl.pathname.endsWith(`/${encodeURIComponent(userId)}`)) {
-    purchaseUrl.pathname = `${purchaseUrl.pathname.replace(/\/$/, "")}/${encodeURIComponent(userId)}`;
+  const purchaseUrl = new URL(normalizedUrl);
+
+  if (!purchaseUrl.pathname.includes(`/${encodedUserId}`)) {
+    purchaseUrl.pathname = `${purchaseUrl.pathname.replace(/\/$/, "")}/${encodedUserId}`;
   }
 
   if (email) {

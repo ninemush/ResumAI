@@ -13,6 +13,7 @@ const revenueCatEventSchema = z.object({
 });
 
 const productCreditMapSchema = z.record(z.string(), z.number().int().positive());
+const PURCHASE_REDEEMED_EVENT_TYPES = new Set(["PURCHASE_REDEEMED"]);
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
@@ -70,18 +71,58 @@ export async function POST(request: Request) {
     );
   }
 
+  const eventType = parsed.data.event.type ?? "";
+  if (!PURCHASE_REDEEMED_EVENT_TYPES.has(eventType)) {
+    return NextResponse.json({
+      ok: true,
+      ignored: true,
+      reason: "event_type_not_purchase_redeemed",
+      requestId,
+    });
+  }
+
   const productId = parsed.data.event.product_id ?? "";
   const appUserId = parsed.data.event.app_user_id ?? "";
   const productMap = readProductCreditMap();
   const creditAmount = productMap[productId] ?? 0;
 
-  if (!creditAmount || !isUuid(appUserId)) {
+  if (!productId || !appUserId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "validation",
+          code: "revenuecat.purchase_missing_required_fields",
+          message: "Purchase redemption payload did not include a product id and app user id.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  if (!creditAmount) {
     return NextResponse.json({
       ok: true,
       ignored: true,
-      reason: !creditAmount ? "product_not_mapped" : "app_user_id_not_supabase_uuid",
+      reason: "product_not_mapped",
       requestId,
     });
+  }
+
+  if (!isUuid(appUserId)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "validation",
+          code: "revenuecat.app_user_id_not_supabase_uuid",
+          message: "Purchase redemption app user id is not a Supabase user id.",
+        },
+      },
+      { status: 400 },
+    );
   }
 
   try {
@@ -109,7 +150,7 @@ export async function POST(request: Request) {
         metadata: {
           event_id: parsed.data.event.id,
           product_id: productId,
-          revenuecat_type: parsed.data.event.type ?? null,
+          revenuecat_type: eventType,
         },
         resource_type: "revenuecat_purchase",
         user_id: appUserId,
