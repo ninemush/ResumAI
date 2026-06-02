@@ -5,6 +5,7 @@ import {
   BarChart3,
   BriefcaseBusiness,
   CheckCircle2,
+  CircleDollarSign,
   Clock3,
   ExternalLink,
   FileText,
@@ -286,6 +287,14 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           value={metrics.support.ticketsOpen}
           detail={`${metrics.support.ticketsEscalated} escalated, ${metrics.support.l1Resolved} L1 resolved`}
         />
+        <MetricCard
+          icon={CircleDollarSign}
+          label="Profitability"
+          onClick={() => setActiveTab("profitability")}
+          value={formatMoney(metrics.profitability.grossProfitUsd)}
+          detail={`${formatMoney(metrics.profitability.revenueUsd)} revenue · ${metrics.profitability.grossMarginPercent.toFixed(1)}% margin`}
+          tone={metrics.profitability.grossProfitUsd < 0 ? "warning" : "normal"}
+        />
       </section>
 
       <section className="owner-action-strip" aria-label="Recommended operating actions">
@@ -320,6 +329,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           ["errors", "Errors"],
           ["support", "Support"],
           ["outcomes", "Outcomes"],
+          ["profitability", "Profitability"],
           ["promos", "Promo codes"],
         ].map(([key, label]) => (
           <button
@@ -710,6 +720,159 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         </section>
       ) : null}
 
+      {activeTab === "profitability" ? (
+        <section className="owner-detail-panel owner-wide-panel" aria-label="Profitability">
+          <SectionHeading
+            eyebrow="Economics"
+            title="Cost and profitability model"
+            body="Revenue, credit consumption, estimated platform cost, and per-user economics for the selected period. Treat this as an operating model until Stripe, RevenueCat, OpenAI, Vercel, and Supabase cost exports are reconciled automatically."
+          />
+
+          <div className="profitability-grid" aria-label="Profitability summary">
+            <FinancialTile label="Revenue" value={formatMoney(metrics.profitability.revenueUsd)} />
+            <FinancialTile label="Estimated cost" value={formatMoney(metrics.profitability.totalCostUsd)} />
+            <FinancialTile
+              label="Gross profit"
+              tone={metrics.profitability.grossProfitUsd < 0 ? "warning" : "normal"}
+              value={formatMoney(metrics.profitability.grossProfitUsd)}
+            />
+            <FinancialTile label="Margin" value={`${metrics.profitability.grossMarginPercent.toFixed(1)}%`} />
+            <FinancialTile label="Credits used" value={metrics.profitability.creditsUsed.toLocaleString()} />
+            <FinancialTile
+              label="Cost / active user"
+              value={formatMoney(metrics.profitability.costPerActiveUserUsd)}
+            />
+          </div>
+
+          <div className="owner-detail-grid two-column">
+            <div className="owner-detail-panel compact-panel">
+              <SectionHeading
+                eyebrow="Assumptions"
+                title="Cost assumptions"
+                body="These defaults can be tuned with owner environment variables until live provider cost telemetry is wired."
+              />
+              <dl className="metric-list">
+                {metrics.profitability.assumptions.map((assumption) => (
+                  <div key={assumption.label}>
+                    <dt>{assumption.label}</dt>
+                    <dd>
+                      <span>{assumption.value}</span>
+                      <small>{assumption.detail}</small>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            <div className="owner-detail-panel compact-panel">
+              <SectionHeading
+                eyebrow="Cost split"
+                title="What drove cost"
+                body="Separates fixed platform baseline from variable credit consumption and estimated payment fees."
+              />
+              <dl className="metric-list">
+                <div>
+                  <dt>AI and variable cost</dt>
+                  <dd><span>{formatMoney(metrics.profitability.aiVariableCostUsd)}</span></dd>
+                </div>
+                <div>
+                  <dt>Fixed platform cost</dt>
+                  <dd><span>{formatMoney(metrics.profitability.platformFixedCostUsd)}</span></dd>
+                </div>
+                <div>
+                  <dt>Payment fees</dt>
+                  <dd><span>{formatMoney(metrics.profitability.paymentFeesUsd)}</span></dd>
+                </div>
+                <div>
+                  <dt>Revenue / active user</dt>
+                  <dd><span>{formatMoney(metrics.profitability.revenuePerActiveUserUsd)}</span></dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          <div className="owner-table profitability-table" role="table" aria-label="User economics">
+            <div className="owner-table-row owner-table-head" role="row">
+              <span>User</span>
+              <span>Paid</span>
+              <span>Credits</span>
+              <span>Estimated cost</span>
+              <span>Profit</span>
+            </div>
+            {metrics.profitability.userEconomics.length > 0 ? (
+              metrics.profitability.userEconomics.map((user) => (
+                <div className="owner-table-row" key={user.userId} role="row">
+                  <span>
+                    <strong>{user.email || "No email"}</strong>
+                    <small>{user.userId}</small>
+                  </span>
+                  <span>
+                    <strong>{formatMoney(user.paidUsd)}</strong>
+                    <small>period purchases</small>
+                  </span>
+                  <span>
+                    <strong>{user.creditsUsed} used</strong>
+                    <small>{user.creditsAvailable} available</small>
+                  </span>
+                  <span>
+                    <strong>{formatMoney(user.estimatedCostUsd)}</strong>
+                    <small>variable + allocated fixed</small>
+                  </span>
+                  <span>
+                    <strong>{formatMoney(user.grossProfitUsd)}</strong>
+                    <small>{user.marginPercent.toFixed(1)}% margin</small>
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="empty-state">No user economics yet for this period.</p>
+            )}
+          </div>
+
+          <div className="owner-table profitability-table" role="table" aria-label="Credit consumption evidence">
+            <div className="owner-table-row owner-table-head" role="row">
+              <span>Event</span>
+              <span>User</span>
+              <span>Credits</span>
+              <span>Revenue / cost</span>
+              <span>Resource</span>
+            </div>
+            {metrics.profitability.consumptionEvidence.length > 0 ? (
+              metrics.profitability.consumptionEvidence.map((event, index) => (
+                <div
+                  className="owner-table-row"
+                  key={`${event.userId}-${event.createdAt}-${event.eventType}-${index}`}
+                  role="row"
+                >
+                  <span>
+                    <strong>{formatLabel(event.eventType)}</strong>
+                    <small>{formatDateTime(event.createdAt)}</small>
+                  </span>
+                  <span>
+                    <strong>{event.email || "No email"}</strong>
+                    <small>{event.userId}</small>
+                  </span>
+                  <span>
+                    <strong>{event.credits > 0 ? `+${event.credits}` : event.credits}</strong>
+                    <small>{event.credits < 0 ? "consumed" : "granted/purchased"}</small>
+                  </span>
+                  <span>
+                    <strong>{formatMoney(event.paidUsd)}</strong>
+                    <small>{formatMoney(event.estimatedCostUsd)} estimated cost</small>
+                  </span>
+                  <span>
+                    <strong>{event.resourceType || "general"}</strong>
+                    <small>{event.resourceId || "No resource id"}</small>
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="empty-state">No credit events in this period.</p>
+            )}
+          </div>
+        </section>
+      ) : null}
+
       {activeTab === "promos" ? (
         <section className="owner-detail-panel owner-wide-panel" aria-label="Promo codes">
           <SectionHeading
@@ -805,7 +968,7 @@ function MetricCard({
   label: string;
   onClick?: () => void;
   tone?: "normal" | "warning";
-  value: number;
+  value: number | string;
 }) {
   const className = [
     "owner-metric-card",
@@ -820,7 +983,7 @@ function MetricCard({
         <Icon size={18} aria-hidden="true" />
         <span>{label}</span>
       </div>
-      <strong>{value.toLocaleString()}</strong>
+      <strong>{typeof value === "number" ? value.toLocaleString() : value}</strong>
       <p>{detail}</p>
     </>
   );
@@ -836,6 +999,23 @@ function MetricCard({
   return (
     <article className={className}>
       {content}
+    </article>
+  );
+}
+
+function FinancialTile({
+  label,
+  tone = "normal",
+  value,
+}: {
+  label: string;
+  tone?: "normal" | "warning";
+  value: string;
+}) {
+  return (
+    <article className={tone === "warning" ? "financial-tile warning" : "financial-tile"}>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </article>
   );
 }
@@ -1292,6 +1472,15 @@ function formatDuration(value: number) {
 
 function formatRate(value: number) {
   return `${Math.round(value * 100)}%`;
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("en", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: Math.abs(value) < 100 ? 2 : 0,
+    style: "currency",
+  }).format(value);
 }
 
 function formatRelativeTime(value: string) {

@@ -217,6 +217,7 @@ export function WorkspaceLayout({
         activeView={layout.activeView}
         initialMessages={conversationMessages}
         jobOverview={jobOverview}
+        onSelectView={selectView}
         profileOverview={profileOverview}
         userEmail={session.user.email}
         userId={session.user.id}

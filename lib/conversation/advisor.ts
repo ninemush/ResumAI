@@ -12,16 +12,23 @@ import { brand } from "@/lib/brand";
 import { getJobOverview, type JobOverview } from "@/lib/jobs/job-overview";
 import { buildProfileIntelligence } from "@/lib/profile/profile-intelligence";
 import { createClient } from "@/lib/supabase/server";
+import {
+  advisorSuggestedActionSchema,
+  advisorSuggestedLinkSchema,
+  advisorSurfaceSchema,
+  formatCapabilitiesForAdvisor,
+  inferSuggestedLinksFromMessage,
+} from "@/lib/conversation/app-capabilities";
 
 export const conversationAdvisorRequestSchema = z.object({
   message: z.string().trim().min(3).max(4000),
-  surface: z
-    .enum(["applications", "artifacts", "jobs", "owner", "profile", "resume", "settings", "sources", "unknown"])
-    .default("unknown"),
+  surface: advisorSurfaceSchema.default("unknown"),
 });
 
 const advisorResponseSchema = z.object({
   assistantMessage: z.string().min(1).max(1500),
+  suggestedActions: z.array(advisorSuggestedActionSchema).max(4).default([]),
+  suggestedLinks: z.array(advisorSuggestedLinkSchema).max(4).default([]),
 });
 
 type ConversationFact = {
@@ -168,9 +175,51 @@ export async function runConversationAdvisor(
           schema: {
             type: "object",
             additionalProperties: false,
-            required: ["assistantMessage"],
+            required: ["assistantMessage", "suggestedActions", "suggestedLinks"],
             properties: {
               assistantMessage: { type: "string" },
+              suggestedActions: {
+                type: "array",
+                maxItems: 4,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["creditCost", "id", "kind", "label", "reason", "view"],
+                  properties: {
+                    creditCost: {
+                      anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }],
+                    },
+                    id: { type: "string" },
+                    kind: {
+                      type: "string",
+                      enum: ["export", "generate", "navigate", "owner_triage", "redeem", "review", "support", "upload"],
+                    },
+                    label: { type: "string" },
+                    reason: { type: "string" },
+                    view: {
+                      type: "string",
+                      enum: ["applications", "jobs", "library", "owner", "profile", "resume", "settings", "support"],
+                    },
+                  },
+                },
+              },
+              suggestedLinks: {
+                type: "array",
+                maxItems: 4,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["label", "reason", "view"],
+                  properties: {
+                    label: { type: "string" },
+                    reason: { type: "string" },
+                    view: {
+                      type: "string",
+                      enum: ["applications", "jobs", "library", "owner", "profile", "resume", "settings", "support"],
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -183,10 +232,14 @@ export async function runConversationAdvisor(
     }
 
     const parsed = advisorResponseSchema.parse(JSON.parse(response.output_text));
+    const normalized = normalizeAdvisorPayload({
+      isOwner,
+      message: input.message,
+      payload: parsed,
+      surface: input.surface,
+    });
 
-    return {
-      assistantMessage: normalizeAdvisorMessage(parsed.assistantMessage),
-    };
+    return normalized;
   } catch (error) {
     console.warn(
       JSON.stringify({
@@ -204,20 +257,34 @@ export async function runConversationAdvisor(
     });
 
     if (relaxedResponse) {
-      return {
-        assistantMessage: relaxedResponse,
-      };
+      return normalizeAdvisorPayload({
+        isOwner,
+        message: input.message,
+        payload: {
+          assistantMessage: relaxedResponse,
+          suggestedActions: [],
+          suggestedLinks: [],
+        },
+        surface: input.surface,
+      });
     }
 
-    return {
-      assistantMessage: buildContextAwareAdvisorFallback({
+    return normalizeAdvisorPayload({
+      isOwner,
+      message: input.message,
+      payload: {
+        assistantMessage: buildContextAwareAdvisorFallback({
         facts: factsError ? [] : ((facts ?? []) as ConversationFact[]),
         latestResume: resumeError ? null : latestResume,
         message: input.message,
         profile,
         workspace,
-      }),
-    };
+        }),
+        suggestedActions: [],
+        suggestedLinks: [],
+      },
+      surface: input.surface,
+    });
   }
 }
 
@@ -324,6 +391,16 @@ the owner console: drill into issue groups, review linked tickets/logs, set
 status, write user-visible notes, mark fixed, ask for more information, or close no-fix.
 Do not pretend to deploy code or apply a product fix unless an actual command has
 run.
+
+Pramania can guide users to these exact app areas and actions. Use suggestedLinks
+or suggestedActions when it would reduce effort or clarify where the user should
+go next. Do not describe navigation vaguely if a precise app surface exists.
+Capabilities:
+${formatCapabilitiesForAdvisor()}
+
+When returning suggested actions, use them only for navigation, review, support,
+upload, generate, export, redeem, or owner triage suggestions. They are not proof
+that work has already happened.
 `.trim();
 }
 
@@ -392,6 +469,29 @@ ${recentConversation.length > 0 ? recentConversation.slice(-12).map((item) => `-
 
 Return JSON only.
 `.trim();
+}
+
+function normalizeAdvisorPayload({
+  isOwner,
+  message,
+  payload,
+  surface,
+}: {
+  isOwner: boolean;
+  message: string;
+  payload: z.infer<typeof advisorResponseSchema>;
+  surface: z.infer<typeof advisorSurfaceSchema>;
+}) {
+  const suggestedLinks =
+    payload.suggestedLinks.length > 0
+      ? payload.suggestedLinks
+      : inferSuggestedLinksFromMessage({ isOwner, message, surface });
+
+  return {
+    assistantMessage: normalizeAdvisorMessage(payload.assistantMessage),
+    suggestedActions: payload.suggestedActions,
+    suggestedLinks,
+  };
 }
 
 async function readAdvisorWorkspaceContext({

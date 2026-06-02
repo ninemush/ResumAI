@@ -1462,7 +1462,7 @@ input:focus {
 .owner-metric-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
 .profile-summary-grid div,
@@ -1554,6 +1554,49 @@ input:focus {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.owner-detail-grid.two-column {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compact-panel {
+  align-content: start;
+}
+
+.profitability-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.financial-tile {
+  background: rgba(255, 255, 255, 0.74);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+
+.financial-tile.warning {
+  border-color: rgba(173, 74, 64, 0.34);
+}
+
+.financial-tile span {
+  color: var(--sage-strong);
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.financial-tile strong {
+  color: var(--foreground);
+  font-family: var(--font-pr-brand), Georgia, serif;
+  font-size: clamp(1.6rem, 3vw, 2.5rem);
+  line-height: 1;
 }
 
 .owner-action-strip {
@@ -1894,6 +1937,10 @@ input:focus {
 
 .support-table .owner-table-row {
   grid-template-columns: 1.4fr 1fr 0.8fr 1fr;
+}
+
+.profitability-table .owner-table-row {
+  grid-template-columns: 1.25fr 0.8fr 0.9fr 0.9fr 1fr;
 }
 
 .support-issue-list {
@@ -5165,6 +5212,34 @@ input:focus {
   margin-top: 0;
 }
 
+.advisor-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.advisor-action-row button {
+  align-items: center;
+  background: rgba(236, 230, 218, 0.66);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 700;
+  min-height: 32px;
+  padding: 7px 11px;
+}
+
+.advisor-action-row button:hover,
+.advisor-action-row button:focus-visible {
+  background: var(--ink);
+  color: var(--paper);
+  outline: none;
+}
+
 .chat-message-body ul {
   display: grid;
   gap: 8px;
@@ -5981,6 +6056,7 @@ input:focus {
   .owner-table,
   .owner-table-row,
   .error-table .owner-table-row,
+  .profitability-table .owner-table-row,
   .support-table .owner-table-row {
     display: grid;
     grid-template-columns: 1fr;

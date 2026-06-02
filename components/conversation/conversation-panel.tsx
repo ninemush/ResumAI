@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import type { AppView } from "@/components/app-shell/side-nav";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import type { AdvisorSuggestedAction, AdvisorSuggestedLink } from "@/lib/conversation/app-capabilities";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 import { createClient } from "@/lib/supabase/browser";
@@ -25,15 +26,24 @@ type ConversationPanelProps = {
   applicationOverview: ApplicationOverview;
   initialMessages: ConversationMessage[];
   jobOverview: JobOverview;
+  onSelectView: (view: AppView) => void;
   profileOverview: ProfileOverview;
   userEmail: string | null;
   userId: string;
 };
 
 type ConversationMessage = {
+  suggestedActions?: AdvisorSuggestedAction[];
+  suggestedLinks?: AdvisorSuggestedLink[];
   attachment?: MessageAttachment;
   id?: string;
   speaker: "assistant" | "user" | "system";
+  text: string;
+};
+
+type AssistantMessageDraft = {
+  suggestedActions?: AdvisorSuggestedAction[];
+  suggestedLinks?: AdvisorSuggestedLink[];
   text: string;
 };
 
@@ -157,6 +167,7 @@ export function ConversationPanel({
   applicationOverview,
   initialMessages,
   jobOverview,
+  onSelectView,
   profileOverview,
   userEmail,
   userId,
@@ -272,7 +283,7 @@ export function ConversationPanel({
   async function processMessage(text: string) {
     const urls = extractUrls(text);
     const textWithoutUrls = removeUrls(text, urls).trim();
-    const summaries: string[] = [];
+    const summaries: Array<string | AssistantMessageDraft> = [];
 
     if (urls.length === 0) {
       const approvedFollowUpAction = await processApprovedFollowUpAction(text);
@@ -368,7 +379,7 @@ export function ConversationPanel({
     }
 
     if (summaries.length > 0) {
-      appendAssistantMessage(summaries.join(" "), true);
+      appendAssistantMessage(joinAssistantSummaries(summaries), true);
       router.refresh();
     }
   }
@@ -625,7 +636,11 @@ export function ConversationPanel({
 
     setStatus(null);
 
-    return cleanPlainChatText(payload.assistantMessage as string);
+    return {
+      suggestedActions: Array.isArray(payload.suggestedActions) ? payload.suggestedActions : [],
+      suggestedLinks: Array.isArray(payload.suggestedLinks) ? payload.suggestedLinks : [],
+      text: cleanPlainChatText(payload.assistantMessage as string),
+    };
   }
 
   async function processAdvisorQuestion(text: string) {
@@ -650,7 +665,11 @@ export function ConversationPanel({
       });
     }
 
-    return cleanPlainChatText(payload.assistantMessage as string);
+    return {
+      suggestedActions: Array.isArray(payload.suggestedActions) ? payload.suggestedActions : [],
+      suggestedLinks: Array.isArray(payload.suggestedLinks) ? payload.suggestedLinks : [],
+      text: cleanPlainChatText(payload.assistantMessage as string),
+    };
   }
 
   async function processProfileEditAction(text: string) {
@@ -705,7 +724,14 @@ export function ConversationPanel({
         `Use the career context already saved from my ${formatSourceTypeForPrompt(source.source_type)} material to identify what is useful for my profile and what is still missing. Keep this grounded in saved profile context.`,
       );
 
-      return `I found ${formatSourceReference(source)} and it has already been read into your career context. ${profileResponse}`;
+      const prefix = `I found ${formatSourceReference(source)} and it has already been read into your career context.`;
+
+      return typeof profileResponse === "string"
+        ? `${prefix} ${profileResponse}`
+        : {
+            ...profileResponse,
+            text: `${prefix} ${profileResponse.text}`,
+          };
     }
 
     const extraction = await extractSource(source.id);
@@ -1145,9 +1171,19 @@ export function ConversationPanel({
     }
   }
 
-  function appendAssistantMessage(text: string, persist = false) {
-    const cleanText = cleanPlainChatText(text);
-    setMessages((current) => [...current, { speaker: "assistant", text: cleanText }]);
+  function appendAssistantMessage(messageDraft: string | AssistantMessageDraft, persist = false) {
+    const cleanText = cleanPlainChatText(
+      typeof messageDraft === "string" ? messageDraft : messageDraft.text,
+    );
+    setMessages((current) => [
+      ...current,
+      {
+        speaker: "assistant",
+        suggestedActions: typeof messageDraft === "string" ? [] : messageDraft.suggestedActions ?? [],
+        suggestedLinks: typeof messageDraft === "string" ? [] : messageDraft.suggestedLinks ?? [],
+        text: cleanText,
+      },
+    ]);
     if (persist) {
       persistConversationMessage("assistant", cleanText);
     }
@@ -1214,6 +1250,13 @@ export function ConversationPanel({
               />
             ) : null}
             <ChatMessageBody text={item.text} />
+            {item.suggestedLinks?.length || item.suggestedActions?.length ? (
+              <AdvisorActionChips
+                actions={item.suggestedActions ?? []}
+                links={item.suggestedLinks ?? []}
+                onSelectView={onSelectView}
+              />
+            ) : null}
           </div>
         ))}
         {isSubmitting ? (
@@ -1328,6 +1371,57 @@ function buildInitialMessages(
       text: welcomeMessage(firstName),
     },
   ];
+}
+
+function AdvisorActionChips({
+  actions,
+  links,
+  onSelectView,
+}: {
+  actions: AdvisorSuggestedAction[];
+  links: AdvisorSuggestedLink[];
+  onSelectView: (view: AppView) => void;
+}) {
+  const merged = [
+    ...links.map((link) => ({
+      id: `link-${link.view}-${link.label}`,
+      label: link.label,
+      reason: link.reason,
+      view: link.view,
+    })),
+    ...actions.map((action) => ({
+      id: `action-${action.id}`,
+      label: action.creditCost ? `${action.label} (${action.creditCost} cr)` : action.label,
+      reason: action.reason,
+      view: action.view,
+    })),
+  ].slice(0, 4);
+
+  if (merged.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="advisor-action-row" aria-label="Suggested next places">
+      {merged.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => onSelectView(item.view as AppView)}
+          title={item.reason}
+          type="button"
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function joinAssistantSummaries(items: Array<string | AssistantMessageDraft>) {
+  return items
+    .map((item) => (typeof item === "string" ? item : item.text))
+    .filter(Boolean)
+    .join(" ");
 }
 
 function getProcessingMessage(mode: ProcessingMode, step: number, activeView: AppView, intent: string) {
@@ -2573,11 +2667,12 @@ function mapActiveViewToAdvisorSurface(activeView: AppView) {
     artifacts: "artifacts",
     jobs: "jobs",
     knowledgebase: "sources",
-    library: "sources",
+    library: "library",
     owner: "owner",
     profile: "profile",
     resume: "resume",
     settings: "settings",
+    support: "support",
   };
 
   return surfaceMap[activeView] ?? "unknown";

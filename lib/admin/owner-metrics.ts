@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { CREDIT_PURCHASE_OPTIONS } from "@/lib/billing/credits";
 import { createClient } from "@/lib/supabase/server";
 
 const countRecordSchema = z.record(z.string(), z.number().int().nonnegative());
@@ -94,6 +95,69 @@ const adminSupportTicketSchema = z.object({
   updatedAt: isoDateSchema,
   userEmail: z.string().nullable(),
 });
+const profitabilitySchema = z.object({
+  aiVariableCostUsd: z.number(),
+  assumptions: z.array(
+    z.object({
+      detail: z.string(),
+      label: z.string(),
+      value: z.string(),
+    }),
+  ),
+  consumptionEvidence: z.array(
+    z.object({
+      createdAt: isoDateSchema,
+      credits: z.number(),
+      email: z.string().nullable(),
+      eventType: z.string(),
+      estimatedCostUsd: z.number(),
+      paidUsd: z.number(),
+      resourceId: z.string().nullable(),
+      resourceType: z.string().nullable(),
+      userId: z.string(),
+    }),
+  ),
+  costPerActiveUserUsd: z.number(),
+  creditsPurchased: z.number().int().nonnegative(),
+  creditsUsed: z.number().int().nonnegative(),
+  grossMarginPercent: z.number(),
+  grossProfitUsd: z.number(),
+  paidCreditsUsed: z.number().int().nonnegative(),
+  paymentFeesUsd: z.number(),
+  platformFixedCostUsd: z.number(),
+  revenuePerActiveUserUsd: z.number(),
+  revenueUsd: z.number(),
+  totalCostUsd: z.number(),
+  userEconomics: z.array(
+    z.object({
+      creditsAvailable: z.number().int(),
+      creditsUsed: z.number().int().nonnegative(),
+      email: z.string().nullable(),
+      estimatedCostUsd: z.number(),
+      grossProfitUsd: z.number(),
+      marginPercent: z.number(),
+      paidUsd: z.number(),
+      userId: z.string(),
+    }),
+  ),
+});
+const emptyProfitability = {
+  aiVariableCostUsd: 0,
+  assumptions: [],
+  consumptionEvidence: [],
+  costPerActiveUserUsd: 0,
+  creditsPurchased: 0,
+  creditsUsed: 0,
+  grossMarginPercent: 0,
+  grossProfitUsd: 0,
+  paidCreditsUsed: 0,
+  paymentFeesUsd: 0,
+  platformFixedCostUsd: 0,
+  revenuePerActiveUserUsd: 0,
+  revenueUsd: 0,
+  totalCostUsd: 0,
+  userEconomics: [],
+};
 
 export const ownerMetricsSchema = z.object({
   applications: z.object({
@@ -153,6 +217,7 @@ export const ownerMetricsSchema = z.object({
       endedAt: new Date(0).toISOString(),
       startedAt: new Date(0).toISOString(),
     }),
+  profitability: profitabilitySchema.default(emptyProfitability),
   sources: countRecordSchema,
   support: z.object({
     l1Resolved: z.number().int().nonnegative(),
@@ -239,7 +304,7 @@ async function attachUserCreditMetrics(
 
   const { data: ledgerRows, error } = await supabase
     .from("credit_ledger")
-    .select("user_id, credit_delta, created_at")
+    .select("user_id, credit_delta, event_type, resource_type, resource_id, metadata, created_at")
     .in("user_id", userIds)
     .order("created_at", { ascending: false })
     .limit(20000);
@@ -250,18 +315,24 @@ async function attachUserCreditMetrics(
 
   const periodStartedAt =
     periodDays > 0 ? new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString() : null;
+  const emailByUserId = new Map(metrics.usersList.map((user) => [user.userId, user.email]));
   const creditTotals = new Map<
     string,
     {
       available: number;
+      paidUsd: number;
+      purchased: number;
       used: number;
       usedAllTime: number;
     }
   >();
+  const evidence: OwnerMetrics["profitability"]["consumptionEvidence"] = [];
 
   for (const row of ledgerRows) {
     const userId = row.user_id as string | null;
     const creditDelta = Number(row.credit_delta ?? 0);
+    const createdAt = row.created_at as string;
+    const isInPeriod = !periodStartedAt || new Date(createdAt) >= new Date(periodStartedAt);
 
     if (!userId) {
       continue;
@@ -269,40 +340,214 @@ async function attachUserCreditMetrics(
 
     const totals = creditTotals.get(userId) ?? {
       available: 0,
+      paidUsd: 0,
+      purchased: 0,
       used: 0,
       usedAllTime: 0,
     };
     totals.available += creditDelta;
 
+    const paidUsd = isInPeriod && creditDelta > 0 ? estimatePaidUsd(row) : 0;
+    if (paidUsd > 0) {
+      totals.paidUsd += paidUsd;
+      totals.purchased += creditDelta;
+    }
+
     if (creditDelta < 0) {
       const usedAmount = Math.abs(creditDelta);
       totals.usedAllTime += usedAmount;
 
-      if (!periodStartedAt || new Date(row.created_at as string) >= new Date(periodStartedAt)) {
+      if (isInPeriod) {
         totals.used += usedAmount;
       }
+    }
+
+    if (isInPeriod && (creditDelta < 0 || paidUsd > 0)) {
+      evidence.push({
+        createdAt,
+        credits: Math.trunc(creditDelta),
+        email: emailByUserId.get(userId) ?? null,
+        eventType: String(row.event_type ?? "credit_event"),
+        estimatedCostUsd: creditDelta < 0 ? roundMoney(Math.abs(creditDelta) * readCostAssumptions().costPerCreditUsd) : 0,
+        paidUsd,
+        resourceId: typeof row.resource_id === "string" ? row.resource_id : null,
+        resourceType: typeof row.resource_type === "string" ? row.resource_type : null,
+        userId,
+      });
     }
 
     creditTotals.set(userId, totals);
   }
 
+  const usersList = metrics.usersList.map((user) => {
+    const totals = creditTotals.get(user.userId);
+
+    if (!totals) {
+      return user;
+    }
+
+    return {
+      ...user,
+      creditsAvailable: Math.max(0, Math.trunc(totals.available)),
+      creditsUsed: Math.trunc(totals.used),
+      creditsUsedAllTime: Math.trunc(totals.usedAllTime),
+    };
+  });
+
   return {
     ...metrics,
-    usersList: metrics.usersList.map((user) => {
-      const totals = creditTotals.get(user.userId);
-
-      if (!totals) {
-        return user;
-      }
-
-      return {
-        ...user,
-        creditsAvailable: Math.max(0, Math.trunc(totals.available)),
-        creditsUsed: Math.trunc(totals.used),
-        creditsUsedAllTime: Math.trunc(totals.usedAllTime),
-      };
+    profitability: buildProfitabilityModel({
+      creditTotals,
+      evidence,
+      metrics,
+      periodDays,
+      usersList,
     }),
+    usersList,
   };
+}
+
+function estimatePaidUsd(row: Record<string, unknown>) {
+  const metadata = readMetadata(row.metadata);
+  const productId =
+    readString(metadata.product_id) ??
+    readString(metadata.productId) ??
+    readString(metadata.product_identifier) ??
+    readString(metadata.productIdentifier);
+  const purchaseOption = productId
+    ? CREDIT_PURCHASE_OPTIONS.find((option) => option.productId === productId)
+    : CREDIT_PURCHASE_OPTIONS.find((option) => option.credits === Number(row.credit_delta ?? 0));
+  const eventType = String(row.event_type ?? "").toLowerCase();
+
+  if (!purchaseOption || !/purchase|revenuecat|stripe|paid|checkout/.test(eventType)) {
+    return 0;
+  }
+
+  return purchaseOption.priceUsd;
+}
+
+function buildProfitabilityModel({
+  creditTotals,
+  evidence,
+  metrics,
+  periodDays,
+  usersList,
+}: {
+  creditTotals: Map<string, { available: number; paidUsd: number; purchased: number; used: number; usedAllTime: number }>;
+  evidence: OwnerMetrics["profitability"]["consumptionEvidence"];
+  metrics: OwnerMetrics;
+  periodDays: number;
+  usersList: OwnerMetrics["usersList"];
+}): OwnerMetrics["profitability"] {
+  const assumptions = readCostAssumptions();
+  const periodAllocationDays = periodDays > 0 ? periodDays : 30;
+  const platformFixedCostUsd = roundMoney(
+    ((assumptions.vercelMonthlyUsd +
+      assumptions.supabaseMonthlyUsd +
+      assumptions.revenueCatMonthlyUsd +
+      assumptions.miscMonthlyUsd) *
+      periodAllocationDays) /
+      30,
+  );
+  const revenueUsd = roundMoney([...creditTotals.values()].reduce((sum, total) => sum + total.paidUsd, 0));
+  const creditsUsed = usersList.reduce((sum, user) => sum + user.creditsUsed, 0);
+  const creditsPurchased = Math.trunc([...creditTotals.values()].reduce((sum, total) => sum + total.purchased, 0));
+  const aiVariableCostUsd = roundMoney(creditsUsed * assumptions.costPerCreditUsd);
+  const purchaseCount = evidence.filter((row) => row.paidUsd > 0).length;
+  const paymentFeesUsd = roundMoney(revenueUsd * assumptions.paymentFeePercent + purchaseCount * assumptions.paymentFixedUsd);
+  const totalCostUsd = roundMoney(platformFixedCostUsd + aiVariableCostUsd + paymentFeesUsd);
+  const grossProfitUsd = roundMoney(revenueUsd - totalCostUsd);
+  const activeUsers = Math.max(1, metrics.users.activeInPeriod || usersList.filter((user) => user.creditsUsed > 0).length);
+  const paidCreditsUsed = Math.min(creditsUsed, creditsPurchased);
+  const fixedCostPerUserUsd = platformFixedCostUsd / Math.max(1, usersList.length);
+
+  return {
+    aiVariableCostUsd,
+    assumptions: [
+      {
+        detail: "Estimated from RevenueCat/Stripe credit purchase ledger events. Promo and signup grants do not count as revenue.",
+        label: "Revenue basis",
+        value: "Credit purchases",
+      },
+      {
+        detail: "Used for AI, parsing, storage, and operational variable cost until provider-level cost telemetry is wired.",
+        label: "Variable cost per credit",
+        value: `$${assumptions.costPerCreditUsd.toFixed(2)}`,
+      },
+      {
+        detail: "Allocated across the selected period. All-time uses a 30-day baseline so fixed costs do not become misleading.",
+        label: "Fixed platform baseline",
+        value: `$${(assumptions.vercelMonthlyUsd + assumptions.supabaseMonthlyUsd + assumptions.revenueCatMonthlyUsd + assumptions.miscMonthlyUsd).toFixed(2)}/mo`,
+      },
+      {
+        detail: "Stripe-style estimate; reconcile against Stripe exports before financial reporting.",
+        label: "Payment fee estimate",
+        value: `${(assumptions.paymentFeePercent * 100).toFixed(1)}% + $${assumptions.paymentFixedUsd.toFixed(2)}`,
+      },
+    ],
+    consumptionEvidence: evidence.slice(0, 120),
+    costPerActiveUserUsd: roundMoney(totalCostUsd / activeUsers),
+    creditsPurchased,
+    creditsUsed,
+    grossMarginPercent: revenueUsd > 0 ? Math.round((grossProfitUsd / revenueUsd) * 1000) / 10 : 0,
+    grossProfitUsd,
+    paidCreditsUsed,
+    paymentFeesUsd,
+    platformFixedCostUsd,
+    revenuePerActiveUserUsd: roundMoney(revenueUsd / activeUsers),
+    revenueUsd,
+    totalCostUsd,
+    userEconomics: usersList
+      .map((user) => {
+        const totals = creditTotals.get(user.userId);
+        const paidUsd = roundMoney(totals?.paidUsd ?? 0);
+        const estimatedCostUsd = roundMoney(user.creditsUsed * assumptions.costPerCreditUsd + fixedCostPerUserUsd);
+        const grossProfit = roundMoney(paidUsd - estimatedCostUsd);
+
+        return {
+          creditsAvailable: user.creditsAvailable,
+          creditsUsed: user.creditsUsed,
+          email: user.email,
+          estimatedCostUsd,
+          grossProfitUsd: grossProfit,
+          marginPercent: paidUsd > 0 ? Math.round((grossProfit / paidUsd) * 1000) / 10 : 0,
+          paidUsd,
+          userId: user.userId,
+        };
+      })
+      .sort((left, right) => right.paidUsd - left.paidUsd || right.creditsUsed - left.creditsUsed)
+      .slice(0, 80),
+  };
+}
+
+function readCostAssumptions() {
+  return {
+    costPerCreditUsd: readNumberEnv("OWNER_COST_PER_CREDIT_USD", 0.18),
+    miscMonthlyUsd: readNumberEnv("OWNER_COST_MISC_MONTHLY_USD", 10),
+    paymentFeePercent: readNumberEnv("OWNER_PAYMENT_FEE_PERCENT", 0.029),
+    paymentFixedUsd: readNumberEnv("OWNER_PAYMENT_FIXED_USD", 0.3),
+    revenueCatMonthlyUsd: readNumberEnv("OWNER_COST_REVENUECAT_MONTHLY_USD", 0),
+    supabaseMonthlyUsd: readNumberEnv("OWNER_COST_SUPABASE_MONTHLY_USD", 25),
+    vercelMonthlyUsd: readNumberEnv("OWNER_COST_VERCEL_MONTHLY_USD", 20),
+  };
+}
+
+function readMetadata(value: unknown) {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function readNumberEnv(name: string, fallback: number) {
+  const value = Number(process.env[name]);
+
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 async function readSupportIssues(
