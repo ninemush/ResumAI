@@ -191,8 +191,8 @@ test.describe("authenticated workspace", () => {
     const experienceIndex = sectionOrder.indexOf("Professional Experience");
 
     expect(skillsIndex).toBeGreaterThanOrEqual(0);
-    expect(experienceIndex).toBeGreaterThan(skillsIndex);
-    expect(highlightsIndex).toBeGreaterThan(experienceIndex);
+    expect(highlightsIndex).toBeGreaterThan(skillsIndex);
+    expect(experienceIndex).toBeGreaterThan(highlightsIndex);
 
     const roleMetaOverflow = await preview.locator(".resume-role-meta-row").evaluateAll((rows) =>
       rows.map((row) => ({

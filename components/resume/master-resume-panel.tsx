@@ -17,7 +17,11 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { normalizeResumeContent, type ResumeContent } from "@/lib/resumes/resume-content";
+import {
+  looksLikeEmploymentTypeLabel,
+  normalizeResumeContent,
+  type ResumeContent,
+} from "@/lib/resumes/resume-content";
 import type { MasterResumeOverview } from "@/lib/resumes/master-resume";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
@@ -412,6 +416,65 @@ export function MasterResumePanel({
                 <p className="resume-static-paragraph">{draft.skills.join(", ")}</p>
               )}
             </section>
+            <section className="resume-highlight-section">
+              <div className="resume-section-heading-row">
+                <h3>Selected Highlights</h3>
+              </div>
+              {isEditing ? (
+                <div className="resume-bullet-editor">
+                  {draft.experienceBullets.map((bullet, index) => (
+                    <div className="resume-bullet-row" key={`${bullet}-${index}`}>
+                      <span aria-hidden="true">•</span>
+                      <textarea
+                        aria-label={`Selected highlight ${index + 1}`}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            experienceBullets: draft.experienceBullets.map((item, itemIndex) =>
+                              itemIndex === index ? event.target.value : item,
+                            ),
+                          })
+                        }
+                        rows={Math.max(1, Math.ceil(bullet.length / 88))}
+                        value={bullet}
+                      />
+                      <button
+                        aria-label={`Remove selected highlight ${index + 1}`}
+                        className="icon-only-action"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            experienceBullets: draft.experienceBullets.filter((_, itemIndex) => itemIndex !== index),
+                          })
+                        }
+                        type="button"
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    className="resume-inline-action"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        experienceBullets: [...draft.experienceBullets, ""],
+                      })
+                    }
+                    type="button"
+                  >
+                    <Plus size={14} aria-hidden="true" />
+                    Add highlight
+                  </button>
+                </div>
+              ) : (
+                <ul className="resume-static-bullet-list">
+                  {draft.experienceBullets.map((bullet, index) => (
+                    <li key={`${bullet}-static-${index}`}>{bullet}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
             <section>
               <div className="resume-section-heading-row">
                 <h3>Professional Experience</h3>
@@ -443,7 +506,8 @@ export function MasterResumePanel({
               {draft.experienceSections.length > 0 ? (
                 <div className="resume-experience-section-list">
                   {draft.experienceSections.map((section, index) => {
-                    const companyBrand = readCompanyBrand(section.company);
+                    const displayCompany = readDisplayCompany(section.company);
+                    const companyBrand = readCompanyBrand(displayCompany);
 
                     return (
                       <article className="resume-experience-section" key={`${section.roleTitle}-${index}`}>
@@ -578,7 +642,7 @@ export function MasterResumePanel({
                                   {[section.dates, section.location].filter(Boolean).join(" · ")}
                                 </p>
                               </div>
-                              {section.company ? (
+                              {displayCompany ? (
                                 companyBrand ? (
                                   <a className="resume-company-static-link" href={companyBrand.url} rel="noreferrer" target="_blank">
                                     <span
@@ -586,10 +650,10 @@ export function MasterResumePanel({
                                       className="resume-company-logo"
                                       style={{ backgroundImage: `url(${companyBrand.logoUrl})` }}
                                     />
-                                    {section.company}
+                                    {displayCompany}
                                   </a>
                                 ) : (
-                                  <strong>{section.company}</strong>
+                                  <strong>{displayCompany}</strong>
                                 )
                               ) : null}
                             </div>
@@ -609,65 +673,6 @@ export function MasterResumePanel({
                   No role-by-role work history yet. Drop a resume, LinkedIn PDF, or work history note into Pramania,
                   then regenerate this master resume.
                 </p>
-              )}
-            </section>
-            <section className="resume-highlight-section">
-              <div className="resume-section-heading-row">
-                <h3>Selected Highlights</h3>
-              </div>
-              {isEditing ? (
-                <div className="resume-bullet-editor">
-                  {draft.experienceBullets.map((bullet, index) => (
-                    <div className="resume-bullet-row" key={`${bullet}-${index}`}>
-                      <span aria-hidden="true">•</span>
-                      <textarea
-                        aria-label={`Selected highlight ${index + 1}`}
-                        onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            experienceBullets: draft.experienceBullets.map((item, itemIndex) =>
-                              itemIndex === index ? event.target.value : item,
-                            ),
-                          })
-                        }
-                        rows={Math.max(1, Math.ceil(bullet.length / 88))}
-                        value={bullet}
-                      />
-                      <button
-                        aria-label={`Remove selected highlight ${index + 1}`}
-                        className="icon-only-action"
-                        onClick={() =>
-                          setDraft({
-                            ...draft,
-                            experienceBullets: draft.experienceBullets.filter((_, itemIndex) => itemIndex !== index),
-                          })
-                        }
-                        type="button"
-                      >
-                        <Trash2 size={14} aria-hidden="true" />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    className="resume-inline-action"
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        experienceBullets: [...draft.experienceBullets, ""],
-                      })
-                    }
-                    type="button"
-                  >
-                    <Plus size={14} aria-hidden="true" />
-                    Add highlight
-                  </button>
-                </div>
-              ) : (
-                <ul className="resume-static-bullet-list">
-                  {draft.experienceBullets.map((bullet, index) => (
-                    <li key={`${bullet}-static-${index}`}>{bullet}</li>
-                  ))}
-                </ul>
               )}
             </section>
           </div>
@@ -980,6 +985,14 @@ function readCompanyBrand(company: string | null) {
     logoUrl: `https://logo.clearbit.com/${match.domain}`,
     url: `https://${match.domain}`,
   };
+}
+
+function readDisplayCompany(company: string | null) {
+  if (!company || looksLikeEmploymentTypeLabel(company)) {
+    return null;
+  }
+
+  return company;
 }
 
 function escapeRegExp(value: string) {

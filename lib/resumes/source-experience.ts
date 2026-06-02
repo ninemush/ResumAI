@@ -1,4 +1,9 @@
-import { MAX_RESUME_EXPERIENCE_SECTIONS, type ResumeContent } from "./resume-content";
+import {
+  MAX_RESUME_EXPERIENCE_SECTIONS,
+  cleanResumeDateRange,
+  looksLikeEmploymentTypeLabel,
+  type ResumeContent,
+} from "./resume-content";
 
 export function extractExperienceSectionsFromText(text: string) {
   const experienceText = readExperienceText(text);
@@ -39,7 +44,7 @@ export function extractExperienceSectionsFromText(text: string) {
         : companyIndex >= 0
           ? nextLines[companyIndex]
           : currentCompany;
-    const dates = dateIndex >= 0 ? nextLines[dateIndex] : null;
+    const dates = dateIndex >= 0 ? cleanResumeDateRange(nextLines[dateIndex]) : null;
     const location = nextLines.find((candidate, lineIndex) =>
       lineIndex !== companyIndex &&
       lineIndex !== dateIndex &&
@@ -219,6 +224,7 @@ function looksLikeResumeCompany(value: string) {
     !looksLikeDateRange(value) &&
     !looksLikeResumeLocation(value) &&
     !looksLikeResumeSectionBoundary(value) &&
+    !looksLikeEmploymentTypeLabel(value) &&
     !looksLikeRecommendationOrTestimonial(value) &&
     !looksLikePersonName(value) &&
     !/^(?:i|we|my|our|led|built|managed|owned|developed|reduced|scaled|created|established|supported|completed|focused|helped)\b/i.test(

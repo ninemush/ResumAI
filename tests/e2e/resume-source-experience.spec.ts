@@ -196,3 +196,73 @@ test("deduplicates near-identical role sections without collapsing real progress
     "Global Vice President of Professional Services, GTM & Operations",
   );
 });
+
+test("does not treat employment type labels as companies or duplicate the same role", () => {
+  const normalized = normalizeResumeContent({
+    contact: {
+      email: "candidate@example.com",
+      linkedin: null,
+      location: "Dubai",
+      phone: null,
+      website: null,
+    },
+    experienceBullets: [],
+    experienceSections: [
+      {
+        bullets: [
+          "Led frontline IT service desk operations and stakeholder support, building early experience in service delivery, incident management, operational execution, and user experience.",
+        ],
+        company: "Contract",
+        dates: "Dec 2007 - Aug 2009",
+        location: null,
+        roleTitle: "Information Technology Service Desk Team Lead",
+      },
+      {
+        bullets: [
+          "Led frontline IT service desk operations and stakeholder support, building early experience in service delivery, incident management, operational execution, and user experience.",
+        ],
+        company: "GE Capital",
+        dates: "Dec 2007 - Aug 2009",
+        location: null,
+        roleTitle: "Information Technology Service Desk Team Lead",
+      },
+    ],
+    headline: "Information Technology Leader",
+    keywordGaps: [],
+    reviewerNotes: [],
+    skills: ["IT Service Management"],
+    summary: "Builds reliable service delivery operations.",
+  });
+
+  expect(normalized.experienceSections).toHaveLength(1);
+  expect(normalized.experienceSections[0].company).toBe("GE Capital");
+});
+
+test("removes clipped partial date ranges from source-derived roles", () => {
+  const normalized = normalizeResumeContent({
+    contact: {
+      email: "candidate@example.com",
+      linkedin: null,
+      location: "Dubai",
+      phone: null,
+      website: null,
+    },
+    experienceBullets: [],
+    experienceSections: [
+      {
+        bullets: ["Strengthened security controls and supported enterprise risk remediation."],
+        company: "GE Capital",
+        dates: "November 2008 - June 20",
+        location: null,
+        roleTitle: "Information Security Specialist",
+      },
+    ],
+    headline: "Information Security Leader",
+    keywordGaps: [],
+    reviewerNotes: [],
+    skills: ["Security Controls"],
+    summary: "Builds reliable controls.",
+  });
+
+  expect(normalized.experienceSections[0].dates).toBeNull();
+});

@@ -653,11 +653,7 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
     throw new Error("PROFILE_NOT_FOUND");
   }
 
-  const [
-    { data: latestResume, error: resumeReadError },
-    { data: sourceEvidence, error: sourceError },
-  ] = await Promise.all([
-    supabase
+  const { data: latestResume, error: resumeReadError } = await supabase
     .from("generated_resumes")
     .select("id, content_json")
     .eq("profile_id", profile.id)
@@ -666,16 +662,7 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
     .is("application_id", null)
     .order("created_at", { ascending: false })
     .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("profile_sources")
-      .select("source_type, source_url, original_filename, extracted_text")
-      .eq("profile_id", profile.id)
-      .eq("user_id", userId)
-      .not("extracted_text", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(30),
-  ]);
+    .maybeSingle();
 
   if (resumeReadError) {
     throw new Error("MASTER_RESUME_READ_FAILED");
@@ -685,18 +672,8 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
     throw new Error("MASTER_RESUME_NOT_FOUND");
   }
 
-  if (sourceError) {
-    console.warn("master_resume.export_source_evidence_read_failed", {
-      profileId: profile.id,
-      userIdHash: hashUserId(userId),
-    });
-  }
-
   const resume = parseResumeContent(latestResume.content_json);
-  const normalizedResume = enrichMasterResumeWithSourceEvidence(
-    normalizeResumeContent(resume),
-    sourceError ? [] : prioritizeSourceEvidence(sourceEvidence ?? []),
-  );
+  const normalizedResume = normalizeResumeContent(resume);
   const templateInput = {
     contextLine: [profile.target_direction, profile.target_level].filter(Boolean).join(" | "),
     displayName: profile.display_name,
@@ -851,10 +828,7 @@ async function buildOverview({
     confirmedFactCount: confirmedFacts.length,
     latestResume: latestResume
       ? {
-          content: enrichMasterResumeWithSourceEvidence(
-            normalizeResumeContent(parseResumeContent(latestResume.content_json)),
-            sourceEvidence,
-          ),
+          content: normalizeResumeContent(parseResumeContent(latestResume.content_json)),
           docxDownloadUrl: await createSignedArtifactUrl(latestResume.docx_storage_path),
           id: latestResume.id,
           model: latestResume.model,

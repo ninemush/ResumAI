@@ -52,8 +52,8 @@ export function normalizeResumeContent(value: ResumeContent): ResumeContent {
         .map((bullet) => cleanResumeText(bullet, 320))
         .filter((bullet) => bullet && !looksLikeRecommendationOrTestimonial(bullet))
         .slice(0, 7),
-      company: cleanNullableText(stripResumeUiLabels(section.company ?? ""), 120),
-      dates: cleanNullableText(section.dates, 80),
+      company: cleanResumeCompany(section.company),
+      dates: cleanResumeDateRange(section.dates),
       location: cleanNullableText(section.location, 120),
       roleTitle: stripResumeUiLabels(cleanResumeText(section.roleTitle, 140)) || "Role",
     }))
@@ -118,9 +118,39 @@ export function dedupeResumeExperienceSections(
   return deduped;
 }
 
+export function looksLikeEmploymentTypeLabel(value: string | null | undefined) {
+  return /^(?:full[-\s]?time|part[-\s]?time|contract|contractor|freelance|self[-\s]?employed|internship|temporary|temp|consultant|apprenticeship|seasonal)$/i.test(
+    (value ?? "").trim(),
+  );
+}
+
+export function cleanResumeDateRange(value: string | null | undefined) {
+  const cleanValue = cleanNullableText(value ?? null, 80);
+
+  if (!cleanValue) {
+    return null;
+  }
+
+  if (/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(?:19|20)(?!\d)\b/i.test(cleanValue)) {
+    return null;
+  }
+
+  return cleanValue;
+}
+
 function cleanNullableText(value: string | null, maxLength: number) {
   const cleanValue = cleanResumeText(value ?? "", maxLength);
   return cleanValue || null;
+}
+
+function cleanResumeCompany(value: string | null | undefined) {
+  const cleanValue = cleanNullableText(stripResumeUiLabels(value ?? ""), 120);
+
+  if (!cleanValue || looksLikeEmploymentTypeLabel(cleanValue)) {
+    return null;
+  }
+
+  return cleanValue;
 }
 
 function cleanResumeText(value: string, maxLength = 320) {
@@ -161,8 +191,8 @@ function looksLikeSameExperienceSection(
   left: ResumeContent["experienceSections"][number],
   right: ResumeContent["experienceSections"][number],
 ) {
-  const leftCompany = normalizeComparableText(left.company ?? "");
-  const rightCompany = normalizeComparableText(right.company ?? "");
+  const leftCompany = normalizeComparableCompany(left.company);
+  const rightCompany = normalizeComparableCompany(right.company);
   const companyMatches =
     !leftCompany ||
     !rightCompany ||
@@ -176,12 +206,42 @@ function looksLikeSameExperienceSection(
 
   const datesCompatible = datesOverlapOrMissing(left.dates, right.dates);
   const roleSimilarity = tokenSimilarity(left.roleTitle, right.roleTitle);
+  const bulletsOverlap = haveSimilarResumeBullets(left.bullets, right.bullets);
 
   if (datesCompatible && roleSimilarity >= 0.58) {
     return true;
   }
 
+  if (datesCompatible && roleSimilarity >= 0.44 && bulletsOverlap) {
+    return true;
+  }
+
   return roleSimilarity >= 0.82 && Boolean(leftCompany && rightCompany);
+}
+
+function haveSimilarResumeBullets(left: string[], right: string[]) {
+  return left.some((leftBullet) =>
+    right.some((rightBullet) => {
+      const leftComparable = normalizeComparableText(leftBullet);
+      const rightComparable = normalizeComparableText(rightBullet);
+
+      return (
+        leftComparable.length > 40 &&
+        rightComparable.length > 40 &&
+        (leftComparable.includes(rightComparable.slice(0, 80)) ||
+          rightComparable.includes(leftComparable.slice(0, 80)) ||
+          tokenSimilarity(leftComparable, rightComparable) >= 0.62)
+      );
+    }),
+  );
+}
+
+function normalizeComparableCompany(value: string | null | undefined) {
+  if (looksLikeEmploymentTypeLabel(value)) {
+    return "";
+  }
+
+  return normalizeComparableText(value ?? "");
 }
 
 function datesOverlapOrMissing(left: string | null, right: string | null) {
