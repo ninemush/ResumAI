@@ -291,6 +291,11 @@ export function ConversationPanel({
         return;
       }
 
+      if (shouldRouteToAdvisor(text) && !looksLikeConcreteWorkflowCommand(text)) {
+        appendAssistantMessage(await processAdvisorQuestion(text), true);
+        return;
+      }
+
       const supportIssueAction = await processSupportIssueAction(text);
 
       if (supportIssueAction) {
@@ -304,11 +309,6 @@ export function ConversationPanel({
       if (resumeAction) {
         appendAssistantMessage(resumeAction, true);
         router.refresh();
-        return;
-      }
-
-      if (shouldRouteToAdvisor(text)) {
-        appendAssistantMessage(await processAdvisorQuestion(text), true);
         return;
       }
 
@@ -343,7 +343,11 @@ export function ConversationPanel({
         return;
       }
 
-      if (shouldRouteToAdvisor(text)) {
+      if (
+        shouldRouteToAdvisor(text) ||
+        shouldTreatAsAdvisorReply(text, messages) ||
+        !looksLikeProfileEvidenceToSave(text)
+      ) {
         appendAssistantMessage(await processAdvisorQuestion(text), true);
         return;
       }
@@ -357,7 +361,7 @@ export function ConversationPanel({
 
     if (!processedActionUrl && shouldProcessProfileRemainder({ textWithoutUrls, urls })) {
       summaries.push(
-        shouldRouteToAdvisor(textWithoutUrls)
+        shouldRouteToAdvisor(textWithoutUrls) || shouldTreatAsAdvisorReply(textWithoutUrls, messages)
           ? await processAdvisorQuestion(textWithoutUrls)
           : await processProfileText(textWithoutUrls),
       );
@@ -414,8 +418,8 @@ export function ConversationPanel({
       const docxUrl = payload.overview?.latestResume?.docxDownloadUrl;
 
       return pdfUrl || docxUrl
-        ? `Exported validated master resume files. PDF: ${pdfUrl ?? "open Resume Studio"} DOCX: ${docxUrl ?? "open Resume Studio"}`
-        : "Exported validated master resume files. Open Resume Studio to download them.";
+        ? `Your master resume files are ready. PDF: ${pdfUrl ?? "open Profile & Resume"} DOCX: ${docxUrl ?? "open Profile & Resume"}`
+        : "Your master resume files are ready. Open Profile & Resume to download them.";
     }
 
     if (!looksLikeMasterResumeRequest(text)) {
@@ -473,13 +477,13 @@ export function ConversationPanel({
       return payload.error?.message ?? "I understood the direction, but could not save it to your profile yet.";
     }
 
-    return `Got it. I’ll use **${answer}** as your working target direction. I saved it to Profile & Resume, and I’ll use it when shaping your master resume, role fit, and job recommendations.`;
+    return `Done. I saved “${answer}” as your working direction. You’ll see it in Profile & Resume, and I’ll use it when shaping your master resume, role fit, and job recommendations.`;
   }
 
   async function processApplicationAction(text: string) {
     if (looksLikeMaterialGenerationRequest(text)) {
       const candidates = applicationOverview.recentApplications.filter((application) =>
-        ["draft", "applied", "interview_in_progress"].includes(application.status),
+        !application.archivedAt && ["draft", "applied", "interview_in_progress"].includes(application.status),
       );
       const matchedCandidates = candidates.filter((application) =>
         applicationMatchesText(application, text),
@@ -511,7 +515,7 @@ export function ConversationPanel({
 
     if (inferredStatus) {
       const candidates = applicationOverview.recentApplications.filter((application) =>
-        ["applied", "interview_in_progress", "draft"].includes(application.status),
+        !application.archivedAt && ["applied", "interview_in_progress", "draft"].includes(application.status),
       );
       const matchedCandidates = candidates.filter((application) =>
         applicationMatchesText(application, text),
@@ -544,7 +548,7 @@ export function ConversationPanel({
     }
 
     const readyJobs = jobOverview.recentJobs.filter(
-      (job) => job.ingestion_status === "succeeded",
+      (job) => !job.archived_at && job.ingestion_status === "succeeded",
     );
 
     if (readyJobs.length !== 1) {
@@ -600,7 +604,7 @@ export function ConversationPanel({
     }
 
     return payload.review?.exportReadiness?.status === "exported"
-      ? "I also exported validated PDF and DOCX files and saved them in Applications and Artifacts."
+      ? "I also exported validated PDF and DOCX files and saved them in Applications and Library."
       : "The editable materials are saved; Applications will show what still needs export.";
   }
 
@@ -688,20 +692,20 @@ export function ConversationPanel({
 
     if (!source) {
       return requestedSourceType === "linkedin"
-        ? "I do not see a saved LinkedIn profile link yet. Paste the LinkedIn URL here, or drop a PDF/screenshots from LinkedIn, and I will turn the readable parts into profile evidence."
+        ? "I do not see a saved LinkedIn profile link yet. Paste the LinkedIn URL here, or drop a PDF/screenshots from LinkedIn, and I will turn the readable parts into career context."
         : "I do not see a saved profile link yet. Paste the link here and I will save it, then try to read what is publicly available.";
     }
 
     if (source.extraction_status === "processing") {
-      return `I found ${formatSourceReference(source)} and it is already being processed. Give me a moment, then refresh or ask me again.`;
+      return `I found ${formatSourceReference(source)} and I’m already reading it. Give me a moment, then refresh or ask me again.`;
     }
 
     if (source.extraction_status === "succeeded") {
       const profileResponse = await processProfileText(
-        `Use the profile evidence already saved from my ${formatSourceTypeForPrompt(source.source_type)} source to identify what is useful for my profile and what is still missing. Keep this grounded in saved profile context.`,
+        `Use the career context already saved from my ${formatSourceTypeForPrompt(source.source_type)} material to identify what is useful for my profile and what is still missing. Keep this grounded in saved profile context.`,
       );
 
-      return `I found ${formatSourceReference(source)} and it has already been read into your profile evidence. ${profileResponse}`;
+      return `I found ${formatSourceReference(source)} and it has already been read into your career context. ${profileResponse}`;
     }
 
     const extraction = await extractSource(source.id);
@@ -997,7 +1001,7 @@ export function ConversationPanel({
   }
 
   async function refreshMasterResumeFromNewEvidence() {
-    setStatus("I’m refreshing your master resume draft with the new evidence.");
+    setStatus("I’m refreshing your master resume with the new career context.");
 
     try {
       const response = await fetch("/api/resume/master", {
@@ -1021,13 +1025,13 @@ export function ConversationPanel({
           errorCode: payload.error?.code ?? "MASTER_RESUME_REFRESH_FAILED",
           errorMessage: payload.error?.message ?? "Master resume refresh failed after source intake.",
           source: "background_refresh_failure",
-          systemResponse: "The profile evidence saved, but the master resume refresh did not complete.",
+          systemResponse: "The career context saved, but the master resume refresh did not complete.",
           title: "Master resume refresh failed",
           userMessage: processingIntent,
         });
         setStatus(
           issueMessage ??
-            "I updated the profile evidence. The master resume can be refreshed from Profile & Resume.",
+            "I updated your career context. The master resume can be refreshed from Profile & Resume.",
         );
         return;
       }
@@ -1038,13 +1042,13 @@ export function ConversationPanel({
       const issueMessage = await logSupportIssue({
         area: "master_resume",
         errorCode: "MASTER_RESUME_REFRESH_EXCEPTION",
-        errorMessage: "Master resume refresh threw an exception after profile evidence intake.",
+        errorMessage: "Master resume refresh threw an exception after career context intake.",
         source: "background_refresh_failure",
-        systemResponse: "The profile evidence saved, but the master resume refresh did not complete.",
+        systemResponse: "The career context saved, but the master resume refresh did not complete.",
         title: "Master resume refresh failed",
         userMessage: processingIntent,
       });
-      setStatus(issueMessage ?? "I updated the profile evidence. The master resume refresh needs another attempt.");
+      setStatus(issueMessage ?? "I updated your career context. The master resume refresh needs another attempt.");
     }
   }
 
@@ -1479,9 +1483,10 @@ function inferProcessingMode(text: string): ProcessingMode {
 function formatActiveViewForMessage(activeView: AppView) {
   const labels: Partial<Record<AppView, string>> = {
     applications: "applications tracker",
-    artifacts: "artifact library",
+    artifacts: "library",
     jobs: "jobs area",
-    knowledgebase: "sources area",
+    knowledgebase: "library",
+    library: "library",
     owner: "owner console",
     profile: "profile cockpit",
     resume: "profile and resume studio",
@@ -1517,8 +1522,8 @@ function formatSourceIntakeReply({
   });
   const sourceRead =
     savedFactCount > 0 || extractedFactCount > 0
-      ? `${label}. I read it and used it to refresh your profile foundation. I will carry that forward into the master resume and role-fit advice.`
-      : `${label}. I saved it as source material. The profile read needs another pass before I change your master profile, so I will keep the source available and retry from the saved copy instead of asking you to upload it again.`;
+      ? `${label}. I read it and used it to refresh your career profile. I will carry that forward into the master resume and role-fit advice.`
+      : `${label}. I saved it in your Library. I need another pass before I change your master profile, so I will retry from the saved copy instead of asking you to upload it again.`;
 
   return [sourceRead, advisorRead, direction, nextQuestion]
     .filter(Boolean)
@@ -1579,7 +1584,7 @@ function cleanPlainChatText(value: string) {
     .replace(/\b(?:Saved|stored)\s+\d+\s+(?:new\s+)?profile\s+details?\.?\s*/gi, "")
     .replace(
       /\bI could not complete the deeper advisor read right now\. Share the resume, role, or profile point again and I will keep it grounded in your career context\.?/gi,
-      "I had trouble reading the saved workspace context for that reply. Ask again and I will use the profile, sources, resume, jobs, applications, and artifacts already saved.",
+      "I hit a context-reading issue on my side. Your saved profile, sources, resume, jobs, applications, and generated files are still intact; I logged enough context for review and will retry from the saved workspace before asking you to repeat anything.",
     )
     .replace(
       /\bProfile intake is unavailable right now\. Please try again\.?/gi,
@@ -2118,22 +2123,22 @@ function buildFileExtractionFailureMessage({
   sourceType: string;
 }) {
   if (sourceType === "image") {
-    return `${fileName} was saved as an image source, but I could not read the visible text yet: ${message} You can retry from Sources, paste the key text here, or drop a clearer screenshot and I will fold it into your profile.`;
+    return `${fileName} was saved as an image source, but I could not read the visible text yet: ${message} You can retry from Library, paste the key text here, or drop a clearer screenshot and I will fold it into your profile.`;
   }
 
   if (sourceType === "pdf") {
-    return `${fileName} was saved as a PDF source, but I could not extract usable text yet: ${message} If it is a scanned PDF, drop screenshots or paste the important sections and I will treat them as source evidence.`;
+    return `${fileName} was saved as a PDF, but I could not read usable career text yet: ${message} If it is a scanned PDF, drop screenshots or paste the important sections and I will add them to your career context.`;
   }
 
   if (sourceType === "docx") {
-    return `${fileName} was saved as a Word source, but I could not extract readable text yet: ${message} You can retry from Sources or paste the resume text here.`;
+    return `${fileName} was saved as a Word file, but I could not read enough text yet: ${message} You can retry from Library or paste the resume text here.`;
   }
 
   if (sourceType === "linkedin") {
-    return `${fileName} was saved as a LinkedIn export source, but I could not extract profile data yet: ${message} LinkedIn archive ZIPs and profile CSV files work best. You can retry from Sources or drop the LinkedIn PDF export instead.`;
+    return `${fileName} was saved as a LinkedIn export source, but I could not extract profile data yet: ${message} LinkedIn archive ZIPs and profile CSV files work best. You can retry from Library or drop the LinkedIn PDF export instead.`;
   }
 
-  return `${fileName} was saved as a source, but I could not extract readable text yet: ${message} You can retry from Sources or paste the important text here.`;
+  return `${fileName} was saved as a source, but I could not extract readable text yet: ${message} You can retry from Library or paste the important text here.`;
 }
 
 function looksLikeExistingSourceRequest(text: string) {
@@ -2424,7 +2429,7 @@ function readFirstName(profileOverview: ProfileOverview, userEmail: string | nul
 
 function buildApplicationFollowUpPrompt(applicationOverview: ApplicationOverview) {
   const followUpApplications = applicationOverview.recentApplications.filter((application) =>
-    ["applied", "interview_in_progress"].includes(application.status),
+    !application.archivedAt && ["applied", "interview_in_progress"].includes(application.status),
   );
 
   if (followUpApplications.length === 0) {
@@ -2457,7 +2462,7 @@ function buildProfileGapPrompt(profileOverview: ProfileOverview) {
 
 function buildJobPrompt(jobOverview: JobOverview) {
   const highFitJob = jobOverview.recentJobs.find(
-    (job) => typeof job.fitSnapshot.score === "number" && job.fitSnapshot.score >= 70,
+    (job) => !job.archived_at && typeof job.fitSnapshot.score === "number" && job.fitSnapshot.score >= 70,
   );
 
   if (!highFitJob) {
@@ -2494,6 +2499,64 @@ function shouldRouteToAdvisor(text: string) {
   return true;
 }
 
+function shouldTreatAsAdvisorReply(text: string, messages: ConversationMessage[]) {
+  if (looksLikeConcreteWorkflowCommand(text) || looksLikeProfileEvidenceToSave(text)) {
+    return false;
+  }
+
+  const lastAssistantMessage = [...messages]
+    .reverse()
+    .find((item) => item.speaker === "assistant" && item.text.trim().length > 0)?.text;
+
+  if (!lastAssistantMessage) {
+    return false;
+  }
+
+  const normalizedAssistant = lastAssistantMessage.toLowerCase();
+  const normalizedText = text.toLowerCase().replace(/\s+/g, " ").trim();
+  const wordCount = normalizedText.split(" ").filter(Boolean).length;
+
+  if (looksLikeAdvisorQuestion(text)) {
+    return true;
+  }
+
+  const assistantAskedOpenQuestion =
+    normalizedAssistant.includes("?") ||
+    /\b(which|what|where|would you like|do you want|does this|should we|tell me|share)\b/.test(
+      normalizedAssistant,
+    );
+
+  if (!assistantAskedOpenQuestion) {
+    return false;
+  }
+
+  return wordCount <= 28 || /\b(direction|lane|path|target|role|focus|yes|no|that one|this one)\b/.test(normalizedText);
+}
+
+function looksLikeProfileEvidenceToSave(text: string) {
+  const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
+
+  if (normalized.length < 20 || looksLikeAdvisorQuestion(text)) {
+    return false;
+  }
+
+  const hasCareerSubject = /\b(i|i'm|i am|i've|i have|my|we|our)\b/.test(normalized);
+  const hasEvidenceVerb =
+    /\b(led|built|managed|owned|delivered|created|scaled|improved|reduced|launched|implemented|served|drove|grew|saved|increased|decreased|transformed|ran|headed|directed|responsible|accountable|oversaw|worked)\b/.test(
+      normalized,
+    );
+  const hasOutcomeOrScope =
+    /\b(%|percent|revenue|cost|budget|team|people|users|customers|markets|regions|countries|portfolio|p&l|profit|margin|growth|cagr|savings|m|million|billion|kpi|metrics)\b/.test(
+      normalized,
+    );
+  const hasResumeStructure =
+    /\b(experience|education|certification|skill|skills|company|role|title|from\s+\d{4}|since\s+\d{4}|present)\b/.test(
+      normalized,
+    );
+
+  return (hasCareerSubject && hasEvidenceVerb) || (hasEvidenceVerb && hasOutcomeOrScope) || hasResumeStructure;
+}
+
 function looksLikeConcreteWorkflowCommand(text: string) {
   return (
     looksLikeMasterResumeExportRequest(text) ||
@@ -2510,6 +2573,7 @@ function mapActiveViewToAdvisorSurface(activeView: AppView) {
     artifacts: "artifacts",
     jobs: "jobs",
     knowledgebase: "sources",
+    library: "sources",
     owner: "owner",
     profile: "profile",
     resume: "resume",
@@ -2539,7 +2603,7 @@ function shouldProcessProfileRemainder({
   }
 
   if (urls.length === 0) {
-    return true;
+    return looksLikeProfileEvidenceToSave(textWithoutUrls);
   }
 
   const normalized = textWithoutUrls.toLowerCase().replace(/\s+/g, " ").trim();
@@ -2549,7 +2613,7 @@ function shouldProcessProfileRemainder({
     return false;
   }
 
-  return true;
+  return looksLikeProfileEvidenceToSave(textWithoutUrls);
 }
 
 function looksLikeUrlInstruction(text: string) {
@@ -2803,7 +2867,7 @@ function getUnsupportedFileReason(file: File) {
   }
 
   if (extension === "heic" || extension === "heif" || mimeType === "image/heic" || mimeType === "image/heif") {
-    return `${file.name} is a HEIC/HEIF image. Convert it to JPG, PNG, or WebP and drop it here so OCR can read it cleanly.`;
+    return `${file.name} is a HEIC/HEIF image. Convert it to JPG, PNG, or WebP and drop it here so Pramania can read it cleanly.`;
   }
 
   return null;

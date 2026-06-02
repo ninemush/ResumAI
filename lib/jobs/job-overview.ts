@@ -14,6 +14,7 @@ export type JobOverview = {
     ingestion_status: string;
     failure_reason: string | null;
     review_status: string;
+    archived_at: string | null;
     created_at: string;
     fitSnapshot: {
       matchedKeywords: string[];
@@ -23,28 +24,37 @@ export type JobOverview = {
     fitAnalysis: JobFitAnalysis;
   }[];
   summary: {
+    active: number;
+    archived: number;
     identified: number;
     readyForReview: number;
     failed: number;
   };
 };
 
+type RawJob = {
+  archived_at?: string | null;
+  company: string | null;
+  created_at: string;
+  extracted_text: string | null;
+  failure_reason: string | null;
+  id: string;
+  ingestion_status: string;
+  job_url: string;
+  resolved_url: string | null;
+  review_status?: string | null;
+  title: string | null;
+};
+
 export async function getJobOverview(userId: string): Promise<JobOverview> {
-  const supabase = await createClient();
-  const [{ data: jobs }, fitContext] = await Promise.all([
-    supabase
-      .from("job_ingestions")
-      .select(
-        "id, job_url, resolved_url, title, company, extracted_text, ingestion_status, failure_reason, review_status, created_at",
-      )
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(50),
+  const [jobs, fitContext] = await Promise.all([
+    readJobs(userId),
     readUserFitContext(userId),
   ]);
+  const activeJobs = jobs.filter((job) => !job.archived_at);
 
   return {
-    recentJobs: (jobs ?? []).map((job) => {
+    recentJobs: jobs.map((job) => {
       const fitAnalysis = analyzeJobFit({
         jobText: job.extracted_text,
         masterResume: fitContext.masterResume,
@@ -53,7 +63,8 @@ export async function getJobOverview(userId: string): Promise<JobOverview> {
 
       return {
         ...job,
-        review_status: "review_status" in job ? String(job.review_status) : "needs_review",
+        archived_at: job.archived_at ?? null,
+        review_status: job.review_status ? String(job.review_status) : "needs_review",
         fitAnalysis,
         fitSnapshot: {
           matchedKeywords: fitAnalysis.matchedKeywords,
@@ -63,14 +74,50 @@ export async function getJobOverview(userId: string): Promise<JobOverview> {
       };
     }),
     summary: {
-      identified: jobs?.length ?? 0,
-      readyForReview:
-        jobs?.filter(
-          (job) =>
-            job.ingestion_status === "succeeded" &&
-            (!("review_status" in job) || job.review_status === "needs_review"),
-        ).length ?? 0,
-      failed: jobs?.filter((job) => job.ingestion_status === "failed").length ?? 0,
+      active: activeJobs.length,
+      archived: jobs.length - activeJobs.length,
+      identified: activeJobs.length,
+      readyForReview: activeJobs.filter(
+        (job) =>
+          job.ingestion_status === "succeeded" &&
+          (!("review_status" in job) || job.review_status === "needs_review"),
+      ).length,
+      failed: activeJobs.filter((job) => job.ingestion_status === "failed").length,
     },
   };
+}
+
+async function readJobs(userId: string): Promise<RawJob[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("job_ingestions")
+    .select(
+      "id, job_url, resolved_url, title, company, extracted_text, ingestion_status, failure_reason, review_status, archived_at, created_at",
+    )
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (!error) {
+    return data ?? [];
+  }
+
+  if (!error.message.toLowerCase().includes("archived_at")) {
+    throw new Error("JOB_OVERVIEW_READ_FAILED");
+  }
+
+  const fallback = await supabase
+    .from("job_ingestions")
+    .select(
+      "id, job_url, resolved_url, title, company, extracted_text, ingestion_status, failure_reason, review_status, created_at",
+    )
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (fallback.error) {
+    throw new Error("JOB_OVERVIEW_READ_FAILED");
+  }
+
+  return (fallback.data ?? []).map((job) => ({ ...job, archived_at: null }));
 }

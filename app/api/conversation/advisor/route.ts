@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       {
         error: {
           message:
-            "I hit a processing issue while reading the saved workspace context. I still have your profile, sources, jobs, applications, and artifacts on record; try the question again in a moment and I will use what is already saved rather than asking you to repeat it.",
+            "I hit a workspace reading issue on my side. Your profile, library, jobs, applications, and generated files are still intact, and I have enough context logged for review without asking you to repeat yourself.",
         },
       },
       { status: 500 },

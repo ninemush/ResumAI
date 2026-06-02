@@ -27,8 +27,14 @@ export const updateApplicationStatusSchema = z.object({
   source: z.enum(["chat", "ui", "system"]).default("ui"),
 });
 
+export const updateApplicationArchiveStateSchema = z.object({
+  applicationId: z.string().uuid(),
+  archived: z.boolean(),
+});
+
 export type ApplicationCommandResult = {
   application: {
+    archivedAt?: string | null;
     id: string;
     companyName: string;
     jobTitle: string | null;
@@ -68,7 +74,7 @@ export async function createApplicationFromJob(
 
   const { data: existingApplication, error: existingError } = await supabase
     .from("applications")
-    .select("id, company_name, job_title, job_url, status")
+    .select("id, company_name, job_title, job_url, status, archived_at")
     .eq("user_id", user.id)
     .eq("job_ingestion_id", job.id)
     .maybeSingle();
@@ -78,6 +84,25 @@ export async function createApplicationFromJob(
   }
 
   if (existingApplication) {
+    if (existingApplication.archived_at) {
+      const { data: restoredApplication, error: restoreError } = await supabase
+        .from("applications")
+        .update({ archived_at: null })
+        .eq("id", existingApplication.id)
+        .eq("user_id", user.id)
+        .select("id, company_name, job_title, job_url, status, archived_at")
+        .single();
+
+      if (restoreError || !restoredApplication) {
+        throw new Error("APPLICATION_RESTORE_FAILED");
+      }
+
+      return {
+        application: mapApplication(restoredApplication),
+        created: false,
+      };
+    }
+
     return {
       application: mapApplication(existingApplication),
       created: false,
@@ -106,7 +131,7 @@ export async function createApplicationFromJob(
       job_ingestion_id: job.id,
       status: parsed.status,
     })
-    .select("id, company_name, job_title, job_url, status")
+    .select("id, company_name, job_title, job_url, status, archived_at")
     .single();
 
   if (applicationError || !application) {
@@ -137,6 +162,37 @@ export async function createApplicationFromJob(
   return {
     application: mapApplication(application),
     created: true,
+  };
+}
+
+export async function updateApplicationArchiveState(
+  input: z.input<typeof updateApplicationArchiveStateSchema>,
+): Promise<ApplicationCommandResult> {
+  const parsed = updateApplicationArchiveStateSchema.parse(input);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const { data, error } = await supabase
+    .from("applications")
+    .update({ archived_at: parsed.archived ? new Date().toISOString() : null })
+    .eq("id", parsed.applicationId)
+    .eq("user_id", user.id)
+    .select("id, company_name, job_title, job_url, status, archived_at")
+    .single();
+
+  if (error || !data) {
+    throw new Error("APPLICATION_NOT_FOUND");
+  }
+
+  return {
+    application: mapApplication(data),
+    created: false,
   };
 }
 
@@ -177,6 +233,7 @@ export async function updateApplicationStatus(
 }
 
 function mapApplication(application: {
+  archived_at?: string | null;
   id: string;
   company_name: string;
   job_title: string | null;
@@ -184,6 +241,7 @@ function mapApplication(application: {
   status: z.infer<typeof applicationStatusSchema>;
 }) {
   return {
+    archivedAt: application.archived_at ?? null,
     id: application.id,
     companyName: application.company_name,
     jobTitle: application.job_title,

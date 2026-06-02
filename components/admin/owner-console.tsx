@@ -36,11 +36,20 @@ type PromoCodeRow = {
   redeemedCount: number;
 };
 
+type OperatingAction = {
+  body: string;
+  label: string;
+  title: string;
+  targetTab?: "errors" | "outcomes" | "users";
+  targetRootCause?: string | null;
+};
+
 const periodOptions = [
   { label: "Today", value: 1 },
   { label: "7 days", value: 7 },
   { label: "30 days", value: 30 },
   { label: "90 days", value: 90 },
+  { label: "All time", value: 0 },
 ];
 
 export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
@@ -90,6 +99,15 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   function openRootCause(rootCause: string) {
     setSelectedRootCause(rootCause);
     setActiveTab("errors");
+  }
+
+  function openOperatingAction(action: OperatingAction) {
+    if (!action.targetTab) {
+      return;
+    }
+
+    setSelectedRootCause(action.targetTab === "errors" ? action.targetRootCause ?? null : null);
+    setActiveTab(action.targetTab);
   }
 
   async function loadPeriod(nextPeriodDays: number) {
@@ -253,9 +271,12 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         <MetricCard
           icon={AlertTriangle}
           label="Fix required"
-          onClick={() => setActiveTab("errors")}
+          onClick={() => {
+            setSelectedRootCause(null);
+            setActiveTab("errors");
+          }}
           value={metrics.systemHealth.fixRequired}
-          detail={`${metrics.errorDetails.length} open signals across app, intake, and jobs`}
+          detail={`${metrics.errorDetails.length} open issues across app, intake, and jobs`}
           tone={metrics.systemHealth.fixRequired > 0 ? "warning" : "normal"}
         />
         <MetricCard
@@ -268,13 +289,28 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       </section>
 
       <section className="owner-action-strip" aria-label="Recommended operating actions">
-        {buildOperatingActions(metrics).map((action) => (
-          <article key={action.title}>
-            <span>{action.label}</span>
-            <strong>{action.title}</strong>
-            <p>{action.body}</p>
-          </article>
-        ))}
+        {buildOperatingActions(metrics, rootCauseCounts).map((action) =>
+          action.targetTab ? (
+            <button
+              aria-label={`${action.label}: ${action.title}. Open details.`}
+              className="owner-operating-action"
+              key={action.title}
+              onClick={() => openOperatingAction(action)}
+              type="button"
+            >
+              <span>{action.label}</span>
+              <strong>{action.title}</strong>
+              <p>{action.body}</p>
+              <small>Open details</small>
+            </button>
+          ) : (
+            <article className="owner-operating-action" key={action.title}>
+              <span>{action.label}</span>
+              <strong>{action.title}</strong>
+              <p>{action.body}</p>
+            </article>
+          ),
+        )}
       </section>
 
       <nav className="owner-tab-list" aria-label="Owner console sections">
@@ -323,7 +359,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           <SectionHeading
             eyebrow="Users"
             title="User operating list"
-            body="Use this to spot stalled onboarding, users with repeated failures, and high-intent users who may need support."
+            body="Use this to spot stalled onboarding, credit constraints, users with repeated failures, and high-intent users who may need support."
           />
           <label className="owner-search">
             <Search size={16} aria-hidden="true" />
@@ -338,7 +374,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               <span>User</span>
               <span>Activity</span>
               <span>Profile</span>
-              <span>Usage</span>
+              <span>Credits</span>
+              <span>Workspace</span>
               <span>Support</span>
             </div>
             {filteredUsers.map((user) => (
@@ -354,6 +391,13 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                 <span>
                   <strong>{formatLabel(user.profileStatus ?? "missing")}</strong>
                   <small>{user.sources} sources</small>
+                </span>
+                <span>
+                  <strong>{user.creditsAvailable} available</strong>
+                  <small>
+                    {user.creditsUsed} used {periodDays === 0 ? "all time" : `in ${periodDays}d`} ·{" "}
+                    {user.creditsUsedAllTime} lifetime
+                  </small>
                 </span>
                 <span>
                   <strong>{user.applications} applications</strong>
@@ -640,7 +684,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           ) : (
             <p className="empty-state">
               {selectedRootCause
-                ? `No support tickets linked to ${formatLabel(selectedRootCause)} in this period. Error signals are still visible in System health.`
+                ? `No support tickets linked to ${formatLabel(selectedRootCause)} in this period. Related app issues are still visible in System health.`
                 : "No support issues in this period. Chat failures and user-reported issues will appear here with supporting logs."}
             </p>
           )}
@@ -1134,7 +1178,7 @@ function suggestErrorFix(error: OwnerMetrics["errorDetails"][number]) {
   }
 
   if (rootCause.includes("ocr") || rootCause.includes("extract")) {
-    return "Review extraction logs, add retry/fallback, and test the source type end to end.";
+    return "Review file-reading logs, add retry/fallback, and test the source type end to end.";
   }
 
   if (rootCause.includes("auth") || rootCause.includes("permission")) {
@@ -1171,14 +1215,23 @@ function Pill({ children, tone }: { children: ReactNode; tone: "danger" | "neutr
   return <span className={tone === "danger" ? "owner-pill danger" : "owner-pill"}>{children}</span>;
 }
 
-function buildOperatingActions(metrics: OwnerMetrics) {
-  const actions = [];
+function buildOperatingActions(metrics: OwnerMetrics, rootCauseCounts: Record<string, number>): OperatingAction[] {
+  const actions: OperatingAction[] = [];
+  const topRootCause = Object.entries(rootCauseCounts).sort(([, left], [, right]) => right - left)[0]?.[0] ?? null;
+  const latestFixRequired = metrics.errorDetails.find((error) => error.fixRequired);
 
   if (metrics.systemHealth.fixRequired > 0) {
+    const fixCount = metrics.systemHealth.fixRequired;
+    const latestDetail = latestFixRequired
+      ? ` Latest: ${formatLabel(latestFixRequired.rootCause)} in ${formatLabel(latestFixRequired.area)}.`
+      : "";
+
     actions.push({
-      body: "Review recurring failures before adding new intake or job features. These are direct trust leaks.",
+      body: `Counts unresolved app errors that were marked as needing a product or code fix.${latestDetail} Open the error detail to see suggested fixes, linked support context, and owner status.`,
       label: "Reliability",
-      title: `${metrics.systemHealth.fixRequired} fixes require owner review`,
+      targetRootCause: topRootCause,
+      targetTab: "errors",
+      title: `${fixCount} unresolved ${fixCount === 1 ? "fix needs" : "fixes need"} owner review`,
     });
   }
 
@@ -1186,6 +1239,7 @@ function buildOperatingActions(metrics: OwnerMetrics) {
     actions.push({
       body: "New signups are not all returning or generating meaningful activity. Check onboarding and first profile flow.",
       label: "Activation",
+      targetTab: "users",
       title: "Signup-to-activation needs attention",
     });
   }
@@ -1194,6 +1248,7 @@ function buildOperatingActions(metrics: OwnerMetrics) {
     actions.push({
       body: "Low interview conversion means targeting, resume quality, or follow-up tracking may need tightening.",
       label: "Outcomes",
+      targetTab: "outcomes",
       title: "Interview rate is below launch target",
     });
   }

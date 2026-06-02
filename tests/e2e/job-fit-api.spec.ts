@@ -22,3 +22,18 @@ test("requires authentication before updating job review status", async ({ reque
   expect(response.status()).toBe(401);
   expect(payload.error.code).toBe("auth.required");
 });
+
+test("requires authentication before archiving a job", async ({ request }) => {
+  const response = await request.patch(
+    "/api/jobs/00000000-0000-4000-8000-000000000000/archive",
+    {
+      data: {
+        archived: true,
+      },
+    },
+  );
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});

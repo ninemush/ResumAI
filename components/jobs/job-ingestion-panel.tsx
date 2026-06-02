@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, CircleHelp, ExternalLink, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  Archive,
+  CheckCircle2,
+  CircleHelp,
+  ExternalLink,
+  RefreshCcw,
+  Sparkles,
+} from "lucide-react";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 
 type JobIngestionPanelProps = {
@@ -13,10 +21,12 @@ type JobIngestionPanelProps = {
 const jobFilters = ["All", "Ready", "Accepted", "Rejected", "Needs attention"] as const;
 
 type JobFilter = (typeof jobFilters)[number];
+type ArchiveView = "active" | "archived";
 
 export function JobIngestionPanel({ overview, showEmptyState = false }: JobIngestionPanelProps) {
   const router = useRouter();
   const [activeJobFilter, setActiveJobFilter] = useState<JobFilter>("All");
+  const [archiveView, setArchiveView] = useState<ArchiveView>("active");
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -25,8 +35,11 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
     return null;
   }
 
-  const visibleJobs = overview.recentJobs.filter((job) => jobMatchesFilter(job, activeJobFilter));
-  const filterCounts = buildJobFilterCounts(overview.recentJobs);
+  const jobsInArchiveView = overview.recentJobs.filter((job) =>
+    archiveView === "archived" ? Boolean(job.archived_at) : !job.archived_at,
+  );
+  const visibleJobs = jobsInArchiveView.filter((job) => jobMatchesFilter(job, activeJobFilter));
+  const filterCounts = buildJobFilterCounts(jobsInArchiveView);
 
   async function logApplication(jobId: string) {
     setPendingJobId(jobId);
@@ -89,7 +102,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       return `${materialPayload.summary ?? "Targeted materials generated."} ${exportPayload.error?.message ?? "Export needs another attempt from Applications."}`;
     }
 
-    return `${materialPayload.summary ?? "Targeted materials generated."} Validated PDF and DOCX files are ready in Applications and Artifacts.`;
+    return `${materialPayload.summary ?? "Targeted materials generated."} Validated PDF and DOCX files are ready in Applications and Library.`;
   }
 
   async function updateReviewStatus(jobId: string, reviewStatus: "accepted" | "rejected") {
@@ -120,6 +133,30 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
     }
   }
 
+  async function updateArchiveState(jobId: string, archived: boolean) {
+    setPendingJobId(jobId);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/archive`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to update that job.");
+        return;
+      }
+
+      setMessage(archived ? "Archived that role. It is out of the active queue." : "Restored that role to active review.");
+      router.refresh();
+    } finally {
+      setPendingJobId(null);
+    }
+  }
+
   return (
     <section className="jobs-panel" aria-label="Recent job posts">
       <div className="section-heading">
@@ -132,19 +169,39 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       </div>
 
       {overview.recentJobs.length > 0 ? (
-        <div className="record-filter-strip" aria-label="Job review filters">
-          {jobFilters.map((filter) => (
+        <div className="record-list-controls">
+          <div className="record-view-toggle" aria-label="Job archive view">
             <button
-              aria-pressed={activeJobFilter === filter}
-              className={`record-filter-chip ${activeJobFilter === filter ? "active" : ""}`}
-              key={filter}
-              onClick={() => setActiveJobFilter(filter)}
+              aria-pressed={archiveView === "active"}
+              className={`record-view-button ${archiveView === "active" ? "active" : ""}`}
+              onClick={() => setArchiveView("active")}
               type="button"
             >
-              <strong>{filterCounts[filter]}</strong>
-              <span>{filter}</span>
+              Active <strong>{overview.summary.active}</strong>
             </button>
-          ))}
+            <button
+              aria-pressed={archiveView === "archived"}
+              className={`record-view-button ${archiveView === "archived" ? "active" : ""}`}
+              onClick={() => setArchiveView("archived")}
+              type="button"
+            >
+              Archived <strong>{overview.summary.archived}</strong>
+            </button>
+          </div>
+          <div className="record-filter-strip" aria-label="Job review filters">
+            {jobFilters.map((filter) => (
+              <button
+                aria-pressed={activeJobFilter === filter}
+                className={`record-filter-chip ${activeJobFilter === filter ? "active" : ""}`}
+                key={filter}
+                onClick={() => setActiveJobFilter(filter)}
+                type="button"
+              >
+                <strong>{filterCounts[filter]}</strong>
+                <span>{filter}</span>
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -159,7 +216,14 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
             </div>
           </div>
         ) : null}
-        {overview.recentJobs.length > 0 && visibleJobs.length === 0 ? (
+        {overview.recentJobs.length > 0 && jobsInArchiveView.length === 0 ? (
+          <p className="empty-state">
+            {archiveView === "archived"
+              ? "No archived roles yet."
+              : "No active roles right now. Archived roles are still available from the Archived view."}
+          </p>
+        ) : null}
+        {jobsInArchiveView.length > 0 && visibleJobs.length === 0 ? (
           <p className="empty-state">No roles match this filter yet.</p>
         ) : null}
         {visibleJobs.length > 0 ? (
@@ -218,7 +282,21 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                 <ExternalLink size={14} aria-hidden="true" />
                 Open
               </a>
-              {job.ingestion_status === "succeeded" ? (
+              <button
+                className="secondary-action compact-action"
+                disabled={pendingJobId === job.id}
+                onClick={() => updateArchiveState(job.id, !job.archived_at)}
+                title={job.archived_at ? "Move this role back to the active queue" : "Archive this role"}
+                type="button"
+              >
+                {job.archived_at ? (
+                  <RefreshCcw size={14} aria-hidden="true" />
+                ) : (
+                  <Archive size={14} aria-hidden="true" />
+                )}
+                {job.archived_at ? "Restore" : "Archive"}
+              </button>
+              {!job.archived_at && job.ingestion_status === "succeeded" ? (
                 <button
                   className="secondary-action compact-action"
                   disabled={pendingJobId === job.id}
@@ -255,24 +333,39 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                   />
                 </div>
                 <div className="record-action-strip">
-                  <button
-                    className="secondary-action compact-action"
-                    disabled={pendingJobId === job.id}
-                    onClick={() => updateReviewStatus(job.id, "rejected")}
-                    title="Remove this role from active review"
-                    type="button"
-                  >
-                    Reject
-                  </button>
-                  <button
-                    className="secondary-action compact-action"
-                    disabled={pendingJobId === job.id}
-                    onClick={() => updateReviewStatus(job.id, "accepted")}
-                    title="Keep this role as worth pursuing"
-                    type="button"
-                  >
-                    Accept
-                  </button>
+                  {job.archived_at ? (
+                    <button
+                      className="secondary-action compact-action"
+                      disabled={pendingJobId === job.id}
+                      onClick={() => updateArchiveState(job.id, false)}
+                      title="Move this role back to the active queue"
+                      type="button"
+                    >
+                      <RefreshCcw size={14} aria-hidden="true" />
+                      Restore
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        className="secondary-action compact-action"
+                        disabled={pendingJobId === job.id}
+                        onClick={() => updateReviewStatus(job.id, "rejected")}
+                        title="Remove this role from active review"
+                        type="button"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        className="secondary-action compact-action"
+                        disabled={pendingJobId === job.id}
+                        onClick={() => updateReviewStatus(job.id, "accepted")}
+                        title="Keep this role as worth pursuing"
+                        type="button"
+                      >
+                        Accept
+                      </button>
+                    </>
+                  )}
                 </div>
                 {job.failure_reason ? (
                   <p className="source-failure">{formatFailureReason(job.failure_reason)}</p>
@@ -302,13 +395,13 @@ function formatReviewStatus(status: string) {
 
 function formatIngestionStatus(status: string) {
   const labels: Record<string, string> = {
-    failed: "Needs attention",
-    pending: "Queued",
+    failed: "Couldn’t read",
+    pending: "Reading",
     processing: "Reading",
     succeeded: "Ready",
   };
 
-  return labels[status] ?? status.replace("_", " ");
+  return labels[status] ?? "Needs cleaner link";
 }
 
 function FitBucket({
@@ -367,7 +460,7 @@ function formatFailureReason(reason: string) {
     JOB_URL_BLOCKED: "This URL is blocked for safety.",
   };
 
-  return friendlyMessages[reason] ?? "Ingestion needs another attempt.";
+  return friendlyMessages[reason] ?? "This job post needs another read attempt.";
 }
 
 function jobMatchesFilter(job: JobOverview["recentJobs"][number], filter: JobFilter) {

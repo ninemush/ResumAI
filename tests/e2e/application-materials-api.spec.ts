@@ -17,3 +17,15 @@ test("requires authentication before exporting material files", async ({ request
   expect(response.status()).toBe(401);
   expect(payload.error.code).toBe("auth.required");
 });
+
+test("requires authentication before archiving an application", async ({ request }) => {
+  const response = await request.patch(`/api/applications/${applicationId}/archive`, {
+    data: {
+      archived: true,
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});

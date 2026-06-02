@@ -111,7 +111,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.unsupported_type",
-        message: "TXT, PDF, Word, supported images, and public profile link extraction are available now.",
+        message: "TXT, PDF, Word, supported images, and public profile links are available now.",
         status: 422,
       };
     }
@@ -147,7 +147,7 @@ function toApiError(error: unknown) {
       return {
         category: "conflict",
         code: "source.already_processing",
-        message: "That source is already being processed.",
+        message: "That source is already being read.",
         status: 409,
       };
     }
@@ -156,7 +156,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.text_file_too_large",
-        message: "TXT extraction currently supports files up to 1 MB.",
+        message: "TXT reading currently supports files up to 1 MB.",
         status: 413,
       };
     }
@@ -165,7 +165,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.pdf_file_too_large",
-        message: "PDF extraction currently supports files up to 15 MB.",
+        message: "PDF reading currently supports files up to 15 MB.",
         status: 413,
       };
     }
@@ -174,7 +174,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.pdf_page_limit_exceeded",
-        message: "PDF extraction currently supports documents up to 15 pages.",
+        message: "PDF reading currently supports documents up to 15 pages.",
         status: 413,
       };
     }
@@ -183,7 +183,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.pdf_text_empty",
-        message: "I tried text extraction and PDF vision extraction, but could not find readable career text in that PDF.",
+        message: "I tried reading the PDF in two ways, but could not find usable career text in it.",
         status: 422,
       };
     }
@@ -211,7 +211,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.docx_file_too_large",
-        message: "Word document extraction currently supports files up to 15 MB.",
+        message: "Word document reading currently supports files up to 15 MB.",
         status: 413,
       };
     }
@@ -238,7 +238,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.image_ocr_unsupported_mime_type",
-        message: "Image OCR currently supports JPG, PNG, and WebP files.",
+        message: "Image reading currently supports JPG, PNG, and WebP files.",
         status: 422,
       };
     }
@@ -247,7 +247,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.image_ocr_file_too_large",
-        message: "Image OCR currently supports files up to 10 MB.",
+        message: "Image reading currently supports files up to 10 MB.",
         status: 413,
       };
     }
@@ -356,7 +356,7 @@ function toApiError(error: unknown) {
 
   return {
     category: "server",
-    code: "source.extraction_failed",
+    code: "source.reading_failed",
     message: "Unable to extract that source right now.",
     status: 500,
   };
@@ -364,7 +364,7 @@ function toApiError(error: unknown) {
 
 function getLinkedInPublicProfileSearchApiError(code: string) {
   const retryMessage =
-    "I could not complete the public LinkedIn profile read right now. The link is saved, and you can retry from Sources. I can only use information visible on the public web; if the profile is private or not indexed, upload a LinkedIn PDF/export or paste the visible profile text.";
+    "I could not complete the public LinkedIn profile read right now. The link is saved, and you can retry from Library. I can only use information visible on the public web; if the profile is private or not indexed, upload a LinkedIn PDF/export or paste the visible profile text.";
 
   const errors: Record<
     string,
@@ -455,58 +455,58 @@ function getPdfExtractionApiError(code: string) {
   > = {
     PDF_TEXT_EXTRACTION_FAILED: {
       category: "server",
-      code: "source.pdf_text_extraction_failed",
-      message: "The PDF parser could not read this file, and fallback extraction did not complete.",
+      code: "source.pdf_text_reading_failed",
+      message: "I could not read this PDF cleanly, and the backup read did not complete.",
       status: 502,
     },
     PDF_AI_EXTRACT_FAILED: {
       category: "server",
       code: "source.pdf_ai_extract_failed",
-      message: "PDF vision extraction failed after retrying. The PDF is saved.",
+      message: "I could not read this PDF after retrying. The PDF is saved.",
       status: 502,
     },
     PDF_AI_PROVIDER_ERROR: {
       category: "server",
       code: "source.pdf_ai_provider_error",
-      message: "PDF vision extraction returned a provider error after retrying. The PDF is saved.",
+      message: "Reading this PDF hit a service error after retrying. The PDF is saved.",
       status: 502,
     },
     PDF_AI_INCOMPLETE_RESPONSE: {
       category: "server",
       code: "source.pdf_ai_incomplete_response",
-      message: "PDF vision extraction returned an incomplete response after retrying. The PDF is saved.",
+      message: "Reading this PDF returned incomplete text after retrying. The PDF is saved.",
       status: 502,
     },
     PDF_AI_PROVIDER_REJECTED_FILE: {
       category: "validation",
       code: "source.pdf_ai_provider_rejected_file",
-      message: "PDF vision extraction could not process this file. The PDF is saved.",
+      message: "I could not process this PDF. The PDF is saved.",
       status: 422,
     },
     PDF_AI_PROVIDER_TEMPORARY_FAILURE: {
       category: "server",
       code: "source.pdf_ai_provider_temporary_failure",
-      message: "PDF vision extraction is temporarily unavailable after retrying. The PDF is saved.",
+      message: "PDF reading is temporarily unavailable after retrying. The PDF is saved.",
       status: 502,
     },
     PDF_AI_PROVIDER_UNAVAILABLE: {
       category: "server",
       code: "source.pdf_ai_provider_unavailable",
-      message: "PDF vision extraction could not be reached after retrying. The PDF is saved.",
+      message: "PDF reading could not be reached after retrying. The PDF is saved.",
       status: 502,
     },
     PDF_AI_PROVIDER_AUTH_FAILED: {
       category: "server",
       code: "source.pdf_ai_provider_auth_failed",
-      message: "PDF vision extraction is not configured correctly. The PDF is saved.",
+      message: "PDF reading needs an owner-side configuration check. The PDF is saved.",
       status: 500,
     },
   };
 
   return errors[code] ?? {
     category: "server",
-    code: "source.pdf_extraction_failed",
-    message: "Unable to extract that PDF right now. The PDF is saved.",
+    code: "source.pdf_reading_failed",
+    message: "Unable to read that PDF right now. The PDF is saved.",
     status: 500,
   };
 }
@@ -524,7 +524,7 @@ function getLinkedInArchiveApiError(code: string) {
     LINKEDIN_ARCHIVE_FILE_TOO_LARGE: {
       category: "validation",
       code: "source.linkedin_archive_file_too_large",
-      message: "LinkedIn archive extraction currently supports files up to 25 MB.",
+      message: "LinkedIn archive reading currently supports files up to 25 MB.",
       status: 413,
     },
     LINKEDIN_ARCHIVE_INVALID_ZIP: {
@@ -576,44 +576,44 @@ function getImageOcrApiError(code: string) {
       category: "validation",
       code: "source.image_ocr_text_empty",
       message:
-        "I retried OCR but could not find readable career text in that image. The image is saved.",
+        "I retried reading the image but could not find usable career text. The image is saved.",
       status: 422,
     },
     IMAGE_OCR_PROVIDER_ERROR: {
       category: "server",
       code: "source.image_ocr_provider_error",
-      message: "OCR returned a provider error after retrying. The image is saved.",
+      message: "Image reading hit a service error after retrying. The image is saved.",
       status: 502,
     },
     IMAGE_OCR_INCOMPLETE_RESPONSE: {
       category: "server",
       code: "source.image_ocr_incomplete_response",
-      message: "OCR returned an incomplete response after retrying. The image is saved.",
+      message: "Image reading returned incomplete text after retrying. The image is saved.",
       status: 502,
     },
     IMAGE_OCR_PROVIDER_REJECTED_IMAGE: {
       category: "validation",
       code: "source.image_ocr_provider_rejected_image",
       message:
-        "OCR could not process this image format/content after retrying. The image is saved.",
+        "I could not process this image after retrying. The image is saved.",
       status: 422,
     },
     IMAGE_OCR_PROVIDER_TEMPORARY_FAILURE: {
       category: "server",
       code: "source.image_ocr_provider_temporary_failure",
-      message: "OCR is temporarily unavailable after retrying. The image is saved.",
+      message: "Image reading is temporarily unavailable after retrying. The image is saved.",
       status: 502,
     },
     IMAGE_OCR_PROVIDER_UNAVAILABLE: {
       category: "server",
       code: "source.image_ocr_provider_unavailable",
-      message: "OCR could not be reached after retrying. The image is saved.",
+      message: "Image reading could not be reached after retrying. The image is saved.",
       status: 502,
     },
     IMAGE_OCR_PROVIDER_AUTH_FAILED: {
       category: "server",
       code: "source.image_ocr_provider_auth_failed",
-      message: "OCR is not configured correctly. The image is saved.",
+      message: "Image reading needs an owner-side configuration check. The image is saved.",
       status: 500,
     },
   };
@@ -621,7 +621,7 @@ function getImageOcrApiError(code: string) {
   return errors[code] ?? {
     category: "server",
     code: "source.image_ocr_failed",
-    message: "Image OCR is unavailable right now. The image is saved.",
+    message: "Image reading is unavailable right now. The image is saved.",
     status: 502,
   };
 }

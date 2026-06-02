@@ -5,6 +5,7 @@ import {
   Building2,
   CheckCircle2,
   Download,
+  Edit3,
   ExternalLink,
   FileText,
   Plus,
@@ -46,6 +47,7 @@ export function MasterResumePanel({
   const [message, setMessage] = useState<string | null>(null);
   const [variantFocus, setVariantFocus] = useState("");
   const [isGeneratingVariant, setIsGeneratingVariant] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const isDirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(savedDraft),
     [draft, savedDraft],
@@ -206,6 +208,7 @@ export function MasterResumePanel({
       setCurrentOverview(payload.overview);
       setDraft(payload.overview.latestResume?.content ?? draft);
       setSavedDraft(payload.overview.latestResume?.content ?? draft);
+      setIsEditing(false);
       setMessage("Saved master resume edits.");
       router.refresh();
     } finally {
@@ -236,7 +239,7 @@ export function MasterResumePanel({
       setCurrentOverview(payload.overview);
       setDraft(payload.overview.latestResume?.content ?? draft);
       setSavedDraft(payload.overview.latestResume?.content ?? draft);
-      setMessage("Exported validated master resume PDF and DOCX files.");
+      setMessage("Your master resume PDF and DOCX are ready to download.");
       router.refresh();
     } finally {
       setIsExporting(false);
@@ -254,10 +257,475 @@ export function MasterResumePanel({
         </p>
       </div>
 
+      {message ? <p className="system-note success">{message}</p> : null}
+
+      {draft ? (
+        <section className="materials-review master-resume-editor resume-studio-surface" aria-label="Master resume editor">
+          <div className="materials-review-header resume-document-toolbar">
+            <div>
+              <p className="eyebrow">{isEditing ? "Editing" : "Resume preview"}</p>
+              <h2>{isEditing ? "Resume editor" : "Review-ready resume"}</h2>
+            </div>
+            <div className="resume-preview-toolbar">
+              <span className="resume-status-pill">
+                <CheckCircle2 size={15} aria-hidden="true" />
+                {formatResumeStatus(currentOverview.latestResume?.status ?? "draft")}
+              </span>
+              {isEditing ? (
+                <button
+                  className="secondary-action compact-action"
+                  disabled={isSaving}
+                  onClick={saveResume}
+                  type="button"
+                >
+                  <Save size={14} aria-hidden="true" />
+                  {isSaving ? "Saving..." : "Save edits"}
+                </button>
+              ) : (
+                <button
+                  className="secondary-action compact-action"
+                  onClick={() => setIsEditing(true)}
+                  type="button"
+                >
+                  <Edit3 size={14} aria-hidden="true" />
+                  Edit resume
+                </button>
+              )}
+            </div>
+          </div>
+          {isDirty ? (
+            <div className="resume-unsaved-banner" role="status">
+              <span>You have unsaved resume edits.</span>
+              <div>
+                <button className="secondary-action compact-action" disabled={isSaving} onClick={saveResume} type="button">
+                  <Save size={14} aria-hidden="true" />
+                  Save
+                </button>
+                <button
+                  className="secondary-action compact-action"
+                  onClick={() => {
+                    setDraft(savedDraft);
+                    setMessage("Discarded unsaved resume edits.");
+                  }}
+                  type="button"
+                >
+                  <RotateCcw size={14} aria-hidden="true" />
+                  Discard
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div
+            className={`resume-document-preview ${isEditing ? "edit-mode" : "preview-mode"}`}
+            aria-label="Resume preview"
+            onInputCapture={(event) => {
+              if (event.target instanceof HTMLTextAreaElement) {
+                autoGrowTextArea(event.target);
+              }
+            }}
+            ref={resumePreviewRef}
+          >
+            <header className="resume-preview-header">
+              <strong className="resume-preview-name">
+                {profileOverview.profile?.displayName ?? "Your Name"}
+              </strong>
+              {isEditing ? (
+                <textarea
+                  aria-label="Resume headline"
+                  className="resume-headline-field"
+                  onChange={(event) => setDraft({ ...draft, headline: normalizeHeadlineInput(event.target.value) })}
+                  rows={2}
+                  value={normalizeHeadlineInput(draft.headline)}
+                />
+              ) : (
+                <p className="resume-headline-static">{normalizeHeadlineInput(draft.headline)}</p>
+              )}
+              {isEditing ? (
+                <div className="resume-contact-grid" aria-label="Resume contact details">
+                  <input
+                    aria-label="Email"
+                    onChange={(event) => updateResumeContact(draft, setDraft, "email", event.target.value)}
+                    placeholder="Email"
+                    value={draft.contact.email ?? ""}
+                  />
+                  <input
+                    aria-label="Phone"
+                    onChange={(event) => updateResumeContact(draft, setDraft, "phone", event.target.value)}
+                    placeholder="Phone"
+                    value={draft.contact.phone ?? ""}
+                  />
+                  <input
+                    aria-label="LinkedIn profile"
+                    onChange={(event) => updateResumeContact(draft, setDraft, "linkedin", event.target.value)}
+                    placeholder="LinkedIn"
+                    value={draft.contact.linkedin ?? ""}
+                  />
+                  <input
+                    aria-label="Location"
+                    onChange={(event) => updateResumeContact(draft, setDraft, "location", event.target.value)}
+                    placeholder="Location"
+                    value={draft.contact.location ?? ""}
+                  />
+                </div>
+              ) : (
+                <div className="resume-contact-line" aria-label="Resume contact details">
+                  {draft.contact.email ? <span>{draft.contact.email}</span> : null}
+                  {draft.contact.phone ? <span>{draft.contact.phone}</span> : null}
+                  {draft.contact.linkedin ? (
+                    <a href={normalizeLinkUrl(draft.contact.linkedin)} rel="noreferrer" target="_blank">
+                      {draft.contact.linkedin}
+                    </a>
+                  ) : null}
+                  {draft.contact.location ? <span>{draft.contact.location}</span> : null}
+                </div>
+              )}
+            </header>
+            <section>
+              <h3>Professional Summary</h3>
+              {isEditing ? (
+                <textarea
+                  aria-label="Resume summary"
+                  onChange={(event) => setDraft({ ...draft, summary: event.target.value })}
+                  rows={Math.max(4, Math.ceil(draft.summary.length / 110))}
+                  value={draft.summary}
+                />
+              ) : (
+                <p className="resume-static-paragraph">{draft.summary}</p>
+              )}
+            </section>
+            <section>
+              <h3>Core Skills</h3>
+              {isEditing ? (
+                <textarea
+                  aria-label="Skills"
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      skills: splitLines(event.target.value),
+                    })
+                  }
+                  rows={Math.max(3, Math.ceil(draft.skills.join(", ").length / 110))}
+                  value={draft.skills.join(", ")}
+                />
+              ) : (
+                <p className="resume-static-paragraph">{draft.skills.join(", ")}</p>
+              )}
+            </section>
+            <section>
+              <div className="resume-section-heading-row">
+                <h3>Professional Experience</h3>
+                {isEditing ? (
+                  <button
+                    className="resume-inline-action"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        experienceSections: [
+                          ...draft.experienceSections,
+                          {
+                            bullets: [""],
+                            company: "",
+                            dates: "",
+                            location: "",
+                            roleTitle: "New role",
+                          },
+                        ],
+                      })
+                    }
+                    type="button"
+                  >
+                    <Plus size={14} aria-hidden="true" />
+                    Add role
+                  </button>
+                ) : null}
+              </div>
+              {draft.experienceSections.length > 0 ? (
+                <div className="resume-experience-section-list">
+                  {draft.experienceSections.map((section, index) => {
+                    const companyBrand = readCompanyBrand(section.company);
+
+                    return (
+                      <article className="resume-experience-section" key={`${section.roleTitle}-${index}`}>
+                        {isEditing ? (
+                          <>
+                            <div className="resume-role-card-header">
+                              <label className="resume-role-title-field">
+                                <span className="sr-only">Role</span>
+                                <textarea
+                                  aria-label={`Role title for experience ${index + 1}`}
+                                  onChange={(event) =>
+                                    updateExperienceSection(draft, setDraft, index, {
+                                      roleTitle: event.target.value,
+                                    })
+                                  }
+                                  placeholder="Role title"
+                                  rows={Math.max(1, Math.ceil(section.roleTitle.length / 54))}
+                                  value={section.roleTitle}
+                                />
+                              </label>
+                              <div className="resume-role-company-field">
+                                {companyBrand ? (
+                                  <a
+                                    aria-label={`Open ${companyBrand.label} website`}
+                                    className="resume-company-link"
+                                    href={companyBrand.url}
+                                    rel="noreferrer"
+                                    target="_blank"
+                                  >
+                                    <span
+                                      aria-hidden="true"
+                                      className="resume-company-logo"
+                                      style={{ backgroundImage: `url(${companyBrand.logoUrl})` }}
+                                    />
+                                    <ExternalLink size={13} aria-hidden="true" />
+                                  </a>
+                                ) : (
+                                  <span className="resume-company-placeholder" aria-hidden="true">
+                                    <Building2 size={15} />
+                                  </span>
+                                )}
+                                <input
+                                  aria-label={`Company for ${section.roleTitle}`}
+                                  onChange={(event) =>
+                                    updateExperienceSection(draft, setDraft, index, {
+                                      company: event.target.value,
+                                    })
+                                  }
+                                  placeholder="Company"
+                                  value={section.company ?? ""}
+                                />
+                              </div>
+                            </div>
+                            <div className="resume-role-meta-row">
+                              <label>
+                                <span className="sr-only">Dates</span>
+                                <textarea
+                                  aria-label={`Dates for ${section.roleTitle}`}
+                                  onChange={(event) =>
+                                    updateExperienceSection(draft, setDraft, index, {
+                                      dates: event.target.value,
+                                    })
+                                  }
+                                  placeholder="Jan 2021 - Present"
+                                  rows={Math.max(1, Math.ceil((section.dates ?? "").length / 42))}
+                                  value={section.dates ?? ""}
+                                />
+                              </label>
+                              <label>
+                                <span className="sr-only">Location</span>
+                                <textarea
+                                  aria-label={`Location for ${section.roleTitle}`}
+                                  onChange={(event) =>
+                                    updateExperienceSection(draft, setDraft, index, {
+                                      location: event.target.value,
+                                    })
+                                  }
+                                  placeholder="Location"
+                                  rows={Math.max(1, Math.ceil((section.location ?? "").length / 42))}
+                                  value={section.location ?? ""}
+                                />
+                              </label>
+                            </div>
+                            <div className="resume-bullet-editor">
+                              {section.bullets.map((bullet, bulletIndex) => (
+                                <div className="resume-bullet-row" key={`${section.roleTitle}-${bulletIndex}`}>
+                                  <span aria-hidden="true">•</span>
+                                  <textarea
+                                    aria-label={`Bullet ${bulletIndex + 1} for ${section.roleTitle}`}
+                                    onChange={(event) =>
+                                      updateExperienceBullet(draft, setDraft, index, bulletIndex, event.target.value)
+                                    }
+                                    rows={Math.max(1, Math.ceil(bullet.length / 88))}
+                                    value={bullet}
+                                  />
+                                  <button
+                                    aria-label={`Remove bullet ${bulletIndex + 1}`}
+                                    className="icon-only-action"
+                                    onClick={() => removeExperienceBullet(draft, setDraft, index, bulletIndex)}
+                                    type="button"
+                                  >
+                                    <Trash2 size={14} aria-hidden="true" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="resume-role-actions">
+                              <button
+                                className="resume-inline-action"
+                                onClick={() => addExperienceBullet(draft, setDraft, index)}
+                                type="button"
+                              >
+                                <Plus size={14} aria-hidden="true" />
+                                Add bullet
+                              </button>
+                              <button
+                                className="resume-inline-action danger"
+                                onClick={() => removeExperienceSection(draft, setDraft, index)}
+                                type="button"
+                              >
+                                <Trash2 size={14} aria-hidden="true" />
+                                Remove role
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="resume-role-static-header">
+                              <div>
+                                <h4>{section.roleTitle}</h4>
+                                <p>
+                                  {[section.dates, section.location].filter(Boolean).join(" · ")}
+                                </p>
+                              </div>
+                              {section.company ? (
+                                companyBrand ? (
+                                  <a className="resume-company-static-link" href={companyBrand.url} rel="noreferrer" target="_blank">
+                                    <span
+                                      aria-hidden="true"
+                                      className="resume-company-logo"
+                                      style={{ backgroundImage: `url(${companyBrand.logoUrl})` }}
+                                    />
+                                    {section.company}
+                                  </a>
+                                ) : (
+                                  <strong>{section.company}</strong>
+                                )
+                              ) : null}
+                            </div>
+                            <ul className="resume-static-bullet-list">
+                              {section.bullets.map((bullet, bulletIndex) => (
+                                <li key={`${section.roleTitle}-static-${bulletIndex}`}>{bullet}</li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="resume-empty-note">
+                  No role-by-role work history yet. Drop a resume, LinkedIn PDF, or work history note into Pramania,
+                  then regenerate this master resume.
+                </p>
+              )}
+            </section>
+            <section className="resume-highlight-section">
+              <div className="resume-section-heading-row">
+                <h3>Selected Highlights</h3>
+              </div>
+              {isEditing ? (
+                <div className="resume-bullet-editor">
+                  {draft.experienceBullets.map((bullet, index) => (
+                    <div className="resume-bullet-row" key={`${bullet}-${index}`}>
+                      <span aria-hidden="true">•</span>
+                      <textarea
+                        aria-label={`Selected highlight ${index + 1}`}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            experienceBullets: draft.experienceBullets.map((item, itemIndex) =>
+                              itemIndex === index ? event.target.value : item,
+                            ),
+                          })
+                        }
+                        rows={Math.max(1, Math.ceil(bullet.length / 88))}
+                        value={bullet}
+                      />
+                      <button
+                        aria-label={`Remove selected highlight ${index + 1}`}
+                        className="icon-only-action"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            experienceBullets: draft.experienceBullets.filter((_, itemIndex) => itemIndex !== index),
+                          })
+                        }
+                        type="button"
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    className="resume-inline-action"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        experienceBullets: [...draft.experienceBullets, ""],
+                      })
+                    }
+                    type="button"
+                  >
+                    <Plus size={14} aria-hidden="true" />
+                    Add highlight
+                  </button>
+                </div>
+              ) : (
+                <ul className="resume-static-bullet-list">
+                  {draft.experienceBullets.map((bullet, index) => (
+                    <li key={`${bullet}-static-${index}`}>{bullet}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+
+          <ResumeReviewSection reviewItems={reviewItems} />
+
+          {isEditing ? (
+            <details className="resume-advanced-editor">
+              <summary>Edit gap and reviewer fields</summary>
+              <label>
+                Keyword gaps
+                <textarea
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      keywordGaps: splitLines(event.target.value),
+                    })
+                  }
+                  rows={5}
+                  value={draft.keywordGaps.join("\n")}
+                />
+              </label>
+              <label>
+                Reviewer notes
+                <textarea
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      reviewerNotes: splitLines(event.target.value),
+                    })
+                  }
+                  rows={5}
+                  value={draft.reviewerNotes.join("\n")}
+                />
+              </label>
+            </details>
+          ) : null}
+        </section>
+      ) : (
+        <>
+          <ResumeReviewSection reviewItems={reviewItems} />
+          <section className="resume-empty-panel" aria-label="No master resume yet">
+            <FileText size={22} aria-hidden="true" />
+            <div>
+              <h2>No master resume yet</h2>
+              <p>
+                Add career context first, then generate a draft here. Pramania will keep
+                unsupported claims out and call out evidence gaps before you tailor for jobs.
+              </p>
+            </div>
+          </section>
+        </>
+      )}
+
       <section className="resume-readiness-panel" aria-label="Master resume readiness">
         <div>
           <span>{currentOverview.canGenerate ? "Ready" : "Needs work"}</span>
-          <strong>Master resume</strong>
+          <strong>Resume actions</strong>
           <p>{currentOverview.readinessNote}</p>
         </div>
         <div className="resume-readiness-actions">
@@ -267,8 +735,8 @@ export function MasterResumePanel({
             onClick={generateResume}
             title={
               currentOverview.canGenerate
-              ? "Generate a master resume from profile evidence"
-              : "Add profile evidence before generating"
+                ? "Generate a master resume from career evidence"
+                : "Add career evidence before generating"
             }
             type="button"
           >
@@ -276,18 +744,18 @@ export function MasterResumePanel({
             {isGenerating
               ? "Generating..."
               : currentOverview.latestResume
-                ? "Regenerate master resume"
-                : "Generate master resume"}
+                ? "Rebuild resume"
+                : "Generate resume"}
           </button>
           <button
             className="secondary-action"
             disabled={!draft || isSaving}
             onClick={saveResume}
-            title="Save edits to the current master resume draft"
+            title="Save edits to the current master resume"
             type="button"
           >
             <Save size={15} aria-hidden="true" />
-            {isSaving ? "Saving..." : "Save draft"}
+            {isSaving ? "Saving..." : "Save resume"}
           </button>
           <button
             className="secondary-action"
@@ -326,12 +794,33 @@ export function MasterResumePanel({
         </div>
       </section>
 
-      {message ? <p className="system-note success">{message}</p> : null}
+      <section className="resume-export-panel" aria-label="Resume export readiness">
+        <article>
+          <span>Format</span>
+          <strong>Resume-ready layout</strong>
+          <p>Pramania keeps the structure consistent and changes the content for your goals.</p>
+        </article>
+        <article>
+          <span>PDF</span>
+          <strong>{currentOverview.latestResume?.pdfDownloadUrl ? "Ready to download" : "Export needed"}</strong>
+          <p>{currentOverview.latestResume?.pdfDownloadUrl ? "PDF file is stored for this resume." : "Export after review to create the PDF."}</p>
+        </article>
+        <article>
+          <span>DOCX</span>
+          <strong>{currentOverview.latestResume?.docxDownloadUrl ? "Ready" : "Export needed"}</strong>
+          <p>{currentOverview.latestResume?.docxDownloadUrl ? "Editable Word file is stored for this resume." : "Export after review to create the DOCX."}</p>
+        </article>
+        <article>
+          <span>Photo-safe</span>
+          <strong>Separate format</strong>
+          <p>ATS-first exports stay photo-free. Profile-photo formats will use a separate template.</p>
+        </article>
+      </section>
 
       <section className="resume-variant-panel" aria-label="Focused resume variants">
         <div>
           <p className="eyebrow">Focused variant</p>
-          <h2>Shape the master resume for a target lane</h2>
+          <h2>Shape the resume for a target lane</h2>
           <p>
             Use this for a role family such as “VP GTM Operations” or “CIO /
             Digital Transformation.” It keeps the same ATS template and verified
@@ -356,399 +845,6 @@ export function MasterResumePanel({
           </button>
         </div>
       </section>
-
-      <section className="resume-export-panel" aria-label="Resume export readiness">
-        <article>
-          <span>Template</span>
-          <strong>Standard ATS</strong>
-          <p>Fixed layout. Pramania changes content and emphasis, not the ATS structure.</p>
-        </article>
-        <article>
-          <span>PDF</span>
-          <strong>{currentOverview.latestResume?.pdfDownloadUrl ? "Validated export" : "Not exported"}</strong>
-          <p>{currentOverview.latestResume?.pdfDownloadUrl ? "Readable PDF file is stored for this draft." : "Export after review to create the PDF."}</p>
-        </article>
-        <article>
-          <span>DOCX</span>
-          <strong>{currentOverview.latestResume?.docxDownloadUrl ? "Ready" : "Not exported"}</strong>
-          <p>{currentOverview.latestResume?.docxDownloadUrl ? "Editable Word file is stored for this draft." : "Export after review to create the DOCX."}</p>
-        </article>
-        <article>
-          <span>Photo-safe</span>
-          <strong>Separate format</strong>
-          <p>ATS-first exports stay photo-free. Profile-photo formats will use a separate template.</p>
-        </article>
-      </section>
-
-      {draft ? (
-        <section className="materials-review master-resume-editor resume-studio-surface" aria-label="Master resume editor">
-          <div className="materials-review-header">
-            <div>
-              <p className="eyebrow">Draft</p>
-              <h2>Master resume</h2>
-            </div>
-            <span className="resume-status-pill">
-              <CheckCircle2 size={15} aria-hidden="true" />
-              {currentOverview.latestResume?.status ?? "draft"}
-            </span>
-          </div>
-          {isDirty ? (
-            <div className="resume-unsaved-banner" role="status">
-              <span>You have unsaved resume edits.</span>
-              <div>
-                <button className="secondary-action compact-action" disabled={isSaving} onClick={saveResume} type="button">
-                  <Save size={14} aria-hidden="true" />
-                  Save
-                </button>
-                <button
-                  className="secondary-action compact-action"
-                  onClick={() => {
-                    setDraft(savedDraft);
-                    setMessage("Discarded unsaved resume edits.");
-                  }}
-                  type="button"
-                >
-                  <RotateCcw size={14} aria-hidden="true" />
-                  Discard
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          <div
-            className="resume-document-preview"
-            aria-label="Resume preview"
-            onInputCapture={(event) => {
-              if (event.target instanceof HTMLTextAreaElement) {
-                autoGrowTextArea(event.target);
-              }
-            }}
-            ref={resumePreviewRef}
-          >
-            <header className="resume-preview-header">
-              <strong className="resume-preview-name">
-                {profileOverview.profile?.displayName ?? "Your Name"}
-              </strong>
-              <textarea
-                aria-label="Resume headline"
-                className="resume-headline-field"
-                onChange={(event) => setDraft({ ...draft, headline: normalizeHeadlineInput(event.target.value) })}
-                rows={2}
-                value={normalizeHeadlineInput(draft.headline)}
-              />
-              <div className="resume-contact-grid" aria-label="Resume contact details">
-                <input
-                  aria-label="Email"
-                  onChange={(event) => updateResumeContact(draft, setDraft, "email", event.target.value)}
-                  placeholder="Email"
-                  value={draft.contact.email ?? ""}
-                />
-                <input
-                  aria-label="Phone"
-                  onChange={(event) => updateResumeContact(draft, setDraft, "phone", event.target.value)}
-                  placeholder="Phone"
-                  value={draft.contact.phone ?? ""}
-                />
-                <input
-                  aria-label="LinkedIn profile"
-                  onChange={(event) => updateResumeContact(draft, setDraft, "linkedin", event.target.value)}
-                  placeholder="LinkedIn"
-                  value={draft.contact.linkedin ?? ""}
-                />
-                <input
-                  aria-label="Location"
-                  onChange={(event) => updateResumeContact(draft, setDraft, "location", event.target.value)}
-                  placeholder="Location"
-                  value={draft.contact.location ?? ""}
-                />
-              </div>
-            </header>
-            <section>
-              <h3>Professional Summary</h3>
-              <textarea
-                aria-label="Resume summary"
-                onChange={(event) => setDraft({ ...draft, summary: event.target.value })}
-                rows={Math.max(4, Math.ceil(draft.summary.length / 110))}
-                value={draft.summary}
-              />
-            </section>
-            <section>
-              <h3>Core Skills</h3>
-              <textarea
-                aria-label="Skills"
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    skills: splitLines(event.target.value),
-                  })
-                }
-                rows={Math.max(3, Math.ceil(draft.skills.join(", ").length / 110))}
-                value={draft.skills.join(", ")}
-              />
-            </section>
-            <section className="resume-highlight-section">
-              <div className="resume-section-heading-row">
-                <h3>Selected Highlights</h3>
-              </div>
-              <div className="resume-bullet-editor">
-                {draft.experienceBullets.map((bullet, index) => (
-                  <div className="resume-bullet-row" key={`${bullet}-${index}`}>
-                    <span aria-hidden="true">•</span>
-                    <textarea
-                      aria-label={`Selected highlight ${index + 1}`}
-                      onChange={(event) =>
-                        setDraft({
-                          ...draft,
-                          experienceBullets: draft.experienceBullets.map((item, itemIndex) =>
-                            itemIndex === index ? event.target.value : item,
-                          ),
-                        })
-                      }
-                      rows={Math.max(1, Math.ceil(bullet.length / 88))}
-                      value={bullet}
-                    />
-                    <button
-                      aria-label={`Remove selected highlight ${index + 1}`}
-                      className="icon-only-action"
-                      onClick={() =>
-                        setDraft({
-                          ...draft,
-                          experienceBullets: draft.experienceBullets.filter((_, itemIndex) => itemIndex !== index),
-                        })
-                      }
-                      type="button"
-                    >
-                      <Trash2 size={14} aria-hidden="true" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  className="resume-inline-action"
-                  onClick={() =>
-                    setDraft({
-                      ...draft,
-                      experienceBullets: [...draft.experienceBullets, ""],
-                    })
-                  }
-                  type="button"
-                >
-                  <Plus size={14} aria-hidden="true" />
-                  Add highlight
-                </button>
-              </div>
-            </section>
-            <section>
-              <div className="resume-section-heading-row">
-                <h3>Professional Experience</h3>
-                <button
-                  className="resume-inline-action"
-                  onClick={() =>
-                    setDraft({
-                      ...draft,
-                      experienceSections: [
-                        ...draft.experienceSections,
-                        {
-                          bullets: [""],
-                          company: "",
-                          dates: "",
-                          location: "",
-                          roleTitle: "New role",
-                        },
-                      ],
-                    })
-                  }
-                  type="button"
-                >
-                  <Plus size={14} aria-hidden="true" />
-                  Add role
-                </button>
-              </div>
-              {draft.experienceSections.length > 0 ? (
-                <div className="resume-experience-section-list">
-                  {draft.experienceSections.map((section, index) => {
-                    const companyBrand = readCompanyBrand(section.company);
-
-                    return (
-                      <article className="resume-experience-section" key={`${section.roleTitle}-${index}`}>
-                        <div className="resume-role-card-header">
-                          <label className="resume-role-title-field">
-                            <span className="sr-only">Role</span>
-                            <textarea
-                              aria-label={`Role title for experience ${index + 1}`}
-                              onChange={(event) =>
-                                updateExperienceSection(draft, setDraft, index, {
-                                  roleTitle: event.target.value,
-                                })
-                              }
-                              placeholder="Role title"
-                              rows={Math.max(1, Math.ceil(section.roleTitle.length / 54))}
-                              value={section.roleTitle}
-                            />
-                          </label>
-                          <div className="resume-role-company-field">
-                            {companyBrand ? (
-                              <a
-                                aria-label={`Open ${companyBrand.label} website`}
-                                className="resume-company-link"
-                                href={companyBrand.url}
-                                rel="noreferrer"
-                                target="_blank"
-                              >
-                                <span
-                                  aria-hidden="true"
-                                  className="resume-company-logo"
-                                  style={{ backgroundImage: `url(${companyBrand.logoUrl})` }}
-                                />
-                                <ExternalLink size={13} aria-hidden="true" />
-                              </a>
-                            ) : (
-                              <span className="resume-company-placeholder" aria-hidden="true">
-                                <Building2 size={15} />
-                              </span>
-                            )}
-                            <input
-                              aria-label={`Company for ${section.roleTitle}`}
-                              onChange={(event) =>
-                                updateExperienceSection(draft, setDraft, index, {
-                                  company: event.target.value,
-                                })
-                              }
-                              placeholder="Company"
-                              value={section.company ?? ""}
-                            />
-                          </div>
-                        </div>
-                        <div className="resume-role-meta-row">
-                          <label>
-                            <span className="sr-only">Dates</span>
-                            <textarea
-                              aria-label={`Dates for ${section.roleTitle}`}
-                              onChange={(event) =>
-                                updateExperienceSection(draft, setDraft, index, {
-                                  dates: event.target.value,
-                                })
-                              }
-                              placeholder="Jan 2021 - Present"
-                              rows={Math.max(1, Math.ceil((section.dates ?? "").length / 42))}
-                              value={section.dates ?? ""}
-                            />
-                          </label>
-                          <label>
-                            <span className="sr-only">Location</span>
-                            <textarea
-                              aria-label={`Location for ${section.roleTitle}`}
-                              onChange={(event) =>
-                                updateExperienceSection(draft, setDraft, index, {
-                                  location: event.target.value,
-                                })
-                              }
-                              placeholder="Location"
-                              rows={Math.max(1, Math.ceil((section.location ?? "").length / 42))}
-                              value={section.location ?? ""}
-                            />
-                          </label>
-                        </div>
-                        <div className="resume-bullet-editor">
-                          {section.bullets.map((bullet, bulletIndex) => (
-                            <div className="resume-bullet-row" key={`${section.roleTitle}-${bulletIndex}`}>
-                              <span aria-hidden="true">•</span>
-                              <textarea
-                                aria-label={`Bullet ${bulletIndex + 1} for ${section.roleTitle}`}
-                                onChange={(event) =>
-                                  updateExperienceBullet(draft, setDraft, index, bulletIndex, event.target.value)
-                                }
-                                rows={Math.max(1, Math.ceil(bullet.length / 88))}
-                                value={bullet}
-                              />
-                              <button
-                                aria-label={`Remove bullet ${bulletIndex + 1}`}
-                                className="icon-only-action"
-                                onClick={() => removeExperienceBullet(draft, setDraft, index, bulletIndex)}
-                                type="button"
-                              >
-                                <Trash2 size={14} aria-hidden="true" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="resume-role-actions">
-                          <button
-                            className="resume-inline-action"
-                            onClick={() => addExperienceBullet(draft, setDraft, index)}
-                            type="button"
-                          >
-                            <Plus size={14} aria-hidden="true" />
-                            Add bullet
-                          </button>
-                          <button
-                            className="resume-inline-action danger"
-                            onClick={() => removeExperienceSection(draft, setDraft, index)}
-                            type="button"
-                          >
-                            <Trash2 size={14} aria-hidden="true" />
-                            Remove role
-                          </button>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="resume-empty-note">
-                  No role-by-role work history yet. Drop a resume, LinkedIn PDF, or work history note into Pramania,
-                  then regenerate this master resume.
-                </p>
-              )}
-            </section>
-          </div>
-
-          <ResumeReviewSection reviewItems={reviewItems} />
-
-          <details className="resume-advanced-editor">
-            <summary>Edit gap and reviewer fields</summary>
-            <label>
-              Keyword gaps
-              <textarea
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    keywordGaps: splitLines(event.target.value),
-                  })
-                }
-                rows={5}
-                value={draft.keywordGaps.join("\n")}
-              />
-            </label>
-            <label>
-              Reviewer notes
-              <textarea
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    reviewerNotes: splitLines(event.target.value),
-                  })
-                }
-                rows={5}
-                value={draft.reviewerNotes.join("\n")}
-              />
-            </label>
-          </details>
-        </section>
-      ) : (
-        <>
-          <ResumeReviewSection reviewItems={reviewItems} />
-          <section className="resume-empty-panel" aria-label="No master resume yet">
-            <FileText size={22} aria-hidden="true" />
-            <div>
-              <h2>No master resume yet</h2>
-              <p>
-                Add career context first, then generate a draft here. Pramania will keep
-                unsupported claims out and call out evidence gaps before you tailor for jobs.
-              </p>
-            </div>
-          </section>
-        </>
-      )}
     </main>
   );
 }
@@ -818,6 +914,17 @@ function splitLines(value: string) {
     .filter(Boolean);
 }
 
+function formatResumeStatus(status: string) {
+  const labels: Record<string, string> = {
+    draft: "Ready for review",
+    exported: "Exported",
+    failed: "Needs review",
+    ready: "Ready",
+  };
+
+  return labels[status] ?? "Ready for review";
+}
+
 function normalizeHeadlineInput(headline: string) {
   const normalized = headline.replace(/\s*\|\s*/g, " / ").replace(/\s+/g, " ").trim();
   const segments = normalized.split(/\s+\/\s+/).filter(Boolean);
@@ -827,6 +934,16 @@ function normalizeHeadlineInput(headline: string) {
   }
 
   return segments.slice(0, 2).join(" / ");
+}
+
+function normalizeLinkUrl(value: string) {
+  const trimmed = value.trim();
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
 }
 
 function readCompanyBrand(company: string | null) {

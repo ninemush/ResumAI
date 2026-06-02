@@ -9,13 +9,14 @@ import { brand } from "@/lib/brand";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
 type KnowledgebasePanelProps = {
+  embedded?: boolean;
   overview: ProfileOverview;
 };
 
 const sourceFilters = [
   "All",
-  "Read",
-  "Needs attention",
+  "Ready",
+  "Needs help",
   "Files",
   "Links",
   "Images",
@@ -23,7 +24,7 @@ const sourceFilters = [
 
 type SourceFilter = (typeof sourceFilters)[number];
 
-export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
+export function KnowledgebasePanel({ embedded = false, overview }: KnowledgebasePanelProps) {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<SourceFilter>("All");
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -55,7 +56,7 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
       const savedFactCount = payload.intake?.savedFactCount ?? 0;
       setMessage(
         savedFactCount > 0
-          ? "Source read. Pramania updated your profile foundation from it."
+          ? "File read. Pramania updated your career profile from it."
           : "Source read. I did not see anything new enough to change your profile this time.",
       );
       router.refresh();
@@ -64,16 +65,18 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
     }
   }
 
-  return (
-    <main className="profile-pane" aria-labelledby="knowledgebase-title">
-      <div className="pane-heading">
-        <p className="eyebrow">Sources</p>
-        <h1 id="knowledgebase-title">Source library</h1>
-        <p>
-          A chronological record of resumes, LinkedIn exports, screenshots, links,
-          and notes that shaped your profile and resume direction.
-        </p>
-      </div>
+  const content = (
+    <>
+      {embedded ? null : (
+        <div className="pane-heading">
+          <p className="eyebrow">Library</p>
+          <h1 id="knowledgebase-title">Uploaded files and links</h1>
+          <p>
+            A chronological record of resumes, LinkedIn exports, screenshots, links,
+            and notes that shaped your profile and resume direction.
+          </p>
+        </div>
+      )}
 
       {message ? <p className="system-note success">{message}</p> : null}
 
@@ -94,27 +97,21 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
         </div>
       </section>
 
-      <section className="source-health-grid" aria-label="Source health summary">
-        <article className="source-health-card ready">
-          <span>Readable</span>
-          <strong>{sourceHealth.read}</strong>
-          <p>Sources Pramania can use for profile, resume, and fit analysis.</p>
-        </article>
-        <article className={sourceHealth.needsAttention > 0 ? "source-health-card warning" : "source-health-card"}>
-          <span>Needs Attention</span>
-          <strong>{sourceHealth.needsAttention}</strong>
-          <p>Items where extraction failed or needs a cleaner file/source.</p>
-        </article>
-        <article className="source-health-card">
-          <span>Preserved Text</span>
-          <strong>{formatCompactNumber(sourceHealth.readableCharacters)}</strong>
-          <p>Readable characters retained so Pramania can avoid asking you to repeat yourself.</p>
-        </article>
-      </section>
+      {sourceHealth.needsAttention > 0 ? (
+        <section className="source-attention-panel" aria-label="Sources needing attention">
+          <div>
+              <strong>{sourceHealth.needsAttention} item{sourceHealth.needsAttention === 1 ? "" : "s"} need a clearer copy</strong>
+              <p>
+              Originals are still saved. Try again, download the file to check
+              the version, or drop a cleaner copy into chat.
+              </p>
+          </div>
+        </section>
+      ) : null}
 
       <section className="sources-panel" aria-label="Profile sources">
         <div className="section-heading">
-          <p className="eyebrow">Sources used</p>
+          <p className="eyebrow">Uploaded timeline</p>
           <h2>Timeline</h2>
         </div>
         {overview.recentSources.length > 0 ? (
@@ -159,22 +156,19 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
                     <p>{formatSourceGuidance(source)}</p>
                     {source.extractedTextPreview ? (
                       <details className="source-excerpt">
-                        <summary>
-                          Read excerpt
-                          <span>{source.readableCharacterCount.toLocaleString()} characters</span>
-                        </summary>
+                        <summary>View content</summary>
                         <p>{source.extractedTextPreview}</p>
                       </details>
                     ) : null}
                     {source.source_type === "image" && source.extraction_status === "failed" ? (
-                      <div className="source-fallback" aria-label="Image OCR import options">
+                      <div className="source-fallback" aria-label="Image import options">
                         <FileText size={15} aria-hidden="true" />
                         <div>
                           <strong>What this means</strong>
                           <p>
-                            The screenshot is saved. OCR now retries automatically before
-                            marking it failed. Use Retry for a fresh attempt, or paste the
-                            visible text into Pramania if the screenshot itself is hard to read.
+                            The screenshot is saved. I try to read it automatically before
+                            marking it as needing help. Use Try again for a fresh attempt, or
+                            paste the visible text if the screenshot itself is hard to read.
                           </p>
                         </div>
                       </div>
@@ -197,7 +191,7 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
                 </div>
                 <div className="source-actions">
                   <span className={`source-pill ${source.extraction_status}`}>
-                    {source.extraction_status.replace("_", " ")}
+                    {formatSourceStatusLabel(source.extraction_status)}
                   </span>
                   {source.downloadUrl ? (
                     <a
@@ -220,8 +214,8 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
                       onClick={() => retrySourceExtraction(source.id)}
                       title={
                         source.extraction_status === "succeeded"
-                          ? "Reprocess preserved source text"
-                          : "Retry source extraction"
+                          ? "Read this saved item again"
+                          : "Try reading this saved item again"
                       }
                       type="button"
                     >
@@ -229,8 +223,8 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
                       {pendingId === source.id
                         ? "Working..."
                         : source.extraction_status === "succeeded"
-                          ? "Reprocess"
-                          : "Retry"}
+                          ? "Read again"
+                          : "Try again"}
                     </button>
                   ) : null}
                 </div>
@@ -253,7 +247,7 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
         <p className="evidence-note">
           {brand.name} uses these sources to build your profile, draft your master
           resume, assess role fit, and create application materials. You should not
-          have to manage individual extracted details here. Update your profile
+          have to manage individual parsed details here. Update your profile
           directly in Profile & Resume, or ask Pramania to refine it in chat.
         </p>
       </section>
@@ -261,6 +255,24 @@ export function KnowledgebasePanel({ overview }: KnowledgebasePanelProps) {
       {activeSource ? (
         <SourceViewer source={activeSource} onClose={() => setActiveSource(null)} />
       ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <section className="profile-pane embedded-library-panel" aria-labelledby="knowledgebase-title">
+        <div className="section-heading">
+          <p className="eyebrow">Uploaded</p>
+          <h2 id="knowledgebase-title">Uploaded files and links</h2>
+        </div>
+        {content}
+      </section>
+    );
+  }
+
+  return (
+    <main className="profile-pane" aria-labelledby="knowledgebase-title">
+      {content}
     </main>
   );
 }
@@ -375,13 +387,13 @@ function SourceViewer({
             <div className="attachment-viewer-empty">
               <FileText size={28} aria-hidden="true" />
               <p>
-                Preview is not available, but the source record is preserved and can
-                be retried or used as audit context.
+                  Preview is not available, but the original item is preserved and
+                  can be tried again or used as supporting context.
               </p>
               <dl className="source-viewer-metadata">
                 <div>
                   <dt>Status</dt>
-                  <dd>{source.extraction_status.replace("_", " ")}</dd>
+                  <dd>{formatSourceStatusLabel(source.extraction_status)}</dd>
                 </div>
                 <div>
                   <dt>Type</dt>
@@ -443,76 +455,86 @@ function formatSourceTimestamp(value: string) {
 
 function formatFailureReason(reason: string) {
   const friendlyMessages: Record<string, string> = {
-    DOCX_TEXT_EMPTY: "No readable text found.",
-    IMAGE_OCR_FAILED: "OCR request failed. The image is saved and can be retried.",
-    IMAGE_OCR_FILE_TOO_LARGE: "Image exceeds the current OCR size limit.",
-    IMAGE_OCR_INCOMPLETE_RESPONSE: "OCR returned an incomplete response after retrying.",
-    IMAGE_OCR_PROVIDER_AUTH_FAILED: "OCR provider configuration needs attention.",
-    IMAGE_OCR_PROVIDER_ERROR: "OCR provider returned an error after retrying.",
-    IMAGE_OCR_PROVIDER_REJECTED_IMAGE: "OCR could not process this image content.",
-    IMAGE_OCR_PROVIDER_TEMPORARY_FAILURE: "OCR provider was temporarily unavailable after retrying.",
-    IMAGE_OCR_PROVIDER_UNAVAILABLE: "OCR provider could not be reached after retrying.",
-    IMAGE_OCR_TEXT_EMPTY: "OCR retried but found no readable text in the image.",
-    IMAGE_OCR_UNSUPPORTED_MIME_TYPE: "OCR supports JPG, PNG, and WebP images.",
-    LINKEDIN_ARCHIVE_FILE_TOO_LARGE: "LinkedIn archive exceeds the current 25 MB parser limit.",
+    DOCX_TEXT_EMPTY: "I could not find enough career content in this Word file.",
+    IMAGE_OCR_FAILED: "I could not read enough text from this image.",
+    IMAGE_OCR_FILE_TOO_LARGE: "This image is too large to read right now.",
+    IMAGE_OCR_INCOMPLETE_RESPONSE: "The image read did not return enough useful text.",
+    IMAGE_OCR_PROVIDER_AUTH_FAILED: "Image reading needs an owner-side configuration check.",
+    IMAGE_OCR_PROVIDER_ERROR: "Image reading hit a service issue.",
+    IMAGE_OCR_PROVIDER_REJECTED_IMAGE: "I could not process this image content.",
+    IMAGE_OCR_PROVIDER_TEMPORARY_FAILURE: "Image reading was temporarily unavailable.",
+    IMAGE_OCR_PROVIDER_UNAVAILABLE: "Image reading could not be reached.",
+    IMAGE_OCR_TEXT_EMPTY: "I tried the image but did not find enough career content.",
+    IMAGE_OCR_UNSUPPORTED_MIME_TYPE: "Use a JPG, PNG, or WebP image.",
+    LINKEDIN_ARCHIVE_FILE_TOO_LARGE: "This LinkedIn export is too large to read right now.",
     LINKEDIN_ARCHIVE_INVALID_ZIP: "This does not look like a valid LinkedIn archive ZIP.",
     LINKEDIN_ARCHIVE_NO_PROFILE_FILES:
       "No LinkedIn profile CSV files found. Upload Profile.csv, Positions.csv, Skills.csv, or Education.csv.",
-    LINKEDIN_ARCHIVE_TEXT_EMPTY: "No readable profile rows found in that LinkedIn export.",
+    LINKEDIN_ARCHIVE_TEXT_EMPTY: "I could not find enough profile rows in that LinkedIn export.",
     LINKEDIN_ARCHIVE_UNSUPPORTED_FILE: "LinkedIn archive import supports ZIP and CSV files.",
     LINKEDIN_PUBLIC_PROFILE_BLOCKED:
-      "LinkedIn did not return readable public content to Pramania.",
-    PDF_AI_EXTRACT_FAILED: "PDF vision extraction failed after retrying.",
-    PDF_AI_INCOMPLETE_RESPONSE: "PDF vision extraction returned an incomplete response.",
-    PDF_AI_PROVIDER_AUTH_FAILED: "PDF extraction provider configuration needs attention.",
-    PDF_AI_PROVIDER_ERROR: "PDF vision extraction provider returned an error.",
-    PDF_AI_PROVIDER_REJECTED_FILE: "PDF vision extraction could not process this file.",
-    PDF_AI_PROVIDER_TEMPORARY_FAILURE: "PDF vision extraction was temporarily unavailable.",
-    PDF_AI_PROVIDER_UNAVAILABLE: "PDF vision extraction could not be reached.",
-    PDF_FILE_TOO_LARGE: "PDF exceeds the current parser size limit.",
-    PDF_PAGE_LIMIT_EXCEEDED: "Too many pages for the current parser limit.",
-    PDF_TEXT_EMPTY: "No readable career text found after parser and PDF vision extraction.",
-    PDF_TEXT_EXTRACTION_FAILED: "The PDF parser could not read this file.",
-    PROFILE_LINK_TEXT_TOO_SHORT: "Not enough readable profile text found.",
-    TEXT_FILE_TOO_LARGE: "Text file exceeds the current parser size limit.",
+      "LinkedIn did not return enough public profile content to Pramania.",
+    PDF_AI_EXTRACT_FAILED: "I could not read enough useful text from this PDF.",
+    PDF_AI_INCOMPLETE_RESPONSE: "The PDF read did not return enough useful text.",
+    PDF_AI_PROVIDER_AUTH_FAILED: "PDF reading needs an owner-side configuration check.",
+    PDF_AI_PROVIDER_ERROR: "PDF reading hit a service issue.",
+    PDF_AI_PROVIDER_REJECTED_FILE: "I could not process this PDF.",
+    PDF_AI_PROVIDER_TEMPORARY_FAILURE: "PDF reading was temporarily unavailable.",
+    PDF_AI_PROVIDER_UNAVAILABLE: "PDF reading could not be reached.",
+    PDF_FILE_TOO_LARGE: "This PDF is too large to read right now.",
+    PDF_PAGE_LIMIT_EXCEEDED: "This PDF has too many pages to read right now.",
+    PDF_TEXT_EMPTY: "I could not find enough career content in this PDF.",
+    PDF_TEXT_EXTRACTION_FAILED: "I could not read this PDF.",
+    PROFILE_LINK_TEXT_TOO_SHORT: "I could not find enough profile content at that link.",
+    TEXT_FILE_TOO_LARGE: "This text file is too large to read right now.",
   };
 
-  return friendlyMessages[reason] ?? "Extraction needs another attempt.";
+  return friendlyMessages[reason] ?? "This item needs another attempt.";
 }
 
 function formatSourceGuidance(source: ProfileOverview["recentSources"][number]) {
   if (source.extraction_status === "succeeded") {
-    return "Read into your profile and resume context.";
+    return "Ready to support your profile, resume, and job-fit reviews.";
   }
 
   if (source.extraction_status === "processing") {
-    return "Currently being read. This can take a moment for larger files.";
+    return "I am reading this now. Larger files can take a moment.";
   }
 
   if (source.extraction_status === "pending") {
-    return "Saved, but not read yet. Retry when you are ready.";
+    return "Saved and waiting to be read.";
   }
 
   if (source.source_type === "linkedin" && source.extraction_status === "failed") {
-    return "Public URL attempted. If LinkedIn blocks server reading, use the PDF or archive path below.";
+    return "I tried the public profile. If LinkedIn blocks the page, use the PDF or archive path below.";
   }
 
   if (source.source_type === "image" && source.extraction_status === "failed") {
-    return "Saved as an image source. OCR retries are bounded; use Retry or paste the key text.";
+    return "Saved as an image. Try again, or paste the key text if the image is hard to read.";
   }
 
   if (source.extraction_status === "failed") {
-    return "Saved, but extraction failed. Retry or provide the content another way.";
+    return "Saved, but I need a clearer copy or another attempt before it can help your profile.";
   }
 
-  return "Saved as profile source.";
+  return "Saved in your career record.";
+}
+
+function formatSourceStatusLabel(status: string) {
+  if (status === "succeeded") return "Ready";
+  if (status === "failed") return "Needs help";
+  if (status === "processing") return "Reading";
+  if (status === "pending") return "Saved";
+  if (status === "deleted") return "Removed";
+
+  return status.replace("_", " ");
 }
 
 function buildSourceCapabilities(source: ProfileOverview["recentSources"][number]) {
   const capabilities: { label: string; tone: string }[] = [];
 
-  if (source.extraction_status === "succeeded" && source.readableCharacterCount > 0) {
-    capabilities.push({ label: "Profile context available", tone: "ready" });
+  if (source.extraction_status === "succeeded") {
+    capabilities.push({ label: "Profile-ready", tone: "ready" });
   }
 
   if (source.previewUrl) {
@@ -520,21 +542,21 @@ function buildSourceCapabilities(source: ProfileOverview["recentSources"][number
   }
 
   if (source.source_type === "pdf") {
-    capabilities.push({ label: "PDF text/vision parser", tone: "neutral" });
+    capabilities.push({ label: "PDF saved", tone: "neutral" });
   } else if (source.source_type === "docx") {
-    capabilities.push({ label: "Word parser", tone: "neutral" });
+    capabilities.push({ label: "Word file saved", tone: "neutral" });
   } else if (source.source_type === "image") {
-    capabilities.push({ label: "OCR retry supported", tone: "neutral" });
+    capabilities.push({ label: "Image saved", tone: "neutral" });
   } else if (source.source_type === "linkedin" && source.source_url) {
-    capabilities.push({ label: "Public web only", tone: source.extraction_status === "failed" ? "warning" : "neutral" });
+    capabilities.push({ label: "Public profile link", tone: source.extraction_status === "failed" ? "warning" : "neutral" });
   } else if (source.source_type === "linkedin" && source.storage_path) {
     capabilities.push({ label: "LinkedIn export", tone: "neutral" });
   } else if (["link", "portfolio"].includes(source.source_type)) {
-    capabilities.push({ label: "Public page reader", tone: "neutral" });
+    capabilities.push({ label: "Public page saved", tone: "neutral" });
   }
 
   if (source.extraction_status === "failed") {
-    capabilities.push({ label: "Needs attention", tone: "warning" });
+    capabilities.push({ label: "Needs a clearer copy", tone: "warning" });
   }
 
   return capabilities;
@@ -548,11 +570,11 @@ function sourceMatchesFilter(
     return true;
   }
 
-  if (filter === "Read") {
+  if (filter === "Ready") {
     return source.extraction_status === "succeeded";
   }
 
-  if (filter === "Needs attention") {
+  if (filter === "Needs help") {
     return source.extraction_status === "failed";
   }
 
@@ -578,8 +600,8 @@ function buildSourceFilterCounts(sources: ProfileOverview["recentSources"]) {
       Files: 0,
       Images: 0,
       Links: 0,
-      "Needs attention": 0,
-      Read: 0,
+      "Needs help": 0,
+      Ready: 0,
     },
   );
 }
@@ -595,21 +617,11 @@ function buildSourceHealth(sources: ProfileOverview["recentSources"]) {
         summary.needsAttention += 1;
       }
 
-      summary.readableCharacters += source.readableCharacterCount ?? 0;
-
       return summary;
     },
     {
       needsAttention: 0,
       read: 0,
-      readableCharacters: 0,
     },
   );
-}
-
-function formatCompactNumber(value: number) {
-  return new Intl.NumberFormat("en", {
-    maximumFractionDigits: 1,
-    notation: "compact",
-  }).format(value);
 }

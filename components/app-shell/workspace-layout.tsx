@@ -2,6 +2,14 @@
 
 import { useMemo, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import {
+  BriefcaseBusiness,
+  ClipboardList,
+  FileText,
+  LayoutDashboard,
+  Library,
+  MessageCircle,
+} from "lucide-react";
 
 import { OwnerConsole } from "@/components/admin/owner-console";
 import type { AppView } from "@/components/app-shell/side-nav";
@@ -9,10 +17,9 @@ import { SideNav } from "@/components/app-shell/side-nav";
 import { WorkspaceTelemetry } from "@/components/app-shell/workspace-telemetry";
 import { ApplicationPanel } from "@/components/applications/application-panel";
 import type { StageFilter } from "@/components/applications/application-panel";
-import { ArtifactsPanel } from "@/components/artifacts/artifacts-panel";
 import { ConversationPanel } from "@/components/conversation/conversation-panel";
 import { JobIngestionPanel } from "@/components/jobs/job-ingestion-panel";
-import { KnowledgebasePanel } from "@/components/knowledgebase/knowledgebase-panel";
+import { LibraryPanel } from "@/components/library/library-panel";
 import { ProfileExplorer } from "@/components/profile/profile-explorer";
 import { MasterResumePanel } from "@/components/resume/master-resume-panel";
 import { SettingsPanel } from "@/components/settings/settings-panel";
@@ -80,6 +87,7 @@ export function WorkspaceLayout({
     navCollapsed: false,
     navWidth: DEFAULT_NAV_WIDTH,
   });
+  const [mobileSurface, setMobileSurface] = useState<"workspace" | "chat">("chat");
   const [hasUnsavedResumeChanges, setHasUnsavedResumeChanges] = useState(false);
 
   const shellStyle = useMemo(
@@ -128,7 +136,7 @@ export function WorkspaceLayout({
     });
   }
 
-  const mobileFocusClass = layout.activeView === "profile" ? "conversation-first" : "workspace-first";
+  const mobileFocusClass = mobileSurface === "chat" ? "conversation-first" : "workspace-first";
 
   function selectView(target: WorkspaceNavigationTarget) {
     const activeView = typeof target === "string" ? target : target.view;
@@ -152,6 +160,7 @@ export function WorkspaceLayout({
           ? (applicationStageFilter ?? currentLayout.applicationStageFilter)
           : currentLayout.applicationStageFilter,
     }));
+    setMobileSurface("workspace");
   }
 
   return (
@@ -212,7 +221,59 @@ export function WorkspaceLayout({
         userEmail={session.user.email}
         userId={session.user.id}
       />
+
+      <MobileWorkspaceNav
+        activeView={layout.activeView}
+        mobileSurface={mobileSurface}
+        onSelectChat={() => setMobileSurface("chat")}
+        onSelectView={selectView}
+      />
     </div>
+  );
+}
+
+function MobileWorkspaceNav({
+  activeView,
+  mobileSurface,
+  onSelectChat,
+  onSelectView,
+}: {
+  activeView: AppView;
+  mobileSurface: "workspace" | "chat";
+  onSelectChat: () => void;
+  onSelectView: (target: WorkspaceNavigationTarget) => void;
+}) {
+  const items = [
+    { icon: LayoutDashboard, label: "Cockpit", target: "profile" as const },
+    { icon: FileText, label: "Resume", target: "resume" as const },
+    { icon: BriefcaseBusiness, label: "Jobs", target: "jobs" as const },
+    { icon: ClipboardList, label: "Apps", target: "applications" as const },
+    { icon: Library, label: "Library", target: "library" as const },
+    { icon: MessageCircle, label: "Chat", target: "profile" as const, chat: true },
+  ];
+
+  return (
+    <nav className="mobile-workspace-nav" aria-label="Workspace sections">
+      {items.map((item) => {
+        const Icon = item.icon;
+        const isActive = item.chat
+          ? mobileSurface === "chat"
+          : mobileSurface === "workspace" && activeView === item.target;
+
+        return (
+          <button
+            aria-current={isActive ? "page" : undefined}
+            className={isActive ? "active" : undefined}
+            key={`${item.label}-${item.target}`}
+            onClick={() => (item.chat ? onSelectChat() : onSelectView(item.target))}
+            type="button"
+          >
+            <Icon size={18} aria-hidden="true" />
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -279,12 +340,14 @@ function renderWorkspaceView({
     );
   }
 
-  if (activeView === "knowledgebase") {
-    return <KnowledgebasePanel overview={profileOverview} />;
-  }
-
-  if (activeView === "artifacts") {
-    return <ArtifactsPanel overview={artifactOverview} />;
+  if (activeView === "library" || activeView === "knowledgebase" || activeView === "artifacts") {
+    return (
+      <LibraryPanel
+        artifactOverview={artifactOverview}
+        initialTab={activeView === "artifacts" ? "generated" : "uploaded"}
+        profileOverview={profileOverview}
+      />
+    );
   }
 
   if (activeView === "settings") {

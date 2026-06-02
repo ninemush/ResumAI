@@ -949,10 +949,10 @@ function buildDeterministicIntakeMessage({
   }
 
   if (isUserMessage) {
-    return "I’ve added that to the profile foundation. The useful next step is to connect it to career evidence: the role it belongs to, the scope you owned, the stakeholders involved, and what changed because of the work.";
+    return "I’ve added that to your career profile. The useful next step is to connect it to career evidence: the role it belongs to, the scope you owned, the stakeholders involved, and what changed because of the work.";
   }
 
-  return `I read ${inputLabel} and updated the profile foundation. My current positioning read is ${targetDirection.toLowerCase()}. I’ll use that to shape the master resume around role history, scope, business impact, and the evidence that should matter most to recruiters.`;
+  return `I read ${inputLabel} and updated your career profile. My current positioning read is ${targetDirection.toLowerCase()}. I’ll use that to shape the master resume around role history, scope, business impact, and the evidence that should matter most to recruiters.`;
 }
 
 function buildAdvisorFallbackResult({
@@ -1119,15 +1119,28 @@ function readLinkedInList({
 
 function readExperienceHighlights(experience: string) {
   const lines = readMeaningfulLines(experience);
+  const recommendationLines = buildRecommendationBlockFlags(lines);
   const highlights: string[] = [];
-  const currentCompany = lines.find((line) => looksLikeCompanyLine(line)) ?? null;
-  const currentTitle = lines.find((line) => looksLikeRoleTitle(line));
+  const currentCompany = lines.find((line, index) => (
+    !recommendationLines.has(index) &&
+    !looksLikeRecommendationOrTestimonial(line) &&
+    looksLikeCompanyLine(line)
+  )) ?? null;
+  const currentTitle = lines.find((line, index) => (
+    !recommendationLines.has(index) &&
+    !looksLikeRecommendationOrTestimonial(line) &&
+    looksLikeRoleTitle(line)
+  ));
 
   if (currentCompany && currentTitle) {
     highlights.push(`${currentTitle} at ${currentCompany}`);
   }
 
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
+    if (recommendationLines.has(index) || looksLikeRecommendationOrTestimonial(line)) {
+      continue;
+    }
+
     if (looksLikeCareerHighlight(line)) {
       highlights.push(line.replace(/^•\s*/, ""));
     }
@@ -1142,11 +1155,17 @@ function readExperienceHighlights(experience: string) {
 
 function readGeneralCareerHighlights(text: string) {
   const lines = readMeaningfulLines(text);
+  const recommendationLines = buildRecommendationBlockFlags(lines);
   const highlights: string[] = [];
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     const nextLine = lines[index + 1] ?? "";
+    const nearbyText = lines.slice(index, index + 5).join(" ");
+
+    if (recommendationLines.has(index) || looksLikeRecommendationOrTestimonial(nearbyText)) {
+      continue;
+    }
 
     if (looksLikeRoleTitle(line) && nextLine && looksLikeCompanyLine(nextLine)) {
       highlights.push(`${line} at ${nextLine}`);
@@ -1167,6 +1186,59 @@ function readGeneralCareerHighlights(text: string) {
 function looksLikeRecommendationOrTestimonial(value: string) {
   return /\b(recommendation|recommendations received|testimonial|endorsement|reference|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed)?\b|he is an?|she is an?|pleasure to share|excellent professional|best of the new generation)\b/i.test(
     value,
+  );
+}
+
+function isInsideRecommendationBlock(lines: string[], index: number) {
+  for (let cursor = index; cursor >= 0 && cursor >= index - 18; cursor -= 1) {
+    const line = lines[cursor] ?? "";
+
+    if (looksLikeRecommendationHeading(line)) {
+      return true;
+    }
+
+    if (cursor !== index && looksLikeProfileSectionHeading(line)) {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+function buildRecommendationBlockFlags(lines: string[]) {
+  const flags = new Set<number>();
+  let insideRecommendations = false;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+
+    if (looksLikeRecommendationHeading(line)) {
+      insideRecommendations = true;
+      flags.add(index);
+      continue;
+    }
+
+    if (insideRecommendations && looksLikeProfileSectionHeading(line)) {
+      insideRecommendations = false;
+    }
+
+    if (insideRecommendations || isInsideRecommendationBlock(lines, index)) {
+      flags.add(index);
+    }
+  }
+
+  return flags;
+}
+
+function looksLikeRecommendationHeading(value: string) {
+  return /^(recommendations?|recommendations received|testimonials?|endorsements?|references?)$/i.test(
+    value.trim(),
+  );
+}
+
+function looksLikeProfileSectionHeading(value: string) {
+  return /^(contact|summary|about|experience|licenses? & certifications?|certifications?|education|skills|top skills|languages|projects|publications|honors|awards|interests|courses|organizations)$/i.test(
+    value.trim(),
   );
 }
 

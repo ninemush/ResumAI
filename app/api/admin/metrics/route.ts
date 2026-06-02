@@ -48,11 +48,15 @@ function toApiError(error: unknown) {
 }
 
 function parsePeriodDays(value: string | null) {
+  if (value === "all" || value === "0") {
+    return 0;
+  }
+
   const parsed = Number(value ?? 30);
 
   if (!Number.isFinite(parsed)) {
     return 30;
   }
 
-  return Math.max(1, Math.min(Math.trunc(parsed), 365));
+  return Math.max(0, Math.min(Math.trunc(parsed), 365));
 }

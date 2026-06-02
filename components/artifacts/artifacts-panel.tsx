@@ -6,12 +6,13 @@ import { Download, ExternalLink, FileText, Layers3, X } from "lucide-react";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 
 type ArtifactsPanelProps = {
+  embedded?: boolean;
   overview: ArtifactOverview;
 };
 
 type ArtifactFilter = "all" | "resume" | "cover_letter" | "pdf" | "docx";
 
-export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
+export function ArtifactsPanel({ embedded = false, overview }: ArtifactsPanelProps) {
   const [activeArtifact, setActiveArtifact] = useState<ArtifactOverview["artifacts"][number] | null>(
     null,
   );
@@ -27,18 +28,20 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
     [filter, overview.artifacts],
   );
 
-  return (
-    <main className="profile-pane" aria-labelledby="artifacts-title">
-      <div className="pane-heading compact-pane-heading">
-        <p className="eyebrow">Artifacts</p>
-        <h1 id="artifacts-title">Generated materials</h1>
-        <p>
-          A chronological cabinet for resumes and cover letters Pramania created,
-          including the role context and export files when available.
-        </p>
-      </div>
+  const content = (
+    <>
+      {embedded ? null : (
+        <div className="pane-heading compact-pane-heading">
+          <p className="eyebrow">Library</p>
+          <h1 id="artifacts-title">Generated materials</h1>
+          <p>
+            A chronological cabinet for resumes and cover letters Pramania created,
+            including the role context and export files when available.
+          </p>
+        </div>
+      )}
 
-      <section className="artifact-filter-strip" aria-label="Artifact filters">
+      <section className="artifact-filter-strip" aria-label="Generated material filters">
         <ArtifactFilterButton active={filter === "all"} count={overview.summary.total} label="All" onClick={() => setFilter("all")} />
         <ArtifactFilterButton active={filter === "resume"} count={overview.summary.resumes} label="Resumes" onClick={() => setFilter("resume")} />
         <ArtifactFilterButton active={filter === "cover_letter"} count={overview.summary.coverLetters} label="Cover letters" onClick={() => setFilter("cover_letter")} />
@@ -46,7 +49,7 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
         <ArtifactFilterButton active={filter === "docx"} count={overview.summary.exportedDocx} label="DOCX" onClick={() => setFilter("docx")} />
       </section>
 
-      <section className="record-list artifact-record-list" aria-label="Generated artifact list">
+      <section className="record-list artifact-record-list" aria-label="Generated materials list">
         {filteredArtifacts.length > 0 ? (
           <>
             <div className="record-table-header artifact-record-header" aria-hidden="true">
@@ -67,12 +70,12 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
                 <button
                   className="record-main-button"
                   onClick={() => setActiveArtifact(artifact)}
-                  title="Open artifact details"
+                  title="Open material details"
                   type="button"
                 >
                   <span className="record-title">{artifact.label}</span>
                   <span className="record-meta">
-                    {formatArtifactKind(artifact.kind)} v{artifact.version}
+                    {formatArtifactKind(artifact.kind)} · Version {artifact.version}
                     {artifact.companyName ? ` · ${artifact.companyName}` : ""}
                     {artifact.roleTitle ? ` · ${artifact.roleTitle}` : ""}
                   </span>
@@ -80,7 +83,7 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
                     Created {formatDate(artifact.createdAt)} · Updated {formatDate(artifact.updatedAt)}
                   </span>
                 </button>
-                <span className={`source-pill ${artifact.status}`}>{artifact.status}</span>
+                <span className={`source-pill ${artifact.status}`}>{formatArtifactStatus(artifact.status)}</span>
                 <div className="record-actions artifact-actions" aria-label={`${artifact.label} downloads`}>
                   <button
                     className="secondary-action compact-action"
@@ -113,7 +116,7 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
                     </a>
                   ) : null}
                   {!artifact.pdfDownloadUrl && !artifact.docxDownloadUrl ? (
-                    <span className="source-pill muted">Not exported</span>
+                    <span className="source-pill muted">Export needed</span>
                   ) : null}
                 </div>
               </article>
@@ -121,7 +124,7 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
           </>
         ) : (
           <p className="empty-state">
-            No artifacts match this filter yet. Generate or export a resume or cover
+            No materials match this filter yet. Generate or export a resume or cover
             letter and it will appear here.
           </p>
         )}
@@ -130,6 +133,24 @@ export function ArtifactsPanel({ overview }: ArtifactsPanelProps) {
       {activeArtifact ? (
         <ArtifactViewer artifact={activeArtifact} onClose={() => setActiveArtifact(null)} />
       ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <section className="profile-pane embedded-library-panel" aria-labelledby="artifacts-title">
+        <div className="section-heading">
+          <p className="eyebrow">Generated</p>
+          <h2 id="artifacts-title">Generated resumes and letters</h2>
+        </div>
+        {content}
+      </section>
+    );
+  }
+
+  return (
+    <main className="profile-pane" aria-labelledby="artifacts-title">
+      {content}
     </main>
   );
 }
@@ -162,6 +183,15 @@ function formatArtifactKind(kind: ArtifactOverview["artifacts"][number]["kind"])
   return kind === "resume" ? "Resume" : "Cover letter";
 }
 
+function formatArtifactStatus(status: string) {
+  if (status === "draft") return "Review draft";
+  if (status === "ready") return "Ready";
+  if (status === "exported") return "Exported";
+  if (status === "failed") return "Needs review";
+
+  return status.replaceAll("_", " ");
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
@@ -189,7 +219,7 @@ function ArtifactViewer({
           <div>
             <strong>{artifact.label}</strong>
             <span>
-              {formatArtifactKind(artifact.kind)} v{artifact.version} · Updated{" "}
+              {formatArtifactKind(artifact.kind)} · Version {artifact.version} · Updated{" "}
               {formatDate(artifact.updatedAt)}
             </span>
           </div>
@@ -203,7 +233,7 @@ function ArtifactViewer({
           <dl className="artifact-metadata-grid">
             <div>
               <dt>Status</dt>
-              <dd>{artifact.status.replaceAll("_", " ")}</dd>
+              <dd>{formatArtifactStatus(artifact.status)}</dd>
             </div>
             <div>
               <dt>Context</dt>
@@ -222,7 +252,7 @@ function ArtifactViewer({
               <dd>
                 {artifact.pdfDownloadUrl || artifact.docxDownloadUrl
                   ? "Export files are ready."
-                  : "Not exported yet."}
+                  : "Export needed."}
               </dd>
             </div>
           </dl>

@@ -7,6 +7,7 @@ const ARTIFACT_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
 export type ApplicationOverview = {
   recentApplications: {
+    archivedAt: string | null;
     id: string;
     companyName: string;
     jobTitle: string | null;
@@ -35,6 +36,8 @@ export type ApplicationOverview = {
   }[];
   openFollowUpCount: number;
   summary: {
+    active: number;
+    archived: number;
     total: number;
     applied: number;
     interviewing: number;
@@ -55,6 +58,17 @@ export type ApplicationOverview = {
   };
 };
 
+type RawApplication = {
+  archived_at?: string | null;
+  company_name: string;
+  created_at: string;
+  id: string;
+  job_title: string | null;
+  job_url: string;
+  status: string;
+  updated_at: string;
+};
+
 const followUpStatuses = new Set(["applied", "interview_in_progress"]);
 const appliedStatuses = new Set(["applied", "no_reply"]);
 const interviewingStatuses = new Set([
@@ -65,19 +79,9 @@ const interviewingStatuses = new Set([
 const rejectedStatuses = new Set(["rejected", "interviewed_not_selected", "withdrawn"]);
 
 export async function getApplicationOverview(userId: string): Promise<ApplicationOverview> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("applications")
-    .select("id, company_name, job_title, job_url, status, created_at, updated_at")
-    .eq("user_id", userId)
-    .order("updated_at", { ascending: false })
-    .limit(100);
+  const data = await readApplications(userId);
 
-  if (error) {
-    throw new Error("APPLICATION_OVERVIEW_READ_FAILED");
-  }
-
-  const applicationIds = (data ?? []).map((application) => application.id);
+  const applicationIds = data.map((application) => application.id);
   const [resumeArtifacts, coverLetterArtifacts, statusEvents] =
     applicationIds.length > 0
       ? await Promise.all([
@@ -117,7 +121,8 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
           new Map<string, ApplicationOverview["recentApplications"][number]["statusEvents"]>(),
         ];
 
-  const recentApplications = (data ?? []).map((application) => ({
+  const recentApplications = data.map((application) => ({
+    archivedAt: application.archived_at ?? null,
     id: application.id,
     companyName: application.company_name,
     jobTitle: application.job_title,
@@ -140,13 +145,53 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
     updatedAt: application.updated_at,
   }));
 
+  const activeApplications = recentApplications.filter((application) => !application.archivedAt);
+
   return {
     recentApplications: recentApplications.slice(0, 50),
-    openFollowUpCount: recentApplications.filter((application) =>
+    openFollowUpCount: activeApplications.filter((application) =>
       followUpStatuses.has(application.status),
     ).length,
-    summary: summarizeApplications(recentApplications),
+    summary: {
+      ...summarizeApplications(activeApplications),
+      active: activeApplications.length,
+      archived: recentApplications.length - activeApplications.length,
+    },
   };
+}
+
+async function readApplications(userId: string): Promise<RawApplication[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("applications")
+    .select("id, company_name, job_title, job_url, status, archived_at, created_at, updated_at")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(100);
+
+  if (!error) {
+    return data ?? [];
+  }
+
+  if (!error.message.toLowerCase().includes("archived_at")) {
+    throw new Error("APPLICATION_OVERVIEW_READ_FAILED");
+  }
+
+  const fallback = await supabase
+    .from("applications")
+    .select("id, company_name, job_title, job_url, status, created_at, updated_at")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(100);
+
+  if (fallback.error) {
+    throw new Error("APPLICATION_OVERVIEW_READ_FAILED");
+  }
+
+  return (fallback.data ?? []).map((application) => ({
+    ...application,
+    archived_at: null,
+  }));
 }
 
 async function readApplicationStatusEvents({ applicationIds }: { applicationIds: string[] }) {
@@ -198,6 +243,8 @@ function summarizeApplications(applications: { status: string }[]) {
   const needsReview = applications.filter((application) => application.status === "draft").length;
 
   return {
+    active: total,
+    archived: 0,
     total,
     applied,
     interviewing,

@@ -120,10 +120,15 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
             <span>Credits</span>
             <strong>{creditSummary.balance} credits available</strong>
             <p>
-              Credits are used for high-cost work like profile extraction, resume generation,
-              job analysis, application materials, and validated exports.
+              Credits are used for high-cost work like reading career files and links,
+              resume generation, job analysis, application materials, and validated exports.
             </p>
             <CreditMeter summary={creditSummary} />
+            <div className="settings-link-row">
+              <a className="inline-link" href="/credits" target="_blank" rel="noreferrer">
+                How credits are used
+              </a>
+            </div>
           </div>
         </article>
 

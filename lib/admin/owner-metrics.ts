@@ -29,6 +29,9 @@ const adminPageUsageSchema = z.object({
 const adminUserRowSchema = z.object({
   applications: z.number().int().nonnegative(),
   createdAt: isoDateSchema,
+  creditsAvailable: z.number().int().nonnegative().default(0),
+  creditsUsed: z.number().int().nonnegative().default(0),
+  creditsUsedAllTime: z.number().int().nonnegative().default(0),
   displayName: z.string().nullable(),
   email: z.string().nullable(),
   lastActivityAt: isoDateSchema.nullable(),
@@ -195,15 +198,21 @@ export async function getOwnerMetrics(periodDays = 30): Promise<OwnerMetrics> {
     throw new Error("ADMIN_REQUIRED");
   }
 
+  const normalizedPeriodDays = Math.trunc(periodDays);
+  const rpcPeriodDays = normalizedPeriodDays > 0 ? normalizedPeriodDays : 36500;
   const { data, error } = await supabase.rpc("get_admin_operating_metrics", {
-    p_period_days: periodDays,
+    p_period_days: rpcPeriodDays,
   });
 
   if (error || !data) {
     throw new Error(mapOwnerMetricsError(error?.message));
   }
 
-  const metrics = ownerMetricsSchema.parse(data);
+  const metrics = await attachUserCreditMetrics(
+    supabase,
+    ownerMetricsSchema.parse(data),
+    normalizedPeriodDays,
+  );
   const supportTickets = await readSupportIssues(supabase, metrics.period.startedAt, metrics.usersList);
 
   return supportTickets.length > 0 ? { ...metrics, supportTickets } : metrics;
@@ -215,6 +224,85 @@ function mapOwnerMetricsError(message: string | undefined) {
   }
 
   return "OWNER_METRICS_READ_FAILED";
+}
+
+async function attachUserCreditMetrics(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  metrics: OwnerMetrics,
+  periodDays: number,
+): Promise<OwnerMetrics> {
+  const userIds = metrics.usersList.map((user) => user.userId);
+
+  if (userIds.length === 0) {
+    return metrics;
+  }
+
+  const { data: ledgerRows, error } = await supabase
+    .from("credit_ledger")
+    .select("user_id, credit_delta, created_at")
+    .in("user_id", userIds)
+    .order("created_at", { ascending: false })
+    .limit(20000);
+
+  if (error || !ledgerRows) {
+    return metrics;
+  }
+
+  const periodStartedAt =
+    periodDays > 0 ? new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString() : null;
+  const creditTotals = new Map<
+    string,
+    {
+      available: number;
+      used: number;
+      usedAllTime: number;
+    }
+  >();
+
+  for (const row of ledgerRows) {
+    const userId = row.user_id as string | null;
+    const creditDelta = Number(row.credit_delta ?? 0);
+
+    if (!userId) {
+      continue;
+    }
+
+    const totals = creditTotals.get(userId) ?? {
+      available: 0,
+      used: 0,
+      usedAllTime: 0,
+    };
+    totals.available += creditDelta;
+
+    if (creditDelta < 0) {
+      const usedAmount = Math.abs(creditDelta);
+      totals.usedAllTime += usedAmount;
+
+      if (!periodStartedAt || new Date(row.created_at as string) >= new Date(periodStartedAt)) {
+        totals.used += usedAmount;
+      }
+    }
+
+    creditTotals.set(userId, totals);
+  }
+
+  return {
+    ...metrics,
+    usersList: metrics.usersList.map((user) => {
+      const totals = creditTotals.get(user.userId);
+
+      if (!totals) {
+        return user;
+      }
+
+      return {
+        ...user,
+        creditsAvailable: Math.max(0, Math.trunc(totals.available)),
+        creditsUsed: Math.trunc(totals.used),
+        creditsUsedAllTime: Math.trunc(totals.usedAllTime),
+      };
+    }),
+  };
 }
 
 async function readSupportIssues(

@@ -3,9 +3,11 @@
 import { useState } from "react";
 import {
   AlertTriangle,
+  Archive,
   Download,
   ExternalLink,
   FileText,
+  RefreshCcw,
   Save,
   ShieldCheck,
   WandSparkles,
@@ -64,6 +66,7 @@ const applicationStatuses = [
 ];
 
 export type StageFilter = "All" | "Review" | "Applied" | "Interview" | "Selected" | "Closed";
+type ArchiveView = "active" | "archived";
 
 export function ApplicationPanel({
   initialStageFilter = "All",
@@ -72,6 +75,7 @@ export function ApplicationPanel({
 }: ApplicationPanelProps) {
   const router = useRouter();
   const [activeReview, setActiveReview] = useState<MaterialReview | null>(null);
+  const [archiveView, setArchiveView] = useState<ArchiveView>("active");
   const [activeStageFilter, setActiveStageFilter] = useState<StageFilter>(initialStageFilter);
   const [coverLetterDraft, setCoverLetterDraft] = useState("");
   const [resumeDraft, setResumeDraft] = useState<ResumeContent | null>(null);
@@ -86,9 +90,13 @@ export function ApplicationPanel({
     return null;
   }
 
-  const visibleApplications = overview.recentApplications.filter((application) =>
+  const applicationsInArchiveView = overview.recentApplications.filter((application) =>
+    archiveView === "archived" ? Boolean(application.archivedAt) : !application.archivedAt,
+  );
+  const visibleApplications = applicationsInArchiveView.filter((application) =>
     applicationMatchesStage(application.status, activeStageFilter),
   );
+  const stageCounts = buildStageFilterCounts(applicationsInArchiveView);
 
   async function updateStatus(applicationId: string, status: string) {
     setPendingApplicationId(applicationId);
@@ -108,6 +116,40 @@ export function ApplicationPanel({
       }
 
       setMessage(`Updated ${payload.application?.companyName ?? "application"} to ${formatStatus(status)}.`);
+      router.refresh();
+    } finally {
+      setPendingApplicationId(null);
+    }
+  }
+
+  async function updateArchiveState(applicationId: string, archived: boolean) {
+    setPendingApplicationId(applicationId);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/applications/${applicationId}/archive`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to update application archive state.");
+        return;
+      }
+
+      if (activeReview?.application.id === applicationId && archived) {
+        setActiveReview(null);
+        setResumeDraft(null);
+        setCoverLetterDraft("");
+      }
+
+      setMessage(
+        archived
+          ? "Archived that application. It is no longer shown with your current roles."
+          : "Restored that application to your current roles.",
+      );
       router.refresh();
     } finally {
       setPendingApplicationId(null);
@@ -244,7 +286,7 @@ export function ApplicationPanel({
     <section className="applications-panel" aria-label="Tracked applications">
       <div className="section-heading">
         <p className="eyebrow">Applications</p>
-        <h2>Application pipeline</h2>
+        <h2>Roles you’re pursuing</h2>
         <p>
           A compact record of every role you choose to pursue: stage, materials,
           and the next follow-up decision.
@@ -252,28 +294,48 @@ export function ApplicationPanel({
       </div>
 
       {overview.recentApplications.length > 0 ? (
-        <div className="record-filter-strip" aria-label="Application stage filters">
-          <button
-            aria-pressed={activeStageFilter === "All"}
-            className={`record-filter-chip ${activeStageFilter === "All" ? "active" : ""}`}
-            onClick={() => setActiveStageFilter("All")}
-            type="button"
-          >
-            <strong>{overview.summary.total}</strong>
-            <span>All</span>
-          </button>
-          {overview.summary.byStage.map((stage) => (
+        <div className="record-list-controls">
+          <div className="record-view-toggle" aria-label="Application archive view">
             <button
-              aria-pressed={activeStageFilter === stage.label}
-              className={`record-filter-chip ${activeStageFilter === stage.label ? "active" : ""}`}
-              key={stage.label}
-              onClick={() => setActiveStageFilter(stage.label as StageFilter)}
+              aria-pressed={archiveView === "active"}
+              className={`record-view-button ${archiveView === "active" ? "active" : ""}`}
+              onClick={() => setArchiveView("active")}
               type="button"
             >
-              <strong>{stage.value}</strong>
-              <span>{stage.label}</span>
+              Active <strong>{overview.summary.active}</strong>
             </button>
-          ))}
+            <button
+              aria-pressed={archiveView === "archived"}
+              className={`record-view-button ${archiveView === "archived" ? "active" : ""}`}
+              onClick={() => setArchiveView("archived")}
+              type="button"
+            >
+              Archived <strong>{overview.summary.archived}</strong>
+            </button>
+          </div>
+          <div className="record-filter-strip" aria-label="Application stage filters">
+            <button
+              aria-pressed={activeStageFilter === "All"}
+              className={`record-filter-chip ${activeStageFilter === "All" ? "active" : ""}`}
+              onClick={() => setActiveStageFilter("All")}
+              type="button"
+            >
+              <strong>{stageCounts.All}</strong>
+              <span>All</span>
+            </button>
+            {stageCounts.byStage.map((stage) => (
+              <button
+                aria-pressed={activeStageFilter === stage.label}
+                className={`record-filter-chip ${activeStageFilter === stage.label ? "active" : ""}`}
+                key={stage.label}
+                onClick={() => setActiveStageFilter(stage.label as StageFilter)}
+                type="button"
+              >
+                <strong>{stage.value}</strong>
+                <span>{stage.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -288,7 +350,14 @@ export function ApplicationPanel({
             </div>
           </div>
         ) : null}
-        {overview.recentApplications.length > 0 && visibleApplications.length === 0 ? (
+        {overview.recentApplications.length > 0 && applicationsInArchiveView.length === 0 ? (
+          <p className="empty-state">
+            {archiveView === "archived"
+              ? "No archived applications yet."
+              : "No active applications right now. Archived applications are still available from the Archived view."}
+          </p>
+        ) : null}
+        {applicationsInArchiveView.length > 0 && visibleApplications.length === 0 ? (
           <p className="empty-state">No applications in this stage yet.</p>
         ) : null}
         {visibleApplications.length > 0 ? (
@@ -370,8 +439,9 @@ export function ApplicationPanel({
               <select
                 aria-label={`Update ${application.companyName} application status`}
                 className="status-select compact-status-select"
-                disabled={pendingApplicationId === application.id}
+                disabled={pendingApplicationId === application.id || Boolean(application.archivedAt)}
                 onChange={(event) => updateStatus(application.id, event.target.value)}
+                title={application.archivedAt ? "Restore this application before changing its stage" : undefined}
                 value={application.status}
               >
                 {applicationStatuses.map((status) => (
@@ -395,10 +465,14 @@ export function ApplicationPanel({
               </a>
               <button
                 className="secondary-action compact-action"
-                disabled={generatingApplicationId === application.id}
+                disabled={generatingApplicationId === application.id || Boolean(application.archivedAt)}
                 onClick={() => generateMaterials(application.id)}
                 type="button"
-                title="Generate tailored resume and cover letter, then export PDF and DOCX files"
+                title={
+                  application.archivedAt
+                    ? "Restore this application before generating materials"
+                    : "Generate tailored resume and cover letter, then export PDF and DOCX files"
+                }
               >
                 <WandSparkles size={14} aria-hidden="true" />
                 {generatingApplicationId === application.id
@@ -418,6 +492,24 @@ export function ApplicationPanel({
               >
                 <FileText size={14} aria-hidden="true" />
                 {loadingReviewApplicationId === application.id ? "Opening" : "Review"}
+              </button>
+              <button
+                className="secondary-action compact-action"
+                disabled={pendingApplicationId === application.id}
+                onClick={() => updateArchiveState(application.id, !application.archivedAt)}
+                title={
+                  application.archivedAt
+                    ? "Move this application back to current roles"
+                    : "Archive this application"
+                }
+                type="button"
+              >
+                {application.archivedAt ? (
+                  <RefreshCcw size={14} aria-hidden="true" />
+                ) : (
+                  <Archive size={14} aria-hidden="true" />
+                )}
+                {application.archivedAt ? "Restore" : "Archive"}
               </button>
             </div>
           </article>
@@ -669,6 +761,20 @@ function formatShortDate(value: string) {
     day: "numeric",
     month: "short",
   }).format(new Date(value));
+}
+
+function buildStageFilterCounts(applications: ApplicationOverview["recentApplications"]) {
+  const byStage = (["Review", "Applied", "Interview", "Selected", "Closed"] as const).map(
+    (stage) => ({
+      label: stage,
+      value: applications.filter((application) => applicationMatchesStage(application.status, stage)).length,
+    }),
+  );
+
+  return {
+    All: applications.length,
+    byStage,
+  };
 }
 
 function cleanDisplayText(value: string) {

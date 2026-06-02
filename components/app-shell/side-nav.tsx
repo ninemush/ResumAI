@@ -4,8 +4,6 @@ import {
   BriefcaseBusiness,
   ClipboardList,
   FileText,
-  HelpCircle,
-  Layers3,
   Library,
   PanelLeftClose,
   PanelLeftOpen,
@@ -22,6 +20,7 @@ import { brand } from "@/lib/brand";
 
 export type AppView =
   | "profile"
+  | "library"
   | "knowledgebase"
   | "jobs"
   | "applications"
@@ -36,10 +35,8 @@ const primaryItems = [
   { label: "Profile & Resume", icon: FileText, view: "resume" },
   { label: "Jobs", icon: BriefcaseBusiness, view: "jobs" },
   { label: "Applications", icon: ClipboardList, view: "applications" },
-  { label: "Sources", icon: Library, view: "knowledgebase" },
-  { label: "Artifacts", icon: Layers3, view: "artifacts" },
+  { label: "Library", icon: Library, view: "library" },
   { label: "Settings", icon: Settings, view: "settings" },
-  { label: "Support", icon: HelpCircle, view: "support" },
 ] satisfies { label: string; icon: LucideIcon; view: AppView }[];
 
 type SideNavProps = {

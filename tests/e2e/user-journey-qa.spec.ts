@@ -9,10 +9,17 @@ const workspaceViews = [
   { marker: /Profile cockpit/i, nav: /^Cockpit$/i, shot: "01-cockpit" },
   { marker: /Master profile and resume/i, nav: /Profile & Resume/i, shot: "02-profile-resume" },
   { marker: /Role decisions/i, nav: /^Jobs$/i, shot: "03-jobs" },
-  { marker: /Application pipeline/i, nav: /^Applications$/i, shot: "04-applications" },
-  { marker: /Source library/i, nav: /^Sources$/i, shot: "05-sources" },
-  { marker: /Generated materials/i, nav: /^Artifacts$/i, shot: "06-artifacts" },
+  { marker: /Roles you’re pursuing/i, nav: /^Applications$/i, shot: "04-applications" },
+  { marker: /Files and generated materials/i, nav: /^Library$/i, shot: "05-library" },
   { marker: /Account and privacy/i, nav: /^Settings$/i, shot: "07-settings" },
+];
+
+const mobileWorkspaceViews = [
+  { marker: /Profile cockpit/i, nav: /^Cockpit$/i, shot: "01-cockpit" },
+  { marker: /Master profile and resume/i, nav: /^Resume$/i, shot: "02-profile-resume" },
+  { marker: /Role decisions/i, nav: /^Jobs$/i, shot: "03-jobs" },
+  { marker: /Roles you’re pursuing/i, nav: /^Apps$/i, shot: "04-applications" },
+  { marker: /Files and generated materials/i, nav: /^Library$/i, shot: "05-library" },
 ];
 
 test.describe("emulated user journey QA", () => {
@@ -24,6 +31,7 @@ test.describe("emulated user journey QA", () => {
 
   test("walks the product like a returning user and records UX signals", async ({ page }, testInfo) => {
     test.setTimeout(120_000);
+    const isMobileProject = testInfo.project.name.toLowerCase().includes("mobile");
     const consoleErrors: string[] = [];
     const findings: Array<{ detail: string; severity: "blocker" | "concern" | "note"; surface: string }> = [];
 
@@ -34,25 +42,41 @@ test.describe("emulated user journey QA", () => {
     });
 
     await page.goto("/");
+    await page.addStyleTag({
+      content: "nextjs-portal { pointer-events: none !important; }",
+    });
     await expect(page.getByText("Career advisor")).toBeVisible();
     await expect(page.getByText("Hydration failed", { exact: false })).toHaveCount(0);
 
     await screenshot(page, testInfo, "00-returning-user-start");
     await auditSurface(page, "Returning cockpit", findings);
 
-    await page.getByRole("button", { name: /Collapse navigation/i }).click();
-    await expect(page.getByRole("button", { name: /Expand navigation/i })).toBeVisible();
-    await page.getByRole("button", { name: /Expand navigation/i }).click();
-    await expect(page.getByRole("button", { name: /Collapse navigation/i })).toBeVisible();
+    if (isMobileProject) {
+      await expect(page.locator(".mobile-workspace-nav")).toBeVisible();
+      await expect(page.locator(".side-nav")).toBeHidden();
+    } else {
+      await page.getByRole("button", { name: /Collapse navigation/i }).click();
+      await expect(page.getByRole("button", { name: /Expand navigation/i })).toBeVisible();
+      await page.getByRole("button", { name: /Expand navigation/i }).click();
+      await expect(page.getByRole("button", { name: /Collapse navigation/i })).toBeVisible();
+    }
 
-    for (const view of workspaceViews) {
-      await page.locator(".side-nav").getByRole("button", { name: view.nav }).click();
+    const viewsToAudit = isMobileProject ? mobileWorkspaceViews : workspaceViews;
+    const navRoot = isMobileProject ? page.locator(".mobile-workspace-nav") : page.locator(".side-nav");
+
+    for (const view of viewsToAudit) {
+      await navRoot.getByRole("button", { name: view.nav }).click();
       await expect(page.locator(".workspace-main").getByText(view.marker).first()).toBeVisible();
       await screenshot(page, testInfo, view.shot);
       await auditSurface(page, view.shot, findings);
     }
 
-    await page.locator(".side-nav").getByRole("button", { name: /^Cockpit$/i }).click();
+    if (isMobileProject) {
+      await page.locator(".mobile-workspace-nav").getByRole("button", { name: /^Chat$/i }).click();
+      await expect(page.locator(".workspace-main")).toBeHidden();
+    } else {
+      await page.locator(".side-nav").getByRole("button", { name: /^Cockpit$/i }).click();
+    }
     await expect(page.getByText("Career advisor")).toBeVisible();
 
     const input = page.getByPlaceholder(/Share background, role, link, or resume/i);

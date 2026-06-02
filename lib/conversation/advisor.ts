@@ -288,10 +288,11 @@ If the user asks for guidance, give pointed, domain-aware hypotheses and a
 small next step. If the profile is thin, say what evidence would unlock better
 advice. If the user has provided enough context, do not ask generic questions.
 
-You know the user's saved profile, sources, jobs, applications, artifacts, and
-recent conversation. Never ask the user to repeat information that appears in
-that context. If a user challenges you because you already have their data,
-acknowledge it directly and use the saved context.
+You know the user's saved profile, career materials, jobs, applications,
+generated resumes and letters, and recent conversation. Never ask the user to
+repeat information that appears in that context. If a user challenges you
+because you already have their data, acknowledge it directly and use the saved
+context.
 
 Keep the response easy to read in a narrow chat panel: no more than 180 words
 unless the user explicitly asks for a deeper review. Prefer this structure:
@@ -317,10 +318,10 @@ actual app command. In this advisor-only route, phrase operational next steps as
 will rebuild it" or "I can proceed." Advice must not pretend to be execution.
 
 If the current surface is owner or owner operating metrics are present, answer as
-an operational product/support copilot for the owner. Use root causes, support
-tickets, errors, and usage patterns. Be clear about what is actionable in the
-owner console: drill into root causes, review linked tickets/logs, set status,
-write user-visible notes, mark fixed, ask for more information, or close no-fix.
+an operational product/support copilot for the owner. Use diagnosed issues,
+support tickets, errors, and usage patterns. Be clear about what is actionable in
+the owner console: drill into issue groups, review linked tickets/logs, set
+status, write user-visible notes, mark fixed, ask for more information, or close no-fix.
 Do not pretend to deploy code or apply a product fix unless an actual command has
 run.
 `.trim();
@@ -363,11 +364,11 @@ Profile:
 - Target direction: ${profile?.target_direction ?? "Not provided"}
 - Target level: ${profile?.target_level ?? "Not provided"}
 
-Saved evidence:
+Saved career context:
 ${facts.length > 0 ? facts.slice(0, 50).map((fact) => `- ${fact.fact_type}: ${fact.fact_value}`).join("\n") : "No saved evidence yet."}
 
-Profile intelligence:
-${intelligence ? `- Evidence strength: ${intelligence.evidenceStrength}
+Profile read:
+${intelligence ? `- Context strength: ${intelligence.evidenceStrength}
 - Role target read: ${intelligence.roleTargetRead}
 - Resume focus: ${intelligence.resumeFocus.join(" | ") || "None yet"}
 - Impact themes: ${intelligence.proofThemes.map((theme) => `${theme.label}: ${theme.evidence.join(" / ")}`).join("; ") || "None yet"}
@@ -377,7 +378,7 @@ Latest master resume exists: ${latestResume ? "yes" : "no"}
 Latest master resume content:
 ${formatLatestResumeForAdvisor(latestResume)}
 
-Most useful source evidence:
+Useful career material:
 ${formatReadableSourcesForAdvisor(workspace.sources.recent)}
 
 Workspace:
@@ -473,40 +474,43 @@ function readSourceUsefulness(source: AdvisorSource) {
 }
 
 function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
+  const activeApplications =
+    workspace.applications?.recentApplications.filter((application) => !application.archivedAt) ?? [];
+  const activeJobs = workspace.jobs?.recentJobs.filter((job) => !job.archived_at) ?? [];
   const applicationLines = workspace.applications
     ? [
-        `Applications: ${workspace.applications.summary.total} total, ${workspace.applications.summary.needsReview} drafts/review, ${workspace.applications.summary.applied} applied, ${workspace.applications.summary.interviewing} interviewing, ${workspace.applications.summary.selected} selected.`,
-        ...workspace.applications.recentApplications.slice(0, 5).map(
+        `Applications: ${workspace.applications.summary.active} active, ${workspace.applications.summary.archived} archived, ${workspace.applications.summary.needsReview} drafts/review, ${workspace.applications.summary.applied} applied, ${workspace.applications.summary.interviewing} interviewing, ${workspace.applications.summary.selected} selected.`,
+        ...activeApplications.slice(0, 5).map(
           (application) =>
             `- Application: ${application.jobTitle ?? "Untitled role"} at ${application.companyName}; status ${application.status}; latest resume ${application.latestResumeStatus ?? "not generated"}; latest cover letter ${application.latestCoverLetterStatus ?? "not generated"}.`,
         ),
       ]
-    : ["Applications: no application records were loaded for this reply."];
+    : ["Applications: no application records were available for this reply."];
   const jobLines = workspace.jobs
     ? [
-        `Jobs: ${workspace.jobs.summary.identified} saved, ${workspace.jobs.summary.readyForReview} ready for review, ${workspace.jobs.summary.failed} failed.`,
-        ...workspace.jobs.recentJobs.slice(0, 5).map(
+        `Jobs: ${workspace.jobs.summary.active} active, ${workspace.jobs.summary.archived} archived, ${workspace.jobs.summary.readyForReview} ready for review, ${workspace.jobs.summary.failed} failed.`,
+        ...activeJobs.slice(0, 5).map(
           (job) =>
             `- Job: ${job.title ?? "Untitled role"} at ${job.company ?? "unknown company"}; status ${job.ingestion_status}; review ${job.review_status}; fit ${job.fitSnapshot.score ?? "unknown"}%; matched ${job.fitSnapshot.matchedKeywords.slice(0, 8).join(", ") || "none"}; gaps ${job.fitSnapshot.missingKeywords.slice(0, 8).join(", ") || "none"}.`,
         ),
       ]
-    : ["Jobs: no job records were loaded for this reply."];
+    : ["Jobs: no job records were available for this reply."];
   const sourceLines = [
-    "Saved source material:",
+    "Career material Pramania can use:",
     ...workspace.sources.recent.slice(0, 8).map(
       (source) =>
-        `- Source: ${source.original_filename ?? source.source_url ?? source.source_type}; type ${source.source_type}; extraction ${source.extraction_status}; readable excerpt ${formatSourceExcerpt(source.extracted_text)}.`,
+        `- Material: ${source.original_filename ?? source.source_url ?? source.source_type}; kind ${formatAdvisorSourceType(source.source_type)}; read status ${formatAdvisorSourceStatus(source.extraction_status)}; preview ${formatSourceExcerpt(source.extracted_text)}.`,
     ),
   ];
   const artifactLines = workspace.artifacts
     ? [
-        `Artifacts: ${workspace.artifacts.summary.total} total, ${workspace.artifacts.summary.resumes} resumes, ${workspace.artifacts.summary.coverLetters} cover letters, ${workspace.artifacts.summary.exportedPdfs} PDFs, ${workspace.artifacts.summary.exportedDocx} DOCX.`,
+        `Generated resumes and letters: ${workspace.artifacts.summary.total} total, ${workspace.artifacts.summary.resumes} resumes, ${workspace.artifacts.summary.coverLetters} cover letters, ${workspace.artifacts.summary.exportedPdfs} PDFs, ${workspace.artifacts.summary.exportedDocx} DOCX.`,
         ...workspace.artifacts.artifacts.slice(0, 5).map(
           (artifact) =>
-            `- Artifact: ${artifact.label}; kind ${artifact.kind}; status ${artifact.status}; role ${artifact.roleTitle ?? "master/general"}; company ${artifact.companyName ?? "none"}.`,
+            `- Generated file: ${artifact.label}; format ${formatArtifactKindForAdvisor(artifact.kind)}; status ${artifact.status}; role ${artifact.roleTitle ?? "master/general"}; company ${artifact.companyName ?? "none"}.`,
         ),
       ]
-    : ["Artifacts: no generated material records were loaded for this reply."];
+    : ["Generated resumes and letters: no generated material records were available for this reply."];
 
   return [...applicationLines, ...jobLines, ...sourceLines, ...artifactLines].join("\n");
 }
@@ -523,7 +527,7 @@ function formatOwnerOperationsForAdvisor(metrics: OwnerMetrics | null) {
   const rootCauseLines = Object.entries(rootCauses)
     .sort((left, right) => right[1] - left[1])
     .slice(0, 5)
-    .map(([rootCause, count]) => `- ${rootCause}: ${count} error signal(s)`);
+    .map(([rootCause, count]) => `- ${rootCause}: ${count} error event(s)`);
   const tickets = metrics.supportTickets
     .slice(0, 5)
     .map(
@@ -534,7 +538,7 @@ function formatOwnerOperationsForAdvisor(metrics: OwnerMetrics | null) {
   return [
     `Period: ${metrics.period.days} days.`,
     `Users: ${metrics.users.totalSignedUp} total, ${metrics.users.newInPeriod} new, ${metrics.users.activeInPeriod} active.`,
-    `System health: ${metrics.systemHealth.fixRequired} fix-required signals, ${metrics.systemHealth.clientErrors} client errors, ${metrics.systemHealth.profileExtractionFailures} profile extraction failures, ${metrics.systemHealth.jobIngestionFailures} job ingestion failures.`,
+    `System health: ${metrics.systemHealth.fixRequired} issues needing owner review, ${metrics.systemHealth.clientErrors} client errors, ${metrics.systemHealth.profileExtractionFailures} source reading failures, ${metrics.systemHealth.jobIngestionFailures} job reading failures.`,
     `Support: ${metrics.support.ticketsOpen} open, ${metrics.support.ticketsEscalated} escalated, ${metrics.support.l1Resolved} L1 resolved.`,
     `Root causes:\n${rootCauseLines.length > 0 ? rootCauseLines.join("\n") : "- none"}`,
     `Recent support tickets:\n${tickets.length > 0 ? tickets.join("\n") : "- none"}`,
@@ -543,7 +547,7 @@ function formatOwnerOperationsForAdvisor(metrics: OwnerMetrics | null) {
 
 function formatSourceExcerpt(value: string | null) {
   if (!value?.trim()) {
-    return "no readable excerpt saved";
+    return "no preview saved";
   }
 
   return value.replace(/\s+/g, " ").trim().slice(0, 900);
@@ -557,7 +561,7 @@ function formatReadableSourcesForAdvisor(sources: AdvisorSource[]) {
       const label = source.original_filename ?? source.source_url ?? source.source_type;
       const excerpt = buildAdvisorSourceExcerpt(source.extracted_text);
 
-      return `- ${label} (${source.source_type}, ${source.extraction_status}): ${excerpt}`;
+      return `- ${label} (${formatAdvisorSourceType(source.source_type)}, ${formatAdvisorSourceStatus(source.extraction_status)}): ${excerpt}`;
     });
 
   if (readableSources.length > 0) {
@@ -573,15 +577,15 @@ function formatReadableSourcesForAdvisor(sources: AdvisorSource[]) {
     );
 
   return failedSources.length > 0
-    ? `No readable source excerpts are available. Recent extraction issues:\n${failedSources.join("\n")}`
-    : "No readable source excerpts are available.";
+    ? `No saved text previews are available. Recent reading issues:\n${failedSources.join("\n")}`
+    : "No saved text previews are available.";
 }
 
 function buildAdvisorSourceExcerpt(text: string | null) {
   const cleanText = text?.replace(/\s+/g, " ").trim();
 
   if (!cleanText) {
-    return "no readable excerpt saved";
+    return "no preview saved";
   }
 
   if (cleanText.length <= 2200) {
@@ -628,7 +632,7 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
 
   const content = (latestResume as { content_json?: unknown }).content_json;
   if (!content || typeof content !== "object") {
-    return "Master resume exists, but readable content has not been saved in a usable format yet.";
+    return "Master resume exists, but its content is not available in a useful format yet.";
   }
 
   const read = (key: string) => {
@@ -707,7 +711,7 @@ function buildContextAwareAdvisorFallback({
     .join(", ");
   const sourceEvidence = workspace.sources.recent
     .map((source) => formatSourceExcerpt(source.extracted_text))
-    .filter((excerpt) => excerpt !== "no readable excerpt saved")
+    .filter((excerpt) => excerpt !== "no preview saved")
     .slice(0, 3);
   const gaps = intelligence?.highValueGaps.slice(0, 4) ?? [];
   const resumeText = formatLatestResumeForAdvisor(latestResume);
@@ -743,12 +747,48 @@ The evidence already visible includes ${formatListForSentence(impactEvidence ?? 
   if (normalized.includes("resume") || normalized.includes("profile pdf") || normalized.includes("learn")) {
     return `I have enough saved context to answer without asking you to re-upload. The current master resume shows this snapshot: ${resumeText.replace(/\n/g, " ")}
 
-The saved source material adds this useful evidence: ${formatListForSentence(sourceEvidence, "role history, scope, skills, and positioning evidence from the uploaded source")}. What I would improve next is the experience architecture: group the evidence by role, attach dates and scope, and turn each role into outcome-led bullets. That is the difference between a senior activity list and a resume that reads like credible executive value.`;
+The files and notes you saved add this useful evidence: ${formatListForSentence(sourceEvidence, "role history, scope, skills, and positioning evidence from your saved materials")}. What I would improve next is the experience architecture: group the evidence by role, attach dates and scope, and turn each role into outcome-led bullets. That is the difference between a senior activity list and a resume that reads like credible executive value.`;
   }
 
   return `Based on what I already know, I would position you around ${roleRead}. The strongest evidence to preserve is ${formatListForSentence(impactEvidence ?? [], impactEvidenceFallback || "the clearest evidence already saved in your profile")}.
 
-The next best move is to sharpen the master profile into role-based evidence: what you owned, how large it was, what changed, and why it mattered commercially. I will use your saved profile, sources, jobs, applications, and artifacts as context instead of asking you to start over.`;
+The next best move is to sharpen the master profile into role-based evidence: what you owned, how large it was, what changed, and why it mattered commercially. I will use your saved profile, career materials, jobs, applications, and generated files as context instead of asking you to start over.`;
+}
+
+function formatAdvisorSourceType(type: string) {
+  const labels: Record<string, string> = {
+    docx: "Word document",
+    image: "image",
+    linkedin: "LinkedIn profile",
+    linkedin_archive: "LinkedIn export",
+    natural_language: "note",
+    pdf: "PDF",
+    profile_link: "profile link",
+    text: "text file",
+  };
+
+  return labels[type] ?? type.replace(/_/g, " ");
+}
+
+function formatAdvisorSourceStatus(status: string) {
+  const labels: Record<string, string> = {
+    deleted: "removed",
+    failed: "needs help",
+    pending: "waiting to be read",
+    processing: "being read",
+    succeeded: "ready",
+  };
+
+  return labels[status] ?? status.replace(/_/g, " ");
+}
+
+function formatArtifactKindForAdvisor(kind: string) {
+  const labels: Record<string, string> = {
+    cover_letter: "cover letter",
+    resume: "resume",
+  };
+
+  return labels[kind] ?? kind.replace(/_/g, " ");
 }
 
 function stripJsonOnlyInstruction(input: string) {

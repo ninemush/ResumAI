@@ -10,7 +10,7 @@ test.describe("authenticated workspace", () => {
     await authenticateDemoUser({ context, request });
   });
 
-  test("renders the signed-in cockpit without marketing or hydration errors", async ({ page }) => {
+  test("renders the signed-in workspace without marketing or hydration errors", async ({ page, isMobile }) => {
     const consoleErrors: string[] = [];
     page.on("console", (message) => {
       if (message.type() === "error") {
@@ -20,8 +20,14 @@ test.describe("authenticated workspace", () => {
 
     await page.goto("/");
 
-    await expect(page.getByRole("button", { name: /Cockpit/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Profile & Resume/i })).toBeVisible();
+    if (isMobile) {
+      await expect(page.getByText("Career advisor")).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Chat$/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Resume$/i })).toBeVisible();
+    } else {
+      await expect(page.getByRole("button", { name: /Cockpit/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /Profile & Resume/i })).toBeVisible();
+    }
     await expect(page.getByText("Career advisor")).toBeVisible();
     await expect(page.getByText("Turn your experience into a sharper career story")).toHaveCount(0);
     await expect(page.getByText("Hydration failed", { exact: false })).toHaveCount(0);
@@ -49,15 +55,11 @@ test.describe("authenticated workspace", () => {
     test.skip(!isMobile, "Mobile workspace focus is a mobile-specific regression check.");
 
     await page.goto("/");
-    await page.locator(".side-nav").getByRole("button", { name: /^Jobs$/i }).click();
+    await page.getByRole("button", { name: /^Jobs$/i }).last().click();
 
     await expect(page.getByRole("heading", { name: /Role decisions/i })).toBeVisible();
-    await expect(page.getByText("Career advisor")).toBeVisible();
-
-    const jobsBox = await page.getByRole("heading", { name: /Role decisions/i }).boundingBox();
-    const advisorBox = await page.getByText("Career advisor").boundingBox();
-
-    expect(jobsBox?.y ?? 0).toBeLessThan(advisorBox?.y ?? Number.POSITIVE_INFINITY);
+    await expect(page.getByText("Career advisor")).toBeHidden();
+    await expect(page.locator(".mobile-workspace-nav")).toBeVisible();
   });
 
   test("keeps profile mode chat-first on mobile without cockpit overlap", async ({ page, isMobile }) => {
@@ -66,10 +68,10 @@ test.describe("authenticated workspace", () => {
     await page.goto("/");
 
     await expect(page.getByText("Career advisor")).toBeVisible();
-    await expect(page.getByText("Profile cockpit")).toBeVisible();
+    await expect(page.getByText("Profile cockpit")).toBeHidden();
 
     const shellClassName = await page.locator(".workspace-shell").evaluate((element) => element.className);
-    const layoutBoxes = await page.evaluate(() => {
+    const layoutState = await page.evaluate(() => {
       const conversation = document.querySelector(".conversation-pane")?.getBoundingClientRect();
       const workspace = document.querySelector(".workspace-main")?.getBoundingClientRect();
 
@@ -84,18 +86,20 @@ test.describe("authenticated workspace", () => {
           ? {
               bottom: workspace.bottom,
               top: workspace.top,
-            }
+          }
           : null,
+        workspaceVisible: Boolean(
+          workspace &&
+            workspace.width > 0 &&
+            workspace.height > 0 &&
+            getComputedStyle(document.querySelector(".workspace-main") as Element).display !== "none",
+        ),
       };
     });
 
     expect(shellClassName).toContain("conversation-first");
-    expect(layoutBoxes.conversation?.top ?? Number.POSITIVE_INFINITY).toBeLessThan(
-      layoutBoxes.workspace?.top ?? 0,
-    );
-    expect(layoutBoxes.conversation?.bottom ?? 0).toBeLessThanOrEqual(
-      (layoutBoxes.workspace?.top ?? Number.POSITIVE_INFINITY) + 1,
-    );
+    expect(layoutState.conversation?.top ?? Number.POSITIVE_INFINITY).toBeLessThan(240);
+    expect(layoutState.workspaceVisible).toBe(false);
   });
 
   test("answers broad advisor questions from saved workspace context", async ({ page, isMobile }) => {
@@ -141,16 +145,18 @@ test.describe("authenticated workspace", () => {
     await expectCompactRecordIfPresent(page, "Role decisions", ".job-record");
 
     await page.locator(".side-nav").getByRole("button", { name: /^Applications$/i }).click();
-    await expect(page.getByRole("heading", { name: /Application pipeline/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Roles you’re pursuing/i })).toBeVisible();
     await expect(page.getByText("Follow-up tracker")).toHaveCount(0);
-    await expectCompactRecordIfPresent(page, "Application pipeline", ".application-record");
+    await expectCompactRecordIfPresent(page, "Roles you’re pursuing", ".application-record");
 
-    await page.locator(".side-nav").getByRole("button", { name: /^Artifacts$/i }).click();
-    await expect(page.getByRole("heading", { name: /Generated materials/i })).toBeVisible();
-    await expectCompactRecordIfPresent(page, "Generated materials", ".artifact-record");
+    await page.locator(".side-nav").getByRole("button", { name: /^Library$/i }).click();
+    await expect(page.getByRole("heading", { name: /Files and generated materials/i })).toBeVisible();
+    await page.getByRole("tab", { name: /Generated/i }).click();
+    await expect(page.getByRole("heading", { name: /Generated resumes and letters/i })).toBeVisible();
+    await expectCompactRecordIfPresent(page, "Generated resumes and letters", ".artifact-record");
 
-    await page.locator(".side-nav").getByRole("button", { name: /^Sources$/i }).click();
-    await expect(page.getByRole("heading", { name: /Source library/i })).toBeVisible();
+    await page.getByRole("tab", { name: /Uploaded/i }).click();
+    await expect(page.getByRole("heading", { name: /Uploaded files and links/i })).toBeVisible();
     await expect(page.getByText("Knowledgebase", { exact: false })).toHaveCount(0);
     await expect(page.getByText("Captured details", { exact: false })).toHaveCount(0);
     await expect(page.getByText("profile signals", { exact: false })).toHaveCount(0);
@@ -185,8 +191,8 @@ test.describe("authenticated workspace", () => {
     const experienceIndex = sectionOrder.indexOf("Professional Experience");
 
     expect(skillsIndex).toBeGreaterThanOrEqual(0);
-    expect(highlightsIndex).toBeGreaterThan(skillsIndex);
-    expect(experienceIndex).toBeGreaterThan(highlightsIndex);
+    expect(experienceIndex).toBeGreaterThan(skillsIndex);
+    expect(highlightsIndex).toBeGreaterThan(experienceIndex);
 
     const roleMetaOverflow = await preview.locator(".resume-role-meta-row").evaluateAll((rows) =>
       rows.map((row) => ({
@@ -210,10 +216,10 @@ test.describe("authenticated workspace", () => {
 
     await ownerNav.click();
 
-    await expect(page.getByRole("heading", { name: /Operating command center/i })).toBeVisible();
+    await expect(page.getByRole("main", { name: /Operating command center/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /Today/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /30 days/i })).toBeVisible();
-    await expect(page.getByText("Monitor acquisition, activation")).toBeVisible();
+    await expect(page.getByRole("region", { name: /Operating metrics/i })).toBeVisible();
 
     await expect(page.getByRole("button", { name: /^Users$/i })).toBeVisible();
     const ownerTabs = page.getByLabel("Owner console sections");
@@ -239,6 +245,7 @@ test.describe("authenticated workspace", () => {
     await page.locator(".side-nav").getByRole("button", { name: /Profile & Resume/i }).click();
     await expect(page.getByRole("heading", { name: /Master profile and resume/i })).toBeVisible();
 
+    await page.getByRole("button", { name: /Edit resume/i }).click();
     const headline = page.getByLabel("Resume headline");
     await expect(headline).toBeVisible();
     await headline.fill("Temporary QA headline");

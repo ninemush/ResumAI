@@ -289,23 +289,17 @@ export function ProfileExplorer({
           value={jobOverview.summary.readyForReview}
         />
         <CockpitMetric
-          detail="Audit the files, links, and notes that shaped your profile"
-          label="Sources"
-          onClick={() => onNavigate("knowledgebase")}
-          value={overview.sourceCount}
-        />
-        <CockpitMetric
-          detail="Open generated resumes and cover letters"
-          label="Artifacts"
-          onClick={() => onNavigate("artifacts")}
-          value={artifactOverview.summary.total}
+          detail="Open uploaded files and generated materials"
+          label="Library"
+          onClick={() => onNavigate("library")}
+          value={overview.sourceCount + artifactOverview.summary.total}
         />
         <div className="stage-progress-card">
           <div>
             <span>Application outcomes</span>
             <strong>
               {applicationOverview.summary.total === 0
-                ? "No active pipeline yet"
+                ? "No active applications yet"
                 : `${applicationOverview.summary.selected} selected`}
             </strong>
           </div>
