@@ -11,7 +11,7 @@ const workspaceViews = [
   { marker: /Role decisions/i, nav: /^Jobs$/i, shot: "03-jobs" },
   { marker: /Roles you’re pursuing/i, nav: /^Applications$/i, shot: "04-applications" },
   { marker: /Files and generated materials/i, nav: /^Library$/i, shot: "05-library" },
-  { marker: /Account and privacy/i, nav: /^Settings$/i, shot: "07-settings" },
+  { marker: /Account, billing, and access/i, nav: /^Settings$/i, shot: "07-settings" },
 ];
 
 const mobileWorkspaceViews = [

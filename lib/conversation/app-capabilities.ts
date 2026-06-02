@@ -104,10 +104,22 @@ export const APP_CAPABILITIES: AppCapability[] = [
   {
     actionLabel: "Open credits",
     creditCost: null,
-    description: "Review credits, apply promo codes, and purchase additional credit packs.",
-    examples: ["credits", "billing", "promo", "purchase", "pricing"],
+    description:
+      "Review credit balance, usage history, purchase history, receipts, promo codes, password reset, and additional credit packs.",
+    examples: [
+      "credits",
+      "billing",
+      "promo",
+      "purchase",
+      "pricing",
+      "invoice",
+      "receipt",
+      "usage",
+      "password reset",
+      "forgot password",
+    ],
     id: "credits",
-    userValue: "Understand remaining credits and top up when needed.",
+    userValue: "Understand remaining credits, see account history, reset access, and top up when needed.",
     view: "settings",
   },
   {
@@ -166,4 +178,3 @@ export function inferSuggestedLinksFromMessage({
     view: capability.view,
   }));
 }
-

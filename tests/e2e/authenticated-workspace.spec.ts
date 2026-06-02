@@ -162,7 +162,10 @@ test.describe("authenticated workspace", () => {
     await expect(page.getByText("profile signals", { exact: false })).toHaveCount(0);
 
     await page.locator(".side-nav").getByRole("button", { name: /^Settings$/i }).click();
-    await expect(page.getByRole("heading", { name: /Account and privacy/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Account, billing, and access/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Credit usage/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Purchase history/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Send reset link/i })).toBeVisible();
     await expect(page.getByText("Workspace controls")).toHaveCount(0);
   });
 

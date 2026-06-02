@@ -60,6 +60,23 @@ export type CreditPurchaseOption = {
   url: string | null;
 };
 
+export type CreditLedgerEvent = {
+  amount: number;
+  createdAt: string;
+  description: string;
+  eventType: string;
+  id: string;
+  invoiceStatus: "not_applicable" | "receipt_emailed";
+  kind: "grant" | "purchase" | "usage";
+  resourceLabel: string;
+};
+
+export type CreditHistory = {
+  invoices: CreditLedgerEvent[];
+  purchases: CreditLedgerEvent[];
+  usage: CreditLedgerEvent[];
+};
+
 export type CreditFeature =
   | "applicationMaterialsExport"
   | "applicationMaterialsGenerate"
@@ -137,6 +154,36 @@ export async function redeemPromoCode(code: string) {
   }
 
   return withPurchaseOptions(creditSummarySchema.parse(data));
+}
+
+const creditLedgerRowSchema = z.object({
+  created_at: z.string(),
+  credit_delta: z.number().int(),
+  event_type: z.string(),
+  id: z.string().uuid(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
+  resource_type: z.string().nullable(),
+});
+
+export async function getCreditHistory(): Promise<CreditHistory> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("credit_ledger")
+    .select("id, event_type, credit_delta, resource_type, metadata, created_at")
+    .order("created_at", { ascending: false })
+    .limit(80);
+
+  if (error) {
+    throw mapCreditError(error.message);
+  }
+
+  const rows = z.array(creditLedgerRowSchema).parse(data ?? []).map(mapCreditLedgerRow);
+
+  return {
+    invoices: rows.filter((row) => row.kind === "purchase"),
+    purchases: rows.filter((row) => row.kind === "purchase"),
+    usage: rows,
+  };
 }
 
 export const createPromoCodeSchema = z.object({
@@ -388,4 +435,77 @@ export function getPurchaseOptions(): CreditPurchaseOption[] {
     recommended: option.recommended,
     url: process.env[option.envKey] ?? null,
   }));
+}
+
+function mapCreditLedgerRow(row: z.infer<typeof creditLedgerRowSchema>): CreditLedgerEvent {
+  const amount = row.credit_delta;
+  const metadata = row.metadata ?? {};
+  const productId = typeof metadata.product_id === "string" ? metadata.product_id : null;
+  const purchaseOption =
+    productId ? CREDIT_PURCHASE_OPTIONS.find((option) => option.productId === productId) : null;
+  const kind: CreditLedgerEvent["kind"] =
+    row.event_type === "revenuecat_purchase"
+      ? "purchase"
+      : amount > 0
+        ? "grant"
+        : "usage";
+
+  return {
+    amount,
+    createdAt: row.created_at,
+    description: describeCreditEvent(row.event_type, row.resource_type, purchaseOption?.label),
+    eventType: row.event_type,
+    id: row.id,
+    invoiceStatus: kind === "purchase" ? "receipt_emailed" : "not_applicable",
+    kind,
+    resourceLabel: describeResource(row.resource_type),
+  };
+}
+
+function describeCreditEvent(eventType: string, resourceType: string | null, purchaseLabel?: string) {
+  if (eventType === "signup_bonus") return "Starter credits";
+  if (eventType === "promo_code_redeemed") return "Promo code credit grant";
+  if (eventType === "revenuecat_purchase") return `${purchaseLabel ?? "Credit pack"} purchase`;
+
+  const feature = eventType.replace(/^feature_/, "");
+
+  switch (feature) {
+    case "applicationMaterialsExport":
+      return "Exported application materials";
+    case "applicationMaterialsGenerate":
+      return "Generated tailored application materials";
+    case "jobIngest":
+      return "Read and analyzed a job link";
+    case "masterResumeExport":
+      return "Exported master resume";
+    case "masterResumeGenerate":
+      return "Generated master resume draft";
+    case "profileSourceExtract":
+      return "Read a resume, profile, link, or file";
+    default:
+      return resourceType ? `Credit activity for ${describeResource(resourceType)}` : "Credit activity";
+  }
+}
+
+function describeResource(resourceType: string | null) {
+  switch (resourceType) {
+    case "application":
+      return "Application";
+    case "application_materials":
+      return "Application materials";
+    case "job_post":
+      return "Job post";
+    case "master_resume":
+      return "Master resume";
+    case "profile_source":
+      return "Profile source";
+    case "promo_code":
+      return "Promo code";
+    case "revenuecat_purchase":
+      return "Purchase";
+    case "account":
+      return "Account";
+    default:
+      return "Workspace";
+  }
 }
