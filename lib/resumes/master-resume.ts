@@ -222,7 +222,7 @@ export async function generateMasterResume(
   return {
     overview: await getMasterResumeOverview(userId),
     resumeId: generatedResume.id,
-    summary: "Generated a master resume draft from your current career foundation.",
+    summary: "Created a master resume draft from your current career foundation.",
   };
 }
 
@@ -501,7 +501,7 @@ function enrichMasterResumeWithSourceEvidence(
     reviewerNotes: [
       ...resume.reviewerNotes,
       ...(sourceSections.length > 0
-        ? ["Review the imported role timeline for exact dates, company names, and ownership scope before exporting."]
+        ? ["Review the imported role timeline for exact dates, company names, and ownership scope before downloading files."]
         : []),
     ].slice(0, 8),
   });

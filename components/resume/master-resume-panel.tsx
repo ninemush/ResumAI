@@ -126,14 +126,14 @@ export function MasterResumePanel({
       const payload = await response.json();
 
       if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to generate the master resume.");
+        setMessage(payload.error?.message ?? "Unable to create the master resume.");
         return;
       }
 
       setCurrentOverview(payload.overview);
       setDraft(payload.overview.latestResume?.content ?? null);
       setSavedDraft(payload.overview.latestResume?.content ?? null);
-      setMessage(payload.summary ?? "Generated a master resume draft.");
+      setMessage(payload.summary ?? "Created a master resume draft.");
       router.refresh();
     } finally {
       setIsGenerating(false);
@@ -144,11 +144,11 @@ export function MasterResumePanel({
     const focus = variantFocus.trim();
 
     if (!focus) {
-      setMessage("Add a target role, role family, or positioning lane before generating a focused variant.");
+      setMessage("Add a target role, role family, or positioning lane before creating a focused variant.");
       return;
     }
 
-    if (isDirty && !window.confirm("Generating a focused variant will replace unsaved resume edits. Continue?")) {
+    if (isDirty && !window.confirm("Creating a focused variant will replace unsaved resume edits. Continue?")) {
       return;
     }
 
@@ -166,14 +166,14 @@ export function MasterResumePanel({
       const payload = await response.json();
 
       if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to generate that focused variant.");
+        setMessage(payload.error?.message ?? "Unable to create that focused variant.");
         return;
       }
 
       setCurrentOverview(payload.overview);
       setDraft(payload.overview.latestResume?.content ?? null);
       setSavedDraft(payload.overview.latestResume?.content ?? null);
-      setMessage(`Generated a focused master resume variant for ${focus}. Review it before exporting.`);
+      setMessage(`Created a focused master resume variant for ${focus}. Review it before downloading files.`);
       router.refresh();
     } finally {
       setIsGeneratingVariant(false);
@@ -222,7 +222,7 @@ export function MasterResumePanel({
 
   async function exportResumeFiles() {
     if (isDirty) {
-      setMessage("Save or discard your resume edits before exporting PDF and DOCX files.");
+      setMessage("Save or discard your resume edits before preparing PDF and DOCX files.");
       return;
     }
 
@@ -730,7 +730,7 @@ export function MasterResumePanel({
       <section className="resume-readiness-panel" aria-label="Master resume readiness">
         <div>
           <span>{currentOverview.canGenerate ? "Ready" : "Needs work"}</span>
-          <strong>Resume actions</strong>
+          <strong>Improve or download</strong>
           <p>{currentOverview.readinessNote}</p>
         </div>
         <div className="resume-readiness-actions">
@@ -740,17 +740,17 @@ export function MasterResumePanel({
             onClick={generateResume}
             title={
               currentOverview.canGenerate
-                ? "Generate a master resume from career evidence"
-                : "Add career evidence before generating"
+                ? "Create a master resume from career evidence"
+                : "Add career evidence before creating a resume"
             }
             type="button"
           >
             <WandSparkles size={15} aria-hidden="true" />
             {isGenerating
-              ? "Generating..."
+              ? "Creating..."
               : currentOverview.latestResume
                 ? "Rebuild resume"
-                : "Generate resume"}
+                : "Create resume"}
           </button>
           <button
             className="secondary-action"
@@ -766,11 +766,11 @@ export function MasterResumePanel({
             className="secondary-action"
             disabled={!draft || isExporting}
             onClick={exportResumeFiles}
-            title="Export validated ATS-friendly PDF and DOCX files from the standard template"
+            title="Create downloadable ATS-friendly PDF and DOCX files from the standard template"
             type="button"
           >
             <Download size={15} aria-hidden="true" />
-            {isExporting ? "Exporting..." : "Export PDF + DOCX"}
+            {isExporting ? "Preparing..." : "Download PDF + DOCX"}
           </button>
           {currentOverview.latestResume?.pdfDownloadUrl ? (
             <a
@@ -802,7 +802,7 @@ export function MasterResumePanel({
       <section className="resume-export-panel" aria-label="Resume export readiness">
         <article>
           <span>Format</span>
-          <strong>Resume-ready layout</strong>
+          <strong>Standard ATS layout</strong>
           <p>Pramania keeps the structure consistent and changes the content for your goals.</p>
         </article>
         <article>
@@ -816,8 +816,8 @@ export function MasterResumePanel({
           <p>{currentOverview.latestResume?.docxDownloadUrl ? "Editable Word file is stored for this resume." : "Export after review to create the DOCX."}</p>
         </article>
         <article>
-          <span>Photo-safe</span>
-          <strong>Separate format</strong>
+          <span>Profile photo</span>
+          <strong>Separate design</strong>
           <p>ATS-first exports stay photo-free. Profile-photo formats will use a separate template.</p>
         </article>
       </section>
@@ -846,7 +846,7 @@ export function MasterResumePanel({
             type="button"
           >
             <WandSparkles size={15} aria-hidden="true" />
-            {isGeneratingVariant ? "Generating..." : "Generate focused variant"}
+            {isGeneratingVariant ? "Creating..." : "Create focused variant"}
           </button>
         </div>
       </section>

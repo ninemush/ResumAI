@@ -273,7 +273,7 @@ export async function generateApplicationMaterials(
     model,
     promptVersion: APPLICATION_MATERIALS_PROMPT_VERSION,
     resumeId: resume.id,
-    summary: `Generated targeted resume bullets and a cover letter for ${context.job_title ?? "the role"} at ${context.company_name}.`,
+    summary: `Created a role-specific resume packet for ${context.job_title ?? "the role"} at ${context.company_name}.`,
   };
 }
 

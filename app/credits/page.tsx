@@ -4,7 +4,7 @@ import { CREDIT_COSTS, CREDIT_PURCHASE_OPTIONS } from "@/lib/billing/credits";
 
 export const metadata = {
   description:
-    "Learn how Pramania credits are used for reading career sources, job analysis, resume generation, application materials, and exports.",
+    "Learn how Pramania credits are used for reading career sources, job analysis, resume drafts, application packets, and downloadable files.",
   title: "How Credits Work | Pramania",
 };
 
@@ -18,13 +18,13 @@ const creditActions = [
   {
     cost: CREDIT_COSTS.masterResumeGenerate,
     examples: "Creating or rebuilding your master ATS resume from confirmed profile context.",
-    name: "Master resume generation",
+    name: "Master resume draft",
     value: "Creates the reusable foundation for role-specific applications.",
   },
   {
     cost: CREDIT_COSTS.masterResumeExport,
-    examples: "Exporting the latest master resume into a validated PDF or DOCX file.",
-    name: "Master resume export",
+    examples: "Preparing the latest master resume as a validated PDF or DOCX file.",
+    name: "Master resume download",
     value: "Produces a file you can review, download, and use outside Pramania.",
   },
   {
@@ -35,14 +35,14 @@ const creditActions = [
   },
   {
     cost: CREDIT_COSTS.applicationMaterialsGenerate,
-    examples: "Generating a tailored resume and cover letter for one specific job.",
-    name: "Application materials",
+    examples: "Creating a tailored resume and cover letter for one specific job.",
+    name: "Application packet",
     value: "Creates role-specific materials without overwriting your master resume.",
   },
   {
     cost: CREDIT_COSTS.applicationMaterialsExport,
-    examples: "Exporting job-specific resume and cover letter files for an application record.",
-    name: "Application export",
+    examples: "Preparing job-specific resume and cover letter files for an application record.",
+    name: "Application files",
     value: "Saves downloadable files against that job so you can revisit what you used.",
   },
 ];
@@ -51,8 +51,8 @@ const sampleJourneys = [
   {
     actions: [
       "Drop a LinkedIn profile export PDF",
-      "Generate a master resume",
-      "Export the master resume",
+      "Create a master resume",
+      "Download the master resume",
     ],
     credits:
       CREDIT_COSTS.profileSourceExtract +
@@ -63,8 +63,8 @@ const sampleJourneys = [
   {
     actions: [
       "Paste one job link",
-      "Generate job-specific materials",
-      "Export the files",
+      "Create job-specific materials",
+      "Download the files",
     ],
     credits:
       CREDIT_COSTS.jobIngest +
@@ -75,8 +75,8 @@ const sampleJourneys = [
   {
     actions: [
       "Analyze three job links",
-      "Generate materials for the strongest fit",
-      "Export the application package",
+      "Create materials for the strongest fit",
+      "Download the application package",
     ],
     credits:
       CREDIT_COSTS.jobIngest * 3 +

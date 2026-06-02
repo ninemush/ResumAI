@@ -178,9 +178,9 @@ export function ApplicationPanel({
 
       if (!exportResponse.ok) {
         setMessage(
-          `${payload.summary ?? "Generated targeted resume and cover-letter materials."} ${
+          `${payload.summary ?? "Created role-specific resume and cover-letter drafts."} ${
             exportPayload.error?.message ??
-            "Review the drafts, then export PDF and DOCX files from the review panel."
+            "Open the packet, review the drafts, then download PDF and DOCX files."
           }`,
         );
         await loadReview(applicationId);
@@ -191,7 +191,7 @@ export function ApplicationPanel({
       setActiveReview(exportPayload.review);
       setResumeDraft(exportPayload.review.resume?.content ?? null);
       setCoverLetterDraft(exportPayload.review.coverLetter?.content ?? "");
-      setMessage("Generated, validated, and exported resume and cover-letter PDF/DOCX files.");
+      setMessage("Created and prepared downloadable resume and cover-letter PDF/DOCX files.");
       router.refresh();
     } finally {
       setGeneratingApplicationId(null);
@@ -471,18 +471,18 @@ export function ApplicationPanel({
                 title={
                   application.archivedAt
                     ? "Restore this application before generating materials"
-                    : "Generate tailored resume and cover letter, then export PDF and DOCX files"
+                    : "Create a role-specific resume and cover letter, then export PDF and DOCX files"
                 }
               >
                 <WandSparkles size={14} aria-hidden="true" />
                 {generatingApplicationId === application.id
-                  ? "Generating"
+                  ? "Creating"
                   : application.latestResumeHasPdf &&
                       application.latestResumeHasDocx &&
                       application.latestCoverLetterHasPdf &&
                       application.latestCoverLetterHasDocx
                     ? "Regenerate"
-                    : "Generate"}
+                    : "Create packet"}
               </button>
               <button
                 className="secondary-action compact-action"
@@ -491,7 +491,7 @@ export function ApplicationPanel({
                 type="button"
               >
                 <FileText size={14} aria-hidden="true" />
-                {loadingReviewApplicationId === application.id ? "Opening" : "Review"}
+                {loadingReviewApplicationId === application.id ? "Opening" : "Open packet"}
               </button>
               <button
                 className="secondary-action compact-action"
@@ -520,7 +520,7 @@ export function ApplicationPanel({
         <section className="materials-review" aria-label="Application materials review">
           <div className="materials-review-header">
             <div>
-              <p className="eyebrow">Material review</p>
+              <p className="eyebrow">Application packet</p>
               <h2>
                 {activeReview.application.jobTitle ?? "Application"} at{" "}
                 {activeReview.application.companyName}
@@ -545,13 +545,13 @@ export function ApplicationPanel({
                 onClick={exportFiles}
                 title={
                   activeReview.exportReadiness.canExport
-                    ? "Export validated resume and cover-letter PDF/DOCX files"
-                    : "Generate both resume and cover-letter materials before exporting"
+                    ? "Download resume and cover-letter PDF/DOCX files"
+                    : "Create both resume and cover-letter drafts before downloading"
                 }
                 type="button"
               >
                 <Download size={15} aria-hidden="true" />
-                {exportingApplicationId === activeReview.application.id ? "Exporting..." : "Export files"}
+                {exportingApplicationId === activeReview.application.id ? "Preparing..." : "Download files"}
               </button>
             </div>
           </div>
@@ -571,12 +571,12 @@ export function ApplicationPanel({
                 ))}
               </ul>
             ) : (
-              <p>Materials are ready for PDF and DOCX export.</p>
+              <p>Files are ready for PDF and DOCX download.</p>
             )}
           </div>
 
           {!resumeDraft || !activeReview.coverLetter ? (
-            <p className="empty-state">Generate materials first, then this review area becomes editable.</p>
+            <p className="empty-state">Create the packet first, then this review area becomes editable.</p>
           ) : (
             <div className="materials-review-layout">
               <section className="material-document-editor" aria-label="Targeted resume editor">
@@ -749,8 +749,8 @@ function materialPillClass(status: string | null) {
 function formatExportStatus(status: MaterialReview["exportReadiness"]["status"]) {
   const labels: Record<MaterialReview["exportReadiness"]["status"], string> = {
     exported: "Files exported",
-    missing_materials: "Materials incomplete",
-    ready_to_export: "Ready for validated export",
+    missing_materials: "Packet incomplete",
+    ready_to_export: "Ready to download",
   };
 
   return labels[status];

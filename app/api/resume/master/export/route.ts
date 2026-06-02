@@ -61,7 +61,7 @@ function toApiError(error: unknown) {
       return {
         category: "auth",
         code: "auth.required",
-        message: "Please sign in before exporting your master resume.",
+        message: "Please sign in before downloading your master resume files.",
         status: 401,
       };
     }
@@ -70,7 +70,7 @@ function toApiError(error: unknown) {
       return {
         category: "not_found",
         code: "resume.not_found",
-        message: "Generate a master resume before exporting files.",
+        message: "Create a master resume before downloading files.",
         status: 404,
       };
     }
@@ -80,7 +80,7 @@ function toApiError(error: unknown) {
         category: "validation",
         code: "resume.pdf_validation_failed",
         message:
-          "The master resume PDF did not pass content validation. Review the draft, save it, and try exporting again.",
+          "The master resume PDF did not pass content validation. Review the draft, save it, and try preparing the files again.",
         status: 422,
       };
     }
@@ -106,7 +106,7 @@ function buildStorageError() {
   return {
     category: "server",
     code: "resume.artifact_storage_failed",
-    message: "The files were built but could not be stored securely. Try exporting again.",
+    message: "The files were built but could not be stored securely. Try preparing them again.",
     status: 500,
   };
 }

@@ -301,11 +301,11 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                   className="secondary-action compact-action"
                   disabled={pendingJobId === job.id}
                   onClick={() => logApplication(job.id)}
-                  title="Log this job, generate targeted materials, and export validated PDF/DOCX files when possible"
+                  title="Create an application record and prepare role-specific resume and letter drafts"
                   type="button"
                 >
                   <Sparkles size={14} aria-hidden="true" />
-                  {pendingJobId === job.id ? "Working" : "Apply"}
+                  {pendingJobId === job.id ? "Preparing" : "Create packet"}
                 </button>
               ) : null}
             </div>

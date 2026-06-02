@@ -275,7 +275,7 @@ function buildExportReadiness({
     return {
       canExport: false,
       status: "missing_materials",
-      warnings: ["Generate both resume and cover-letter materials before exporting PDFs."],
+      warnings: ["Create both resume and cover-letter drafts before downloading files."],
     };
   }
 

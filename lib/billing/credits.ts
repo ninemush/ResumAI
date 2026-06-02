@@ -315,7 +315,7 @@ export function buildCreditsApiError(error: unknown) {
       category: "billing",
       code: "billing.credits_exhausted",
       message:
-        "You have used your included credits. Add credits to keep generating, ingesting, and exporting materials.",
+        "You have used your included credits. Add credits to keep reading sources, creating packets, and downloading files.",
       purchaseOptions: error.summary?.purchaseOptions ?? getPurchaseOptions(),
       status: 402,
       summary: error.summary,
@@ -471,15 +471,15 @@ function describeCreditEvent(eventType: string, resourceType: string | null, pur
 
   switch (feature) {
     case "applicationMaterialsExport":
-      return "Exported application materials";
+      return "Downloaded application files";
     case "applicationMaterialsGenerate":
-      return "Generated tailored application materials";
+      return "Created role-specific application packet";
     case "jobIngest":
       return "Read and analyzed a job link";
     case "masterResumeExport":
-      return "Exported master resume";
+      return "Downloaded master resume files";
     case "masterResumeGenerate":
-      return "Generated master resume draft";
+      return "Created master resume draft";
     case "profileSourceExtract":
       return "Read a resume, profile, link, or file";
     default:

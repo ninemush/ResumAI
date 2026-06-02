@@ -6035,7 +6035,7 @@ input:focus {
     box-shadow: 0 -18px 40px rgba(18, 31, 49, 0.08);
     display: grid;
     gap: 2px;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     left: 0;
     padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
     position: fixed;

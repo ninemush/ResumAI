@@ -15,11 +15,9 @@ const workspaceViews = [
 ];
 
 const mobileWorkspaceViews = [
-  { marker: /Profile cockpit/i, nav: /^Cockpit$/i, shot: "01-cockpit" },
-  { marker: /Master profile and resume/i, nav: /^Resume$/i, shot: "02-profile-resume" },
+  { marker: /Master profile and resume/i, nav: /^Profile$/i, shot: "02-profile-resume" },
   { marker: /Role decisions/i, nav: /^Jobs$/i, shot: "03-jobs" },
   { marker: /Roles you’re pursuing/i, nav: /^Apps$/i, shot: "04-applications" },
-  { marker: /Files and generated materials/i, nav: /^Library$/i, shot: "05-library" },
 ];
 
 test.describe("emulated user journey QA", () => {

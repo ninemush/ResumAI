@@ -84,7 +84,7 @@ function toApiError(error: unknown) {
       return {
         category: "auth",
         code: "auth.required",
-        message: "Please sign in before exporting materials.",
+        message: "Please sign in before downloading application files.",
         status: 401,
       };
     }
@@ -102,7 +102,7 @@ function toApiError(error: unknown) {
       return {
         category: "not_found",
         code: "application.materials_not_found",
-        message: "Generate resume and cover-letter materials before exporting files.",
+        message: "Create resume and cover-letter drafts before downloading files.",
         status: 404,
       };
     }
@@ -111,7 +111,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "application.pdf_validation_failed",
-        message: "The PDF export did not pass layout/content validation. Keep the editable materials and try again after reviewing the content.",
+        message: "The PDF did not pass layout/content validation. Keep the editable materials and try again after reviewing the content.",
         status: 422,
       };
     }
@@ -125,7 +125,7 @@ function toApiError(error: unknown) {
       return {
         category: "server",
         code: "application.artifact_storage_failed",
-        message: "The files were built but could not be stored securely. Try exporting again.",
+        message: "The files were built but could not be stored securely. Try preparing them again.",
         status: 500,
       };
     }

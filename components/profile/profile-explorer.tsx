@@ -637,14 +637,14 @@ function readNextMove({
   if (jobOverview.summary.readyForReview > 0) {
     return {
       title: "Review the role fit",
-      body: "You have a readable job post ready. Review fit, gaps, and tradeoffs before generating materials.",
+      body: "You have a readable job post ready. Review fit, gaps, and tradeoffs before creating an application packet.",
     };
   }
 
   if (applicationOverview.summary.needsReview > 0) {
     return {
       title: "Finish the application record",
-      body: "You have an application waiting for a next action. Generate materials, update status, or decide whether to proceed.",
+      body: "You have an application waiting for a next action. Create the packet, update status, or decide whether to proceed.",
     };
   }
 

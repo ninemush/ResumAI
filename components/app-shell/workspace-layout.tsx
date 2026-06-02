@@ -6,8 +6,6 @@ import {
   BriefcaseBusiness,
   ClipboardList,
   FileText,
-  LayoutDashboard,
-  Library,
   MessageCircle,
 } from "lucide-react";
 
@@ -245,12 +243,10 @@ function MobileWorkspaceNav({
   onSelectView: (target: WorkspaceNavigationTarget) => void;
 }) {
   const items = [
-    { icon: LayoutDashboard, label: "Cockpit", target: "profile" as const },
-    { icon: FileText, label: "Resume", target: "resume" as const },
+    { icon: MessageCircle, label: "Chat", target: "profile" as const, chat: true },
+    { icon: FileText, label: "Profile", target: "resume" as const },
     { icon: BriefcaseBusiness, label: "Jobs", target: "jobs" as const },
     { icon: ClipboardList, label: "Apps", target: "applications" as const },
-    { icon: Library, label: "Library", target: "library" as const },
-    { icon: MessageCircle, label: "Chat", target: "profile" as const, chat: true },
   ];
 
   return (

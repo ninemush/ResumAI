@@ -219,7 +219,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "application.job_text_required",
-        message: "The job post needs readable text before I can generate targeted materials.",
+        message: "The job post needs readable text before I can create a credible application packet.",
         status: 422,
       };
     }
@@ -228,7 +228,7 @@ function toApiError(error: unknown) {
       return {
         category: "not_found",
         code: "application.materials_not_found",
-        message: "Generate materials before reviewing or editing them.",
+        message: "Create the application packet before reviewing or editing it.",
         status: 404,
       };
     }
@@ -237,7 +237,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "profile.context_too_thin",
-        message: "I need a little more profile evidence before generating credible materials.",
+        message: "I need a little more profile evidence before creating credible application materials.",
         status: 422,
       };
     }

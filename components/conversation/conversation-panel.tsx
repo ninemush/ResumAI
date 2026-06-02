@@ -294,19 +294,6 @@ export function ConversationPanel({
         return;
       }
 
-      const targetDirectionAnswer = await processTargetDirectionAnswer(text);
-
-      if (targetDirectionAnswer) {
-        appendAssistantMessage(targetDirectionAnswer, true);
-        router.refresh();
-        return;
-      }
-
-      if (shouldRouteToAdvisor(text) && !looksLikeConcreteWorkflowCommand(text)) {
-        appendAssistantMessage(await processAdvisorQuestion(text), true);
-        return;
-      }
-
       const supportIssueAction = await processSupportIssueAction(text);
 
       if (supportIssueAction) {
@@ -323,14 +310,6 @@ export function ConversationPanel({
         return;
       }
 
-      const profileEditAction = await processProfileEditAction(text);
-
-      if (profileEditAction) {
-        appendAssistantMessage(profileEditAction, true);
-        router.refresh();
-        return;
-      }
-
       const applicationAction = await processApplicationAction(text);
 
       if (applicationAction) {
@@ -343,6 +322,27 @@ export function ConversationPanel({
 
       if (existingSourceAction) {
         appendAssistantMessage(existingSourceAction, true);
+        router.refresh();
+        return;
+      }
+
+      if (shouldRouteToAdvisor(text) || shouldTreatAsAdvisorReply(text, messages)) {
+        appendAssistantMessage(await processAdvisorQuestion(text), true);
+        return;
+      }
+
+      const profileEditAction = await processProfileEditAction(text);
+
+      if (profileEditAction) {
+        appendAssistantMessage(profileEditAction, true);
+        router.refresh();
+        return;
+      }
+
+      const targetDirectionAnswer = await processTargetDirectionAnswer(text);
+
+      if (targetDirectionAnswer) {
+        appendAssistantMessage(targetDirectionAnswer, true);
         router.refresh();
         return;
       }
@@ -417,10 +417,10 @@ export function ConversationPanel({
         return logSupportIssueAndReply({
           area: "master_resume",
           errorCode: payload.error?.code ?? "MASTER_RESUME_EXPORT_FAILED",
-          errorMessage: payload.error?.message ?? "Master resume export failed.",
+          errorMessage: payload.error?.message ?? "Master resume file preparation failed.",
           source: "chat_command_failure",
-          systemResponse: payload.error?.message ?? "I could not export the master resume PDF yet.",
-          title: "Master resume export failed",
+          systemResponse: payload.error?.message ?? "I could not prepare the master resume files yet.",
+          title: "Master resume download failed",
           userMessage: text,
         });
       }
@@ -448,9 +448,9 @@ export function ConversationPanel({
       return logSupportIssueAndReply({
         area: "master_resume",
         errorCode: payload.error?.code ?? "MASTER_RESUME_GENERATION_FAILED",
-        errorMessage: payload.error?.message ?? "Master resume generation failed.",
+        errorMessage: payload.error?.message ?? "Master resume creation failed.",
         source: "chat_command_failure",
-        systemResponse: payload.error?.message ?? "I could not generate the master resume yet.",
+        systemResponse: payload.error?.message ?? "I could not create the master resume yet.",
         title: "Master resume update failed",
         userMessage: text,
       });
@@ -503,7 +503,7 @@ export function ConversationPanel({
 
       if (actionableCandidates.length !== 1) {
         return actionableCandidates.length === 0
-          ? "I can generate targeted materials once an application is logged from a readable job post."
+          ? "I can create a role-specific application packet once an application is logged from a readable job post."
           : `I can do that, but I need to know which application. Do you mean ${actionableCandidates.map(formatApplicationLabel).join(", ")}?`;
       }
 
@@ -514,7 +514,7 @@ export function ConversationPanel({
       const payload = await response.json();
 
       if (!response.ok) {
-        return payload.error?.message ?? "I could not generate those materials yet.";
+        return payload.error?.message ?? "I could not create that application packet yet.";
       }
 
       const exportSummary = await exportApplicationMaterials(application.id);
@@ -582,7 +582,7 @@ export function ConversationPanel({
     const applicationId = payload.application?.id;
     const materialSummary = applicationId
       ? await generateAndExportApplicationMaterials(applicationId)
-      : "Next, we should generate targeted materials before marking it applied.";
+      : "Next, we should create the role-specific application packet before marking it applied.";
 
     return payload.created
       ? `Logged ${payload.application?.jobTitle ?? "that role"} at ${payload.application?.companyName ?? "the company"} as an application. ${materialSummary}`
@@ -596,7 +596,7 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
-      return payload.error?.message ?? "I could not generate targeted materials yet.";
+      return payload.error?.message ?? "I could not create the role-specific application packet yet.";
     }
 
     const exportSummary = await exportApplicationMaterials(applicationId);
@@ -611,12 +611,12 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
-      return payload.error?.message ?? "The editable materials are saved, but export needs another attempt from Applications.";
+      return payload.error?.message ?? "The editable materials are saved, but file preparation needs another attempt from Applications.";
     }
 
     return payload.review?.exportReadiness?.status === "exported"
-      ? "I also exported validated PDF and DOCX files and saved them in Applications and Library."
-      : "The editable materials are saved; Applications will show what still needs export.";
+      ? "I also prepared validated PDF and DOCX files and saved them in Applications and Library."
+      : "The editable materials are saved; Applications will show what still needs file preparation.";
   }
 
   async function processProfileText(text: string) {
@@ -1616,12 +1616,15 @@ function formatSourceIntakeReply({
   });
   const sourceRead =
     savedFactCount > 0 || extractedFactCount > 0
-      ? `${label}. I read it and used it to refresh your career profile. I will carry that forward into the master resume and role-fit advice.`
-      : `${label}. I saved it in your Library. I need another pass before I change your master profile, so I will retry from the saved copy instead of asking you to upload it again.`;
+      ? `What I learned:\n- I read ${label} and refreshed your career profile.\n- I will carry the useful experience, skills, scope, and impact evidence into your master resume and role-fit advice.`
+      : `What happened:\n- I saved ${label} in your Library.\n- I need another pass before changing your master profile, so I will retry from the saved copy instead of asking you to upload it again.`;
+  const directionRead = direction ? `Current direction:\n- ${direction.replace(/^My current read:\s*/i, "")}` : null;
+  const advisorSection = advisorRead ? `Advisor read:\n${advisorRead}` : null;
+  const nextSection = nextQuestion ? `Next best move:\n- ${nextQuestion}` : null;
 
-  return [sourceRead, advisorRead, direction, nextQuestion]
+  return [sourceRead, advisorSection, directionRead, nextSection]
     .filter(Boolean)
-    .join(" ");
+    .join("\n\n");
 }
 
 function selectSourceFollowUp({
@@ -2217,22 +2220,22 @@ function buildFileExtractionFailureMessage({
   sourceType: string;
 }) {
   if (sourceType === "image") {
-    return `${fileName} was saved as an image source, but I could not read the visible text yet: ${message} You can retry from Library, paste the key text here, or drop a clearer screenshot and I will fold it into your profile.`;
+    return `${fileName} is saved in your Library. I could not read the visible text on this pass: ${message} I will keep it available for another OCR pass; if there is a key line you want me to use immediately, paste it here.`;
   }
 
   if (sourceType === "pdf") {
-    return `${fileName} was saved as a PDF, but I could not read usable career text yet: ${message} If it is a scanned PDF, drop screenshots or paste the important sections and I will add them to your career context.`;
+    return `${fileName} is saved in your Library. I could not read enough career text on this pass: ${message} I will keep the file available for another extraction pass before asking you to re-upload anything.`;
   }
 
   if (sourceType === "docx") {
-    return `${fileName} was saved as a Word file, but I could not read enough text yet: ${message} You can retry from Library or paste the resume text here.`;
+    return `${fileName} is saved in your Library. I could not read enough Word document text on this pass: ${message} I will keep it available for another extraction pass; if there is a key section you want me to use immediately, paste it here.`;
   }
 
   if (sourceType === "linkedin") {
-    return `${fileName} was saved as a LinkedIn export source, but I could not extract profile data yet: ${message} LinkedIn archive ZIPs and profile CSV files work best. You can retry from Library or drop the LinkedIn PDF export instead.`;
+    return `${fileName} is saved in your Library. I could not extract LinkedIn profile data on this pass: ${message} I will keep it available for another extraction pass. LinkedIn archive ZIPs, profile CSV files, and the LinkedIn PDF export are the most reliable formats.`;
   }
 
-  return `${fileName} was saved as a source, but I could not extract readable text yet: ${message} You can retry from Library or paste the important text here.`;
+  return `${fileName} is saved in your Library. I could not extract readable career text on this pass: ${message} I will keep it available for another extraction pass before asking you to upload anything again.`;
 }
 
 function looksLikeExistingSourceRequest(text: string) {

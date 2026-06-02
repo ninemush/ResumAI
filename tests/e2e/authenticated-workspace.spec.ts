@@ -23,7 +23,7 @@ test.describe("authenticated workspace", () => {
     if (isMobile) {
       await expect(page.getByText("Career advisor")).toBeVisible();
       await expect(page.getByRole("button", { name: /^Chat$/i })).toBeVisible();
-      await expect(page.getByRole("button", { name: /^Resume$/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Profile$/i })).toBeVisible();
     } else {
       await expect(page.getByRole("button", { name: /Cockpit/i })).toBeVisible();
       await expect(page.getByRole("button", { name: /Profile & Resume/i })).toBeVisible();
