@@ -446,24 +446,34 @@ function describeCreditEvent(eventType: string, resourceType: string | null, pur
   if (eventType === "promo_code_redeemed") return "Promo code credit grant";
   if (eventType === "revenuecat_purchase") return `${purchaseLabel ?? "Credit pack"} purchase`;
 
-  const feature = eventType.replace(/^feature_/, "");
+  const isHistoricalEstimate = eventType.startsWith("historical_feature_");
+  const feature = eventType.replace(/^historical_/, "").replace(/^feature_/, "");
 
+  let description: string;
   switch (feature) {
     case "applicationMaterialsExport":
-      return "Downloaded application files";
+      description = "Downloaded application files";
+      break;
     case "applicationMaterialsGenerate":
-      return "Created role-specific application packet";
+      description = "Created role-specific application packet";
+      break;
     case "jobIngest":
-      return "Read and analyzed a job link";
+      description = "Read and analyzed a job link";
+      break;
     case "masterResumeExport":
-      return "Downloaded master resume files";
+      description = "Downloaded master resume files";
+      break;
     case "masterResumeGenerate":
-      return "Created master resume draft";
+      description = "Created master resume draft";
+      break;
     case "profileSourceExtract":
-      return "Read a resume, profile, link, or file";
+      description = "Read a resume, profile, link, or file";
+      break;
     default:
-      return resourceType ? `Credit activity for ${describeResource(resourceType)}` : "Credit activity";
+      description = resourceType ? `Credit activity for ${describeResource(resourceType)}` : "Credit activity";
   }
+
+  return isHistoricalEstimate ? `Historical estimate: ${description}` : description;
 }
 
 function describeResource(resourceType: string | null) {
@@ -472,10 +482,16 @@ function describeResource(resourceType: string | null) {
       return "Application";
     case "application_materials":
       return "Application materials";
+    case "application_materials_export":
+      return "Application export";
+    case "job_ingestion":
+      return "Job post";
     case "job_post":
       return "Job post";
     case "master_resume":
       return "Master resume";
+    case "master_resume_export":
+      return "Master resume export";
     case "profile_source":
       return "Profile source";
     case "promo_code":
