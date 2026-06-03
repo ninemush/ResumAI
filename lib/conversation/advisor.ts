@@ -357,6 +357,16 @@ If the user asks for guidance, give pointed, domain-aware hypotheses and a
 small next step. If the profile is thin, say what evidence would unlock better
 advice. If the user has provided enough context, do not ask generic questions.
 
+Use the supplied domain and seniority read as your calibration layer. Treat the
+strongest domain read as the primary lane and a second strong read as adjacent,
+not as a contradiction. Adapt your advice by seniority: early-career users need
+project, tool, learning, and scope prompts; individual contributors need craft,
+quality, autonomy, and delivery evidence; managers need team, cadence, coaching,
+and operating metrics; executives need mandate, P&L/budget exposure, governance,
+decision authority, board/executive stakeholders, and before/after business
+outcomes. Ask the one highest-value domain-specific question, not a generic
+"share examples" question.
+
 You know the user's saved profile, career materials, jobs, applications,
 generated resumes and letters, and recent conversation. Never ask the user to
 repeat information that appears in that context. If a user challenges you
@@ -449,6 +459,7 @@ ${facts.length > 0 ? facts.slice(0, 50).map((fact) => `- ${fact.fact_type}: ${fa
 Profile read:
 ${intelligence ? `- Context strength: ${intelligence.evidenceStrength}
 - Role target read: ${intelligence.roleTargetRead}
+- ${formatDomainSeniorityForAdvisor(intelligence)}
 - Resume focus: ${intelligence.resumeFocus.join(" | ") || "None yet"}
 - Impact themes: ${intelligence.proofThemes.map((theme) => `${theme.label}: ${theme.evidence.join(" / ")}`).join("; ") || "None yet"}
 - High-value gaps: ${intelligence.highValueGaps.map((gap) => `[${gap.severity}] ${gap.label}: ${gap.prompt}`).join("; ") || "None"}` : "No profile intelligence yet."}
@@ -471,6 +482,39 @@ ${recentConversation.length > 0 ? recentConversation.slice(-12).map((item) => `-
 
 Return JSON only.
 `.trim();
+}
+
+function formatDomainSeniorityForAdvisor(intelligence: ProfileIntelligence) {
+  const domains =
+    intelligence.domainReads.length > 0
+      ? intelligence.domainReads
+          .map(
+            (read) =>
+              `${read.label} (${read.confidence}; evidence: ${
+                read.evidenceTerms.slice(0, 8).join(", ") || "none"
+              })`,
+          )
+          .join("; ")
+      : "No confident domain read yet";
+
+  return [
+    `Domain read: ${domains}`,
+    `Seniority read: ${intelligence.seniorityRead.label} (${intelligence.seniorityRead.confidence}; evidence: ${
+      intelligence.seniorityRead.evidenceTerms.slice(0, 8).join(", ") || "none"
+    })`,
+    `Domain/seniority metric families: ${
+      intelligence.advisorPromptPack.metricFamilies.slice(0, 10).join(" | ") ||
+      "revenue, cost, customer, risk, speed, quality, scale"
+    }`,
+    `Suggested evidence questions: ${
+      intelligence.advisorPromptPack.gentlePrompts.slice(0, 6).join(" | ") ||
+      "Ask for one initiative, the scale, and what changed"
+    }`,
+    `Resume implications: ${
+      intelligence.advisorPromptPack.resumeImplications.slice(0, 6).join(" | ") ||
+      "Keep claims grounded in verified evidence"
+    }`,
+  ].join("\n- ");
 }
 
 function normalizeAdvisorPayload({
@@ -1104,6 +1148,27 @@ function buildMetricGuidance({
   resumeText: string;
   sources: AdvisorSource[];
 }) {
+  const intelligence = profile
+    ? buildProfileIntelligence({
+        facts,
+        profile,
+      })
+    : null;
+  const contextualRecommendations = [
+    ...(intelligence?.advisorPromptPack.metricFamilies ?? []),
+    ...(intelligence?.seniorityRead.resumeImplications ?? []),
+  ]
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const uniqueContextualRecommendations = Array.from(new Set(contextualRecommendations));
+
+  if (uniqueContextualRecommendations.length > 0) {
+    return formatListForSentence(
+      uniqueContextualRecommendations.slice(0, 6),
+      uniqueContextualRecommendations[0],
+    );
+  }
+
   const corpus = [
     profile?.headline,
     profile?.summary,

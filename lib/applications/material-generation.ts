@@ -427,8 +427,13 @@ ${facts.map((fact) => `- [${fact.fact_type}${fact.user_confirmed ? ", confirmed"
 Profile intelligence:
 - Evidence strength: ${intelligence.evidenceStrength}
 - Role target read: ${intelligence.roleTargetRead}
+- Domain read:
+${formatIntelligenceDomainReadForPrompt(intelligence)}
+- Seniority read: ${intelligence.seniorityRead.label} (${intelligence.seniorityRead.confidence})
 - Positioning context: ${intelligence.positioningSignals.join(", ") || "None yet"}
 - Resume focus: ${intelligence.resumeFocus.join(" | ") || "None yet"}
+- Domain-specific metric families: ${intelligence.advisorPromptPack.metricFamilies.join(" | ") || "None yet"}
+- Domain/seniority resume implications: ${intelligence.advisorPromptPack.resumeImplications.join(" | ") || "None yet"}
 - High-value gaps: ${intelligence.highValueGaps.map((gap) => `${gap.label}: ${gap.prompt}`).join(" | ") || "None"}
 
 Master resume context:
@@ -468,6 +473,21 @@ Return:
 - resume.experienceBullets: selected highlights for this application. This is
   a highlight reel, not a replacement for role-by-role work history.
 `.trim();
+}
+
+function formatIntelligenceDomainReadForPrompt(intelligence: ProfileIntelligence) {
+  if (intelligence.domainReads.length === 0) {
+    return "  - No confident domain read yet";
+  }
+
+  return intelligence.domainReads
+    .map(
+      (read) =>
+        `  - ${read.label} (${read.confidence}; evidence: ${
+          read.evidenceTerms.slice(0, 8).join(", ") || "none"
+        })`,
+    )
+    .join("\n");
 }
 
 async function readLatestMasterResume({

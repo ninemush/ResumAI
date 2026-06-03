@@ -1420,8 +1420,15 @@ grounded in the excerpt text.
 Profile intelligence:
 - Evidence strength: ${intelligence.evidenceStrength}
 - Role target read: ${intelligence.roleTargetRead}
+- Domain read:
+${formatIntelligenceDomainReadForPrompt(intelligence)}
+- Seniority read: ${intelligence.seniorityRead.label} (${intelligence.seniorityRead.confidence})
 - Positioning context: ${intelligence.positioningSignals.join(", ") || "None yet"}
 - Resume focus: ${intelligence.resumeFocus.join(" | ") || "None yet"}
+- Domain-specific metric families: ${intelligence.advisorPromptPack.metricFamilies.join(" | ") || "None yet"}
+- Domain/seniority resume implications: ${intelligence.advisorPromptPack.resumeImplications.join(" | ") || "None yet"}
+- Suggested evidence questions:
+${intelligence.advisorPromptPack.gentlePrompts.length > 0 ? intelligence.advisorPromptPack.gentlePrompts.map((prompt) => `  - ${prompt}`).join("\n") : "  - None yet"}
 - Impact themes:
 ${intelligence.proofThemes.length > 0 ? intelligence.proofThemes.map((theme) => `  - ${theme.label}: ${theme.evidence.join(" / ")}`).join("\n") : "  - None yet"}
 - High-value gaps to resolve:
@@ -1432,6 +1439,21 @@ ${instruction ?? "No extra instruction."}
 
 Return structured JSON only.
 `.trim();
+}
+
+function formatIntelligenceDomainReadForPrompt(intelligence: ProfileIntelligence) {
+  if (intelligence.domainReads.length === 0) {
+    return "  - No confident domain read yet";
+  }
+
+  return intelligence.domainReads
+    .map(
+      (read) =>
+        `  - ${read.label} (${read.confidence}; evidence: ${
+          read.evidenceTerms.slice(0, 8).join(", ") || "none"
+        })`,
+    )
+    .join("\n");
 }
 
 function formatSourceEvidenceForPrompt(sourceEvidence: SourceEvidence[]) {
