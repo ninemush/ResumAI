@@ -675,6 +675,211 @@ export function MasterResumePanel({
                 </p>
               )}
             </section>
+            {(isEditing || draft.specialProjects.length > 0) ? (
+              <section>
+                <div className="resume-section-heading-row">
+                  <h3>Special Projects</h3>
+                  {isEditing ? (
+                    <button
+                      className="resume-inline-action"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          specialProjects: [
+                            ...draft.specialProjects,
+                            {
+                              bullets: [""],
+                              context: "",
+                              dates: "",
+                              name: "",
+                            },
+                          ],
+                        })
+                      }
+                      type="button"
+                    >
+                      <Plus size={14} aria-hidden="true" />
+                      Add project
+                    </button>
+                  ) : null}
+                </div>
+                {isEditing ? (
+                  <div className="resume-credential-list">
+                    {draft.specialProjects.map((item, index) => (
+                      <div className="resume-credential-row" key={`special-project-${index}`}>
+                        <div className="resume-credential-grid">
+                          <label>
+                            <span>Project</span>
+                            <input
+                              aria-label={`Special project name ${index + 1}`}
+                              onChange={(event) =>
+                                updateSpecialProjectItem(draft, setDraft, index, { name: event.target.value })
+                              }
+                              placeholder="Project or initiative"
+                              value={item.name}
+                            />
+                          </label>
+                          <label>
+                            <span>Context</span>
+                            <input
+                              aria-label={`Special project context ${index + 1}`}
+                              onChange={(event) =>
+                                updateSpecialProjectItem(draft, setDraft, index, { context: event.target.value })
+                              }
+                              placeholder="Company, client, or program"
+                              value={item.context ?? ""}
+                            />
+                          </label>
+                          <label>
+                            <span>Dates</span>
+                            <input
+                              aria-label={`Special project dates ${index + 1}`}
+                              onChange={(event) =>
+                                updateSpecialProjectItem(draft, setDraft, index, { dates: event.target.value })
+                              }
+                              placeholder="Dates"
+                              value={item.dates ?? ""}
+                            />
+                          </label>
+                          <button
+                            aria-label={`Remove special project ${index + 1}`}
+                            className="icon-only-action"
+                            onClick={() => removeSpecialProjectItem(draft, setDraft, index)}
+                            type="button"
+                          >
+                            <Trash2 size={14} aria-hidden="true" />
+                          </button>
+                        </div>
+                        <div className="resume-bullet-editor">
+                          {item.bullets.map((bullet, bulletIndex) => (
+                            <div className="resume-bullet-row" key={`special-project-${index}-bullet-${bulletIndex}`}>
+                              <span aria-hidden="true">•</span>
+                              <textarea
+                                aria-label={`Special project bullet ${bulletIndex + 1}`}
+                                onChange={(event) =>
+                                  updateSpecialProjectBullet(draft, setDraft, index, bulletIndex, event.target.value)
+                                }
+                                rows={Math.max(1, Math.ceil(bullet.length / 88))}
+                                value={bullet}
+                              />
+                              <button
+                                aria-label={`Remove special project bullet ${bulletIndex + 1}`}
+                                className="icon-only-action"
+                                onClick={() => removeSpecialProjectBullet(draft, setDraft, index, bulletIndex)}
+                                type="button"
+                              >
+                                <Trash2 size={14} aria-hidden="true" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          className="resume-inline-action"
+                          onClick={() => addSpecialProjectBullet(draft, setDraft, index)}
+                          type="button"
+                        >
+                          <Plus size={14} aria-hidden="true" />
+                          Add bullet
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="resume-credential-list">
+                    {draft.specialProjects.map((item, index) => (
+                      <div className="resume-credential-static" key={`${item.name}-${index}`}>
+                        <strong>{item.name}</strong>
+                        <span>{formatSpecialProjectMeta(item)}</span>
+                        {item.bullets.length > 0 ? (
+                          <ul className="resume-static-bullet-list">
+                            {item.bullets.map((bullet, bulletIndex) => (
+                              <li key={`${item.name}-bullet-${bulletIndex}`}>{bullet}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : null}
+            {(isEditing || draft.languages.length > 0) ? (
+              <section>
+                <div className="resume-section-heading-row">
+                  <h3>Languages</h3>
+                  {isEditing ? (
+                    <button
+                      className="resume-inline-action"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          languages: [
+                            ...draft.languages,
+                            {
+                              name: "",
+                              proficiency: "",
+                            },
+                          ],
+                        })
+                      }
+                      type="button"
+                    >
+                      <Plus size={14} aria-hidden="true" />
+                      Add language
+                    </button>
+                  ) : null}
+                </div>
+                {isEditing ? (
+                  <div className="resume-credential-list">
+                    {draft.languages.map((item, index) => (
+                      <div className="resume-credential-row" key={`language-${index}`}>
+                        <div className="resume-credential-grid">
+                          <label>
+                            <span>Language</span>
+                            <input
+                              aria-label={`Language ${index + 1}`}
+                              onChange={(event) =>
+                                updateLanguageItem(draft, setDraft, index, { name: event.target.value })
+                              }
+                              placeholder="Language"
+                              value={item.name}
+                            />
+                          </label>
+                          <label>
+                            <span>Proficiency</span>
+                            <input
+                              aria-label={`Language proficiency ${index + 1}`}
+                              onChange={(event) =>
+                                updateLanguageItem(draft, setDraft, index, { proficiency: event.target.value })
+                              }
+                              placeholder="Native, fluent, conversational..."
+                              value={item.proficiency ?? ""}
+                            />
+                          </label>
+                          <button
+                            aria-label={`Remove language ${index + 1}`}
+                            className="icon-only-action"
+                            onClick={() => removeLanguageItem(draft, setDraft, index)}
+                            type="button"
+                          >
+                            <Trash2 size={14} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="resume-credential-list">
+                    {draft.languages.map((item, index) => (
+                      <div className="resume-credential-static" key={`${item.name}-${index}`}>
+                        <strong>{item.name}</strong>
+                        <span>{item.proficiency ?? ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : null}
             {(isEditing || draft.education.length > 0) ? (
               <section>
                 <div className="resume-section-heading-row">
@@ -1209,7 +1414,127 @@ function sanitizeResumeDraft(draft: ResumeContent): ResumeContent {
         bullets: section.bullets.filter((bullet) => bullet.trim()),
       }))
       .filter((section) => section.roleTitle.trim() || section.company?.trim() || section.bullets.length > 0),
+    languages: draft.languages.filter((item) => item.name.trim()),
+    specialProjects: draft.specialProjects
+      .map((item) => ({
+        ...item,
+        bullets: item.bullets.filter((bullet) => bullet.trim()),
+      }))
+      .filter((item) => item.name.trim() || item.bullets.length > 0),
   };
+}
+
+function formatSpecialProjectMeta(item: ResumeContent["specialProjects"][number]) {
+  return [item.context, item.dates].filter(Boolean).join(" · ");
+}
+
+function updateSpecialProjectItem(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  index: number,
+  patch: Partial<ResumeContent["specialProjects"][number]>,
+) {
+  setDraft({
+    ...draft,
+    specialProjects: draft.specialProjects.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, ...patch } : item,
+    ),
+  });
+}
+
+function removeSpecialProjectItem(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  index: number,
+) {
+  setDraft({
+    ...draft,
+    specialProjects: draft.specialProjects.filter((_, itemIndex) => itemIndex !== index),
+  });
+}
+
+function updateSpecialProjectBullet(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  projectIndex: number,
+  bulletIndex: number,
+  value: string,
+) {
+  setDraft({
+    ...draft,
+    specialProjects: draft.specialProjects.map((project, index) =>
+      index === projectIndex
+        ? {
+            ...project,
+            bullets: project.bullets.map((bullet, currentBulletIndex) =>
+              currentBulletIndex === bulletIndex ? value : bullet,
+            ),
+          }
+        : project,
+    ),
+  });
+}
+
+function addSpecialProjectBullet(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  projectIndex: number,
+) {
+  setDraft({
+    ...draft,
+    specialProjects: draft.specialProjects.map((project, index) =>
+      index === projectIndex
+        ? {
+            ...project,
+            bullets: [...project.bullets, ""],
+          }
+        : project,
+    ),
+  });
+}
+
+function removeSpecialProjectBullet(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  projectIndex: number,
+  bulletIndex: number,
+) {
+  setDraft({
+    ...draft,
+    specialProjects: draft.specialProjects.map((project, index) =>
+      index === projectIndex
+        ? {
+            ...project,
+            bullets: project.bullets.filter((_, currentBulletIndex) => currentBulletIndex !== bulletIndex),
+          }
+        : project,
+    ),
+  });
+}
+
+function updateLanguageItem(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  index: number,
+  patch: Partial<ResumeContent["languages"][number]>,
+) {
+  setDraft({
+    ...draft,
+    languages: draft.languages.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, ...patch } : item,
+    ),
+  });
+}
+
+function removeLanguageItem(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  index: number,
+) {
+  setDraft({
+    ...draft,
+    languages: draft.languages.filter((_, itemIndex) => itemIndex !== index),
+  });
 }
 
 function updateEducationItem(

@@ -705,7 +705,7 @@ function buildAdvisorSourceExcerpt(text: string | null) {
 
   const windows: Array<{ end: number; start: number }> = [{ start: 0, end: 850 }];
   const sectionPattern =
-    /\b(summary|experience|employment|work history|professional experience|projects?|skills?|education|certifications?|licenses?|awards?|honou?rs?|publications?|volunteer|recommendations?)\b/gi;
+    /\b(summary|experience|employment|work history|professional experience|projects?|skills?|languages?|education|certifications?|licenses?|awards?|honou?rs?|publications?|volunteer|recommendations?)\b/gi;
   let match: RegExpExecArray | null;
 
   while ((match = sectionPattern.exec(cleanText)) && windows.length < 6) {
@@ -786,6 +786,37 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
         .filter((item): item is string => Boolean(item))
         .slice(0, 5)
     : [];
+  const specialProjects = Array.isArray((content as Record<string, unknown>).specialProjects)
+    ? ((content as Record<string, unknown>).specialProjects as unknown[])
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const record = item as Record<string, unknown>;
+          const heading = [record.name, record.context, record.dates]
+            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+            .join(" | ");
+          const bullets = Array.isArray(record.bullets)
+            ? record.bullets.filter((bullet): bullet is string => typeof bullet === "string").slice(0, 3)
+            : [];
+
+          if (!heading && bullets.length === 0) return null;
+
+          return `${heading || "Project"}${bullets.length > 0 ? `: ${bullets.join(" / ")}` : ""}`;
+        })
+        .filter((item): item is string => Boolean(item))
+        .slice(0, 4)
+    : [];
+  const languages = Array.isArray((content as Record<string, unknown>).languages)
+    ? ((content as Record<string, unknown>).languages as unknown[])
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const record = item as Record<string, unknown>;
+          return [record.name, record.proficiency]
+            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+            .join(" | ");
+        })
+        .filter((item): item is string => Boolean(item))
+        .slice(0, 8)
+    : [];
   const experienceSections = Array.isArray((content as Record<string, unknown>).experienceSections)
     ? ((content as Record<string, unknown>).experienceSections as unknown[])
         .map((item) => {
@@ -813,6 +844,8 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
     `- Skills: ${readArray("skills").slice(0, 16).join(", ") || "None"}`,
     `- Role-based experience: ${experienceSections.join(" || ") || "None"}`,
     `- Experience highlights: ${readArray("experienceBullets").slice(0, 8).join(" / ") || "None"}`,
+    `- Special projects: ${specialProjects.join(" || ") || "None"}`,
+    `- Languages: ${languages.join(" || ") || "None"}`,
     `- Education: ${education.join(" || ") || "None"}`,
     `- Certifications: ${certifications.join(" || ") || "None"}`,
     `- Gaps: ${readArray("keywordGaps").slice(0, 6).join(" / ") || "None"}`,

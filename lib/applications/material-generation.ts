@@ -18,6 +18,8 @@ import {
   MAX_RESUME_CERTIFICATION_ITEMS,
   MAX_RESUME_EDUCATION_ITEMS,
   MAX_RESUME_EXPERIENCE_SECTIONS,
+  MAX_RESUME_LANGUAGE_ITEMS,
+  MAX_RESUME_SPECIAL_PROJECT_ITEMS,
   normalizeResumeContent,
   parseResumeContent,
   resumeContentSchema,
@@ -179,6 +181,8 @@ export async function generateApplicationMaterials(
                 "summary",
                 "skills",
                 "experienceSections",
+                "specialProjects",
+                "languages",
                 "education",
                 "certifications",
                 "experienceBullets",
@@ -222,6 +226,38 @@ export async function generateApplicationMaterials(
                         maxItems: 7,
                         items: { type: "string" },
                       },
+                    },
+                  },
+                },
+                specialProjects: {
+                  type: "array",
+                  maxItems: MAX_RESUME_SPECIAL_PROJECT_ITEMS,
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["name", "context", "dates", "bullets"],
+                    properties: {
+                      name: { type: "string" },
+                      context: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      dates: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      bullets: {
+                        type: "array",
+                        maxItems: 6,
+                        items: { type: "string" },
+                      },
+                    },
+                  },
+                },
+                languages: {
+                  type: "array",
+                  maxItems: MAX_RESUME_LANGUAGE_ITEMS,
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["name", "proficiency"],
+                    properties: {
+                      name: { type: "string" },
+                      proficiency: { anyOf: [{ type: "string" }, { type: "null" }] },
                     },
                   },
                 },
@@ -424,8 +460,11 @@ Return:
 - resume.experienceSections: preserve chronological role history by company,
   title, date, and location from the master resume, but tailor only the bullets
   that are relevant to this role. Do not flatten chronology into highlights.
-- resume.education and resume.certifications: preserve supported master resume
-  values when present. Use empty arrays only when no evidence exists.
+- resume.specialProjects, resume.languages, resume.education, and
+  resume.certifications: preserve supported master resume values when present
+  and useful. Use empty arrays only when no evidence exists.
+- ATS order is summary, skills, selected highlights, role-based work history,
+  special projects, languages, education, certifications.
 - resume.experienceBullets: selected highlights for this application. This is
   a highlight reel, not a replacement for role-by-role work history.
 `.trim();
@@ -484,6 +523,19 @@ function formatMasterResume(masterResume: ResumeContent | null) {
         .join(" | ");
       return [heading ? `  - ${heading}` : "  - Role", ...section.bullets.map((bullet) => `    - ${bullet}`)];
     }),
+    "- Special projects:",
+    ...(masterResume.specialProjects.length > 0
+      ? masterResume.specialProjects.map((item) => {
+          const heading = [item.name, item.context, item.dates].filter(Boolean).join(" | ");
+          return `  - ${heading || "Project"}${item.bullets.length > 0 ? `: ${item.bullets.join(" / ")}` : ""}`;
+        })
+      : ["  - None"]),
+    "- Languages:",
+    ...(masterResume.languages.length > 0
+      ? masterResume.languages.map((item) =>
+          `  - ${[item.name, item.proficiency].filter(Boolean).join(" | ")}`,
+        )
+      : ["  - None"]),
     "- Education:",
     ...(masterResume.education.length > 0
       ? masterResume.education.map((item) =>
@@ -512,6 +564,9 @@ function normalizeGeneratedApplicationResume(resume: ResumeContent, masterResume
       resume.experienceSections.length > 0
         ? resume.experienceSections
         : (masterResume?.experienceSections ?? []),
+    specialProjects:
+      resume.specialProjects.length > 0 ? resume.specialProjects : (masterResume?.specialProjects ?? []),
+    languages: resume.languages.length > 0 ? resume.languages : (masterResume?.languages ?? []),
     education: resume.education.length > 0 ? resume.education : (masterResume?.education ?? []),
     certifications:
       resume.certifications.length > 0 ? resume.certifications : (masterResume?.certifications ?? []),

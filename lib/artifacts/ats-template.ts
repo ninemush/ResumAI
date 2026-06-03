@@ -79,6 +79,8 @@ export async function buildAtsResumePdf(input: ResumeTemplateInput) {
   drawSection(document, "Core Skills", [formatSkills(input.resume.skills)]);
   drawSelectedHighlights(document, input.resume);
   drawExperience(document, input.resume);
+  drawSpecialProjects(document, input.resume);
+  drawLanguages(document, input.resume);
   drawEducation(document, input.resume);
   drawCertifications(document, input.resume);
 
@@ -134,6 +136,8 @@ export async function buildAtsResumeDocx(input: ResumeTemplateInput) {
     docxParagraph(formatSkills(input.resume.skills), { spacingAfter: 160 }),
     ...buildDocxSelectedHighlights(input.resume),
     ...buildDocxExperience(input.resume),
+    ...buildDocxSpecialProjects(input.resume),
+    ...buildDocxLanguages(input.resume),
     ...buildDocxEducation(input.resume),
     ...buildDocxCertifications(input.resume),
   );
@@ -294,6 +298,58 @@ function drawSelectedHighlights(document: PdfLayout, resume: ResumeContent) {
   );
 }
 
+function drawSpecialProjects(document: PdfLayout, resume: ResumeContent) {
+  const projects = resume.specialProjects ?? [];
+
+  if (projects.length === 0) {
+    return;
+  }
+
+  addVerticalSpace(document, 10);
+  drawTextBlock(document, "SPECIAL PROJECTS", {
+    color: navy,
+    font: document.bold,
+    lineGap: 2,
+    size: 10,
+  });
+  addVerticalSpace(document, 3);
+
+  for (const project of projects) {
+    drawTextBlock(document, project.name, {
+      font: document.bold,
+      lineGap: 3,
+      size: 10.4,
+    });
+    const meta = formatSpecialProjectMeta(project);
+    if (meta) {
+      drawTextBlock(document, meta, {
+        color: taupe,
+        font: document.regular,
+        lineGap: 3,
+        size: 9.3,
+      });
+    }
+    for (const bullet of project.bullets) {
+      drawTextBlock(document, `- ${bullet}`, {
+        font: document.regular,
+        lineGap: 4,
+        size: 10.2,
+      });
+    }
+    addVerticalSpace(document, 5);
+  }
+}
+
+function drawLanguages(document: PdfLayout, resume: ResumeContent) {
+  const lines = resume.languages.map(formatLanguageLine).filter(Boolean);
+
+  if (lines.length === 0) {
+    return;
+  }
+
+  drawSection(document, "Languages", lines);
+}
+
 function drawEducation(document: PdfLayout, resume: ResumeContent) {
   const lines = resume.education.map(formatEducationLine).filter(Boolean);
 
@@ -370,6 +426,60 @@ function buildDocxSelectedHighlights(resume: ResumeContent) {
   ];
 }
 
+function buildDocxSpecialProjects(resume: ResumeContent) {
+  const projects = resume.specialProjects ?? [];
+
+  if (projects.length === 0) {
+    return [];
+  }
+
+  return [
+    docxSectionHeading("Special Projects"),
+    ...projects.flatMap((project) => {
+      const meta = formatSpecialProjectMeta(project);
+      return [
+        docxParagraph(project.name, {
+          bold: true,
+          spacingAfter: 40,
+          spacingBefore: 80,
+        }),
+        ...(meta
+          ? [
+              docxParagraph(meta, {
+                color: "6F6252",
+                size: 19,
+                spacingAfter: 60,
+              }),
+            ]
+          : []),
+        ...project.bullets.map((bullet) =>
+          docxParagraph(bullet, {
+            bullet: true,
+            spacingAfter: 70,
+          }),
+        ),
+      ];
+    }),
+  ];
+}
+
+function buildDocxLanguages(resume: ResumeContent) {
+  const lines = resume.languages.map(formatLanguageLine).filter(Boolean);
+
+  if (lines.length === 0) {
+    return [];
+  }
+
+  return [
+    docxSectionHeading("Languages"),
+    ...lines.map((line) =>
+      docxParagraph(line, {
+        spacingAfter: 70,
+      }),
+    ),
+  ];
+}
+
 function buildDocxEducation(resume: ResumeContent) {
   const lines = resume.education.map(formatEducationLine).filter(Boolean);
 
@@ -410,6 +520,14 @@ function formatEducationLine(item: ResumeContent["education"][number]) {
 
 function formatCertificationLine(item: ResumeContent["certifications"][number]) {
   return [item.name, item.issuer, item.date].filter(Boolean).join(" | ");
+}
+
+function formatSpecialProjectMeta(item: ResumeContent["specialProjects"][number]) {
+  return [item.context, item.dates].filter(Boolean).join(" | ");
+}
+
+function formatLanguageLine(item: ResumeContent["languages"][number]) {
+  return [item.name, item.proficiency].filter(Boolean).join(" | ");
 }
 
 function formatResumeHeadline(headline: string) {

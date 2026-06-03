@@ -266,3 +266,51 @@ test("removes clipped partial date ranges from source-derived roles", () => {
 
   expect(normalized.experienceSections[0].dates).toBeNull();
 });
+
+test("keeps optional resume sections off the draft unless evidence exists", () => {
+  const minimal = normalizeResumeContent({
+    contact: {
+      email: null,
+      linkedin: null,
+      location: null,
+      phone: null,
+      website: null,
+    },
+    experienceBullets: ["Led transformation."],
+    experienceSections: [],
+    headline: "Enterprise Transformation Executive",
+    keywordGaps: [],
+    reviewerNotes: [],
+    skills: ["Strategy"],
+    summary: "Leads transformation.",
+  });
+
+  expect(minimal.specialProjects).toEqual([]);
+  expect(minimal.languages).toEqual([]);
+  expect(minimal.education).toEqual([]);
+
+  const rich = normalizeResumeContent({
+    ...minimal,
+    education: [
+      {
+        credential: "Bachelor of Engineering",
+        dates: "2002",
+        institution: "University of Mumbai",
+        location: "Mumbai",
+      },
+    ],
+    languages: [{ name: "English", proficiency: "Native or Bilingual" }],
+    specialProjects: [
+      {
+        bullets: ["Built a governance model for AI-enabled service delivery."],
+        context: "UiPath",
+        dates: "2024",
+        name: "AI operating model",
+      },
+    ],
+  });
+
+  expect(rich.specialProjects).toHaveLength(1);
+  expect(rich.languages).toHaveLength(1);
+  expect(rich.education).toHaveLength(1);
+});

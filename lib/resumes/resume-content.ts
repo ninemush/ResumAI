@@ -3,6 +3,8 @@ import { z } from "zod";
 export const MAX_RESUME_EXPERIENCE_SECTIONS = 12;
 export const MAX_RESUME_EDUCATION_ITEMS = 8;
 export const MAX_RESUME_CERTIFICATION_ITEMS = 10;
+export const MAX_RESUME_LANGUAGE_ITEMS = 12;
+export const MAX_RESUME_SPECIAL_PROJECT_ITEMS = 8;
 
 export const resumeExperienceSectionSchema = z.object({
   bullets: z.array(z.string().trim().min(1).max(320)).max(7),
@@ -33,6 +35,18 @@ export const resumeCertificationSchema = z.object({
   name: z.string().trim().min(1).max(180),
 });
 
+export const resumeLanguageSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  proficiency: z.string().trim().max(80).nullable().default(null),
+});
+
+export const resumeSpecialProjectSchema = z.object({
+  bullets: z.array(z.string().trim().min(1).max(320)).max(5).default([]),
+  context: z.string().trim().max(160).nullable().default(null),
+  dates: z.string().trim().max(80).nullable().default(null),
+  name: z.string().trim().min(1).max(160),
+});
+
 export const emptyResumeContact = {
   email: null,
   linkedin: null,
@@ -49,8 +63,10 @@ export const resumeContentSchema = z.object({
   experienceSections: z.array(resumeExperienceSectionSchema).max(MAX_RESUME_EXPERIENCE_SECTIONS).default([]),
   headline: z.string().trim().min(1).max(220),
   keywordGaps: z.array(z.string().trim().min(1).max(140)).max(16),
+  languages: z.array(resumeLanguageSchema).max(MAX_RESUME_LANGUAGE_ITEMS).default([]),
   reviewerNotes: z.array(z.string().trim().min(1).max(260)).max(8),
   skills: z.array(z.string().trim().min(1).max(90)).max(24),
+  specialProjects: z.array(resumeSpecialProjectSchema).max(MAX_RESUME_SPECIAL_PROJECT_ITEMS).default([]),
   summary: z.string().trim().min(1).max(1200),
 });
 
@@ -110,6 +126,37 @@ export function normalizeResumeContent(value: z.input<typeof resumeContentSchema
           !looksLikeRecommendationOrTestimonial(Object.values(item).filter(Boolean).join(" ")),
       ),
   ).slice(0, MAX_RESUME_CERTIFICATION_ITEMS);
+  const languages = dedupeResumeLanguages(
+    parsed.languages
+      .map((item) => ({
+        name: stripResumeUiLabels(cleanResumeText(item.name, 80)),
+        proficiency: cleanNullableText(item.proficiency ?? null, 80),
+      }))
+      .filter(
+        (item) =>
+          item.name &&
+          !looksLikeRecommendationOrTestimonial(Object.values(item).filter(Boolean).join(" ")),
+      ),
+  ).slice(0, MAX_RESUME_LANGUAGE_ITEMS);
+  const specialProjects = dedupeResumeSpecialProjects(
+    parsed.specialProjects
+      .map((item) => ({
+        bullets: item.bullets
+          .map((bullet) => cleanResumeText(bullet, 320))
+          .filter((bullet) => bullet && !looksLikeRecommendationOrTestimonial(bullet))
+          .slice(0, 5),
+        context: cleanNullableText(item.context ?? null, 160),
+        dates: cleanResumeDateRange(item.dates),
+        name: stripResumeUiLabels(cleanResumeText(item.name, 160)),
+      }))
+      .filter(
+        (item) =>
+          item.name &&
+          !looksLikeRecommendationOrTestimonial(
+            [item.name, item.context, item.dates, ...item.bullets].filter(Boolean).join(" "),
+          ),
+      ),
+  ).slice(0, MAX_RESUME_SPECIAL_PROJECT_ITEMS);
 
   return resumeContentSchema.parse({
     certifications,
@@ -128,8 +175,10 @@ export function normalizeResumeContent(value: z.input<typeof resumeContentSchema
     experienceSections,
     headline: cleanResumeHeadline(parsed.headline),
     keywordGaps: parsed.keywordGaps.map((gap) => cleanResumeText(gap, 140)).filter(Boolean).slice(0, 16),
+    languages,
     reviewerNotes: parsed.reviewerNotes.map((note) => cleanResumeText(note, 260)).filter(Boolean).slice(0, 8),
     skills: parsed.skills.map((skill) => cleanResumeText(skill, 90)).filter(Boolean).slice(0, 24),
+    specialProjects,
     summary: stripResumeUiLabels(cleanResumeText(parsed.summary, 1200)),
   });
 }
@@ -204,6 +253,59 @@ export function dedupeResumeCertifications(
     if (!existing) {
       deduped.push(item);
     }
+  }
+
+  return deduped;
+}
+
+export function dedupeResumeLanguages(
+  items: ResumeContent["languages"],
+): ResumeContent["languages"] {
+  const deduped: ResumeContent["languages"] = [];
+
+  for (const item of items) {
+    const name = normalizeComparableText(item.name);
+    const proficiency = normalizeComparableText(item.proficiency ?? "");
+    const existing = deduped.find(
+      (candidate) =>
+        normalizeComparableText(candidate.name) === name &&
+        normalizeComparableText(candidate.proficiency ?? "") === proficiency,
+    );
+
+    if (!existing) {
+      deduped.push(item);
+    }
+  }
+
+  return deduped;
+}
+
+export function dedupeResumeSpecialProjects(
+  items: ResumeContent["specialProjects"],
+): ResumeContent["specialProjects"] {
+  const deduped: ResumeContent["specialProjects"] = [];
+
+  for (const item of items) {
+    const name = normalizeComparableText(item.name);
+    const context = normalizeComparableText(item.context ?? "");
+    const existingIndex = deduped.findIndex(
+      (candidate) =>
+        normalizeComparableText(candidate.name) === name &&
+        normalizeComparableText(candidate.context ?? "") === context,
+    );
+
+    if (existingIndex === -1) {
+      deduped.push(item);
+      continue;
+    }
+
+    const existing = deduped[existingIndex];
+    deduped[existingIndex] = {
+      bullets: mergeUniqueResumeBullets(existing.bullets, item.bullets).slice(0, 5),
+      context: existing.context || item.context,
+      dates: existing.dates || item.dates,
+      name: existing.name.length >= item.name.length ? existing.name : item.name,
+    };
   }
 
   return deduped;

@@ -16,6 +16,8 @@ import {
   MAX_RESUME_CERTIFICATION_ITEMS,
   MAX_RESUME_EDUCATION_ITEMS,
   MAX_RESUME_EXPERIENCE_SECTIONS,
+  MAX_RESUME_LANGUAGE_ITEMS,
+  MAX_RESUME_SPECIAL_PROJECT_ITEMS,
   dedupeResumeExperienceSections,
   normalizeResumeContent,
   parseResumeContent,
@@ -25,7 +27,7 @@ import {
 import { extractExperienceSectionsFromText } from "@/lib/resumes/source-experience";
 import { createClient } from "@/lib/supabase/server";
 
-export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v6";
+export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v7";
 const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
 const PDF_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
@@ -282,6 +284,8 @@ async function generateMasterResumeDraft({
               "summary",
               "skills",
               "experienceSections",
+              "specialProjects",
+              "languages",
               "education",
               "certifications",
               "experienceBullets",
@@ -331,6 +335,38 @@ async function generateMasterResumeDraft({
                       maxItems: 7,
                       items: { type: "string" },
                     },
+                  },
+                },
+              },
+              specialProjects: {
+                type: "array",
+                maxItems: MAX_RESUME_SPECIAL_PROJECT_ITEMS,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["name", "context", "dates", "bullets"],
+                  properties: {
+                    name: { type: "string" },
+                    context: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    dates: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    bullets: {
+                      type: "array",
+                      maxItems: 5,
+                      items: { type: "string" },
+                    },
+                  },
+                },
+              },
+              languages: {
+                type: "array",
+                maxItems: MAX_RESUME_LANGUAGE_ITEMS,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["name", "proficiency"],
+                  properties: {
+                    name: { type: "string" },
+                    proficiency: { anyOf: [{ type: "string" }, { type: "null" }] },
                   },
                 },
               },
@@ -460,6 +496,20 @@ Use this exact object shape:
       "bullets": ["evidence-backed impact bullet"]
     }
   ],
+  "specialProjects": [
+    {
+      "name": "special project from evidence",
+      "context": "role, client, program, or context from evidence or null",
+      "dates": "dates from evidence or null",
+      "bullets": ["evidence-backed project bullet"]
+    }
+  ],
+  "languages": [
+    {
+      "name": "language from evidence",
+      "proficiency": "proficiency from evidence or null"
+    }
+  ],
   "education": [
     {
       "institution": "school or university from evidence",
@@ -529,15 +579,32 @@ function enrichMasterResumeWithSourceEvidence(
   const sourceContact = extractResumeContactFromSources(sourceEvidence);
   const sourceEducation = extractResumeEducationFromSources(sourceEvidence);
   const sourceCertifications = extractResumeCertificationsFromSources(sourceEvidence);
+  const sourceLanguages = extractResumeLanguagesFromSources(sourceEvidence);
+  const sourceSpecialProjects = extractResumeSpecialProjectsFromSources(sourceEvidence);
 
   if (
     sourceSections.length === 0 &&
     sourceEducation.length === 0 &&
     sourceCertifications.length === 0 &&
+    sourceLanguages.length === 0 &&
+    sourceSpecialProjects.length === 0 &&
     Object.values(sourceContact).every((value) => !value)
   ) {
-    return resume;
+    return normalizeResumeContent({
+      ...resume,
+      reviewerNotes: [
+        ...resume.reviewerNotes,
+        ...readOptionalResumeReviewNotes(resume),
+      ].slice(0, 8),
+    });
   }
+
+  const nextEducation = resume.education.length > 0 ? resume.education : sourceEducation;
+  const nextCertifications =
+    resume.certifications.length > 0 ? resume.certifications : sourceCertifications;
+  const nextLanguages = resume.languages.length > 0 ? resume.languages : sourceLanguages;
+  const nextSpecialProjects =
+    resume.specialProjects.length > 0 ? resume.specialProjects : sourceSpecialProjects;
 
   return normalizeResumeContent({
     ...resume,
@@ -553,16 +620,56 @@ function enrichMasterResumeWithSourceEvidence(
       sourceSections.length > 0
         ? mergeExperienceSections(sourceSections, resume.experienceSections)
         : resume.experienceSections,
-    education: resume.education.length > 0 ? resume.education : sourceEducation,
-    certifications:
-      resume.certifications.length > 0 ? resume.certifications : sourceCertifications,
+    education: nextEducation,
+    certifications: nextCertifications,
+    languages: nextLanguages,
+    specialProjects: nextSpecialProjects,
     reviewerNotes: [
       ...resume.reviewerNotes,
       ...(sourceSections.length > 0
         ? ["Review the imported role timeline for exact dates, company names, and ownership scope before downloading files."]
         : []),
+      ...readOptionalResumeReviewNotes({
+        education: nextEducation,
+        languages: nextLanguages,
+        specialProjects: nextSpecialProjects,
+      }),
     ].slice(0, 8),
   });
+}
+
+function readOptionalResumeReviewNotes(
+  resume: Pick<ResumeContent, "education" | "languages" | "specialProjects">,
+) {
+  const missing: string[] = [];
+
+  if (resume.specialProjects.length === 0) {
+    missing.push("special projects");
+  }
+
+  if (resume.languages.length === 0) {
+    missing.push("languages");
+  }
+
+  if (resume.education.length === 0) {
+    missing.push("education");
+  }
+
+  if (missing.length === 0) {
+    return [];
+  }
+
+  return [
+    `Optional resume sections still missing: ${formatHumanList(missing)}. Add them if they strengthen the story; Pramania will keep them off the resume until you provide them.`,
+  ];
+}
+
+function formatHumanList(items: string[]) {
+  if (items.length <= 1) {
+    return items[0] ?? "";
+  }
+
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 function extractResumeContactFromSources(sourceEvidence: SourceEvidence[]) {
@@ -654,6 +761,122 @@ function extractResumeCertificationsFromSources(sourceEvidence: SourceEvidence[]
       issuer: null,
       name: cleanCredentialLine(line.replace(extractYearRange(line) ?? "", "")),
     }))
+    .filter((item) => item.name.length > 0);
+}
+
+function extractResumeLanguagesFromSources(sourceEvidence: SourceEvidence[]) {
+  const text = stripRecommendationSourceSections(
+    sourceEvidence
+      .map((source) => source.extracted_text)
+      .filter((value): value is string => Boolean(value?.trim()))
+      .join("\n"),
+  );
+  const sectionText = extractNamedSectionText(text, ["languages"], [
+    "education",
+    "licenses",
+    "certifications",
+    "certificates",
+    "skills",
+    "top skills",
+    "experience",
+    "professional experience",
+    "work history",
+    "employment",
+    "recommendations",
+    "projects",
+    "special projects",
+    "publications",
+    "honors",
+    "awards",
+  ]);
+
+  return sectionText
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 3)
+    .filter((line) => !/^\d+$/.test(line))
+    .map(parseLanguageLine)
+    .filter((item): item is ResumeContent["languages"][number] => Boolean(item?.name))
+    .slice(0, MAX_RESUME_LANGUAGE_ITEMS);
+}
+
+function parseLanguageLine(line: string): ResumeContent["languages"][number] | null {
+  const cleaned = cleanCredentialLine(line);
+  if (!cleaned || /recommend|endorse|worked with|pleasure/i.test(cleaned)) {
+    return null;
+  }
+
+  const parenthetical = cleaned.match(/^([^()|;:-]{2,80})\s*\(([^()]{2,80})\)$/);
+  if (parenthetical) {
+    return {
+      name: cleanCredentialLine(parenthetical[1]),
+      proficiency: cleanCredentialLine(parenthetical[2]),
+    };
+  }
+
+  const separated = cleaned.split(/\s+(?:-|–|—|\||:|•)\s+/).filter(Boolean);
+  if (separated.length >= 2) {
+    return {
+      name: cleanCredentialLine(separated[0]),
+      proficiency: cleanCredentialLine(separated.slice(1).join(" ")),
+    };
+  }
+
+  return {
+    name: cleaned,
+    proficiency: null,
+  };
+}
+
+function extractResumeSpecialProjectsFromSources(sourceEvidence: SourceEvidence[]) {
+  const text = stripRecommendationSourceSections(
+    sourceEvidence
+      .map((source) => source.extracted_text)
+      .filter((value): value is string => Boolean(value?.trim()))
+      .join("\n"),
+  );
+  const sectionText = extractNamedSectionText(text, ["projects", "special projects", "key projects"], [
+    "languages",
+    "education",
+    "licenses",
+    "certifications",
+    "certificates",
+    "skills",
+    "top skills",
+    "experience",
+    "professional experience",
+    "work history",
+    "employment",
+    "recommendations",
+    "publications",
+    "honors",
+    "awards",
+  ]);
+
+  return sectionText
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 8)
+    .filter((line) => !/^\d+$/.test(line))
+    .filter(
+      (line) =>
+        !/\b(recommendation|recommended|worked with|pleasure|reported to|managed directly|colleague)\b/i.test(
+          line,
+        ),
+    )
+    .slice(0, MAX_RESUME_SPECIAL_PROJECT_ITEMS)
+    .map((line) => {
+      const dates = extractYearRange(line);
+      const cleanLine = cleanCredentialLine(line.replace(dates ?? "", ""));
+      const [name, ...rest] = cleanLine.split(/\s+(?:-|–|—|:|•)\s+/).filter(Boolean);
+
+      return {
+        bullets: rest.length > 0 ? [rest.join(" ")] : [cleanLine],
+        context: null,
+        dates,
+        name: name && rest.length > 0 ? cleanCredentialLine(name) : cleanLine.slice(0, 150),
+      };
+    })
     .filter((item) => item.name.length > 0);
 }
 
@@ -1093,19 +1316,26 @@ third-party praise, or "worked with" sections as work experience. Those sources
 can inform reviewerNotes only if useful, but they must not become roleTitle,
 company, dates, location, or work-history bullets.
 
-Use a standard ATS structure. The headline must be a concise title or
-positioning line under 95 characters, not a pipe-delimited keyword list. Put
-keyword breadth into skills and experience, not the title. The summary should
-be tight enough for a resume preview, usually 90-140 words.
+Use this standard ATS section order: Professional Summary, Core Skills,
+Selected Highlights, Professional Experience, Special Projects, Languages,
+Education, Certifications. The headline must be a concise title or positioning
+line under 95 characters, not a pipe-delimited keyword list. Put keyword
+breadth into skills and experience, not the title. The summary should be tight
+enough for a resume preview, usually 90-140 words.
 
 Include a contact object for email, phone, LinkedIn URL, website, and location
 when those details appear in the profile or readable source evidence. Use null
 for missing contact fields. Do not invent contact details.
 
-Preserve education and certifications/licenses in their own arrays when they
-appear in profile or source evidence. Use empty arrays when absent. Do not turn
-recommendations, testimonials, endorsements, interests, or public praise into
-education, certifications, or work-history roles.
+Preserve special projects, languages, education, and certifications/licenses in
+their own arrays when they appear in profile or source evidence. Use empty
+arrays when absent, and mention the missing optional sections in reviewerNotes
+instead of rendering empty resume sections. Special Projects are standalone
+initiatives, transformations, programs, or advisory/projects that are not
+ordinary role responsibilities. Languages should only contain language names and
+proficiency. Do not turn recommendations, testimonials, endorsements, interests,
+or public praise into special projects, languages, education, certifications, or
+work-history roles.
 
 The work history must be organized into role-based experienceSections whenever
 the evidence names employers, roles, dates, scope, or repeated role context.
