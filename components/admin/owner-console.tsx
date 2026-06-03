@@ -15,6 +15,7 @@ import {
   Wrench,
   UsersRound,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState, useTransition } from "react";
 
@@ -37,6 +38,15 @@ type PromoCodeRow = {
   redeemedCount: number;
 };
 
+type CreditGrant = {
+  createdAt: string;
+  creditAmount: number;
+  description: string;
+  id: string;
+  userEmail: string | null;
+  userId: string;
+};
+
 type OperatingAction = {
   body: string;
   label: string;
@@ -54,6 +64,7 @@ const periodOptions = [
 ];
 
 export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
+  const router = useRouter();
   const [metrics, setMetrics] = useState(initialMetrics);
   const [periodDays, setPeriodDays] = useState(initialMetrics.period.days);
   const [activeTab, setActiveTab] = useState("overview");
@@ -61,6 +72,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [issueNotes, setIssueNotes] = useState<Record<string, string>>({});
   const [issueUpdatingId, setIssueUpdatingId] = useState<string | null>(null);
   const [promoCodes, setPromoCodes] = useState<PromoCodeRow[]>([]);
+  const [grantMessage, setGrantMessage] = useState<string | null>(null);
+  const [grantLoading, setGrantLoading] = useState(false);
   const [promoMessage, setPromoMessage] = useState<string | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -154,9 +167,11 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     }
   }
 
-  async function loadPromoCodes() {
+  async function loadPromoCodes({ preserveMessage = false }: { preserveMessage?: boolean } = {}) {
     setPromoLoading(true);
-    setPromoMessage(null);
+    if (!preserveMessage) {
+      setPromoMessage(null);
+    }
 
     try {
       const response = await fetch("/api/admin/promo-codes", { cache: "no-store" });
@@ -178,6 +193,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
 
   async function createPromoCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     setPromoLoading(true);
     setPromoMessage(null);
     const formData = new FormData(event.currentTarget);
@@ -206,11 +222,51 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         return;
       }
 
-      event.currentTarget.reset();
-      setPromoMessage(`Promo code ${payload.promoCode.code} created.`);
-      await loadPromoCodes();
+      form.reset();
+      await loadPromoCodes({ preserveMessage: true });
+      setPromoMessage(`Promo code ${payload.promoCode.code} created and ready to redeem.`);
+      router.refresh();
     } finally {
       setPromoLoading(false);
+    }
+  }
+
+  async function grantCreditsDirectly(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setGrantLoading(true);
+    setGrantMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/credits/grants", {
+        body: JSON.stringify({
+          creditAmount: Number(formData.get("creditAmount") ?? 0),
+          description: formData.get("description")?.toString() ?? "",
+          userEmail: formData.get("userEmail")?.toString() ?? "",
+          userId: formData.get("userId")?.toString() ?? "",
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const payload = (await response.json()) as {
+        error?: { message?: string };
+        grant?: CreditGrant;
+      };
+
+      if (!response.ok || !payload.grant) {
+        setGrantMessage(payload.error?.message ?? "Credits could not be added.");
+        return;
+      }
+
+      form.reset();
+      setGrantMessage(
+        `Added ${payload.grant.creditAmount} credits to ${payload.grant.userEmail ?? payload.grant.userId}.`,
+      );
+      await loadPeriod(periodDays);
+      router.refresh();
+    } finally {
+      setGrantLoading(false);
     }
   }
 
@@ -878,41 +934,93 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           <SectionHeading
             eyebrow="Credits"
             title="Promo code management"
-            body="Create one-time credit grants for beta testers, launch campaigns, or a specific user. Redemptions are recorded in the credit ledger so usage remains auditable."
+            body="Create redeemable codes or grant credits directly to a user. Both paths write to the credit ledger so owner actions remain auditable."
           />
-          <form className="owner-promo-form" onSubmit={createPromoCode}>
-            <label>
-              <span>Code</span>
-              <input name="code" placeholder="BETA-THANKYOU" required />
-            </label>
-            <label>
-              <span>Credits</span>
-              <input name="creditAmount" defaultValue="10" min="1" max="500" required type="number" />
-            </label>
-            <label>
-              <span>Max redemptions</span>
-              <input name="maxRedemptions" defaultValue="1" min="1" max="5000" required type="number" />
-            </label>
-            <label>
-              <span>User email optional</span>
-              <input name="assignedUserEmail" placeholder="specific.user@example.com" type="email" />
-            </label>
-            <label>
-              <span>Expiry optional</span>
-              <input name="expiresAt" type="datetime-local" />
-            </label>
-            <label className="owner-promo-description">
-              <span>Description</span>
-              <input name="description" placeholder="Why this credit grant exists" />
-            </label>
-            <button className="primary-action" disabled={promoLoading} type="submit">
-              Create promo code
-            </button>
-            <button className="secondary-action" disabled={promoLoading} onClick={loadPromoCodes} type="button">
-              Refresh
-            </button>
-          </form>
-          {promoMessage ? <p className="owner-generated-note">{promoMessage}</p> : null}
+          <div className="owner-credit-actions">
+            <article className="owner-credit-card">
+              <div className="owner-credit-card-header">
+                <CircleDollarSign aria-hidden="true" size={22} />
+                <div>
+                  <h3>Generate a promo code</h3>
+                  <p>Best for launch campaigns, beta groups, or a user who should redeem the grant themselves.</p>
+                </div>
+              </div>
+              <form className="owner-credit-form" onSubmit={createPromoCode}>
+                <label>
+                  <span>Code</span>
+                  <input name="code" placeholder="BETA-THANKYOU" required />
+                </label>
+                <label>
+                  <span>Credits</span>
+                  <input name="creditAmount" defaultValue="10" min="1" max="500" required type="number" />
+                </label>
+                <label>
+                  <span>Max redemptions</span>
+                  <input name="maxRedemptions" defaultValue="1" min="1" max="5000" required type="number" />
+                </label>
+                <label>
+                  <span>User email optional</span>
+                  <input name="assignedUserEmail" placeholder="specific.user@example.com" type="email" />
+                </label>
+                <label>
+                  <span>Expiry optional</span>
+                  <input name="expiresAt" type="datetime-local" />
+                </label>
+                <label className="owner-credit-description">
+                  <span>Description</span>
+                  <input name="description" placeholder="Why this code exists" />
+                </label>
+                <div className="owner-form-actions">
+                  <button className="owner-action-button primary" disabled={promoLoading} type="submit">
+                    Create code
+                  </button>
+                  <button
+                    className="owner-action-button secondary"
+                    disabled={promoLoading}
+                    onClick={() => loadPromoCodes()}
+                    type="button"
+                  >
+                    <RefreshCcw aria-hidden="true" size={16} />
+                    Refresh
+                  </button>
+                </div>
+              </form>
+              {promoMessage ? <p className="owner-generated-note">{promoMessage}</p> : null}
+            </article>
+            <article className="owner-credit-card owner-credit-card-direct">
+              <div className="owner-credit-card-header">
+                <UsersRound aria-hidden="true" size={22} />
+                <div>
+                  <h3>Add credits to a user</h3>
+                  <p>Use this when you want the grant to land immediately without asking the user for a code.</p>
+                </div>
+              </div>
+              <form className="owner-credit-form owner-credit-form-direct" onSubmit={grantCreditsDirectly}>
+                <label>
+                  <span>User email</span>
+                  <input name="userEmail" placeholder="user@example.com" type="email" />
+                </label>
+                <label>
+                  <span>User id optional</span>
+                  <input name="userId" placeholder="Use when email is unavailable" />
+                </label>
+                <label>
+                  <span>Credits</span>
+                  <input name="creditAmount" defaultValue="10" min="1" max="500" required type="number" />
+                </label>
+                <label className="owner-credit-description">
+                  <span>Owner note</span>
+                  <input name="description" placeholder="Beta goodwill, support fix, launch grant..." />
+                </label>
+                <div className="owner-form-actions">
+                  <button className="owner-action-button primary" disabled={grantLoading} type="submit">
+                    Add credits
+                  </button>
+                </div>
+              </form>
+              {grantMessage ? <p className="owner-generated-note">{grantMessage}</p> : null}
+            </article>
+          </div>
           <div className="owner-table" role="table" aria-label="Promo code list">
             <div className="owner-table-row owner-table-head" role="row">
               <span>Code</span>

@@ -5,6 +5,11 @@ import {
   ingestProfileSource,
   profileSourceRequestSchema,
 } from "@/lib/profile/profile-source-ingestion";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 export async function GET() {
   const requestId = crypto.randomUUID();
@@ -84,6 +89,20 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  }
+
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "profile_source_create"),
+    limit: 20,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Sources are being added too quickly. Pause for a moment before adding more.",
+      requestId,
+      result: rateLimit,
+    });
   }
 
   try {

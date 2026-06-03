@@ -156,7 +156,17 @@ function verifySignedPayload(signedValue: string): MfaCookiePayload | null {
 }
 
 function getCookieSecret() {
-  return process.env.AUTH_MFA_COOKIE_SECRET ?? "local-pramania-auth-cookie-secret";
+  const secret = process.env.AUTH_MFA_COOKIE_SECRET;
+
+  if (secret && secret.length >= 32) {
+    return secret;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_MFA_COOKIE_SECRET_REQUIRED");
+  }
+
+  return "local-pramania-auth-cookie-secret";
 }
 
 function normalizeEmail(email: string) {

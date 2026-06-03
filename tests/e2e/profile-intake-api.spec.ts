@@ -211,3 +211,17 @@ test("requires owner access before managing promo codes", async ({ request }) =>
   expect(response.status()).toBe(401);
   expect(payload.error.code).toBe("auth.required");
 });
+
+test("requires owner access before granting credits directly", async ({ request }) => {
+  const response = await request.post("/api/admin/credits/grants", {
+    data: {
+      creditAmount: 10,
+      description: "Owner test grant",
+      userEmail: "test@example.com",
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});

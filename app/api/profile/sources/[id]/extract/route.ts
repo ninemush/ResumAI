@@ -9,6 +9,11 @@ import {
   extractProfileSourceText,
   profileSourceExtractionRequestSchema,
 } from "@/lib/parsing/profile-source-extraction";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 type RouteContext = {
   params: Promise<{
@@ -16,7 +21,7 @@ type RouteContext = {
   }>;
 };
 
-export async function POST(_request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
   const params = await context.params;
   const parsed = profileSourceExtractionRequestSchema.safeParse({
@@ -36,6 +41,20 @@ export async function POST(_request: Request, context: RouteContext) {
       },
       { status: 400 },
     );
+  }
+
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "profile_source_extract"),
+    limit: 10,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Sources are being processed too quickly. Pause briefly before retrying another extraction.",
+      requestId,
+      result: rateLimit,
+    });
   }
 
   try {

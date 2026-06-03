@@ -20,6 +20,21 @@ export async function POST(request: Request) {
   const webhookSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
   const authorization = request.headers.get("authorization");
 
+  if (!webhookSecret && process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "configuration",
+          code: "revenuecat.webhook_secret_required",
+          message: "RevenueCat webhook secret is not configured.",
+        },
+      },
+      { status: 503 },
+    );
+  }
+
   if (webhookSecret && authorization !== `Bearer ${webhookSecret}`) {
     return NextResponse.json(
       {

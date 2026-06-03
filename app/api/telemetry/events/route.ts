@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { redactOperationalText } from "@/lib/security/redaction";
 import { createClient } from "@/lib/supabase/server";
 
 const telemetryEventSchema = z.discriminatedUnion("eventType", [
@@ -44,12 +45,12 @@ export async function POST(request: Request) {
 
     if (payload.eventType === "client_error") {
       const { error } = await supabase.from("error_events").insert({
-        area: payload.area,
-        error_code: payload.errorCode,
+        area: redactOperationalText(payload.area, 80),
+        error_code: redactOperationalText(payload.errorCode, 120),
         fix_required: true,
-        message: payload.message,
+        message: redactOperationalText(payload.message, 500),
         metadata: {
-          path: payload.path ?? null,
+          path: payload.path ? redactOperationalText(payload.path, 240) : null,
         },
         rationale: "Captured from the browser runtime. Owner review is required if this repeats or affects a core workflow.",
         root_cause_category: "client_runtime",
@@ -69,9 +70,9 @@ export async function POST(request: Request) {
         payload.eventType === "page_time" ? roundDuration(payload.durationSeconds) : null,
       event_type: payload.eventType,
       metadata: {
-        path: payload.path ?? null,
+        path: payload.path ? redactOperationalText(payload.path, 240) : null,
       },
-      page: payload.page,
+      page: redactOperationalText(payload.page, 80),
       user_id: user.id,
     });
 

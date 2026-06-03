@@ -6,9 +6,27 @@ import {
   requireCredits,
 } from "@/lib/billing/credits";
 import { exportMasterResumeArtifacts } from "@/lib/resumes/master-resume";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
-export async function POST() {
+export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "master_resume_export"),
+    limit: 8,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Resume exports are being requested too quickly. Pause briefly before preparing files again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
 
   try {
     await requireCredits("masterResumeExport");

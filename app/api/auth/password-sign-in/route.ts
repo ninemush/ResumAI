@@ -5,6 +5,11 @@ import {
   setEmailMfaPendingCookie,
   setEmailMfaVerifiedCookie,
 } from "@/lib/auth/session-security";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 const signInSchema = z.object({
@@ -16,6 +21,7 @@ const LOCKED_MESSAGE =
   "This account is temporarily locked after three incorrect password attempts. Try again in 15 minutes or reset your password.";
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   const parsed = signInSchema.safeParse(await request.json().catch(() => null));
 
   if (!parsed.success) {
@@ -26,6 +32,20 @@ export async function POST(request: Request) {
   }
 
   const email = parsed.data.email.trim().toLowerCase();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "password_sign_in", email),
+    limit: 8,
+    windowMs: 15 * 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Too many sign-in attempts. Please wait before trying again or use password reset.",
+      requestId,
+      result: rateLimit,
+    });
+  }
+
   const supabase = await createClient();
   const { data: allowedState } = await supabase.rpc("check_password_login_allowed", {
     email_input: email,

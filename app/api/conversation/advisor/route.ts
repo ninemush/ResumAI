@@ -4,8 +4,14 @@ import {
   conversationAdvisorRequestSchema,
   runConversationAdvisor,
 } from "@/lib/conversation/advisor";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   let body: unknown;
 
   try {
@@ -24,6 +30,20 @@ export async function POST(request: Request) {
       { error: { message: "Use a short career, resume, profile, or application question." } },
       { status: 400 },
     );
+  }
+
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "conversation_advisor"),
+    limit: 30,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Pramania is receiving messages too quickly. Pause for a moment and send the next note.",
+      requestId,
+      result: rateLimit,
+    });
   }
 
   try {

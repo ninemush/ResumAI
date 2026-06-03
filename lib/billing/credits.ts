@@ -10,6 +10,7 @@ import {
   CREDIT_USAGE_GUIDE,
   type CreditFeature,
 } from "@/lib/billing/credit-catalog";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export {
@@ -188,6 +189,29 @@ export const createPromoCodeSchema = z.object({
   maxRedemptions: z.number().int().min(1).max(5000).default(1),
 });
 
+export const grantCreditsSchema = z
+  .object({
+    creditAmount: z.number().int().min(1).max(500),
+    description: z.string().trim().max(240).default(""),
+    userEmail: z
+      .string()
+      .trim()
+      .email()
+      .transform((value) => value.toLowerCase())
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
+    userId: z.string().trim().uuid().optional().or(z.literal("").transform(() => undefined)),
+  })
+  .superRefine((value, context) => {
+    if (!value.userEmail && !value.userId) {
+      context.addIssue({
+        code: "custom",
+        message: "Provide a user email or user id.",
+        path: ["userEmail"],
+      });
+    }
+  });
+
 export async function createPromoCode(input: z.input<typeof createPromoCodeSchema>) {
   const parsed = createPromoCodeSchema.parse(input);
   const supabase = await createClient();
@@ -225,6 +249,101 @@ export async function createPromoCode(input: z.input<typeof createPromoCodeSchem
     maxRedemptions: data.max_redemptions,
     redeemedCount: 0,
   };
+}
+
+export async function grantCreditsToUser(input: z.input<typeof grantCreditsSchema>) {
+  const parsed = grantCreditsSchema.parse(input);
+  const supabase = await createClient();
+  const adminUser = await requireAdminUser(supabase);
+  const adminClient = createAdminClient();
+  const targetUser = await resolveCreditGrantTarget(adminClient, {
+    userEmail: parsed.userEmail,
+    userId: parsed.userId,
+  });
+
+  if (!targetUser?.id) {
+    throw new Error("CREDIT_TARGET_USER_NOT_FOUND");
+  }
+
+  const { data, error } = await adminClient
+    .from("credit_ledger")
+    .insert({
+      credit_delta: parsed.creditAmount,
+      event_type: "owner_credit_grant",
+      metadata: {
+        description: parsed.description,
+        granted_by: adminUser.id,
+        target_email: targetUser.email ?? parsed.userEmail ?? null,
+      },
+      resource_id: targetUser.id,
+      resource_type: "owner_credit_grant",
+      user_id: targetUser.id,
+    })
+    .select("id, credit_delta, created_at")
+    .single();
+
+  if (error || !data) {
+    throw new Error("OWNER_CREDIT_GRANT_FAILED");
+  }
+
+  return {
+    createdAt: data.created_at,
+    creditAmount: data.credit_delta,
+    description: parsed.description,
+    id: data.id,
+    userEmail: targetUser.email ?? parsed.userEmail ?? null,
+    userId: targetUser.id,
+  };
+}
+
+async function resolveCreditGrantTarget(
+  adminClient: ReturnType<typeof createAdminClient>,
+  {
+    userEmail,
+    userId,
+  }: {
+    userEmail?: string;
+    userId?: string;
+  },
+) {
+  if (userId) {
+    const { data, error } = await adminClient.auth.admin.getUserById(userId);
+
+    if (error) {
+      return null;
+    }
+
+    return data.user ? { email: data.user.email ?? null, id: data.user.id } : null;
+  }
+
+  if (!userEmail) {
+    throw new Error("CREDIT_TARGET_REQUIRED");
+  }
+
+  let page = 1;
+  const perPage = 1000;
+
+  while (page <= 20) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
+
+    if (error) {
+      throw new Error("CREDIT_TARGET_LOOKUP_FAILED");
+    }
+
+    const user = data.users.find((candidate) => candidate.email?.toLowerCase() === userEmail);
+
+    if (user) {
+      return { email: user.email ?? null, id: user.id };
+    }
+
+    if (data.users.length < perPage) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return null;
 }
 
 const promoCodeRowSchema = z.object({
@@ -355,6 +474,42 @@ export function buildCreditsApiError(error: unknown) {
         status: 400,
       };
     }
+
+    if (error.message === "CREDIT_TARGET_REQUIRED") {
+      return {
+        category: "validation",
+        code: "billing.credit_target_required",
+        message: "Choose a user before adding credits.",
+        status: 400,
+      };
+    }
+
+    if (error.message === "CREDIT_TARGET_USER_NOT_FOUND") {
+      return {
+        category: "validation",
+        code: "billing.credit_target_not_found",
+        message: "No user was found with that email or user id.",
+        status: 404,
+      };
+    }
+
+    if (error.message === "CREDIT_TARGET_LOOKUP_FAILED") {
+      return {
+        category: "server",
+        code: "billing.credit_target_lookup_failed",
+        message: "Unable to look up that user right now.",
+        status: 500,
+      };
+    }
+
+    if (error.message === "OWNER_CREDIT_GRANT_FAILED") {
+      return {
+        category: "server",
+        code: "billing.owner_credit_grant_failed",
+        message: "Unable to add credits to that user right now.",
+        status: 500,
+      };
+    }
   }
 
   return {
@@ -443,6 +598,7 @@ function mapCreditLedgerRow(row: z.infer<typeof creditLedgerRowSchema>): CreditL
 
 function describeCreditEvent(eventType: string, resourceType: string | null, purchaseLabel?: string) {
   if (eventType === "signup_bonus") return "Starter credits";
+  if (eventType === "owner_credit_grant") return "Owner credit grant";
   if (eventType === "promo_code_redeemed") return "Promo code credit grant";
   if (eventType === "revenuecat_purchase") return `${purchaseLabel ?? "Credit pack"} purchase`;
 
@@ -496,6 +652,8 @@ function describeResource(resourceType: string | null) {
       return "Profile source";
     case "promo_code":
       return "Promo code";
+    case "owner_credit_grant":
+      return "Owner credit grant";
     case "revenuecat_purchase":
       return "Purchase";
     case "account":

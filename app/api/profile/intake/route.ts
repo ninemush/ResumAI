@@ -4,8 +4,14 @@ import {
   profileIntakeRequestSchema,
   runProfileIntake,
 } from "@/lib/profile/profile-intake";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   let body: unknown;
 
   try {
@@ -21,6 +27,20 @@ export async function POST(request: Request) {
       { error: "Message must be between 3 and 4000 characters." },
       { status: 400 },
     );
+  }
+
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "profile_intake"),
+    limit: 20,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Profile updates are coming in too quickly. Pause for a moment before adding more.",
+      requestId,
+      result: rateLimit,
+    });
   }
 
   try {

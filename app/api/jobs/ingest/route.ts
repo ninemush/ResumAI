@@ -6,6 +6,11 @@ import {
   requireCredits,
 } from "@/lib/billing/credits";
 import { ingestJobUrl, jobIngestionRequestSchema } from "@/lib/jobs/job-ingestion";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
@@ -43,6 +48,20 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  }
+
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "job_ingest"),
+    limit: 12,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Job links are being read too quickly. Pause briefly before adding another role.",
+      requestId,
+      result: rateLimit,
+    });
   }
 
   try {

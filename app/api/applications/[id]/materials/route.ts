@@ -14,6 +14,11 @@ import {
   updateMaterialReview,
   updateMaterialReviewSchema,
 } from "@/lib/applications/material-review";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 type RouteContext = {
   params: Promise<{
@@ -47,7 +52,7 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 }
 
-export async function POST(_request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
   const params = await context.params;
   const parsed = generateApplicationMaterialsSchema.safeParse({
@@ -67,6 +72,20 @@ export async function POST(_request: Request, context: RouteContext) {
       },
       { status: 400 },
     );
+  }
+
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "application_materials_generate"),
+    limit: 8,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Application packet generation is being requested too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
   }
 
   try {

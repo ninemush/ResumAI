@@ -1932,20 +1932,63 @@ input:focus {
   width: 100%;
 }
 
-.owner-promo-form {
+.owner-credit-actions {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  margin: 22px 0;
+}
+
+.owner-credit-card {
+  background: rgba(255, 255, 255, 0.58);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-lg);
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.owner-credit-card-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+}
+
+.owner-credit-card-header svg {
+  color: var(--pr-navy);
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.owner-credit-card-header h3 {
+  font-size: 1.15rem;
+  margin: 0 0 4px;
+}
+
+.owner-credit-card-header p {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.owner-credit-form {
   align-items: end;
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto auto;
-  margin: 18px 0;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
 }
 
-.owner-promo-form label {
+.owner-credit-form-direct {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.owner-credit-form label {
   display: grid;
-  gap: 6px;
+  gap: 7px;
+  min-width: 0;
 }
 
-.owner-promo-form label span {
+.owner-credit-form label span {
   color: var(--sage-strong);
   font-family: var(--font-pr-mono), monospace;
   font-size: 0.72rem;
@@ -1954,18 +1997,83 @@ input:focus {
   text-transform: uppercase;
 }
 
-.owner-promo-form input {
-  background: var(--panel-strong);
+.owner-credit-form input {
+  background: var(--surface);
   border: var(--pr-border-subtle);
   border-radius: var(--pr-radius-pill);
   color: var(--foreground);
   font: inherit;
-  min-height: 44px;
-  padding: 0 14px;
+  min-height: 46px;
+  min-width: 0;
+  padding: 0 16px;
+  width: 100%;
 }
 
-.owner-promo-description {
+.owner-credit-form input:focus {
+  border-color: var(--pr-antique-gold);
+  box-shadow: 0 0 0 3px rgba(190, 151, 87, 0.16);
+  outline: 0;
+}
+
+.owner-credit-description {
   grid-column: span 2;
+}
+
+.owner-form-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+
+.owner-action-button {
+  align-items: center;
+  border-radius: var(--pr-radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 850;
+  gap: 8px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+  white-space: nowrap;
+}
+
+.owner-action-button.primary {
+  background: var(--pr-navy);
+  border: 1px solid var(--pr-navy);
+  color: #fff;
+}
+
+.owner-action-button.secondary {
+  background: transparent;
+  border: var(--pr-border-subtle);
+  color: var(--foreground);
+}
+
+.owner-action-button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.owner-action-button.primary:not(:disabled):hover {
+  background: #1b2b42;
+  border-color: #1b2b42;
+}
+
+.owner-action-button.secondary:not(:disabled):hover {
+  background: rgba(236, 229, 217, 0.62);
+}
+
+.owner-action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .owner-table {
@@ -6519,6 +6627,25 @@ input:focus {
 
   .owner-console-controls {
     justify-content: stretch;
+  }
+
+  .owner-credit-actions,
+  .owner-credit-form,
+  .owner-credit-form-direct {
+    grid-template-columns: 1fr;
+  }
+
+  .owner-credit-card {
+    padding: 16px;
+  }
+
+  .owner-credit-description {
+    grid-column: auto;
+  }
+
+  .owner-form-actions,
+  .owner-action-button {
+    width: 100%;
   }
 
   .segmented-control.compact {

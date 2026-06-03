@@ -6,6 +6,7 @@ import {
   supportIssueCreateSchema,
   supportIssueShortId,
 } from "@/lib/support/issues";
+import { redactOperationalMetadata, redactOperationalText } from "@/lib/security/redaction";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -133,19 +134,36 @@ export async function POST(request: Request) {
     }
 
     const input = supportIssueCreateSchema.parse(await request.json());
-    const analysis = buildSupportIssueAnalysis(input);
+    const safeInput = {
+      ...input,
+      area: redactOperationalText(input.area, 80),
+      errorCode: input.errorCode ? redactOperationalText(input.errorCode, 120) : undefined,
+      errorMessage: input.errorMessage ? redactOperationalText(input.errorMessage, 500) : undefined,
+      metadata: redactOperationalMetadata(input.metadata),
+      source: redactOperationalText(input.source, 80),
+      systemResponse: input.systemResponse
+        ? redactOperationalText(input.systemResponse, 2000)
+        : undefined,
+      title: input.title ? redactOperationalText(input.title, 180) : undefined,
+      userMessage: input.userMessage ? redactOperationalText(input.userMessage, 2000) : undefined,
+    };
+    const analysis = buildSupportIssueAnalysis(safeInput);
 
     const { data: errorEvent } = await supabase
       .from("error_events")
       .insert({
-        area: input.area,
-        error_code: input.errorCode ?? "USER_REPORTED_ISSUE",
+        area: safeInput.area,
+        error_code: safeInput.errorCode ?? "USER_REPORTED_ISSUE",
         fix_required: analysis.fixStatus === "needs_code_fix",
-        message: input.errorMessage ?? input.systemResponse ?? input.userMessage ?? analysis.summary,
+        message:
+          safeInput.errorMessage ??
+          safeInput.systemResponse ??
+          safeInput.userMessage ??
+          analysis.summary,
         metadata: {
-          ...input.metadata,
+          ...safeInput.metadata,
           requestId,
-          source: input.source,
+          source: safeInput.source,
           title: analysis.title,
         },
         rationale: analysis.rootCause,
@@ -159,21 +177,21 @@ export async function POST(request: Request) {
     const { data: ticket, error: ticketError } = await supabase
       .from("support_tickets")
       .insert({
-        area: input.area,
-        error_code: input.errorCode ?? "USER_REPORTED_ISSUE",
+        area: safeInput.area,
+        error_code: safeInput.errorCode ?? "USER_REPORTED_ISSUE",
         fix_status: analysis.fixStatus,
         linked_error_event_id: errorEvent?.id ?? null,
         l1_disposition: "not_started",
         metadata: {
-          ...input.metadata,
+          ...safeInput.metadata,
           requestId,
-          systemResponse: input.systemResponse ?? null,
+          systemResponse: safeInput.systemResponse ?? null,
         },
         priority: analysis.priority,
         root_cause: analysis.rootCause,
         root_cause_category: analysis.rootCauseCategory,
-        sentiment: inferSentiment(input.userMessage ?? input.systemResponse ?? ""),
-        source: input.source,
+        sentiment: inferSentiment(safeInput.userMessage ?? safeInput.systemResponse ?? ""),
+        source: safeInput.source,
         status: "open",
         subject: analysis.title,
         suggested_fix: analysis.suggestedFix,
@@ -187,9 +205,9 @@ export async function POST(request: Request) {
       throw new Error("SUPPORT_ISSUE_INSERT_FAILED");
     }
 
-    if (input.userMessage) {
+    if (safeInput.userMessage) {
       await supabase.from("support_ticket_messages").insert({
-        message: input.userMessage,
+        message: safeInput.userMessage,
         metadata: { requestId },
         speaker: "user",
         ticket_id: ticket.id,
@@ -197,10 +215,10 @@ export async function POST(request: Request) {
       });
     }
 
-    if (input.systemResponse || input.errorMessage) {
+    if (safeInput.systemResponse || safeInput.errorMessage) {
       await supabase.from("support_ticket_messages").insert({
-        message: input.systemResponse ?? input.errorMessage ?? analysis.summary,
-        metadata: { requestId, errorCode: input.errorCode ?? null },
+        message: safeInput.systemResponse ?? safeInput.errorMessage ?? analysis.summary,
+        metadata: { requestId, errorCode: safeInput.errorCode ?? null },
         speaker: "system",
         ticket_id: ticket.id,
         user_id: user.id,
