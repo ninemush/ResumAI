@@ -413,8 +413,12 @@ export function buildCreditsApiError(error: unknown) {
       category: "billing",
       code: "billing.credits_exhausted",
       message:
-        "You have used your included credits. Add credits to keep reading sources, creating packets, and downloading files.",
+        "You're out of credits, so I paused this action before it ran. Add credits to keep reading sources, creating packets, and downloading files.",
       purchaseOptions: error.summary?.purchaseOptions ?? getPurchaseOptions(),
+      resolution: {
+        label: "Add credits",
+        view: "settings",
+      },
       status: 402,
       summary: error.summary,
     };
@@ -521,40 +525,77 @@ export function buildCreditsApiError(error: unknown) {
 }
 
 function mapCreditError(message: string | undefined) {
-  if (message?.includes("CREDITS_EXHAUSTED")) {
+  const normalizedMessage = message?.toUpperCase() ?? "";
+
+  if (
+    normalizedMessage.includes("CREDITS_EXHAUSTED") ||
+    normalizedMessage.includes("INSUFFICIENT_CREDIT_BALANCE")
+  ) {
     return new CreditsExhaustedError();
   }
 
-  if (message?.includes("AUTH_REQUIRED")) {
+  if (normalizedMessage.includes("AUTH_REQUIRED")) {
     return new Error("AUTH_REQUIRED");
   }
 
-  if (message?.includes("ADMIN_REQUIRED")) {
+  if (normalizedMessage.includes("ADMIN_REQUIRED")) {
     return new Error("ADMIN_REQUIRED");
   }
 
-  if (message?.includes("PROMO_CODE_INVALID")) {
+  if (normalizedMessage.includes("PROMO_CODE_INVALID")) {
     return new Error("PROMO_CODE_INVALID");
   }
 
-  if (message?.includes("PROMO_CODE_EXHAUSTED")) {
+  if (normalizedMessage.includes("PROMO_CODE_EXHAUSTED")) {
     return new Error("PROMO_CODE_EXHAUSTED");
   }
 
-  if (message?.includes("PROMO_CODE_ALREADY_REDEEMED")) {
+  if (normalizedMessage.includes("PROMO_CODE_ALREADY_REDEEMED")) {
     return new Error("PROMO_CODE_ALREADY_REDEEMED");
   }
 
-  if (message?.includes("PROMO_CODE_NOT_ASSIGNED")) {
+  if (normalizedMessage.includes("PROMO_CODE_NOT_ASSIGNED")) {
     return new Error("PROMO_CODE_NOT_ASSIGNED");
   }
 
   return new Error("CREDIT_OPERATION_FAILED");
 }
 
-function withPurchaseOptions(summary: z.infer<typeof creditSummarySchema>): CreditSummary {
+function normalizeCreditSummary(
+  summary: z.infer<typeof creditSummarySchema>,
+): z.infer<typeof creditSummarySchema> {
+  const signupCredits = Math.max(0, summary.signupCredits);
+  const promoCredits = Math.max(0, summary.promoCredits);
+  const purchasedCredits = Math.max(0, summary.purchasedCredits);
+  const totalCredits = Math.max(0, summary.totalCredits, signupCredits + promoCredits + purchasedCredits);
+  const usedCredits = Math.max(0, summary.usedCredits);
+  const balance = Math.max(0, summary.balance);
+  const usagePercent =
+    totalCredits > 0
+      ? Math.min(100, Math.max(0, Number(((usedCredits / totalCredits) * 100).toFixed(2))))
+      : 0;
+  const warningThreshold =
+    usagePercent >= 90 ? 90 : usagePercent >= 75 ? 75 : usagePercent >= 50 ? 50 : null;
+
   return {
     ...summary,
+    balance,
+    isExhausted: balance <= 0,
+    promoCredits,
+    purchasedCredits,
+    signupCredits,
+    totalCredits,
+    usagePercent,
+    usedCredits,
+    warningThreshold,
+  };
+}
+
+function withPurchaseOptions(summary: z.infer<typeof creditSummarySchema>): CreditSummary {
+  const normalizedSummary = normalizeCreditSummary(summary);
+
+  return {
+    ...normalizedSummary,
     purchaseOptions: getPurchaseOptions(),
   };
 }

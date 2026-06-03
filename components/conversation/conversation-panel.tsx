@@ -47,6 +47,25 @@ type AssistantMessageDraft = {
   text: string;
 };
 
+type ApiErrorShape = {
+  category?: string;
+  code?: string;
+  message?: string;
+  resolution?: {
+    label?: string;
+    view?: string;
+  };
+  status?: number;
+};
+
+type ApiErrorPayload = {
+  category?: string;
+  code?: string;
+  error?: ApiErrorShape;
+  message?: string;
+  status?: number;
+};
+
 type MessageAttachment = {
   name: string;
   previewUrl?: string;
@@ -70,9 +89,7 @@ type SourceCreateResponse = {
     extractionStatus: string;
     sourceType: string;
   };
-  error?: {
-    message?: string;
-  };
+  error?: ApiErrorShape;
 };
 
 type RecentProfileSource = ProfileOverview["recentSources"][number];
@@ -80,9 +97,7 @@ type RecentProfileSource = ProfileOverview["recentSources"][number];
 type SourceListResponse = {
   ok: boolean;
   sources?: RecentProfileSource[];
-  error?: {
-    message?: string;
-  };
+  error?: ApiErrorShape;
 };
 
 type SupportIssueResponse = {
@@ -107,6 +122,7 @@ type SourceExtractionResult =
     }
   | {
       assistantMessage?: null;
+      billingBlocked?: boolean;
       extractedFactCount?: 0;
       followUpQuestions?: [];
       message: string;
@@ -161,6 +177,68 @@ const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image" | "li
   ["image/png", "image"],
   ["image/webp", "image"],
 ]);
+
+const ADD_CREDITS_ACTION: AdvisorSuggestedAction = {
+  creditCost: null,
+  id: "open-settings-credits",
+  kind: "navigate",
+  label: "Add credits",
+  reason: "Open Settings to review your balance and choose a credit pack.",
+  view: "settings",
+};
+
+const ADD_CREDITS_LINK: AdvisorSuggestedLink = {
+  label: "Review credit balance",
+  reason: "See your balance, history, and available credit packs.",
+  view: "settings",
+};
+
+function getApiError(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as ApiErrorPayload;
+  return candidate.error ?? candidate;
+}
+
+function isCreditExhaustionPayload(payload: unknown) {
+  const error = getApiError(payload);
+
+  if (!error) {
+    return false;
+  }
+
+  const code = error.code?.toLowerCase() ?? "";
+  const category = error.category?.toLowerCase() ?? "";
+  const message = error.message?.toUpperCase() ?? "";
+  const status = error.status ?? (payload as ApiErrorPayload).status ?? null;
+
+  return (
+    code === "billing.credits_exhausted" ||
+    code === "credits_exhausted" ||
+    message.includes("CREDITS_EXHAUSTED") ||
+    message.includes("INSUFFICIENT_CREDIT_BALANCE") ||
+    (category === "billing" && status === 402)
+  );
+}
+
+function buildCreditExhaustionReply(payload?: unknown): AssistantMessageDraft {
+  const apiError = getApiError(payload);
+
+  return {
+    suggestedActions: [ADD_CREDITS_ACTION],
+    suggestedLinks: [ADD_CREDITS_LINK],
+    text: cleanPlainChatText(
+      apiError?.message ??
+        "You're out of credits, so I paused this action before it ran. Add credits in Settings to keep reading sources, creating packets, and exporting files.",
+    ),
+  };
+}
+
+function getCreditExhaustionReply(payload: unknown) {
+  return isCreditExhaustionPayload(payload) ? buildCreditExhaustionReply(payload) : null;
+}
 
 export function ConversationPanel({
   activeView,
@@ -448,7 +526,13 @@ export function ConversationPanel({
       });
       const payload = await response.json();
 
-    if (!response.ok) {
+      if (!response.ok) {
+        const creditReply = getCreditExhaustionReply(payload);
+
+        if (creditReply) {
+          return creditReply;
+        }
+
         return logSupportIssueAndReply({
           area: "master_resume",
           errorCode: payload.error?.code ?? "MASTER_RESUME_EXPORT_FAILED",
@@ -480,6 +564,12 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
+      const creditReply = getCreditExhaustionReply(payload);
+
+      if (creditReply) {
+        return creditReply;
+      }
+
       return logSupportIssueAndReply({
         area: "master_resume",
         errorCode: payload.error?.code ?? "MASTER_RESUME_GENERATION_FAILED",
@@ -520,6 +610,12 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
+      const creditReply = getCreditExhaustionReply(payload);
+
+      if (creditReply) {
+        return creditReply;
+      }
+
       return payload.error?.message ?? "I understood the direction, but could not save it to your profile yet.";
     }
 
@@ -549,6 +645,12 @@ export function ConversationPanel({
       const payload = await response.json();
 
       if (!response.ok) {
+        const creditReply = getCreditExhaustionReply(payload);
+
+        if (creditReply) {
+          return creditReply;
+        }
+
         return payload.error?.message ?? "I could not create that application packet yet.";
       }
 
@@ -583,6 +685,12 @@ export function ConversationPanel({
       const payload = await response.json();
 
       if (!response.ok) {
+        const creditReply = getCreditExhaustionReply(payload);
+
+        if (creditReply) {
+          return creditReply;
+        }
+
         return payload.error?.message ?? "I could not update that application status yet.";
       }
 
@@ -611,6 +719,12 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
+      const creditReply = getCreditExhaustionReply(payload);
+
+      if (creditReply) {
+        return creditReply;
+      }
+
       return payload.error?.message ?? "I could not log that application yet.";
     }
 
@@ -631,6 +745,12 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
+      const creditReply = getCreditExhaustionReply(payload);
+
+      if (creditReply) {
+        return creditReply;
+      }
+
       return payload.error?.message ?? "I could not create the role-specific application packet yet.";
     }
 
@@ -646,6 +766,12 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
+      const creditReply = getCreditExhaustionReply(payload);
+
+      if (creditReply) {
+        return creditReply;
+      }
+
       return payload.error?.message ?? "The editable materials are saved, but file preparation needs another attempt from Applications.";
     }
 
@@ -663,8 +789,14 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
+      const creditReply = getCreditExhaustionReply(payload);
+
+      if (creditReply) {
+        return creditReply;
+      }
+
       return (
-        payload.error ??
+        payload.error?.message ??
         "I understood the guidance, but I could not save it to your profile yet. Try again with one sentence about where this should apply."
       );
     }
@@ -687,6 +819,12 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
+      const creditReply = getCreditExhaustionReply(payload);
+
+      if (creditReply) {
+        return creditReply;
+      }
+
       return logSupportIssueAndReply({
         area: "advisor",
         errorCode: payload.error?.code ?? "ADVISOR_CONTEXT_FAILED",
@@ -719,6 +857,12 @@ export function ConversationPanel({
       const payload = await response.json();
 
       if (!response.ok) {
+        const creditReply = getCreditExhaustionReply(payload);
+
+        if (creditReply) {
+          return creditReply;
+        }
+
         return payload.error?.message ?? "I could not update that profile field yet.";
       }
 
@@ -772,6 +916,15 @@ export function ConversationPanel({
     const extraction = await extractSource(source.id);
 
     if (!extraction.ok) {
+      if (extraction.billingBlocked) {
+        return buildCreditExhaustionReply({
+          category: "billing",
+          code: "billing.credits_exhausted",
+          message: extraction.message,
+          status: 402,
+        });
+      }
+
       return source.source_type === "linkedin"
         ? buildLinkedInBlockedMessage(extraction.message)
         : `I found ${formatSourceReference(source)}, but I could not read it directly: ${extraction.message}`;
@@ -801,6 +954,12 @@ export function ConversationPanel({
       const payload = await response.json();
 
       if (!response.ok) {
+        const creditReply = getCreditExhaustionReply(payload);
+
+        if (creditReply) {
+          return creditReply;
+        }
+
         return payload.error?.message ?? "I could not read that job link yet.";
       }
 
@@ -819,6 +978,12 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
+      const creditReply = getCreditExhaustionReply(payload);
+
+      if (creditReply) {
+        return creditReply;
+      }
+
       return payload.error?.message ?? "I could not save that profile link yet.";
     }
 
@@ -829,6 +994,15 @@ export function ConversationPanel({
     const extraction = await extractSource(payload.source.id);
 
     if (!extraction.ok) {
+      if (extraction.billingBlocked) {
+        return buildCreditExhaustionReply({
+          category: "billing",
+          code: "billing.credits_exhausted",
+          message: extraction.message,
+          status: 402,
+        });
+      }
+
       return sourceType === "linkedin"
         ? buildLinkedInBlockedMessage(extraction.message)
         : `I saved that profile link, but I could not read it directly yet: ${extraction.message}`;
@@ -873,13 +1047,13 @@ export function ConversationPanel({
     );
 
     try {
-      const summaries: string[] = [];
+      const summaries: Array<string | AssistantMessageDraft> = [];
 
       for (const file of fileList) {
         summaries.push(await processFile(file));
       }
 
-      appendAssistantMessage(summaries.join(" "), true);
+      appendAssistantMessage(joinAssistantSummaries(summaries), true);
       router.refresh();
     } catch {
       setError("I could not finish reading that file. Try again, or paste the most important text directly.");
@@ -980,6 +1154,12 @@ export function ConversationPanel({
     });
 
     if (!source.ok || !source.source?.id) {
+      const creditReply = getCreditExhaustionReply(source);
+
+      if (creditReply) {
+        return creditReply;
+      }
+
       return source.error?.message ?? `I could not save ${file.name}.`;
     }
 
@@ -987,6 +1167,15 @@ export function ConversationPanel({
       const extraction = await extractSource(source.source.id);
 
       if (!extraction.ok) {
+        if (extraction.billingBlocked) {
+          return buildCreditExhaustionReply({
+            category: "billing",
+            code: "billing.credits_exhausted",
+            message: extraction.message,
+            status: 402,
+          });
+        }
+
         return buildFileExtractionFailureMessage({
           fileName: file.name,
           message: extraction.message,
@@ -1041,6 +1230,17 @@ export function ConversationPanel({
     const payload = await response.json();
 
     if (!response.ok) {
+      const creditReply = getCreditExhaustionReply(payload);
+
+      if (creditReply) {
+        return {
+          billingBlocked: true,
+          ok: false,
+          message: creditReply.text,
+          savedFactCount: 0,
+        };
+      }
+
       return {
         ok: false,
         message: payload.error?.message ?? "Unable to extract that source.",
@@ -1078,6 +1278,13 @@ export function ConversationPanel({
       if (!response.ok) {
         if (payload.error?.code === "resume.context_too_thin") {
           setStatus(null);
+          return;
+        }
+
+        const creditReply = getCreditExhaustionReply(payload);
+
+        if (creditReply) {
+          setStatus(creditReply.text);
           return;
         }
 
@@ -1142,6 +1349,18 @@ export function ConversationPanel({
     title: string;
     userMessage: string;
   }) {
+    const creditReply = getCreditExhaustionReply({
+      error: {
+        category: input.errorCode.toLowerCase().includes("billing") ? "billing" : undefined,
+        code: input.errorCode,
+        message: input.errorMessage ?? input.systemResponse,
+      },
+    });
+
+    if (creditReply) {
+      return creditReply;
+    }
+
     const logged = await logSupportIssue(input);
 
     return (
@@ -1453,10 +1672,17 @@ function AdvisorActionChips({
 }
 
 function joinAssistantSummaries(items: Array<string | AssistantMessageDraft>) {
-  return items
+  const text = items
     .map((item) => (typeof item === "string" ? item : item.text))
     .filter(Boolean)
     .join(" ");
+  const actionableDraft = items.find(
+    (item): item is AssistantMessageDraft =>
+      typeof item !== "string" &&
+      ((item.suggestedActions?.length ?? 0) > 0 || (item.suggestedLinks?.length ?? 0) > 0),
+  );
+
+  return actionableDraft ? { ...actionableDraft, text } : text;
 }
 
 function getProcessingMessage(mode: ProcessingMode, step: number, activeView: AppView, intent: string) {
