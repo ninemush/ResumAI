@@ -178,8 +178,8 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
             <strong>{creditSummary.balance} available</strong>
             <CreditMeter summary={creditSummary} />
             <div className="settings-link-row">
-              <a className="inline-link" href="/credits" target="_blank" rel="noreferrer">
-                How credits are used
+              <a className="inline-link" href="/credits">
+                Open usage and billing guide
               </a>
             </div>
           </div>
@@ -229,8 +229,8 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
         <article className="settings-cost-guide" aria-labelledby="settings-cost-title">
           <div>
             <h3 id="settings-cost-title">What actions use credits</h3>
-            <a className="inline-link" href="/credits" target="_blank" rel="noreferrer">
-              Full usage guide
+            <a className="inline-link" href="/credits">
+              See examples and rules
             </a>
           </div>
           <div className="settings-cost-list">

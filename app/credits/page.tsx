@@ -1,4 +1,13 @@
 import Link from "next/link";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CircleDollarSign,
+  FileSearch,
+  ReceiptText,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 
 import {
   CREDIT_EXAMPLE_JOURNEYS,
@@ -6,136 +15,168 @@ import {
   CREDIT_PURCHASE_OPTIONS,
   CREDIT_USAGE_GUIDE,
 } from "@/lib/billing/credit-catalog";
+import { brand } from "@/lib/brand";
 
 export const metadata = {
   description:
     "Learn how Pramania credits are used for reading career sources, job analysis, resume drafts, application packets, and downloadable files.",
-  title: "How Credits Work | Pramania",
+  title: `How Credits Work | ${brand.name}`,
 };
 
 export default function CreditsPage() {
   return (
-    <main className="legal-page">
-      <section className="legal-document credits-document" aria-labelledby="credits-title">
-        <Link className="legal-back-link" href="/">
-          Back to Pramania
-        </Link>
-        <p className="eyebrow">Credits</p>
-        <h1 id="credits-title">How Pramania credits work</h1>
-        <p className="legal-meta">Credits are used when Pramania does high-cost work for you.</p>
-
-        <p>
-          Pramania uses credits for actions that require document reading, job analysis,
-          generation, file preparation, or deeper AI reasoning. The goal is simple: you
-          should know what will use credits, why it is valuable, and where the work lands.
-        </p>
-        <p>
-          Job hunting is a season, not something you should be charged for indefinitely.
-          You can add credits when you need more help and stop when you do not. Pramania
-          does not auto-charge, auto-renew credit packs, or refill your balance without
-          your explicit action.
-        </p>
-
-        <div className="credits-callout">
-          <strong>Simple rule:</strong>
-          <p>
-            Credits are tied to meaningful career outcomes, not raw token counts. Viewing
-            saved work, asking Pramania to explain your context, or downloading files that
-            were already prepared does not consume extra credits.
-          </p>
-        </div>
-
-        <h2>Current credit costs</h2>
-        <div className="credits-table" role="table" aria-label="Credit costs">
-          <div className="credits-table-row credits-table-head" role="row">
-            <span>Action</span>
-            <span>Credits</span>
-            <span>Example</span>
-            <span>Why it matters</span>
-          </div>
-          {CREDIT_USAGE_GUIDE.map((action) => (
-            <div className="credits-table-row" key={action.name} role="row">
-              <span>
-                <strong>{action.name}</strong>
-              </span>
-              <span>{action.cost}</span>
-              <span>{action.examples}</span>
-              <span>{action.value}</span>
-            </div>
-          ))}
-        </div>
-
-        <h2>What does not use credits</h2>
-        <ul className="credits-free-list">
-          {CREDIT_FREE_ACTIONS.map((action) => (
-            <li key={action}>{action}</li>
-          ))}
-        </ul>
-
-        <h2>Example credit journeys</h2>
-        <div className="credits-example-grid" aria-label="Example credit usage">
-          {CREDIT_EXAMPLE_JOURNEYS.map((journey) => (
-            <article className="credits-example-card" key={journey.title}>
-              <span>{journey.credits} credits</span>
-              <h3>{journey.title}</h3>
-              <ul>
-                {journey.actions.map((action) => (
-                  <li key={action}>{action}</li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-
-        <h2>Credit packs</h2>
-        <div className="credits-pack-grid" aria-label="Credit packs">
-          {CREDIT_PURCHASE_OPTIONS.map((option) => (
-            <article className="credits-pack-card" key={option.productId}>
-              <span>{option.recommended ? "Best value" : "Focused pack"}</span>
-              <h3>{option.label}</h3>
-              <strong>
-                ${option.priceUsd} for {option.credits} credits
-              </strong>
-              <p>{option.description}</p>
-            </article>
-          ))}
-        </div>
-
-        <h2>What happens when credits run low?</h2>
-        <p>
-          Pramania shows your available balance in Settings. The app warns at 50%, 75%,
-          and 90% usage. When credits are exhausted, high-cost actions such as reading
-          new career sources, generation, job analysis, and export are blocked until more credits
-          are added. Your saved profile, applications, uploaded sources, and generated
-          materials remain available.
-        </p>
-
-        <div className="credits-principle-grid" aria-label="Credit principles">
-          <article>
-            <strong>No surprise deductions</strong>
-            <p>Credit use is shown in Settings history, including what action used credits and when.</p>
-          </article>
-          <article>
-            <strong>Failures are investigated</strong>
-            <p>If a source or generation fails, Pramania records the issue with context so it can be triaged.</p>
-          </article>
-          <article>
-            <strong>Your saved work stays available</strong>
-            <p>Running out of credits blocks new high-cost actions, not access to your existing workspace.</p>
-          </article>
-        </div>
-
-        <p>
-          For billing and usage terms, review the{" "}
-          <Link href="/terms" target="_blank">
-            Terms and Conditions
-          </Link>{" "}
-          and{" "}
-          <Link href="/privacy" target="_blank">
-            Privacy Policy
+    <main className="credits-help-page">
+      <section className="credits-help-shell" aria-labelledby="credits-title">
+        <header className="credits-help-topbar">
+          <Link className="credits-back-link" href="/">
+            <ArrowLeft size={16} aria-hidden="true" />
+            Back to workspace
           </Link>
-          .
-        </p>
+          <span>Help / Billing</span>
+        </header>
+
+        <section className="credits-help-hero">
+          <div>
+            <p className="eyebrow">Credits</p>
+            <h1 id="credits-title">Credits should be clear before you spend them.</h1>
+            <p>
+              {brand.name} uses credits only for higher-cost work: reading career sources,
+              analyzing jobs, generating materials, preparing files, and deeper AI reasoning.
+              Your balance, usage history, purchases, and invoices live in Settings.
+            </p>
+          </div>
+
+          <aside className="credits-help-summary" aria-label="Credit model summary">
+            <CircleDollarSign size={22} aria-hidden="true" />
+            <strong>Job hunting is a phase.</strong>
+            <p>
+              Add credits when you need more support. {brand.name} does not auto-charge,
+              auto-renew credit packs, or refill your balance without your explicit action.
+            </p>
+          </aside>
+        </section>
+
+        <section className="credits-rule-grid" aria-label="Credit principles">
+          <article>
+            <CheckCircle2 size={18} aria-hidden="true" />
+            <strong>Saved work stays available</strong>
+            <p>Viewing prepared files, browsing your workspace, and reviewing saved context are free.</p>
+          </article>
+          <article>
+            <ReceiptText size={18} aria-hidden="true" />
+            <strong>Usage is auditable</strong>
+            <p>Settings shows the action, date, and amount for every credit event.</p>
+          </article>
+          <article>
+            <ShieldCheck size={18} aria-hidden="true" />
+            <strong>No surprise deductions</strong>
+            <p>High-cost actions are priced by outcome, not hidden token counters.</p>
+          </article>
+        </section>
+
+        <section className="credits-help-section">
+          <div className="credits-section-heading">
+            <FileSearch size={19} aria-hidden="true" />
+            <div>
+              <p className="eyebrow">Usage</p>
+              <h2>What uses credits</h2>
+            </div>
+          </div>
+          <div className="credits-cost-grid" aria-label="Credit costs">
+            {CREDIT_USAGE_GUIDE.map((action) => (
+              <article className="credits-cost-card" key={action.name}>
+                <div>
+                  <strong>{action.name}</strong>
+                  <span>{action.cost} credit{action.cost === 1 ? "" : "s"}</span>
+                </div>
+                <p>{action.examples}</p>
+                <small>{action.value}</small>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="credits-help-section credits-help-split">
+          <div>
+            <div className="credits-section-heading">
+              <CheckCircle2 size={19} aria-hidden="true" />
+              <div>
+                <p className="eyebrow">Free actions</p>
+                <h2>What does not use credits</h2>
+              </div>
+            </div>
+            <ul className="credits-free-list credits-free-list-modern">
+              {CREDIT_FREE_ACTIONS.map((action) => (
+                <li key={action}>{action}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <div className="credits-section-heading">
+              <Sparkles size={19} aria-hidden="true" />
+              <div>
+                <p className="eyebrow">Examples</p>
+                <h2>Typical journeys</h2>
+              </div>
+            </div>
+            <div className="credits-example-stack" aria-label="Example credit usage">
+              {CREDIT_EXAMPLE_JOURNEYS.map((journey) => (
+                <article className="credits-example-card" key={journey.title}>
+                  <span>{journey.credits} credits</span>
+                  <h3>{journey.title}</h3>
+                  <ul>
+                    {journey.actions.map((action) => (
+                      <li key={action}>{action}</li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="credits-help-section">
+          <div className="credits-section-heading">
+            <CircleDollarSign size={19} aria-hidden="true" />
+            <div>
+              <p className="eyebrow">Packs</p>
+              <h2>Add credits when you need more runway</h2>
+            </div>
+          </div>
+          <p className="credits-section-copy">
+            The larger pack is better value for a full search cycle, but both are one-time
+            purchases. You stay in control.
+          </p>
+          <div className="credits-pack-grid credits-pack-grid-modern" aria-label="Credit packs">
+            {CREDIT_PURCHASE_OPTIONS.map((option) => (
+              <article className="credits-pack-card" key={option.productId}>
+                <span>{option.recommended ? "Best value" : "Focused pack"}</span>
+                <h3>{option.label}</h3>
+                <strong>
+                  ${option.priceUsd} for {option.credits} credits
+                </strong>
+                <p>{option.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="credits-help-section credits-low-credit-section">
+          <div>
+            <p className="eyebrow">Low balance</p>
+            <h2>What happens when credits run low?</h2>
+            <p>
+              {brand.name} warns at 50%, 75%, and 90% usage. When credits are exhausted,
+              new source reading, generation, job analysis, and export are blocked until
+              more credits are added. Your existing workspace remains available.
+            </p>
+          </div>
+          <div className="credits-legal-links">
+            <Link href="/terms">Terms and Conditions</Link>
+            <Link href="/privacy">Privacy Policy</Link>
+          </div>
+        </section>
       </section>
     </main>
   );
