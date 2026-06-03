@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import {
   BriefcaseBusiness,
@@ -135,6 +135,16 @@ export function WorkspaceLayout({
   }
 
   const mobileFocusClass = mobileSurface === "chat" ? "conversation-first" : "workspace-first";
+
+  useEffect(() => {
+    function handleFocusChat() {
+      setMobileSurface("chat");
+    }
+
+    window.addEventListener("pramania:focus-chat", handleFocusChat);
+
+    return () => window.removeEventListener("pramania:focus-chat", handleFocusChat);
+  }, []);
 
   function selectView(target: WorkspaceNavigationTarget) {
     const activeView = typeof target === "string" ? target : target.view;

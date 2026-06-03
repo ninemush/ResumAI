@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  ArrowRight,
   Building2,
   CheckCircle2,
   Download,
@@ -31,6 +32,13 @@ type MasterResumePanelProps = {
   profileOverview: ProfileOverview;
 };
 
+type ResumeReviewItem = {
+  id: string;
+  severity: "critical" | "important" | "informational";
+  source: "Missing evidence" | "Keyword gap" | "Reviewer note";
+  text: string;
+};
+
 export function MasterResumePanel({
   onDirtyChange,
   overview,
@@ -56,35 +64,65 @@ export function MasterResumePanel({
     () => JSON.stringify(draft) !== JSON.stringify(savedDraft),
     [draft, savedDraft],
   );
-  const hasDraft = Boolean(draft);
-  const reviewItems = useMemo(() => {
-    const visibleLimit = hasDraft ? 4 : 8;
-    const items = [
-      ...currentOverview.missingEvidence.map((text) => ({
+  const reviewItems = useMemo<ResumeReviewItem[]>(() => {
+    return [
+      ...currentOverview.missingEvidence.map((text, index) => ({
+        id: `missing-${index}-${text}`,
         severity: "critical" as const,
+        source: "Missing evidence" as const,
         text,
       })),
-      ...(draft?.keywordGaps ?? []).map((text) => ({
+      ...(draft?.keywordGaps ?? []).map((text, index) => ({
+        id: `gap-${index}-${text}`,
         severity: "important" as const,
+        source: "Keyword gap" as const,
         text,
       })),
-      ...(draft?.reviewerNotes ?? []).map((text) => ({
+      ...(draft?.reviewerNotes ?? []).map((text, index) => ({
+        id: `note-${index}-${text}`,
         severity: "informational" as const,
+        source: "Reviewer note" as const,
         text,
       })),
     ];
-
-    return {
-      hiddenCount: Math.max(0, items.length - visibleLimit),
-      visible: items.slice(0, visibleLimit),
-    };
-  }, [currentOverview.missingEvidence, draft?.keywordGaps, draft?.reviewerNotes, hasDraft]);
+  }, [currentOverview.missingEvidence, draft?.keywordGaps, draft?.reviewerNotes]);
 
   useEffect(() => {
     onDirtyChange?.(isDirty);
 
     return () => onDirtyChange?.(false);
   }, [isDirty, onDirtyChange]);
+
+  function startRefinementInChat(item: ResumeReviewItem) {
+    const prompt = [
+      "I want to address this specific resume refinement:",
+      "",
+      `"${item.text}"`,
+      "",
+      "My answer:",
+    ].join("\n");
+
+    window.dispatchEvent(
+      new CustomEvent("pramania:conversation-draft", {
+        detail: {
+          focus: true,
+          source: "master-resume-refinement",
+          text: prompt,
+        },
+      }),
+    );
+    window.dispatchEvent(
+      new CustomEvent("pramania:focus-chat", {
+        detail: {
+          reason: "resume-refinement",
+          refinementId: item.id,
+        },
+      }),
+    );
+    setMessage(
+      "I moved that refinement into Pramania chat. Add the missing detail there, and Pramania will use it against that exact gap.",
+    );
+  }
 
   useEffect(() => {
     if (!isDirty) {
@@ -1060,7 +1098,10 @@ export function MasterResumePanel({
             ) : null}
           </div>
 
-          <ResumeReviewSection reviewItems={reviewItems} />
+          <ResumeReviewSection
+            onSelectRefinement={startRefinementInChat}
+            reviewItems={reviewItems}
+          />
 
           {isEditing ? (
             <details className="resume-advanced-editor">
@@ -1096,7 +1137,10 @@ export function MasterResumePanel({
         </section>
       ) : (
         <>
-          <ResumeReviewSection reviewItems={reviewItems} />
+          <ResumeReviewSection
+            onSelectRefinement={startRefinementInChat}
+            reviewItems={reviewItems}
+          />
           <section className="resume-empty-panel" aria-label="No master resume yet">
             <FileText size={22} aria-hidden="true" />
             <div>
@@ -1238,60 +1282,72 @@ export function MasterResumePanel({
 }
 
 function ResumeReviewSection({
+  onSelectRefinement,
   reviewItems,
 }: {
-  reviewItems: {
-    hiddenCount: number;
-    visible: Array<{
-      severity: "critical" | "important" | "informational";
-      text: string;
-    }>;
-  };
+  onSelectRefinement: (item: ResumeReviewItem) => void;
+  reviewItems: ResumeReviewItem[];
 }) {
-  if (reviewItems.visible.length === 0) {
+  if (reviewItems.length === 0) {
     return null;
   }
 
   return (
     <section className="resume-gap-panel priority-review-panel" aria-label="Master resume review priorities">
-      <div className="section-heading">
-        <p className="eyebrow">Review next</p>
-        <h2>Resume refinement prompts</h2>
+      <div className="resume-review-header">
+        <div className="section-heading">
+          <p className="eyebrow">Review next</p>
+          <h2>Resume refinement prompts</h2>
+        </div>
+        <span className="resume-review-count">{reviewItems.length} open</span>
       </div>
-      <div className="resume-review-grid">
-        {reviewItems.visible.map((item) => (
+      <p className="resume-review-helper">
+        Pick one prompt at a time. Pramania will load the exact refinement into chat so your answer can be
+        attached to the right part of the resume.
+      </p>
+      <div className="resume-review-list" role="list">
+        {reviewItems.map((item, index) => (
           <ReviewItem
-            key={`${item.severity}-${item.text}`}
-            severity={item.severity}
-            text={item.text}
+            index={index}
+            item={item}
+            key={item.id}
+            onSelect={onSelectRefinement}
           />
         ))}
       </div>
-      {reviewItems.hiddenCount > 0 ? (
-        <p className="resume-review-note">
-          {reviewItems.hiddenCount} more refinement prompt{reviewItems.hiddenCount === 1 ? "" : "s"} are
-          preserved in the advanced editor so the resume itself stays easy to work on.
-        </p>
-      ) : null}
     </section>
   );
 }
 
 function ReviewItem({
-  severity,
-  text,
+  index,
+  item,
+  onSelect,
 }: {
-  severity: "critical" | "important" | "informational";
-  text: string;
+  index: number;
+  item: ResumeReviewItem;
+  onSelect: (item: ResumeReviewItem) => void;
 }) {
   return (
-    <article className={`review-item ${severity}`}>
-      <span>{severity}</span>
-      <p>
+    <button
+      className={`review-item ${item.severity}`}
+      onClick={() => onSelect(item)}
+      type="button"
+    >
+      <span className="review-item-meta">
+        <span className="review-item-number">{index + 1}</span>
+        <span>{item.severity}</span>
+        <span>{item.source}</span>
+      </span>
+      <span className="review-item-text">
         <AlertCircle size={15} aria-hidden="true" />
-        {text}
-      </p>
-    </article>
+        {item.text}
+      </span>
+      <span className="review-item-action">
+        Answer in chat
+        <ArrowRight size={14} aria-hidden="true" />
+      </span>
+    </button>
   );
 }
 

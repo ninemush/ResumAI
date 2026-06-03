@@ -226,6 +226,41 @@ export function ConversationPanel({
   }, []);
 
   useEffect(() => {
+    function handleConversationDraft(event: Event) {
+      const detail = (event as CustomEvent<{
+        focus?: boolean;
+        text?: string;
+      }>).detail;
+
+      if (!detail?.text) {
+        return;
+      }
+
+      setMessage(detail.text);
+
+      window.requestAnimationFrame(() => {
+        const input = messageInputRef.current;
+
+        if (!input) {
+          return;
+        }
+
+        input.style.height = "auto";
+        input.style.height = `${input.scrollHeight}px`;
+
+        if (detail.focus) {
+          input.focus();
+          input.setSelectionRange(input.value.length, input.value.length);
+        }
+      });
+    }
+
+    window.addEventListener("pramania:conversation-draft", handleConversationDraft);
+
+    return () => window.removeEventListener("pramania:conversation-draft", handleConversationDraft);
+  }, []);
+
+  useEffect(() => {
     if (!isSubmitting) {
       return;
     }
