@@ -2237,25 +2237,29 @@ input:focus {
 }
 
 .owner-credit-actions {
+  align-items: start;
   display: grid;
-  gap: 18px;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 20px;
+  grid-template-columns: minmax(520px, 1fr) minmax(420px, 0.88fr);
   margin: 22px 0;
 }
 
 .owner-credit-card {
+  align-content: start;
   background: rgba(255, 255, 255, 0.58);
   border: var(--pr-border-subtle);
   border-radius: var(--pr-radius-lg);
   display: grid;
   gap: 18px;
-  padding: 20px;
+  min-width: 0;
+  padding: clamp(18px, 2vw, 24px);
 }
 
 .owner-credit-card-header {
   align-items: flex-start;
   display: flex;
   gap: 12px;
+  min-width: 0;
 }
 
 .owner-credit-card-header svg {
@@ -2265,7 +2269,7 @@ input:focus {
 }
 
 .owner-credit-card-header h3 {
-  font-size: 1.15rem;
+  font-size: clamp(1.2rem, 1.5vw, 1.45rem);
   margin: 0 0 4px;
 }
 
@@ -2276,14 +2280,22 @@ input:focus {
 }
 
 .owner-credit-form {
-  align-items: end;
+  align-items: start;
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 14px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
 }
 
-.owner-credit-form-direct {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.owner-field-code {
+  grid-column: span 5;
+}
+
+.owner-field-small {
+  grid-column: span 3;
+}
+
+.owner-field-medium {
+  grid-column: span 6;
 }
 
 .owner-credit-form label {
@@ -2292,7 +2304,8 @@ input:focus {
   min-width: 0;
 }
 
-.owner-credit-form label span {
+.owner-credit-form label span,
+.owner-field-label {
   color: var(--sage-strong);
   font-family: var(--font-pr-mono), monospace;
   font-size: 0.72rem;
@@ -2320,7 +2333,124 @@ input:focus {
 }
 
 .owner-credit-description {
-  grid-column: span 2;
+  grid-column: 1 / -1;
+}
+
+.owner-credit-form-direct .owner-field-small {
+  grid-column: span 4;
+}
+
+.owner-credit-form-direct .owner-credit-description {
+  grid-column: 1 / -1;
+}
+
+.owner-user-picker {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  min-width: 0;
+  position: relative;
+}
+
+.owner-user-picker-input {
+  align-items: center;
+  background: var(--surface);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-pill);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 50px;
+  padding: 7px 12px;
+}
+
+.owner-user-picker-input:focus-within {
+  border-color: var(--pr-antique-gold);
+  box-shadow: 0 0 0 3px rgba(190, 151, 87, 0.16);
+}
+
+.owner-user-picker-input input {
+  background: transparent;
+  border: 0;
+  color: var(--foreground);
+  flex: 1 1 190px;
+  font: inherit;
+  min-height: 34px;
+  min-width: 150px;
+  outline: 0;
+  padding: 0;
+}
+
+.owner-user-chip {
+  align-items: flex-start;
+  background: rgba(236, 229, 217, 0.7);
+  border: 1px solid rgba(211, 195, 170, 0.9);
+  border-radius: 16px;
+  color: var(--foreground);
+  cursor: pointer;
+  display: grid;
+  gap: 1px;
+  max-width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.owner-user-chip span {
+  font-size: 0.84rem;
+  font-weight: 850;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner-user-chip small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner-user-suggestions {
+  background: rgba(255, 255, 255, 0.96);
+  border: var(--pr-border-subtle);
+  border-radius: 18px;
+  box-shadow: var(--pr-shadow-soft);
+  display: grid;
+  gap: 4px;
+  margin-top: 2px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px;
+  z-index: 2;
+}
+
+.owner-user-suggestion {
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  color: var(--foreground);
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.owner-user-suggestion:hover {
+  background: rgba(236, 229, 217, 0.62);
+}
+
+.owner-user-suggestion strong {
+  font-size: 0.9rem;
+}
+
+.owner-user-suggestion small,
+.owner-user-picker > small,
+.owner-user-suggestions p {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0;
 }
 
 .owner-form-actions {
@@ -2377,7 +2507,19 @@ input:focus {
 
 .owner-action-button:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.68;
+}
+
+.owner-action-button.primary:disabled {
+  background: rgba(18, 30, 45, 0.42);
+  border-color: transparent;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+@media (max-width: 1180px) {
+  .owner-credit-actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 .owner-table {
@@ -6943,7 +7085,11 @@ input:focus {
     padding: 16px;
   }
 
-  .owner-credit-description {
+  .owner-field-code,
+  .owner-field-small,
+  .owner-field-medium,
+  .owner-credit-description,
+  .owner-user-picker {
     grid-column: auto;
   }
 

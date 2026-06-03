@@ -47,6 +47,12 @@ type CreditGrant = {
   userId: string;
 };
 
+type CreditGrantTarget = {
+  displayName: string | null;
+  email: string | null;
+  userId: string;
+};
+
 type OperatingAction = {
   body: string;
   label: string;
@@ -77,6 +83,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [promoMessage, setPromoMessage] = useState<string | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [query, setQuery] = useState("");
+  const [grantTargetQuery, setGrantTargetQuery] = useState("");
+  const [selectedGrantTargets, setSelectedGrantTargets] = useState<CreditGrantTarget[]>([]);
   const [isPending, startTransition] = useTransition();
 
   const filteredUsers = useMemo(() => {
@@ -110,6 +118,29 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       : metrics.supportTickets;
   }, [metrics.supportTickets, selectedRootCause]);
 
+  const grantTargetSuggestions = useMemo(() => {
+    const normalizedQuery = grantTargetQuery.trim().toLowerCase();
+    const selectedIds = new Set(selectedGrantTargets.map((target) => target.userId));
+
+    return metrics.usersList
+      .filter((user) => !selectedIds.has(user.userId))
+      .filter((user) => {
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        return [user.email, user.displayName, user.userId]
+          .filter(Boolean)
+          .some((value) => value?.toLowerCase().includes(normalizedQuery));
+      })
+      .slice(0, 8)
+      .map((user) => ({
+        displayName: user.displayName,
+        email: user.email,
+        userId: user.userId,
+      }));
+  }, [grantTargetQuery, metrics.usersList, selectedGrantTargets]);
+
   function openRootCause(rootCause: string) {
     setSelectedRootCause(rootCause);
     setActiveTab("errors");
@@ -122,6 +153,26 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
 
     setSelectedRootCause(action.targetTab === "errors" ? action.targetRootCause ?? null : null);
     setActiveTab(action.targetTab);
+  }
+
+  function addGrantTarget(target: CreditGrantTarget) {
+    setSelectedGrantTargets((current) =>
+      current.some((item) => item.userId === target.userId) ? current : [...current, target],
+    );
+    setGrantTargetQuery("");
+    setGrantMessage(null);
+  }
+
+  function removeGrantTarget(userId: string) {
+    setSelectedGrantTargets((current) => current.filter((target) => target.userId !== userId));
+  }
+
+  function selectFirstGrantTargetSuggestion() {
+    const [firstSuggestion] = grantTargetSuggestions;
+
+    if (firstSuggestion) {
+      addGrantTarget(firstSuggestion);
+    }
   }
 
   async function loadPeriod(nextPeriodDays: number) {
@@ -235,34 +286,77 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
+    const creditAmount = Number(formData.get("creditAmount") ?? 0);
+    const description = formData.get("description")?.toString() ?? "";
+    const manualTarget = grantTargetQuery.trim();
+    const targets = selectedGrantTargets.map((target) => ({
+      label: formatGrantTargetLabel(target),
+      userEmail: "",
+      userId: target.userId,
+    }));
+
+    if (targets.length === 0 && manualTarget) {
+      targets.push({
+        label: manualTarget,
+        userEmail: manualTarget.includes("@") ? manualTarget : "",
+        userId: manualTarget.includes("@") ? "" : manualTarget,
+      });
+    }
+
+    if (targets.length === 0) {
+      setGrantMessage("Choose at least one user before adding credits.");
+      return;
+    }
+
     setGrantLoading(true);
     setGrantMessage(null);
-
     try {
-      const response = await fetch("/api/admin/credits/grants", {
-        body: JSON.stringify({
-          creditAmount: Number(formData.get("creditAmount") ?? 0),
-          description: formData.get("description")?.toString() ?? "",
-          userEmail: formData.get("userEmail")?.toString() ?? "",
-          userId: formData.get("userId")?.toString() ?? "",
-        }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-      const payload = (await response.json()) as {
-        error?: { message?: string };
-        grant?: CreditGrant;
-      };
+      const successes: CreditGrant[] = [];
+      const failures: string[] = [];
 
-      if (!response.ok || !payload.grant) {
-        setGrantMessage(payload.error?.message ?? "Credits could not be added.");
+      for (const target of targets) {
+        const response = await fetch("/api/admin/credits/grants", {
+          body: JSON.stringify({
+            creditAmount,
+            description,
+            userEmail: target.userEmail,
+            userId: target.userId,
+          }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+        const payload = (await response.json()) as {
+          error?: { message?: string };
+          grant?: CreditGrant;
+        };
+
+        if (!response.ok || !payload.grant) {
+          failures.push(`${target.label}: ${payload.error?.message ?? "Credits could not be added."}`);
+        } else {
+          successes.push(payload.grant);
+        }
+      }
+
+      if (successes.length === 0) {
+        setGrantMessage(failures[0] ?? "Credits could not be added.");
         return;
       }
 
-      form.reset();
-      setGrantMessage(
-        `Added ${payload.grant.creditAmount} credits to ${payload.grant.userEmail ?? payload.grant.userId}.`,
-      );
+      if (failures.length === 0) {
+        form.reset();
+        setGrantTargetQuery("");
+        setSelectedGrantTargets([]);
+        setGrantMessage(
+          `Added ${creditAmount} credits to ${successes.length} user${successes.length === 1 ? "" : "s"}.`,
+        );
+      } else {
+        const successfulIds = new Set(successes.map((grant) => grant.userId));
+        setSelectedGrantTargets((current) => current.filter((target) => !successfulIds.has(target.userId)));
+        setGrantMessage(
+          `Added credits to ${successes.length} user${successes.length === 1 ? "" : "s"}. ${failures.length} failed: ${failures.join(" ")}`,
+        );
+      }
+
       await loadPeriod(periodDays);
       router.refresh();
     } finally {
@@ -934,7 +1028,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           <SectionHeading
             eyebrow="Credits"
             title="Promo code management"
-            body="Create redeemable codes or grant credits directly to a user. Both paths write to the credit ledger so owner actions remain auditable."
+            body="Create redeemable codes or grant credits directly to one or more users. Both paths write to the credit ledger so owner actions remain auditable."
           />
           <div className="owner-credit-actions">
             <article className="owner-credit-card">
@@ -945,24 +1039,24 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                   <p>Best for launch campaigns, beta groups, or a user who should redeem the grant themselves.</p>
                 </div>
               </div>
-              <form className="owner-credit-form" onSubmit={createPromoCode}>
-                <label>
+              <form className="owner-credit-form owner-credit-form-promo" onSubmit={createPromoCode}>
+                <label className="owner-field-code">
                   <span>Code</span>
                   <input name="code" placeholder="BETA-THANKYOU" required />
                 </label>
-                <label>
+                <label className="owner-field-small">
                   <span>Credits</span>
                   <input name="creditAmount" defaultValue="10" min="1" max="500" required type="number" />
                 </label>
-                <label>
+                <label className="owner-field-small">
                   <span>Max redemptions</span>
                   <input name="maxRedemptions" defaultValue="1" min="1" max="5000" required type="number" />
                 </label>
-                <label>
+                <label className="owner-field-medium">
                   <span>User email optional</span>
                   <input name="assignedUserEmail" placeholder="specific.user@example.com" type="email" />
                 </label>
-                <label>
+                <label className="owner-field-medium">
                   <span>Expiry optional</span>
                   <input name="expiresAt" type="datetime-local" />
                 </label>
@@ -991,20 +1085,79 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               <div className="owner-credit-card-header">
                 <UsersRound aria-hidden="true" size={22} />
                 <div>
-                  <h3>Add credits to a user</h3>
-                  <p>Use this when you want the grant to land immediately without asking the user for a code.</p>
+                  <h3>Add credits to users</h3>
+                  <p>Use this when you want grants to land immediately without asking recipients for a code.</p>
                 </div>
               </div>
               <form className="owner-credit-form owner-credit-form-direct" onSubmit={grantCreditsDirectly}>
-                <label>
-                  <span>User email</span>
-                  <input name="userEmail" placeholder="user@example.com" type="email" />
-                </label>
-                <label>
-                  <span>User id optional</span>
-                  <input name="userId" placeholder="Use when email is unavailable" />
-                </label>
-                <label>
+                <div className="owner-user-picker">
+                  <span className="owner-field-label">Recipients</span>
+                  <div className="owner-user-picker-input">
+                    {selectedGrantTargets.map((target) => (
+                      <button
+                        className="owner-user-chip"
+                        key={target.userId}
+                        onClick={() => removeGrantTarget(target.userId)}
+                        title="Remove recipient"
+                        type="button"
+                      >
+                        <span>{formatGrantTargetLabel(target)}</span>
+                        <small>{target.email && target.displayName ? target.email : target.userId}</small>
+                      </button>
+                    ))}
+                    <input
+                      aria-autocomplete="list"
+                      aria-controls="owner-credit-user-suggestions"
+                      aria-expanded={grantTargetSuggestions.length > 0}
+                      id="credit-grant-recipient-search"
+                      onChange={(event) => setGrantTargetQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          selectFirstGrantTargetSuggestion();
+                        }
+
+                        if (
+                          event.key === "Backspace" &&
+                          !grantTargetQuery &&
+                          selectedGrantTargets.length > 0
+                        ) {
+                          removeGrantTarget(selectedGrantTargets[selectedGrantTargets.length - 1].userId);
+                        }
+                      }}
+                      placeholder={
+                        selectedGrantTargets.length > 0
+                          ? "Add another user..."
+                          : "Search name, email, or user id"
+                      }
+                      role="combobox"
+                      value={grantTargetQuery}
+                    />
+                  </div>
+                  {grantTargetQuery || selectedGrantTargets.length === 0 ? (
+                    <div className="owner-user-suggestions" id="owner-credit-user-suggestions" role="listbox">
+                      {grantTargetSuggestions.length > 0 ? (
+                        grantTargetSuggestions.map((target) => (
+                          <button
+                            aria-selected="false"
+                            className="owner-user-suggestion"
+                            key={target.userId}
+                            onClick={() => addGrantTarget(target)}
+                            role="option"
+                            type="button"
+                          >
+                            <strong>{formatGrantTargetLabel(target)}</strong>
+                            <small>{[target.email, target.userId].filter(Boolean).join(" · ")}</small>
+                          </button>
+                        ))
+                      ) : (
+                        <p>No matching user. Paste an exact email or user id and submit.</p>
+                      )}
+                    </div>
+                  ) : null}
+                  <small>Choose one or more users. Each grant is written as a separate ledger event.</small>
+                </div>
+                <label className="owner-field-small">
                   <span>Credits</span>
                   <input name="creditAmount" defaultValue="10" min="1" max="500" required type="number" />
                 </label>
@@ -1554,6 +1707,10 @@ function buildOperatingActions(metrics: OwnerMetrics, rootCauseCounts: Record<st
 
 function formatLabel(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function formatGrantTargetLabel(target: CreditGrantTarget) {
+  return target.displayName || target.email || target.userId;
 }
 
 function formatDate(value: string) {
