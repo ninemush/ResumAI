@@ -29,6 +29,12 @@ export default function CreditsPage() {
           generation, file preparation, or deeper AI reasoning. The goal is simple: you
           should know what will use credits, why it is valuable, and where the work lands.
         </p>
+        <p>
+          Job hunting is a season, not something you should be charged for indefinitely.
+          You can add credits when you need more help and stop when you do not. Pramania
+          does not auto-charge, auto-renew credit packs, or refill your balance without
+          your explicit action.
+        </p>
 
         <div className="credits-callout">
           <strong>Simple rule:</strong>

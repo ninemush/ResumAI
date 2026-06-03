@@ -561,10 +561,11 @@ export function AuthPanel() {
 
       <section className="auth-section auth-pricing-section" id="pricing" aria-labelledby="pricing-title">
         <p className="eyebrow">Pricing</p>
-        <h2 id="pricing-title">Credits that fit the rhythm of a real search.</h2>
+        <h2 id="pricing-title">Pricing for a job search, not a forever subscription.</h2>
         <p>
-          Start with included credits, then add more only when you need Pramania to read sources,
-          analyze roles, prepare application packets, or create downloadable files.
+          We know job hunting is usually a focused phase. Pramania uses credits so you can
+          start with what you need, add more as you go, and stay in control. There are no
+          automatic top-ups or surprise recurring charges.
         </p>
         <div className="auth-pricing-grid" aria-label="Credit packs">
           {CREDIT_PURCHASE_OPTIONS.map((option) => (
