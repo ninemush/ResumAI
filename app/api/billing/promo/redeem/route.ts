@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { buildCreditsApiError, redeemPromoCode } from "@/lib/billing/credits";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 const redeemPromoSchema = z.object({
   code: z.string().trim().min(1).max(80),
@@ -9,6 +14,19 @@ const redeemPromoSchema = z.object({
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "billing_promo_redeem"),
+    limit: 20,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Promo code attempts are happening too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
   let body: unknown;
 
   try {

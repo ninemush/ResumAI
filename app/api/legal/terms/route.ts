@@ -1,9 +1,27 @@
 import { NextResponse } from "next/server";
 
 import { acceptTerms, acceptTermsSchema } from "@/lib/legal/terms-commands";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "legal_terms_accept"),
+    limit: 20,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Terms acceptance requests are being submitted too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
   let body: unknown;
 
   try {

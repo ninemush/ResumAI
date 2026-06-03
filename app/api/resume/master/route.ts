@@ -107,6 +107,19 @@ async function readOptionalJson(request: Request) {
 
 export async function PATCH(request: Request) {
   const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "master_resume_update"),
+    limit: 60,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Resume edits are being saved too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
   let body: unknown;
 
   try {

@@ -6,6 +6,7 @@ import {
   supportIssueCreateSchema,
   supportIssueShortId,
 } from "@/lib/support/issues";
+import { checkRateLimit, getClientRateLimitKey, rateLimitResponse } from "@/lib/security/rate-limit";
 import { redactOperationalMetadata, redactOperationalText } from "@/lib/security/redaction";
 import { createClient } from "@/lib/supabase/server";
 
@@ -115,6 +116,19 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "support_issue_create"),
+    limit: 20,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Support issues are being logged too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
 
   try {
     const supabase = await createClient();

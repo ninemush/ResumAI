@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { checkRateLimit, getClientRateLimitKey, rateLimitResponse } from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = {
@@ -10,7 +11,22 @@ type RouteContext = {
 
 const PROFILE_SOURCE_BUCKET = "profile-sources";
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
+  const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "profile_source_download"),
+    limit: 60,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Source downloads are being requested too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
+
   const params = await context.params;
   const supabase = await createClient();
   const {
@@ -21,6 +37,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json(
       {
         ok: false,
+        requestId,
         error: {
           code: "auth.required",
           message: "Please sign in before downloading profile sources.",
@@ -41,6 +58,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json(
       {
         ok: false,
+        requestId,
         error: {
           code: "source.download_not_available",
           message: "That original source file is not available for download.",
@@ -54,6 +72,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json(
       {
         ok: false,
+        requestId,
         error: {
           code: "source.invalid_storage_path",
           message: "That source file is outside your private source folder.",
@@ -73,6 +92,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json(
       {
         ok: false,
+        requestId,
         error: {
           code: "source.signed_url_failed",
           message: "Unable to create a download link for that source.",

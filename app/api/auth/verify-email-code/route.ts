@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { readPendingEmailMfa, setEmailMfaVerifiedCookie } from "@/lib/auth/session-security";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 const verifySchema = z.object({
@@ -9,6 +14,20 @@ const verifySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "auth_email_code_verify"),
+    limit: 20,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Email code verification is being attempted too quickly. Please wait a moment.",
+      requestId,
+      result: rateLimit,
+    });
+  }
   const parsed = verifySchema.safeParse(await request.json().catch(() => null));
 
   if (!parsed.success) {

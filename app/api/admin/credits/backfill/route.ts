@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 const backfillRequestSchema = z.object({
@@ -10,6 +15,19 @@ const backfillRequestSchema = z.object({
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "admin_credit_backfill"),
+    limit: 10,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Credit backfill is being requested too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
 
   try {
     const supabase = await createClient();

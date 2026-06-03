@@ -1,9 +1,28 @@
 import { NextResponse } from "next/server";
 
 import { readPendingEmailMfa, setEmailMfaPendingCookie } from "@/lib/auth/session-security";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "auth_email_code_resend"),
+    limit: 5,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Email code requests are happening too quickly. Please wait a moment.",
+      requestId,
+      result: rateLimit,
+    });
+  }
   const pending = await readPendingEmailMfa();
 
   if (!pending || pending.exp < Math.floor(Date.now() / 1000)) {

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { updateApplicationStatus, updateApplicationStatusSchema } from "@/lib/applications/application-commands";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 type RouteContext = {
   params: Promise<{
@@ -10,6 +15,19 @@ type RouteContext = {
 
 export async function PATCH(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "application_status"),
+    limit: 120,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Application status changes are being submitted too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
   const params = await context.params;
   let body: unknown;
 

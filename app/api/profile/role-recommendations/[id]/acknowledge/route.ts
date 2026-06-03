@@ -4,6 +4,11 @@ import {
   acknowledgeRoleRecommendation,
   acknowledgeRoleRecommendationSchema,
 } from "@/lib/profile/profile-commands";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 type RouteContext = {
   params: Promise<{
@@ -11,8 +16,21 @@ type RouteContext = {
   }>;
 };
 
-export async function POST(_request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "role_recommendation_acknowledge"),
+    limit: 120,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Role direction updates are being submitted too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
   const params = await context.params;
   const parsed = acknowledgeRoleRecommendationSchema.safeParse({
     recommendationId: params.id,

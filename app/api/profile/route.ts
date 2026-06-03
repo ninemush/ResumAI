@@ -1,9 +1,27 @@
 import { NextResponse } from "next/server";
 
 import { updateProfileDraft, updateProfileDraftSchema } from "@/lib/profile/profile-commands";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 export async function PATCH(request: Request) {
   const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "profile_update"),
+    limit: 120,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Profile updates are being saved too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
   let body: unknown;
 
   try {

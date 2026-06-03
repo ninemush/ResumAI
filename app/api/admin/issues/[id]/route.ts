@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 import { supportIssueUpdateSchema } from "@/lib/support/issues";
 import { createClient } from "@/lib/supabase/server";
 
@@ -10,6 +15,19 @@ type RouteContext = {
 
 export async function PATCH(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "admin_issue_update"),
+    limit: 60,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Issue updates are being submitted too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
 
   try {
     const { id } = await context.params;

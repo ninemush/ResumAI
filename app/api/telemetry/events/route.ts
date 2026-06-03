@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { checkRateLimit, getClientRateLimitKey, rateLimitResponse } from "@/lib/security/rate-limit";
 import { redactOperationalText } from "@/lib/security/redaction";
 import { createClient } from "@/lib/supabase/server";
 
@@ -28,6 +29,21 @@ const telemetryEventSchema = z.discriminatedUnion("eventType", [
 ]);
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+  const rateLimit = checkRateLimit({
+    key: getClientRateLimitKey(request, "telemetry_event"),
+    limit: 240,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Telemetry events are being recorded too quickly. Pause briefly before trying again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
+
   try {
     const supabase = await createClient();
     const {
@@ -36,7 +52,7 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json(
-        { error: { code: "auth.required", message: "Sign in is required." } },
+        { ok: false, requestId, error: { code: "auth.required", message: "Sign in is required." } },
         { status: 401 },
       );
     }
@@ -51,6 +67,7 @@ export async function POST(request: Request) {
         message: redactOperationalText(payload.message, 500),
         metadata: {
           path: payload.path ? redactOperationalText(payload.path, 240) : null,
+          requestId,
         },
         rationale: "Captured from the browser runtime. Owner review is required if this repeats or affects a core workflow.",
         root_cause_category: "client_runtime",
@@ -62,7 +79,7 @@ export async function POST(request: Request) {
         throw new Error("ERROR_EVENT_INSERT_FAILED");
       }
 
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, requestId });
     }
 
     const { error } = await supabase.from("app_events").insert({
@@ -71,6 +88,7 @@ export async function POST(request: Request) {
       event_type: payload.eventType,
       metadata: {
         path: payload.path ? redactOperationalText(payload.path, 240) : null,
+        requestId,
       },
       page: redactOperationalText(payload.page, 80),
       user_id: user.id,
@@ -80,11 +98,13 @@ export async function POST(request: Request) {
       throw new Error("APP_EVENT_INSERT_FAILED");
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, requestId });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         {
+          ok: false,
+          requestId,
           error: {
             code: "telemetry.invalid_payload",
             message: "Telemetry payload was invalid.",
@@ -98,11 +118,14 @@ export async function POST(request: Request) {
       JSON.stringify({
         event: "telemetry_event_route_failed",
         code: error instanceof Error ? error.message : "UNKNOWN_TELEMETRY_ERROR",
+        requestId,
       }),
     );
 
     return NextResponse.json(
       {
+        ok: false,
+        requestId,
         error: {
           code: "telemetry.write_failed",
           message: "Telemetry event could not be recorded.",
