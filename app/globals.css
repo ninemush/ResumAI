@@ -6493,29 +6493,45 @@ input:focus {
 }
 
 .chat-input {
+  align-items: center;
+  background: rgba(251, 249, 244, 0.96);
   border: 1px solid var(--line);
   border-radius: var(--pr-radius-pill);
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 42px 42px minmax(0, 1fr) 42px;
-  padding: 6px;
+  display: flex;
+  gap: 6px;
+  min-height: 58px;
+  padding: 5px;
   position: sticky;
   bottom: 0;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.chat-input:focus-within {
+  background: rgba(255, 253, 248, 0.98);
+  border-color: rgba(191, 158, 95, 0.68);
+  box-shadow:
+    0 0 0 3px rgba(191, 158, 95, 0.16),
+    0 12px 30px rgba(14, 25, 43, 0.07);
 }
 
 .chat-input textarea {
   background: transparent;
   border: 0;
+  flex: 1 1 auto;
   font-size: 0.95rem;
   line-height: 1.35;
   max-height: 132px;
-  min-height: 40px;
+  min-height: 28px;
   overflow-y: auto;
-  padding: 9px 0;
+  padding: 4px 8px;
   resize: none;
 }
 
 .chat-input textarea:focus {
+  outline: none;
   box-shadow: none;
 }
 
@@ -6523,16 +6539,25 @@ input:focus {
   background: var(--sage-strong);
   border-radius: var(--pr-radius-pill);
   color: var(--pr-soft-ivory);
+  flex: 0 0 44px;
+  height: 44px;
+  min-width: 44px;
 }
 
 .chat-input .attach-button {
   background: transparent;
   color: var(--muted);
+  flex-basis: 36px;
+  height: 36px;
+  min-width: 36px;
 }
 
 .chat-input .voice-button {
   background: transparent;
   color: var(--muted);
+  flex-basis: 36px;
+  height: 36px;
+  min-width: 36px;
 }
 
 .chat-input .attach-button:hover,
