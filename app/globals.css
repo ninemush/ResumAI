@@ -718,10 +718,46 @@ input:focus {
   padding-left: 18px;
 }
 
+.credits-free-list {
+  background: rgba(255, 250, 243, 0.62);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-md);
+  color: var(--muted);
+  display: grid;
+  gap: 10px;
+  line-height: 1.62;
+  margin: 18px 0 30px;
+  padding: 18px 18px 18px 34px;
+}
+
 .credits-pack-card strong {
   color: var(--foreground);
   display: block;
   margin-bottom: 8px;
+}
+
+.credits-principle-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.credits-principle-grid article {
+  background: rgba(255, 250, 243, 0.62);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-md);
+  padding: 18px;
+}
+
+.credits-principle-grid strong {
+  color: var(--foreground);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.credits-principle-grid p {
+  margin: 0;
 }
 
 .terms-gate-page {
@@ -854,6 +890,52 @@ input:focus {
 
 .auth-pricing-section {
   padding-bottom: 92px;
+}
+
+.auth-pricing-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 760px;
+}
+
+.auth-pricing-card {
+  background: rgba(255, 250, 243, 0.68);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 8px;
+  padding: 22px;
+  position: relative;
+}
+
+.auth-pricing-card.recommended {
+  border-color: rgba(185, 155, 103, 0.58);
+  box-shadow: 0 18px 38px rgba(60, 47, 37, 0.08);
+}
+
+.auth-pricing-card span,
+.auth-pricing-card em {
+  color: var(--pr-antique-gold);
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.auth-pricing-card strong {
+  color: var(--foreground);
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.auth-pricing-card p,
+.auth-pricing-card small {
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
 }
 
 .spin {
@@ -3049,6 +3131,63 @@ input:focus {
   margin: 0;
 }
 
+.resume-credential-list {
+  display: grid;
+  gap: 10px;
+}
+
+.resume-credential-row {
+  border-top: 1px solid rgba(185, 155, 103, 0.22);
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.resume-credential-grid {
+  align-items: end;
+  display: grid;
+  gap: 10px 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+}
+
+.resume-credential-grid label {
+  color: var(--muted);
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.resume-credential-grid label > span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.resume-credential-grid input {
+  color: var(--foreground);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.resume-credential-static {
+  border-top: 1px solid rgba(185, 155, 103, 0.2);
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+}
+
+.resume-credential-static strong {
+  color: var(--foreground);
+  font-size: 0.95rem;
+}
+
+.resume-credential-static span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .resume-inline-action,
 .icon-only-action {
   align-items: center;
@@ -4421,6 +4560,64 @@ input:focus {
 .settings-stat-card strong {
   color: var(--foreground);
   font-size: 1.2rem;
+}
+
+.settings-cost-guide {
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.settings-cost-guide > div:first-child {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.settings-cost-guide h3 {
+  color: var(--foreground);
+  font-size: 1rem;
+  margin: 0;
+}
+
+.settings-cost-list {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-cost-row {
+  align-items: start;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.45fr);
+  padding-top: 8px;
+}
+
+.settings-cost-row span {
+  color: var(--foreground);
+  font-weight: 850;
+}
+
+.settings-cost-row strong {
+  background: rgba(74, 115, 91, 0.1);
+  border: 1px solid rgba(74, 115, 91, 0.18);
+  border-radius: 999px;
+  color: var(--sage-strong);
+  font-size: 0.76rem;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.settings-cost-row p {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin: 0;
 }
 
 .settings-history-grid {
@@ -6201,7 +6398,9 @@ input:focus {
   .credits-table,
   .credits-table-row,
   .credits-example-grid,
-  .credits-pack-grid {
+  .credits-pack-grid,
+  .credits-principle-grid,
+  .auth-pricing-grid {
     display: grid;
     grid-template-columns: 1fr;
   }
@@ -6222,6 +6421,7 @@ input:focus {
   .settings-section-grid,
   .settings-stat-grid,
   .settings-history-grid,
+  .settings-cost-row,
   .sources-helper-panel,
   .owner-metric-grid,
   .fit-review-grid,
@@ -6351,8 +6551,13 @@ input:focus {
   .resume-role-card-header,
   .resume-role-meta-row,
   .resume-contact-grid,
-  .resume-bullet-row {
+  .resume-bullet-row,
+  .resume-credential-grid {
     grid-template-columns: 1fr;
+  }
+
+  .resume-credential-grid .icon-only-action {
+    justify-self: start;
   }
 
   .resume-document-preview.preview-mode .resume-role-company-field {

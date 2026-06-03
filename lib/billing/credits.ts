@@ -2,37 +2,24 @@ import "server-only";
 
 import { z } from "zod";
 
+import {
+  CREDIT_COSTS,
+  CREDIT_EXAMPLE_JOURNEYS,
+  CREDIT_FREE_ACTIONS,
+  CREDIT_PURCHASE_OPTIONS,
+  CREDIT_USAGE_GUIDE,
+  type CreditFeature,
+} from "@/lib/billing/credit-catalog";
 import { createClient } from "@/lib/supabase/server";
 
-export const CREDIT_COSTS = {
-  applicationMaterialsExport: 1,
-  applicationMaterialsGenerate: 4,
-  jobIngest: 1,
-  masterResumeExport: 1,
-  masterResumeGenerate: 2,
-  profileSourceExtract: 1,
-} as const;
-
-export const CREDIT_PURCHASE_OPTIONS = [
-  {
-    credits: 25,
-    description: "Good for a focused search sprint or a few polished applications.",
-    envKey: "NEXT_PUBLIC_REVENUECAT_CREDITS_25_URL",
-    label: "Clarity",
-    priceUsd: 12,
-    productId: "pramania_credits_25",
-    recommended: false,
-  },
-  {
-    credits: 75,
-    description: "Best value for a full search cycle with multiple tailored applications.",
-    envKey: "NEXT_PUBLIC_REVENUECAT_CREDITS_75_URL",
-    label: "Momentum",
-    priceUsd: 29,
-    productId: "pramania_credits_75",
-    recommended: true,
-  },
-] as const;
+export {
+  CREDIT_COSTS,
+  CREDIT_EXAMPLE_JOURNEYS,
+  CREDIT_FREE_ACTIONS,
+  CREDIT_PURCHASE_OPTIONS,
+  CREDIT_USAGE_GUIDE,
+};
+export type { CreditFeature };
 
 const creditSummarySchema = z.object({
   balance: z.number().int(),
@@ -76,14 +63,6 @@ export type CreditHistory = {
   purchases: CreditLedgerEvent[];
   usage: CreditLedgerEvent[];
 };
-
-export type CreditFeature =
-  | "applicationMaterialsExport"
-  | "applicationMaterialsGenerate"
-  | "jobIngest"
-  | "masterResumeExport"
-  | "masterResumeGenerate"
-  | "profileSourceExtract";
 
 export class CreditsExhaustedError extends Error {
   readonly summary: CreditSummary | null;

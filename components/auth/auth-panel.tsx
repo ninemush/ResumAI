@@ -13,6 +13,7 @@ import {
 import type { Provider } from "@supabase/supabase-js";
 import Image from "next/image";
 
+import { CREDIT_PURCHASE_OPTIONS } from "@/lib/billing/credit-catalog";
 import { brand } from "@/lib/brand";
 import { TERMS_VERSION } from "@/lib/legal/terms";
 import { createClient } from "@/lib/supabase/browser";
@@ -560,11 +561,25 @@ export function AuthPanel() {
 
       <section className="auth-section auth-pricing-section" id="pricing" aria-labelledby="pricing-title">
         <p className="eyebrow">Pricing</p>
-        <h2 id="pricing-title">Simple tiers are coming.</h2>
+        <h2 id="pricing-title">Credits that fit the rhythm of a real search.</h2>
         <p>
-          Early access will focus on profile quality, application credits, and transparent limits.
-          The product is being built so tiers can be configured without code changes.
+          Start with included credits, then add more only when you need Pramania to read sources,
+          analyze roles, prepare application packets, or create downloadable files.
         </p>
+        <div className="auth-pricing-grid" aria-label="Credit packs">
+          {CREDIT_PURCHASE_OPTIONS.map((option) => (
+            <article className={option.recommended ? "auth-pricing-card recommended" : "auth-pricing-card"} key={option.productId}>
+              <span>{option.label}</span>
+              <strong>${option.priceUsd}</strong>
+              <p>{option.credits} credits</p>
+              <small>{option.description}</small>
+              {option.recommended ? <em>Best value</em> : null}
+            </article>
+          ))}
+        </div>
+        <a className="inline-link" href="/credits" target="_blank" rel="noreferrer">
+          See exactly how credits are used
+        </a>
       </section>
     </div>
   );

@@ -116,7 +116,7 @@ export function ArtifactsPanel({ embedded = false, overview }: ArtifactsPanelPro
                     </a>
                   ) : null}
                   {!artifact.pdfDownloadUrl && !artifact.docxDownloadUrl ? (
-                    <span className="source-pill muted">Export needed</span>
+                    <span className="source-pill muted">Files not prepared</span>
                   ) : null}
                 </div>
               </article>
@@ -252,7 +252,7 @@ function ArtifactViewer({
               <dd>
                 {artifact.pdfDownloadUrl || artifact.docxDownloadUrl
                   ? "Export files are ready."
-                  : "Export needed."}
+                  : "Files are not prepared yet."}
               </dd>
             </div>
           </dl>

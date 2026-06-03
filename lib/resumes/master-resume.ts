@@ -13,6 +13,8 @@ import {
   type ProfileIntelligence,
 } from "@/lib/profile/profile-intelligence";
 import {
+  MAX_RESUME_CERTIFICATION_ITEMS,
+  MAX_RESUME_EDUCATION_ITEMS,
   MAX_RESUME_EXPERIENCE_SECTIONS,
   dedupeResumeExperienceSections,
   normalizeResumeContent,
@@ -23,7 +25,7 @@ import {
 import { extractExperienceSectionsFromText } from "@/lib/resumes/source-experience";
 import { createClient } from "@/lib/supabase/server";
 
-export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v5";
+export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v6";
 const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
 const PDF_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
@@ -280,6 +282,8 @@ async function generateMasterResumeDraft({
               "summary",
               "skills",
               "experienceSections",
+              "education",
+              "certifications",
               "experienceBullets",
               "keywordGaps",
               "reviewerNotes",
@@ -327,6 +331,35 @@ async function generateMasterResumeDraft({
                       maxItems: 7,
                       items: { type: "string" },
                     },
+                  },
+                },
+              },
+              education: {
+                type: "array",
+                maxItems: MAX_RESUME_EDUCATION_ITEMS,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["institution", "credential", "location", "dates"],
+                  properties: {
+                    institution: { type: "string" },
+                    credential: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    location: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    dates: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  },
+                },
+              },
+              certifications: {
+                type: "array",
+                maxItems: MAX_RESUME_CERTIFICATION_ITEMS,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["name", "issuer", "date"],
+                  properties: {
+                    name: { type: "string" },
+                    issuer: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    date: { anyOf: [{ type: "string" }, { type: "null" }] },
                   },
                 },
               },
@@ -427,6 +460,21 @@ Use this exact object shape:
       "bullets": ["evidence-backed impact bullet"]
     }
   ],
+  "education": [
+    {
+      "institution": "school or university from evidence",
+      "credential": "degree, diploma, or credential from evidence or null",
+      "location": "location from evidence or null",
+      "dates": "dates from evidence or null"
+    }
+  ],
+  "certifications": [
+    {
+      "name": "certification/license name from evidence",
+      "issuer": "issuer from evidence or null",
+      "date": "date from evidence or null"
+    }
+  ],
   "experienceBullets": ["fallback selected highlight"],
   "keywordGaps": ["specific missing keyword or evidence gap"],
   "reviewerNotes": ["specific review prompt"]
@@ -479,8 +527,15 @@ function enrichMasterResumeWithSourceEvidence(
 ) {
   const sourceSections = extractExperienceSectionsFromSources(sourceEvidence);
   const sourceContact = extractResumeContactFromSources(sourceEvidence);
+  const sourceEducation = extractResumeEducationFromSources(sourceEvidence);
+  const sourceCertifications = extractResumeCertificationsFromSources(sourceEvidence);
 
-  if (sourceSections.length === 0 && Object.values(sourceContact).every((value) => !value)) {
+  if (
+    sourceSections.length === 0 &&
+    sourceEducation.length === 0 &&
+    sourceCertifications.length === 0 &&
+    Object.values(sourceContact).every((value) => !value)
+  ) {
     return resume;
   }
 
@@ -498,6 +553,9 @@ function enrichMasterResumeWithSourceEvidence(
       sourceSections.length > 0
         ? mergeExperienceSections(sourceSections, resume.experienceSections)
         : resume.experienceSections,
+    education: resume.education.length > 0 ? resume.education : sourceEducation,
+    certifications:
+      resume.certifications.length > 0 ? resume.certifications : sourceCertifications,
     reviewerNotes: [
       ...resume.reviewerNotes,
       ...(sourceSections.length > 0
@@ -529,6 +587,113 @@ function extractResumeContactFromSources(sourceEvidence: SourceEvidence[]) {
     phone,
     website: websiteMatch,
   };
+}
+
+function extractResumeEducationFromSources(sourceEvidence: SourceEvidence[]) {
+  const text = stripRecommendationSourceSections(
+    sourceEvidence
+      .map((source) => source.extracted_text)
+      .filter((value): value is string => Boolean(value?.trim()))
+      .join("\n"),
+  );
+  const sectionText = extractNamedSectionText(text, ["education"], [
+    "licenses",
+    "certifications",
+    "skills",
+    "experience",
+    "recommendations",
+    "projects",
+  ]);
+
+  return sectionText
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 4)
+    .filter((line) =>
+      /\b(university|college|school|institute|academy|bachelor|master|mba|degree|diploma|engineering|science|commerce|arts)\b/i.test(
+        line,
+      ),
+    )
+    .slice(0, MAX_RESUME_EDUCATION_ITEMS)
+    .map((line) => ({
+      credential: extractCredential(line),
+      dates: extractYearRange(line),
+      institution: cleanCredentialLine(
+        line
+          .replace(extractCredential(line) ?? "", "")
+          .replace(extractYearRange(line) ?? "", ""),
+      ),
+      location: null,
+    }))
+    .filter((item) => item.institution.length > 0);
+}
+
+function extractResumeCertificationsFromSources(sourceEvidence: SourceEvidence[]) {
+  const text = stripRecommendationSourceSections(
+    sourceEvidence
+      .map((source) => source.extracted_text)
+      .filter((value): value is string => Boolean(value?.trim()))
+      .join("\n"),
+  );
+  const sectionText = extractNamedSectionText(text, ["licenses", "certifications", "certificates"], [
+    "education",
+    "skills",
+    "experience",
+    "recommendations",
+    "projects",
+  ]);
+
+  return sectionText
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 4)
+    .filter((line) => !/^\d+$/.test(line))
+    .slice(0, MAX_RESUME_CERTIFICATION_ITEMS)
+    .map((line) => ({
+      date: extractYearRange(line),
+      issuer: null,
+      name: cleanCredentialLine(line.replace(extractYearRange(line) ?? "", "")),
+    }))
+    .filter((item) => item.name.length > 0);
+}
+
+function extractNamedSectionText(text: string, starts: string[], stops: string[]) {
+  const lines = text.split(/\n+/);
+  const startIndex = lines.findIndex((line) =>
+    starts.some((start) => new RegExp(`^\\s*${escapeRegExp(start)}\\s*$`, "i").test(line.trim())),
+  );
+
+  if (startIndex < 0) {
+    return "";
+  }
+
+  const stopIndex = lines.findIndex(
+    (line, index) =>
+      index > startIndex &&
+      stops.some((stop) => new RegExp(`^\\s*${escapeRegExp(stop)}\\s*$`, "i").test(line.trim())),
+  );
+
+  return lines.slice(startIndex + 1, stopIndex > startIndex ? stopIndex : undefined).join("\n");
+}
+
+function extractCredential(value: string) {
+  return (
+    value.match(
+      /\b(?:Bachelor|Master|MBA|B\.?S\.?|M\.?S\.?|B\.?A\.?|M\.?A\.?|BEng|MEng|Diploma|Degree)[^,|;]*/i,
+    )?.[0] ?? null
+  );
+}
+
+function extractYearRange(value: string) {
+  return value.match(/\b(?:19|20)\d{2}(?:\s*[-–]\s*(?:(?:19|20)\d{2}|Present|Current))?\b/i)?.[0] ?? null;
+}
+
+function cleanCredentialLine(value: string) {
+  return value.replace(/[|,;:•-]+$/g, "").replace(/^[|,;:•-]+/g, "").replace(/\s+/g, " ").trim();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function normalizeLinkedInUrl(value: string) {
@@ -936,6 +1101,11 @@ be tight enough for a resume preview, usually 90-140 words.
 Include a contact object for email, phone, LinkedIn URL, website, and location
 when those details appear in the profile or readable source evidence. Use null
 for missing contact fields. Do not invent contact details.
+
+Preserve education and certifications/licenses in their own arrays when they
+appear in profile or source evidence. Use empty arrays when absent. Do not turn
+recommendations, testimonials, endorsements, interests, or public praise into
+education, certifications, or work-history roles.
 
 The work history must be organized into role-based experienceSections whenever
 the evidence names employers, roles, dates, scope, or repeated role context.

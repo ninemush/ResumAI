@@ -128,7 +128,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "job.unsupported_content_type",
-        message: "That link did not return a readable job page.",
+        message: "That link did not return enough job-post detail.",
         status: 422,
       };
     }

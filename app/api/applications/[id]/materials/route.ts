@@ -219,7 +219,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "application.job_text_required",
-        message: "The job post needs readable text before I can create a credible application packet.",
+        message: "The job post needs enough detail before I can create a credible application packet.",
         status: 422,
       };
     }

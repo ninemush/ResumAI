@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AppView } from "@/components/app-shell/side-nav";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
+import { CREDIT_USAGE_GUIDE } from "@/lib/billing/credit-catalog";
 import type { CreditHistory, CreditLedgerEvent, CreditSummary } from "@/lib/billing/credits";
 import type { WorkspaceSession } from "@/lib/commands/session";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
@@ -225,6 +226,26 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
           ))}
         </div>
 
+        <article className="settings-cost-guide" aria-labelledby="settings-cost-title">
+          <div>
+            <h3 id="settings-cost-title">What actions use credits</h3>
+            <a className="inline-link" href="/credits" target="_blank" rel="noreferrer">
+              Full usage guide
+            </a>
+          </div>
+          <div className="settings-cost-list">
+            {CREDIT_USAGE_GUIDE.map((item) => (
+              <div className="settings-cost-row" key={item.feature}>
+                <span>{item.name}</span>
+                <strong>
+                  {item.cost} {item.cost === 1 ? "credit" : "credits"}
+                </strong>
+                <p>{item.value}</p>
+              </div>
+            ))}
+          </div>
+        </article>
+
         <HistoryList
           emptyText="No credit activity yet."
           isLoading={isHistoryLoading}
@@ -241,8 +262,9 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
             <p className="eyebrow">Billing</p>
             <h2 id="billing-title">Add credits</h2>
             <p>
-              Pick a pack when you need more runway. The larger pack is priced for users applying to
-              multiple roles and revising materials over a search sprint.
+              Pick a pack when you need more space for role analysis, tailored materials, and
+              validated exports. The larger pack is priced for users applying to multiple roles
+              and revising materials over a search sprint.
             </p>
           </div>
         </div>

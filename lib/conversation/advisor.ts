@@ -7,10 +7,11 @@ import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
 import { getOwnerMetrics, type OwnerMetrics } from "@/lib/admin/owner-metrics";
 import { getApplicationOverview, type ApplicationOverview } from "@/lib/applications/application-overview";
 import { getArtifactOverview, type ArtifactOverview } from "@/lib/artifacts/artifact-overview";
+import { CREDIT_COSTS, getCreditSummary, type CreditSummary } from "@/lib/billing/credits";
 import { PROFILE_INTAKE_INSTRUCTIONS } from "@/lib/ai/prompts/profile-intake";
 import { brand } from "@/lib/brand";
 import { getJobOverview, type JobOverview } from "@/lib/jobs/job-overview";
-import { buildProfileIntelligence } from "@/lib/profile/profile-intelligence";
+import { buildProfileIntelligence, type ProfileIntelligence } from "@/lib/profile/profile-intelligence";
 import { createClient } from "@/lib/supabase/server";
 import {
   advisorSuggestedActionSchema,
@@ -58,6 +59,7 @@ type AdvisorSource = {
 type AdvisorWorkspaceContext = {
   applications: ApplicationOverview | null;
   artifacts: ArtifactOverview | null;
+  credits: CreditSummary | null;
   jobs: JobOverview | null;
   sources: {
     recent: AdvisorSource[];
@@ -504,9 +506,10 @@ async function readAdvisorWorkspaceContext({
   userId: string;
 }): Promise<AdvisorWorkspaceContext> {
   const supabase = await createClient();
-  const [applications, artifacts, jobs, ownerMetrics, sourceResult] = await Promise.allSettled([
+  const [applications, artifacts, credits, jobs, ownerMetrics, sourceResult] = await Promise.allSettled([
     getApplicationOverview(userId),
     getArtifactOverview(userId),
+    getCreditSummary(),
     getJobOverview(userId),
     includeOwnerMetrics ? getOwnerMetrics(30) : Promise.resolve(null),
     profileId
@@ -531,6 +534,7 @@ async function readAdvisorWorkspaceContext({
   return {
     applications: applications.status === "fulfilled" ? applications.value : null,
     artifacts: artifacts.status === "fulfilled" ? artifacts.value : null,
+    credits: credits.status === "fulfilled" ? credits.value : null,
     jobs: jobs.status === "fulfilled" ? jobs.value : null,
     ownerMetrics: ownerMetrics.status === "fulfilled" ? ownerMetrics.value : null,
     sources: {
@@ -574,6 +578,13 @@ function readSourceUsefulness(source: AdvisorSource) {
 }
 
 function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
+  const creditLines = workspace.credits
+    ? [
+        `Credits: ${workspace.credits.balance} available, ${workspace.credits.usedCredits} used of ${workspace.credits.totalCredits} total${workspace.credits.warningThreshold ? `, ${workspace.credits.warningThreshold}% usage warning reached` : ""}.`,
+        `Credit costs: profile/source reading ${CREDIT_COSTS.profileSourceExtract}; job ingest ${CREDIT_COSTS.jobIngest}; master resume generation ${CREDIT_COSTS.masterResumeGenerate}; master resume export ${CREDIT_COSTS.masterResumeExport}; application materials ${CREDIT_COSTS.applicationMaterialsGenerate}; application export ${CREDIT_COSTS.applicationMaterialsExport}.`,
+        `Credit packs: ${workspace.credits.purchaseOptions.map((option) => `${option.label} ${option.credits} credits for $${option.priceUsd}`).join("; ") || "not configured"}.`,
+      ]
+    : ["Credits: no credit summary was available for this reply."];
   const activeApplications =
     workspace.applications?.recentApplications.filter((application) => !application.archivedAt) ?? [];
   const activeJobs = workspace.jobs?.recentJobs.filter((job) => !job.archived_at) ?? [];
@@ -612,7 +623,7 @@ function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
       ]
     : ["Generated resumes and letters: no generated material records were available for this reply."];
 
-  return [...applicationLines, ...jobLines, ...sourceLines, ...artifactLines].join("\n");
+  return [...creditLines, ...applicationLines, ...jobLines, ...sourceLines, ...artifactLines].join("\n");
 }
 
 function formatOwnerOperationsForAdvisor(metrics: OwnerMetrics | null) {
@@ -743,6 +754,38 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
     const value = (content as Record<string, unknown>)[key];
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
   };
+  const contact =
+    "contact" in content && content.contact && typeof content.contact === "object"
+      ? (content.contact as Record<string, unknown>)
+      : {};
+  const contactLine = ["email", "phone", "linkedin", "website", "location"]
+    .map((key) => contact[key])
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" | ");
+  const education = Array.isArray((content as Record<string, unknown>).education)
+    ? ((content as Record<string, unknown>).education as unknown[])
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const record = item as Record<string, unknown>;
+          return [record.credential, record.institution, record.location, record.dates]
+            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+            .join(" | ");
+        })
+        .filter((item): item is string => Boolean(item))
+        .slice(0, 4)
+    : [];
+  const certifications = Array.isArray((content as Record<string, unknown>).certifications)
+    ? ((content as Record<string, unknown>).certifications as unknown[])
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const record = item as Record<string, unknown>;
+          return [record.name, record.issuer, record.date]
+            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+            .join(" | ");
+        })
+        .filter((item): item is string => Boolean(item))
+        .slice(0, 5)
+    : [];
   const experienceSections = Array.isArray((content as Record<string, unknown>).experienceSections)
     ? ((content as Record<string, unknown>).experienceSections as unknown[])
         .map((item) => {
@@ -765,10 +808,13 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
 
   return [
     `- Headline: ${read("headline") ?? "None"}`,
+    `- Contact: ${contactLine || "None"}`,
     `- Summary: ${read("summary") ?? "None"}`,
     `- Skills: ${readArray("skills").slice(0, 16).join(", ") || "None"}`,
     `- Role-based experience: ${experienceSections.join(" || ") || "None"}`,
     `- Experience highlights: ${readArray("experienceBullets").slice(0, 8).join(" / ") || "None"}`,
+    `- Education: ${education.join(" || ") || "None"}`,
+    `- Certifications: ${certifications.join(" || ") || "None"}`,
     `- Gaps: ${readArray("keywordGaps").slice(0, 6).join(" / ") || "None"}`,
   ].join("\n");
 }
@@ -822,6 +868,26 @@ function buildContextAwareAdvisorFallback({
     sources: workspace.sources.recent,
   });
 
+  if (isCreditQuestion(normalized)) {
+    return buildCreditAdvisorFallback(workspace.credits);
+  }
+
+  if (isTrackingQuestion(normalized)) {
+    return buildTrackingAdvisorFallback(workspace);
+  }
+
+  if (isNextMoveQuestion(normalized)) {
+    return buildNextMoveAdvisorFallback({
+      impactEvidence: impactEvidence ?? [],
+      impactEvidenceFallback,
+      intelligence,
+      latestResume,
+      profile,
+      roleRead,
+      workspace,
+    });
+  }
+
   if (/\b(vp|executive|senior|board|level)\b/.test(normalized) && /\b(metric|impact|cagr|profit|revenue|margin|scale|percentage)\b/.test(normalized)) {
     const metricClaim = extractMetricClaim(message);
 
@@ -853,6 +919,105 @@ The files and notes you saved add this useful evidence: ${formatListForSentence(
   return `Based on what I already know, I would position you around ${roleRead}. The strongest evidence to preserve is ${formatListForSentence(impactEvidence ?? [], impactEvidenceFallback || "the clearest evidence already saved in your profile")}.
 
 The next best move is to sharpen the master profile into role-based evidence: what you owned, how large it was, what changed, and why it mattered commercially. I will use your saved profile, career materials, jobs, applications, and generated files as context instead of asking you to start over.`;
+}
+
+function isCreditQuestion(normalized: string) {
+  return /\b(credit|credits|balance|usage|used|cost|costs|paid|price|purchase|buy)\b/.test(normalized);
+}
+
+function isTrackingQuestion(normalized: string) {
+  return (
+    /\b(jobs?|applications?|tracking|pipeline|interviews?|applied|roles?)\b/.test(normalized) &&
+    /\b(what|which|tracking|status|show|list|have|am i)\b/.test(normalized)
+  );
+}
+
+function isNextMoveQuestion(normalized: string) {
+  return /\b(next|do next|career advice|advice|recommend|should i do|best move|where should|what should)\b/.test(
+    normalized,
+  );
+}
+
+function buildCreditAdvisorFallback(credits: CreditSummary | null) {
+  if (!credits) {
+    return "I cannot read the credit ledger right now. Check Settings for the latest balance, purchase packs, and usage history; I should not guess at credits.";
+  }
+
+  const warning = credits.warningThreshold
+    ? ` You have crossed the ${credits.warningThreshold}% usage threshold, so I would be deliberate about exports and role-specific generations.`
+    : "";
+  const packs =
+    credits.purchaseOptions.map((option) => `${option.label}: ${option.credits} credits for $${option.priceUsd}`).join("; ") ||
+    "purchase packs are not configured yet";
+
+  return `You have ${credits.balance} credits available. You have used ${credits.usedCredits} of ${credits.totalCredits} total credits.${warning}
+
+Typical costs are: reading a profile/resume source ${CREDIT_COSTS.profileSourceExtract} credit, ingesting a job ${CREDIT_COSTS.jobIngest} credit, generating a master resume ${CREDIT_COSTS.masterResumeGenerate} credits, exporting a master resume ${CREDIT_COSTS.masterResumeExport} credit, generating application materials ${CREDIT_COSTS.applicationMaterialsGenerate} credits, and exporting application files ${CREDIT_COSTS.applicationMaterialsExport} credit.
+
+Available packs: ${packs}.`;
+}
+
+function buildTrackingAdvisorFallback(workspace: AdvisorWorkspaceContext) {
+  const applications = workspace.applications?.recentApplications.filter((application) => !application.archivedAt) ?? [];
+  const jobs = workspace.jobs?.recentJobs.filter((job) => !job.archived_at) ?? [];
+
+  if (applications.length === 0 && jobs.length === 0) {
+    return "You are not actively tracking any jobs or applications yet. The next useful move is to paste a job link into Pramania; I will read it, compare it against your profile, and ask before logging it as an application.";
+  }
+
+  const applicationLines = applications
+    .slice(0, 4)
+    .map(
+      (application) =>
+        `${application.jobTitle ?? "Untitled role"} at ${application.companyName} is ${application.status}; resume ${application.latestResumeStatus ?? "not generated"}, cover letter ${application.latestCoverLetterStatus ?? "not generated"}`,
+    );
+  const jobLines = jobs
+    .slice(0, 4)
+    .map(
+      (job) =>
+        `${job.title ?? "Untitled role"} at ${job.company ?? "unknown company"} is ${job.review_status}; fit ${job.fitSnapshot.score ?? "unknown"}%`,
+    );
+
+  return `Here is what you are tracking right now.
+
+Applications: ${applicationLines.length > 0 ? applicationLines.join("; ") : "none logged yet"}.
+
+Jobs under review: ${jobLines.length > 0 ? jobLines.join("; ") : "none waiting for review"}.
+
+The practical next step is to move any real submitted application out of Draft/Review and keep the status current, because that is how Pramania can help with follow-ups and outcome tracking.`;
+}
+
+function buildNextMoveAdvisorFallback({
+  impactEvidence,
+  impactEvidenceFallback,
+  intelligence,
+  latestResume,
+  profile,
+  roleRead,
+  workspace,
+}: {
+  impactEvidence: string[];
+  impactEvidenceFallback: string;
+  intelligence: ProfileIntelligence | null;
+  latestResume: unknown;
+  profile: AdvisorProfile | null;
+  roleRead: string;
+  workspace: AdvisorWorkspaceContext;
+}) {
+  const resumeText = formatLatestResumeForAdvisor(latestResume);
+  const activeApplications = workspace.applications?.summary.active ?? 0;
+  const activeJobs = workspace.jobs?.summary.active ?? 0;
+  const missing = intelligence?.highValueGaps.map((gap) => gap.label).slice(0, 3) ?? [];
+  const evidence = formatListForSentence(
+    impactEvidence,
+    impactEvidenceFallback || profile?.summary || "the strongest saved profile evidence",
+  );
+
+  return `My current read is ${roleRead}. The strongest saved evidence is ${evidence}.
+
+The next best move is to make the master resume undeniable before creating more variants: clean role chronology, clear company/title/dates/location, and two or three high-value outcomes per major role. The current resume snapshot is: ${resumeText.replace(/\n/g, " ")}
+
+After that, use Jobs to compare roles before applying. You currently have ${activeJobs} active job(s) under review and ${activeApplications} active application(s). The highest-value gaps to close are ${formatListForSentence(missing, "scope, measurable outcomes, and role focus")}.`;
 }
 
 function formatAdvisorSourceType(type: string) {

@@ -250,7 +250,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
               <span className="record-summary">
                 {job.fitSnapshot.score !== null
                   ? job.fitAnalysis.summary
-                  : "Open the role once Pramania has readable job-post text."}
+                  : "Open the role once Pramania has enough job-post detail."}
               </span>
             </button>
 
@@ -323,7 +323,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                     icon="risk"
                     items={job.fitAnalysis.missingKeywords}
                     label="Gaps to Validate"
-                    placeholder="No obvious gaps from the readable post."
+                    placeholder="No obvious gaps from the available post detail."
                   />
                   <FitBucket
                     icon="question"
@@ -371,8 +371,8 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                   <p className="source-failure">{formatFailureReason(job.failure_reason)}</p>
                 ) : null}
                 <div className="job-description-preview">
-                  <strong>Readable job-post excerpt</strong>
-                  <p>{job.extracted_text?.slice(0, 1400) ?? "No readable job text available."}</p>
+                  <strong>Job-post excerpt</strong>
+                  <p>{job.extracted_text?.slice(0, 1400) ?? "No job-post detail is available yet."}</p>
                 </div>
               </div>
             ) : null}
@@ -456,7 +456,7 @@ function formatFailureReason(reason: string) {
     JOB_FETCH_FAILED: "The page could not be fetched.",
     JOB_PAGE_TOO_LARGE: "The page is too large for the current ingest limit.",
     JOB_TEXT_TOO_SHORT: "Not enough job-post text was found.",
-    JOB_UNSUPPORTED_CONTENT_TYPE: "The link did not return a readable job page.",
+    JOB_UNSUPPORTED_CONTENT_TYPE: "The link did not return enough job-post detail.",
     JOB_URL_BLOCKED: "This URL is blocked for safety.",
   };
 

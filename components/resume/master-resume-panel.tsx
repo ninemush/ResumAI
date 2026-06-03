@@ -187,7 +187,7 @@ export function MasterResumePanel({
 
     let normalizedDraft: ResumeContent;
     try {
-      normalizedDraft = normalizeResumeContent(draft);
+      normalizedDraft = normalizeResumeContent(sanitizeResumeDraft(draft));
     } catch {
       setMessage("The resume has an empty required section. Add a summary, headline, skill, and at least one experience bullet before saving.");
       return;
@@ -675,6 +675,184 @@ export function MasterResumePanel({
                 </p>
               )}
             </section>
+            {(isEditing || draft.education.length > 0) ? (
+              <section>
+                <div className="resume-section-heading-row">
+                  <h3>Education</h3>
+                  {isEditing ? (
+                    <button
+                      className="resume-inline-action"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          education: [
+                            ...draft.education,
+                            {
+                              credential: "",
+                              dates: "",
+                              institution: "",
+                              location: "",
+                            },
+                          ],
+                        })
+                      }
+                      type="button"
+                    >
+                      <Plus size={14} aria-hidden="true" />
+                      Add education
+                    </button>
+                  ) : null}
+                </div>
+                {isEditing ? (
+                  <div className="resume-credential-list">
+                    {draft.education.map((item, index) => (
+                      <div className="resume-credential-row" key={`education-${index}`}>
+                        <div className="resume-credential-grid">
+                          <label>
+                            <span>Institution</span>
+                            <input
+                              aria-label={`Education institution ${index + 1}`}
+                              onChange={(event) => updateEducationItem(draft, setDraft, index, { institution: event.target.value })}
+                              placeholder="Institution"
+                              value={item.institution}
+                            />
+                          </label>
+                          <label>
+                            <span>Credential</span>
+                            <input
+                              aria-label={`Education credential ${index + 1}`}
+                              onChange={(event) => updateEducationItem(draft, setDraft, index, { credential: event.target.value })}
+                              placeholder="Degree, diploma, or program"
+                              value={item.credential ?? ""}
+                            />
+                          </label>
+                          <label>
+                            <span>Dates</span>
+                            <input
+                              aria-label={`Education dates ${index + 1}`}
+                              onChange={(event) => updateEducationItem(draft, setDraft, index, { dates: event.target.value })}
+                              placeholder="Dates"
+                              value={item.dates ?? ""}
+                            />
+                          </label>
+                          <label>
+                            <span>Location</span>
+                            <input
+                              aria-label={`Education location ${index + 1}`}
+                              onChange={(event) => updateEducationItem(draft, setDraft, index, { location: event.target.value })}
+                              placeholder="Location"
+                              value={item.location ?? ""}
+                            />
+                          </label>
+                          <button
+                            aria-label={`Remove education item ${index + 1}`}
+                            className="icon-only-action"
+                            onClick={() => removeEducationItem(draft, setDraft, index)}
+                            type="button"
+                          >
+                            <Trash2 size={14} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="resume-credential-list">
+                    {draft.education.map((item, index) => (
+                      <div className="resume-credential-static" key={`${item.institution}-${index}`}>
+                        <strong>{item.institution}</strong>
+                        <span>
+                          {[item.credential, item.dates, item.location].filter(Boolean).join(" · ")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : null}
+            {(isEditing || draft.certifications.length > 0) ? (
+              <section>
+                <div className="resume-section-heading-row">
+                  <h3>Certifications</h3>
+                  {isEditing ? (
+                    <button
+                      className="resume-inline-action"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          certifications: [
+                            ...draft.certifications,
+                            {
+                              date: "",
+                              issuer: "",
+                              name: "",
+                            },
+                          ],
+                        })
+                      }
+                      type="button"
+                    >
+                      <Plus size={14} aria-hidden="true" />
+                      Add certification
+                    </button>
+                  ) : null}
+                </div>
+                {isEditing ? (
+                  <div className="resume-credential-list">
+                    {draft.certifications.map((item, index) => (
+                      <div className="resume-credential-row" key={`certification-${index}`}>
+                        <div className="resume-credential-grid">
+                          <label>
+                            <span>Certification</span>
+                            <input
+                              aria-label={`Certification name ${index + 1}`}
+                              onChange={(event) => updateCertificationItem(draft, setDraft, index, { name: event.target.value })}
+                              placeholder="Certification"
+                              value={item.name}
+                            />
+                          </label>
+                          <label>
+                            <span>Issuer</span>
+                            <input
+                              aria-label={`Certification issuer ${index + 1}`}
+                              onChange={(event) => updateCertificationItem(draft, setDraft, index, { issuer: event.target.value })}
+                              placeholder="Issuer"
+                              value={item.issuer ?? ""}
+                            />
+                          </label>
+                          <label>
+                            <span>Date</span>
+                            <input
+                              aria-label={`Certification date ${index + 1}`}
+                              onChange={(event) => updateCertificationItem(draft, setDraft, index, { date: event.target.value })}
+                              placeholder="Date"
+                              value={item.date ?? ""}
+                            />
+                          </label>
+                          <button
+                            aria-label={`Remove certification ${index + 1}`}
+                            className="icon-only-action"
+                            onClick={() => removeCertificationItem(draft, setDraft, index)}
+                            type="button"
+                          >
+                            <Trash2 size={14} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="resume-credential-list">
+                    {draft.certifications.map((item, index) => (
+                      <div className="resume-credential-static" key={`${item.name}-${index}`}>
+                        <strong>{item.name}</strong>
+                        <span>{[item.issuer, item.date].filter(Boolean).join(" · ")}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : null}
           </div>
 
           <ResumeReviewSection reviewItems={reviewItems} />
@@ -807,13 +985,13 @@ export function MasterResumePanel({
         </article>
         <article>
           <span>PDF</span>
-          <strong>{currentOverview.latestResume?.pdfDownloadUrl ? "Ready to download" : "Export needed"}</strong>
-          <p>{currentOverview.latestResume?.pdfDownloadUrl ? "PDF file is stored for this resume." : "Export after review to create the PDF."}</p>
+          <strong>{currentOverview.latestResume?.pdfDownloadUrl ? "Ready to download" : "Prepare files"}</strong>
+          <p>{currentOverview.latestResume?.pdfDownloadUrl ? "PDF file is stored for this resume." : "Prepare the PDF after review."}</p>
         </article>
         <article>
           <span>DOCX</span>
-          <strong>{currentOverview.latestResume?.docxDownloadUrl ? "Ready" : "Export needed"}</strong>
-          <p>{currentOverview.latestResume?.docxDownloadUrl ? "Editable Word file is stored for this resume." : "Export after review to create the DOCX."}</p>
+          <strong>{currentOverview.latestResume?.docxDownloadUrl ? "Ready" : "Prepare files"}</strong>
+          <p>{currentOverview.latestResume?.docxDownloadUrl ? "Editable Word file is stored for this resume." : "Prepare the DOCX after review."}</p>
         </article>
         <article>
           <span>Profile photo</span>
@@ -1017,6 +1195,71 @@ function updateResumeContact(
 function autoGrowTextArea(field: HTMLTextAreaElement) {
   field.style.height = "auto";
   field.style.height = `${field.scrollHeight}px`;
+}
+
+function sanitizeResumeDraft(draft: ResumeContent): ResumeContent {
+  return {
+    ...draft,
+    certifications: draft.certifications.filter((item) => item.name.trim()),
+    education: draft.education.filter((item) => item.institution.trim() || item.credential?.trim()),
+    experienceBullets: draft.experienceBullets.filter((bullet) => bullet.trim()),
+    experienceSections: draft.experienceSections
+      .map((section) => ({
+        ...section,
+        bullets: section.bullets.filter((bullet) => bullet.trim()),
+      }))
+      .filter((section) => section.roleTitle.trim() || section.company?.trim() || section.bullets.length > 0),
+  };
+}
+
+function updateEducationItem(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  index: number,
+  patch: Partial<ResumeContent["education"][number]>,
+) {
+  setDraft({
+    ...draft,
+    education: draft.education.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, ...patch } : item,
+    ),
+  });
+}
+
+function removeEducationItem(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  index: number,
+) {
+  setDraft({
+    ...draft,
+    education: draft.education.filter((_, itemIndex) => itemIndex !== index),
+  });
+}
+
+function updateCertificationItem(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  index: number,
+  patch: Partial<ResumeContent["certifications"][number]>,
+) {
+  setDraft({
+    ...draft,
+    certifications: draft.certifications.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, ...patch } : item,
+    ),
+  });
+}
+
+function removeCertificationItem(
+  draft: ResumeContent,
+  setDraft: (draft: ResumeContent) => void,
+  index: number,
+) {
+  setDraft({
+    ...draft,
+    certifications: draft.certifications.filter((_, itemIndex) => itemIndex !== index),
+  });
 }
 
 function updateExperienceSection(

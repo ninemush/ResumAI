@@ -56,3 +56,14 @@ test("renders the privacy policy", async ({ page }) => {
   await expect(page.locator("body")).toContainText(/AI Processing/i);
   await expect(page.locator("body")).toContainText(/Data Separation and Access Control/i);
 });
+
+test("explains credit usage with concrete examples", async ({ page }) => {
+  await page.goto("/credits");
+
+  await expect(page.getByRole("heading", { name: /How Pramania credits work/i })).toBeVisible();
+  await expect(page.locator("body")).toContainText(/Read a career source/i);
+  await expect(page.locator("body")).toContainText(/What does not use credits/i);
+  await expect(page.locator("body")).toContainText(/Build a starting profile/i);
+  await expect(page.locator("body")).toContainText(/Clarity/i);
+  await expect(page.locator("body")).toContainText(/Momentum/i);
+});

@@ -503,7 +503,7 @@ export function ConversationPanel({
 
       if (actionableCandidates.length !== 1) {
         return actionableCandidates.length === 0
-          ? "I can create a role-specific application packet once an application is logged from a readable job post."
+          ? "I can create a role-specific application packet once an application is logged from a job post with enough detail."
           : `I can do that, but I need to know which application. Do you mean ${actionableCandidates.map(formatApplicationLabel).join(", ")}?`;
       }
 
@@ -711,7 +711,7 @@ export function ConversationPanel({
 
     if (!source) {
       return requestedSourceType === "linkedin"
-        ? "I do not see a saved LinkedIn profile link yet. Paste the LinkedIn URL here, or drop a PDF/screenshots from LinkedIn, and I will turn the readable parts into career context."
+        ? "I do not see a saved LinkedIn profile link yet. Paste the LinkedIn URL here, or drop a PDF/screenshots from LinkedIn, and I will turn the usable parts into career context."
         : "I do not see a saved profile link yet. Paste the link here and I will save it, then try to read what is publicly available.";
     }
 
@@ -2190,7 +2190,7 @@ function processSourceExplanationQuestion(text: string) {
     return buildLinkedInExplanation();
   }
 
-  return "I could not read that profile link because the page did not return enough readable career content to Pramania's server. Some sites render content only in a browser, block automated server requests, require sign-in, or hide profile sections from public HTML. The reliable V1 path is to paste the profile text, upload a PDF/DOCX export, or drop a screenshot so I can extract it and show you the evidence before trusting it.";
+  return "I could not read that profile link because the page did not return enough career content to Pramania's server. Some sites render content only in a browser, block automated server requests, require sign-in, or hide profile sections from public HTML. The reliable V1 path is to paste the profile text, upload a PDF/DOCX export, or drop a screenshot so I can extract it and show you the evidence before trusting it.";
 }
 
 function buildLinkedInBlockedMessage(reason: string) {
@@ -2235,7 +2235,7 @@ function buildFileExtractionFailureMessage({
     return `${fileName} is saved in your Library. I could not extract LinkedIn profile data on this pass: ${message} I will keep it available for another extraction pass. LinkedIn archive ZIPs, profile CSV files, and the LinkedIn PDF export are the most reliable formats.`;
   }
 
-  return `${fileName} is saved in your Library. I could not extract readable career text on this pass: ${message} I will keep it available for another extraction pass before asking you to upload anything again.`;
+  return `${fileName} is saved in your Library. I could not extract enough career text on this pass: ${message} I will keep it available for another extraction pass before asking you to upload anything again.`;
 }
 
 function looksLikeExistingSourceRequest(text: string) {
@@ -2439,7 +2439,7 @@ function formatJobIntakeReply(job: {
   title?: string | null;
 } | null | undefined) {
   if (!job) {
-    return "I saved that job post. We can review fit once the page is readable.";
+    return "I saved that job post. We can review fit once Pramania has enough job detail.";
   }
 
   const roleLabel = [job.title, job.company].filter(Boolean).join(" at ") || "that job post";

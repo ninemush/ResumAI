@@ -79,6 +79,8 @@ export async function buildAtsResumePdf(input: ResumeTemplateInput) {
   drawSection(document, "Core Skills", [formatSkills(input.resume.skills)]);
   drawSelectedHighlights(document, input.resume);
   drawExperience(document, input.resume);
+  drawEducation(document, input.resume);
+  drawCertifications(document, input.resume);
 
   return pdf.save();
 }
@@ -132,6 +134,8 @@ export async function buildAtsResumeDocx(input: ResumeTemplateInput) {
     docxParagraph(formatSkills(input.resume.skills), { spacingAfter: 160 }),
     ...buildDocxSelectedHighlights(input.resume),
     ...buildDocxExperience(input.resume),
+    ...buildDocxEducation(input.resume),
+    ...buildDocxCertifications(input.resume),
   );
 
   return Packer.toBuffer(createDocx(children, "ATS resume"));
@@ -290,6 +294,26 @@ function drawSelectedHighlights(document: PdfLayout, resume: ResumeContent) {
   );
 }
 
+function drawEducation(document: PdfLayout, resume: ResumeContent) {
+  const lines = resume.education.map(formatEducationLine).filter(Boolean);
+
+  if (lines.length === 0) {
+    return;
+  }
+
+  drawSection(document, "Education", lines);
+}
+
+function drawCertifications(document: PdfLayout, resume: ResumeContent) {
+  const lines = resume.certifications.map(formatCertificationLine).filter(Boolean);
+
+  if (lines.length === 0) {
+    return;
+  }
+
+  drawSection(document, "Certifications", lines);
+}
+
 function buildDocxExperience(resume: ResumeContent) {
   const sections = resume.experienceSections ?? [];
 
@@ -344,6 +368,48 @@ function buildDocxSelectedHighlights(resume: ResumeContent) {
       }),
     ),
   ];
+}
+
+function buildDocxEducation(resume: ResumeContent) {
+  const lines = resume.education.map(formatEducationLine).filter(Boolean);
+
+  if (lines.length === 0) {
+    return [];
+  }
+
+  return [
+    docxSectionHeading("Education"),
+    ...lines.map((line) =>
+      docxParagraph(line, {
+        spacingAfter: 70,
+      }),
+    ),
+  ];
+}
+
+function buildDocxCertifications(resume: ResumeContent) {
+  const lines = resume.certifications.map(formatCertificationLine).filter(Boolean);
+
+  if (lines.length === 0) {
+    return [];
+  }
+
+  return [
+    docxSectionHeading("Certifications"),
+    ...lines.map((line) =>
+      docxParagraph(line, {
+        spacingAfter: 70,
+      }),
+    ),
+  ];
+}
+
+function formatEducationLine(item: ResumeContent["education"][number]) {
+  return [item.credential, item.institution, item.location, item.dates].filter(Boolean).join(" | ");
+}
+
+function formatCertificationLine(item: ResumeContent["certifications"][number]) {
+  return [item.name, item.issuer, item.date].filter(Boolean).join(" | ");
 }
 
 function formatResumeHeadline(headline: string) {

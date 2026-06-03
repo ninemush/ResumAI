@@ -173,7 +173,7 @@ export function analyzeJobFit({
   profileFacts: ProfileFact[];
 }): JobFitAnalysis {
   if (!jobText) {
-    return buildEmptyFit("No readable job text is available yet.");
+    return buildEmptyFit("No job-post detail is available yet.");
   }
 
   const candidateKeywords = extractCandidateKeywords({ masterResume, profileFacts });

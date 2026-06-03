@@ -229,7 +229,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.docx_text_empty",
-        message: "I could not find readable text in that Word document.",
+        message: "I could not find enough career text in that Word document.",
         status: 422,
       };
     }
@@ -292,7 +292,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.profile_link_unsupported_content_type",
-        message: "That link did not return a readable web page.",
+        message: "That link did not return a web page I can use for profile intake.",
         status: 422,
       };
     }
@@ -310,7 +310,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.profile_link_text_too_short",
-        message: "I could not find enough readable profile text on that page.",
+        message: "I could not find enough career profile detail on that page.",
         status: 422,
       };
     }
@@ -543,7 +543,7 @@ function getLinkedInArchiveApiError(code: string) {
     LINKEDIN_ARCHIVE_TEXT_EMPTY: {
       category: "validation",
       code: "source.linkedin_archive_text_empty",
-      message: "I could not find readable profile rows in that LinkedIn export.",
+      message: "I could not find enough profile detail in that LinkedIn export.",
       status: 422,
     },
     LINKEDIN_ARCHIVE_UNSUPPORTED_FILE: {

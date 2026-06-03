@@ -637,7 +637,7 @@ function readNextMove({
   if (jobOverview.summary.readyForReview > 0) {
     return {
       title: "Review the role fit",
-      body: "You have a readable job post ready. Review fit, gaps, and tradeoffs before creating an application packet.",
+      body: "You have a job post ready for review. Review fit, gaps, and tradeoffs before creating an application packet.",
     };
   }
 

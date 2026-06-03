@@ -1,90 +1,17 @@
 import Link from "next/link";
 
-import { CREDIT_COSTS, CREDIT_PURCHASE_OPTIONS } from "@/lib/billing/credits";
+import {
+  CREDIT_EXAMPLE_JOURNEYS,
+  CREDIT_FREE_ACTIONS,
+  CREDIT_PURCHASE_OPTIONS,
+  CREDIT_USAGE_GUIDE,
+} from "@/lib/billing/credit-catalog";
 
 export const metadata = {
   description:
     "Learn how Pramania credits are used for reading career sources, job analysis, resume drafts, application packets, and downloadable files.",
   title: "How Credits Work | Pramania",
 };
-
-const creditActions = [
-  {
-    cost: CREDIT_COSTS.profileSourceExtract,
-    examples: "Reading a resume PDF, DOCX, text file, image, or profile export you drop into chat.",
-    name: "Read career source",
-    value: "Turns raw material into structured career context Pramania can use.",
-  },
-  {
-    cost: CREDIT_COSTS.masterResumeGenerate,
-    examples: "Creating or rebuilding your master ATS resume from confirmed profile context.",
-    name: "Master resume draft",
-    value: "Creates the reusable foundation for role-specific applications.",
-  },
-  {
-    cost: CREDIT_COSTS.masterResumeExport,
-    examples: "Preparing the latest master resume as a validated PDF or DOCX file.",
-    name: "Master resume download",
-    value: "Produces a file you can review, download, and use outside Pramania.",
-  },
-  {
-    cost: CREDIT_COSTS.jobIngest,
-    examples: "Reading a public job post link and producing a fit review against your profile.",
-    name: "Job analysis",
-    value: "Helps you decide whether a role is worth pursuing before spending more effort.",
-  },
-  {
-    cost: CREDIT_COSTS.applicationMaterialsGenerate,
-    examples: "Creating a tailored resume and cover letter for one specific job.",
-    name: "Application packet",
-    value: "Creates role-specific materials without overwriting your master resume.",
-  },
-  {
-    cost: CREDIT_COSTS.applicationMaterialsExport,
-    examples: "Preparing job-specific resume and cover letter files for an application record.",
-    name: "Application files",
-    value: "Saves downloadable files against that job so you can revisit what you used.",
-  },
-];
-
-const sampleJourneys = [
-  {
-    actions: [
-      "Drop a LinkedIn profile export PDF",
-      "Create a master resume",
-      "Download the master resume",
-    ],
-    credits:
-      CREDIT_COSTS.profileSourceExtract +
-      CREDIT_COSTS.masterResumeGenerate +
-      CREDIT_COSTS.masterResumeExport,
-    title: "Build a starting profile",
-  },
-  {
-    actions: [
-      "Paste one job link",
-      "Create job-specific materials",
-      "Download the files",
-    ],
-    credits:
-      CREDIT_COSTS.jobIngest +
-      CREDIT_COSTS.applicationMaterialsGenerate +
-      CREDIT_COSTS.applicationMaterialsExport,
-    title: "Prepare one application",
-  },
-  {
-    actions: [
-      "Analyze three job links",
-      "Create materials for the strongest fit",
-      "Download the application package",
-    ],
-    credits:
-      CREDIT_COSTS.jobIngest * 3 +
-      CREDIT_COSTS.applicationMaterialsGenerate +
-      CREDIT_COSTS.applicationMaterialsExport,
-    title: "Compare roles before applying",
-  },
-];
 
 export default function CreditsPage() {
   return (
@@ -98,17 +25,17 @@ export default function CreditsPage() {
         <p className="legal-meta">Credits are used when Pramania does high-cost work for you.</p>
 
         <p>
-          Pramania uses credits for actions that require AI reasoning, document reading,
-          job analysis, generation, validation, or export infrastructure. Browsing your
-          workspace, reading saved materials, editing text, changing application status,
-          and downloading already-created files do not consume extra credits.
+          Pramania uses credits for actions that require document reading, job analysis,
+          generation, file preparation, or deeper AI reasoning. The goal is simple: you
+          should know what will use credits, why it is valuable, and where the work lands.
         </p>
 
         <div className="credits-callout">
           <strong>Simple rule:</strong>
           <p>
-            Credits are tied to meaningful outcomes, not raw token counts. You should know
-            when credits are being used and what value that action creates.
+            Credits are tied to meaningful career outcomes, not raw token counts. Viewing
+            saved work, asking Pramania to explain your context, or downloading files that
+            were already prepared does not consume extra credits.
           </p>
         </div>
 
@@ -120,7 +47,7 @@ export default function CreditsPage() {
             <span>Example</span>
             <span>Why it matters</span>
           </div>
-          {creditActions.map((action) => (
+          {CREDIT_USAGE_GUIDE.map((action) => (
             <div className="credits-table-row" key={action.name} role="row">
               <span>
                 <strong>{action.name}</strong>
@@ -132,9 +59,16 @@ export default function CreditsPage() {
           ))}
         </div>
 
+        <h2>What does not use credits</h2>
+        <ul className="credits-free-list">
+          {CREDIT_FREE_ACTIONS.map((action) => (
+            <li key={action}>{action}</li>
+          ))}
+        </ul>
+
         <h2>Example credit journeys</h2>
         <div className="credits-example-grid" aria-label="Example credit usage">
-          {sampleJourneys.map((journey) => (
+          {CREDIT_EXAMPLE_JOURNEYS.map((journey) => (
             <article className="credits-example-card" key={journey.title}>
               <span>{journey.credits} credits</span>
               <h3>{journey.title}</h3>
@@ -169,6 +103,21 @@ export default function CreditsPage() {
           are added. Your saved profile, applications, uploaded sources, and generated
           materials remain available.
         </p>
+
+        <div className="credits-principle-grid" aria-label="Credit principles">
+          <article>
+            <strong>No surprise deductions</strong>
+            <p>Credit use is shown in Settings history, including what action used credits and when.</p>
+          </article>
+          <article>
+            <strong>Failures are investigated</strong>
+            <p>If a source or generation fails, Pramania records the issue with context so it can be triaged.</p>
+          </article>
+          <article>
+            <strong>Your saved work stays available</strong>
+            <p>Running out of credits blocks new high-cost actions, not access to your existing workspace.</p>
+          </article>
+        </div>
 
         <p>
           For billing and usage terms, review the{" "}

@@ -15,6 +15,10 @@ import {
 } from "@/lib/profile/profile-intelligence";
 import { recordQuotaEvent } from "@/lib/quota/quota-events";
 import {
+  MAX_RESUME_CERTIFICATION_ITEMS,
+  MAX_RESUME_EDUCATION_ITEMS,
+  MAX_RESUME_EXPERIENCE_SECTIONS,
+  normalizeResumeContent,
   parseResumeContent,
   resumeContentSchema,
   type ResumeContent,
@@ -146,7 +150,7 @@ export async function generateApplicationMaterials(
       masterResume,
       profile,
     }),
-    max_output_tokens: 1800,
+    max_output_tokens: 3400,
     metadata: {
       application_id: context.id,
       feature: "application_materials",
@@ -170,20 +174,85 @@ export async function generateApplicationMaterials(
               type: "object",
               additionalProperties: false,
               required: [
+                "contact",
                 "headline",
                 "summary",
                 "skills",
+                "experienceSections",
+                "education",
+                "certifications",
                 "experienceBullets",
                 "keywordGaps",
                 "reviewerNotes",
               ],
               properties: {
+                contact: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["email", "phone", "linkedin", "website", "location"],
+                  properties: {
+                    email: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    phone: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    linkedin: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    website: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    location: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  },
+                },
                 headline: { type: "string" },
                 summary: { type: "string" },
                 skills: {
                   type: "array",
                   maxItems: 18,
                   items: { type: "string" },
+                },
+                experienceSections: {
+                  type: "array",
+                  maxItems: MAX_RESUME_EXPERIENCE_SECTIONS,
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["roleTitle", "company", "location", "dates", "bullets"],
+                    properties: {
+                      roleTitle: { type: "string" },
+                      company: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      location: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      dates: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      bullets: {
+                        type: "array",
+                        maxItems: 7,
+                        items: { type: "string" },
+                      },
+                    },
+                  },
+                },
+                education: {
+                  type: "array",
+                  maxItems: MAX_RESUME_EDUCATION_ITEMS,
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["institution", "credential", "location", "dates"],
+                    properties: {
+                      institution: { type: "string" },
+                      credential: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      location: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      dates: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    },
+                  },
+                },
+                certifications: {
+                  type: "array",
+                  maxItems: MAX_RESUME_CERTIFICATION_ITEMS,
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["name", "issuer", "date"],
+                    properties: {
+                      name: { type: "string" },
+                      issuer: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      date: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    },
+                  },
                 },
                 experienceBullets: {
                   type: "array",
@@ -351,6 +420,14 @@ Return:
 - resume.reviewerNotes: candid recruiter-style notes about fit, unsupported
   claims to avoid, risk, and what the user should verify before export.
 - coverLetter: concise, credible cover letter in the user's implied professional voice.
+- resume.contact: carry verified contact fields from the master resume/profile.
+- resume.experienceSections: preserve chronological role history by company,
+  title, date, and location from the master resume, but tailor only the bullets
+  that are relevant to this role. Do not flatten chronology into highlights.
+- resume.education and resume.certifications: preserve supported master resume
+  values when present. Use empty arrays only when no evidence exists.
+- resume.experienceBullets: selected highlights for this application. This is
+  a highlight reel, not a replacement for role-by-role work history.
 `.trim();
 }
 
@@ -407,13 +484,25 @@ function formatMasterResume(masterResume: ResumeContent | null) {
         .join(" | ");
       return [heading ? `  - ${heading}` : "  - Role", ...section.bullets.map((bullet) => `    - ${bullet}`)];
     }),
+    "- Education:",
+    ...(masterResume.education.length > 0
+      ? masterResume.education.map((item) =>
+          `  - ${[item.credential, item.institution, item.location, item.dates].filter(Boolean).join(" | ")}`,
+        )
+      : ["  - None"]),
+    "- Certifications:",
+    ...(masterResume.certifications.length > 0
+      ? masterResume.certifications.map((item) =>
+          `  - ${[item.name, item.issuer, item.date].filter(Boolean).join(" | ")}`,
+        )
+      : ["  - None"]),
     "- Existing gaps/notes:",
     ...[...masterResume.keywordGaps, ...masterResume.reviewerNotes].map((note) => `  - ${note}`),
   ].join("\n");
 }
 
 function normalizeGeneratedApplicationResume(resume: ResumeContent, masterResume: ResumeContent | null) {
-  return resumeContentSchema.parse({
+  return normalizeResumeContent({
     ...resume,
     contact: {
       ...masterResume?.contact,
@@ -423,6 +512,9 @@ function normalizeGeneratedApplicationResume(resume: ResumeContent, masterResume
       resume.experienceSections.length > 0
         ? resume.experienceSections
         : (masterResume?.experienceSections ?? []),
+    education: resume.education.length > 0 ? resume.education : (masterResume?.education ?? []),
+    certifications:
+      resume.certifications.length > 0 ? resume.certifications : (masterResume?.certifications ?? []),
   });
 }
 
