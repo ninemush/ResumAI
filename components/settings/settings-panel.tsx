@@ -52,6 +52,12 @@ type PrivacyRequestType =
   | "data_export"
   | "privacy_question";
 
+type PrivacyRequestResponse = {
+  error?: { message?: string };
+  privacyRequestId?: string;
+  request?: { id?: string };
+};
+
 export function SettingsPanel({
   creditSummary: initialCreditSummary,
   onNavigate,
@@ -192,22 +198,19 @@ export function SettingsPanel({
     setPrivacyRequestStatus(null);
 
     try {
-      const response = await fetch("/api/support/issues", {
-        body: JSON.stringify({
-          area: "privacy",
-          errorCode: `USER_PRIVACY_${type.toUpperCase()}`,
-          metadata: {
-            requestType: type,
-            sourceSurface: "settings_data_privacy",
-          },
-          source: "settings_data_privacy",
-          title: config.title,
-          userMessage: config.message,
-        }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-      const payload = await response.json();
+      const response =
+        type === "data_export"
+          ? await fetch("/api/privacy/export", { method: "POST" })
+          : await fetch("/api/privacy/requests", {
+              body: JSON.stringify({
+                details: config.message,
+                requestType: mapPrivacyRequestType(type),
+                subject: config.title,
+              }),
+              headers: { "Content-Type": "application/json" },
+              method: "POST",
+            });
+      const payload = (await response.json()) as PrivacyRequestResponse;
 
       if (!response.ok) {
         setPrivacyRequestStatus(
@@ -216,8 +219,15 @@ export function SettingsPanel({
         return;
       }
 
+      if (type === "data_export") {
+        setPrivacyRequestStatus(
+          `Generated a data export and recorded request ${payload.privacyRequestId ?? ""}.`.trim(),
+        );
+        return;
+      }
+
       setPrivacyRequestStatus(
-        `Created ${payload.issue?.shortId ?? "a support issue"} for ${config.label.toLowerCase()}.`,
+        `Created request ${payload.request?.id ?? ""} for ${config.label.toLowerCase()}.`.trim(),
       );
     } finally {
       setPrivacyRequestLoading(null);
@@ -663,6 +673,13 @@ const privacyRequestConfig: Record<
     title: "Privacy support request",
   },
 };
+
+function mapPrivacyRequestType(type: PrivacyRequestType) {
+  if (type === "data_export") return "export";
+  if (type === "privacy_question") return "ai_review";
+
+  return "deletion";
+}
 
 function CreditMeter({ summary }: { summary: CreditSummary }) {
   const percent = Math.min(Math.max(summary.usagePercent, 0), 100);
