@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import {
+  ArrowRight,
   BriefcaseBusiness,
   ClipboardList,
   FileText,
   MessageCircle,
+  WalletCards,
 } from "lucide-react";
 
 import { OwnerConsole } from "@/components/admin/owner-console";
@@ -85,7 +87,9 @@ export function WorkspaceLayout({
     navCollapsed: false,
     navWidth: DEFAULT_NAV_WIDTH,
   });
-  const [mobileSurface, setMobileSurface] = useState<"workspace" | "chat">("chat");
+  const [mobileSurface, setMobileSurface] = useState<"workspace" | "chat">(
+    "chat",
+  );
   const [hasUnsavedResumeChanges, setHasUnsavedResumeChanges] = useState(false);
 
   const shellStyle = useMemo(
@@ -116,7 +120,9 @@ export function WorkspaceLayout({
     });
   }
 
-  function startConversationResize(event: ReactPointerEvent<HTMLButtonElement>) {
+  function startConversationResize(
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) {
     event.preventDefault();
     const startX = event.clientX;
     const startWidth = layout.conversationWidth;
@@ -134,7 +140,8 @@ export function WorkspaceLayout({
     });
   }
 
-  const mobileFocusClass = mobileSurface === "chat" ? "conversation-first" : "workspace-first";
+  const mobileFocusClass =
+    mobileSurface === "chat" ? "conversation-first" : "workspace-first";
 
   useEffect(() => {
     function handleFocusChat() {
@@ -143,7 +150,8 @@ export function WorkspaceLayout({
 
     window.addEventListener("pramania:focus-chat", handleFocusChat);
 
-    return () => window.removeEventListener("pramania:focus-chat", handleFocusChat);
+    return () =>
+      window.removeEventListener("pramania:focus-chat", handleFocusChat);
   }, []);
 
   function selectView(target: WorkspaceNavigationTarget) {
@@ -196,6 +204,10 @@ export function WorkspaceLayout({
       />
 
       <div className="workspace-main">
+        <CreditStatusBanner
+          creditSummary={creditSummary}
+          onSelectSettings={() => selectView("settings")}
+        />
         {renderWorkspaceView({
           activeView: layout.activeView,
           applicationStageFilter: layout.applicationStageFilter,
@@ -223,6 +235,7 @@ export function WorkspaceLayout({
       <ConversationPanel
         applicationOverview={applicationOverview}
         activeView={layout.activeView}
+        creditSummary={creditSummary}
         initialMessages={conversationMessages}
         jobOverview={jobOverview}
         onSelectView={selectView}
@@ -241,6 +254,62 @@ export function WorkspaceLayout({
   );
 }
 
+function CreditStatusBanner({
+  creditSummary,
+  onSelectSettings,
+}: {
+  creditSummary: CreditSummary;
+  onSelectSettings: () => void;
+}) {
+  if (!creditSummary.isExhausted && !creditSummary.warningThreshold) {
+    return null;
+  }
+
+  const isExhausted = creditSummary.isExhausted;
+
+  return (
+    <section
+      className={
+        isExhausted
+          ? "credit-status-banner exhausted"
+          : "credit-status-banner warning"
+      }
+      aria-live="polite"
+    >
+      <WalletCards size={22} aria-hidden="true" />
+      <div className="credit-status-copy">
+        <strong>
+          {isExhausted
+            ? "Credits are paused, not your workspace."
+            : "Credits are running low."}
+        </strong>
+        <p>
+          {isExhausted
+            ? "Your saved profile, resumes, jobs, applications, Library, Settings, and Support remain available. Add credits when you want Pramania to read new sources, analyze jobs, generate materials, or export files."
+            : `You have ${creditSummary.balance} credits left. Larger actions such as source reading, job analysis, generation, and export may need a top-up soon.`}
+        </p>
+      </div>
+      <div className="credit-status-actions">
+        <button
+          className="credit-status-primary"
+          type="button"
+          onClick={onSelectSettings}
+        >
+          Add credits <ArrowRight size={16} aria-hidden="true" />
+        </button>
+        <a
+          className="credit-status-secondary"
+          href="/credits"
+          target="_blank"
+          rel="noreferrer"
+        >
+          How credits work
+        </a>
+      </div>
+    </section>
+  );
+}
+
 function MobileWorkspaceNav({
   activeView,
   mobileSurface,
@@ -253,7 +322,12 @@ function MobileWorkspaceNav({
   onSelectView: (target: WorkspaceNavigationTarget) => void;
 }) {
   const items = [
-    { icon: MessageCircle, label: "Chat", target: "profile" as const, chat: true },
+    {
+      icon: MessageCircle,
+      label: "Chat",
+      target: "profile" as const,
+      chat: true,
+    },
     { icon: FileText, label: "Profile", target: "resume" as const },
     { icon: BriefcaseBusiness, label: "Jobs", target: "jobs" as const },
     { icon: ClipboardList, label: "Apps", target: "applications" as const },
@@ -272,7 +346,9 @@ function MobileWorkspaceNav({
             aria-current={isActive ? "page" : undefined}
             className={isActive ? "active" : undefined}
             key={`${item.label}-${item.target}`}
-            onClick={() => (item.chat ? onSelectChat() : onSelectView(item.target))}
+            onClick={() =>
+              item.chat ? onSelectChat() : onSelectView(item.target)
+            }
             type="button"
           >
             <Icon size={18} aria-hidden="true" />
@@ -347,7 +423,11 @@ function renderWorkspaceView({
     );
   }
 
-  if (activeView === "library" || activeView === "knowledgebase" || activeView === "artifacts") {
+  if (
+    activeView === "library" ||
+    activeView === "knowledgebase" ||
+    activeView === "artifacts"
+  ) {
     return (
       <LibraryPanel
         artifactOverview={artifactOverview}
@@ -395,7 +475,10 @@ function WorkspacePlaceholder({
   title: string;
 }) {
   return (
-    <main className="profile-pane" aria-labelledby="workspace-placeholder-title">
+    <main
+      className="profile-pane"
+      aria-labelledby="workspace-placeholder-title"
+    >
       <div className="pane-heading">
         <p className="eyebrow">{eyebrow}</p>
         <h1 id="workspace-placeholder-title">{title}</h1>
@@ -421,7 +504,12 @@ function trackPointer(onMove: (event: PointerEvent) => void) {
   window.addEventListener("pointerup", handleUp, { once: true });
 }
 
-function clamp(value: number | undefined, min: number, max: number, fallback: number) {
+function clamp(
+  value: number | undefined,
+  min: number,
+  max: number,
+  fallback: number,
+) {
   if (typeof value !== "number" || Number.isNaN(value)) {
     return fallback;
   }

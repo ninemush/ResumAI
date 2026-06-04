@@ -16,7 +16,11 @@ import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import type { AppView } from "@/components/app-shell/side-nav";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
-import type { AdvisorSuggestedAction, AdvisorSuggestedLink } from "@/lib/conversation/app-capabilities";
+import type { CreditSummary } from "@/lib/billing/credits";
+import type {
+  AdvisorSuggestedAction,
+  AdvisorSuggestedLink,
+} from "@/lib/conversation/app-capabilities";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 import { createClient } from "@/lib/supabase/browser";
@@ -24,6 +28,7 @@ import { createClient } from "@/lib/supabase/browser";
 type ConversationPanelProps = {
   activeView: AppView;
   applicationOverview: ApplicationOverview;
+  creditSummary: CreditSummary;
   initialMessages: ConversationMessage[];
   jobOverview: JobOverview;
   onSelectView: (view: AppView) => void;
@@ -162,7 +167,10 @@ const PROFILE_SOURCE_BUCKET = "profile-sources";
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 const welcomeMessage = (name: string | null) =>
   `Hi${name ? `, ${name}` : ""}. I'm ${brand.name}. Tell me your target role, or drop a resume/link and I will help shape your profile.`;
-const acceptedFileTypes = new Map<string, "pdf" | "docx" | "txt" | "image" | "linkedin">([
+const acceptedFileTypes = new Map<
+  string,
+  "pdf" | "docx" | "txt" | "image" | "linkedin"
+>([
   ["application/pdf", "pdf"],
   [
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -223,26 +231,24 @@ function isCreditExhaustionPayload(payload: unknown) {
   );
 }
 
-function buildCreditExhaustionReply(payload?: unknown): AssistantMessageDraft {
-  const apiError = getApiError(payload);
-
+function buildCreditExhaustionReply(): AssistantMessageDraft {
   return {
     suggestedActions: [ADD_CREDITS_ACTION],
     suggestedLinks: [ADD_CREDITS_LINK],
     text: cleanPlainChatText(
-      apiError?.message ??
-        "You're out of credits, so I paused this action before it ran. Add credits in Settings to keep reading sources, creating packets, and exporting files.",
+      "Your credits are used up, so I paused this paid work before it ran. Nothing is lost: your profile, saved materials, jobs, applications, Library, Settings, and Support stay open. When you are ready, add a one-time credit pack in Settings to keep reading sources, analyzing jobs, generating resumes, or exporting files.",
     ),
   };
 }
 
 function getCreditExhaustionReply(payload: unknown) {
-  return isCreditExhaustionPayload(payload) ? buildCreditExhaustionReply(payload) : null;
+  return isCreditExhaustionPayload(payload) ? buildCreditExhaustionReply() : null;
 }
 
 export function ConversationPanel({
   activeView,
   applicationOverview,
+  creditSummary,
   initialMessages,
   jobOverview,
   onSelectView,
@@ -257,7 +263,10 @@ export function ConversationPanel({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ConversationMessage[]>(
-    buildInitialMessages(initialMessages, readFirstName(profileOverview, userEmail)),
+    buildInitialMessages(
+      initialMessages,
+      readFirstName(profileOverview, userEmail),
+    ),
   );
   const sessionPrompt = buildSessionPrompt({
     applicationOverview,
@@ -271,10 +280,12 @@ export function ConversationPanel({
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [isDragActive, setIsDragActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [processingMode, setProcessingMode] = useState<ProcessingMode>("profile");
+  const [processingMode, setProcessingMode] =
+    useState<ProcessingMode>("profile");
   const [processingStep, setProcessingStep] = useState(0);
   const [processingIntent, setProcessingIntent] = useState("");
-  const [activeAttachment, setActiveAttachment] = useState<MessageAttachment | null>(null);
+  const [activeAttachment, setActiveAttachment] =
+    useState<MessageAttachment | null>(null);
   const isSubmitting = pendingRequestCount > 0;
 
   useEffect(() => {
@@ -305,10 +316,12 @@ export function ConversationPanel({
 
   useEffect(() => {
     function handleConversationDraft(event: Event) {
-      const detail = (event as CustomEvent<{
-        focus?: boolean;
-        text?: string;
-      }>).detail;
+      const detail = (
+        event as CustomEvent<{
+          focus?: boolean;
+          text?: string;
+        }>
+      ).detail;
 
       if (!detail?.text) {
         return;
@@ -333,9 +346,16 @@ export function ConversationPanel({
       });
     }
 
-    window.addEventListener("pramania:conversation-draft", handleConversationDraft);
+    window.addEventListener(
+      "pramania:conversation-draft",
+      handleConversationDraft,
+    );
 
-    return () => window.removeEventListener("pramania:conversation-draft", handleConversationDraft);
+    return () =>
+      window.removeEventListener(
+        "pramania:conversation-draft",
+        handleConversationDraft,
+      );
   }, []);
 
   useEffect(() => {
@@ -439,7 +459,10 @@ export function ConversationPanel({
         return;
       }
 
-      if (shouldRouteToAdvisor(text) || shouldTreatAsAdvisorReply(text, messages)) {
+      if (
+        shouldRouteToAdvisor(text) ||
+        shouldTreatAsAdvisorReply(text, messages)
+      ) {
         appendAssistantMessage(await processAdvisorQuestion(text), true);
         return;
       }
@@ -483,9 +506,13 @@ export function ConversationPanel({
 
     const processedActionUrl = summaries.length > 0 && urls.length > 0;
 
-    if (!processedActionUrl && shouldProcessProfileRemainder({ textWithoutUrls, urls })) {
+    if (
+      !processedActionUrl &&
+      shouldProcessProfileRemainder({ textWithoutUrls, urls })
+    ) {
       summaries.push(
-        shouldRouteToAdvisor(textWithoutUrls) || shouldTreatAsAdvisorReply(textWithoutUrls, messages)
+        shouldRouteToAdvisor(textWithoutUrls) ||
+          shouldTreatAsAdvisorReply(textWithoutUrls, messages)
           ? await processAdvisorQuestion(textWithoutUrls)
           : await processProfileText(textWithoutUrls),
       );
@@ -504,7 +531,9 @@ export function ConversationPanel({
 
     const lastAssistantMessage = [...messages]
       .reverse()
-      .find((item) => item.speaker === "assistant" && item.text.trim().length > 0)?.text;
+      .find(
+        (item) => item.speaker === "assistant" && item.text.trim().length > 0,
+      )?.text;
 
     if (!lastAssistantMessage) {
       return null;
@@ -536,9 +565,12 @@ export function ConversationPanel({
         return logSupportIssueAndReply({
           area: "master_resume",
           errorCode: payload.error?.code ?? "MASTER_RESUME_EXPORT_FAILED",
-          errorMessage: payload.error?.message ?? "Master resume file preparation failed.",
+          errorMessage:
+            payload.error?.message ?? "Master resume file preparation failed.",
           source: "chat_command_failure",
-          systemResponse: payload.error?.message ?? "I could not prepare the master resume files yet.",
+          systemResponse:
+            payload.error?.message ??
+            "I could not prepare the master resume files yet.",
           title: "Master resume download failed",
           userMessage: text,
         });
@@ -573,9 +605,11 @@ export function ConversationPanel({
       return logSupportIssueAndReply({
         area: "master_resume",
         errorCode: payload.error?.code ?? "MASTER_RESUME_GENERATION_FAILED",
-        errorMessage: payload.error?.message ?? "Master resume creation failed.",
+        errorMessage:
+          payload.error?.message ?? "Master resume creation failed.",
         source: "chat_command_failure",
-        systemResponse: payload.error?.message ?? "I could not create the master resume yet.",
+        systemResponse:
+          payload.error?.message ?? "I could not create the master resume yet.",
         title: "Master resume update failed",
         userMessage: text,
       });
@@ -593,10 +627,13 @@ export function ConversationPanel({
 
     const lastAssistantMessage = [...messages]
       .reverse()
-      .find((item) => item.speaker === "assistant" && item.text.trim().length > 0)?.text;
+      .find(
+        (item) => item.speaker === "assistant" && item.text.trim().length > 0,
+      )?.text;
 
     if (
-      (!lastAssistantMessage || !assistantAskedForTargetDirection(lastAssistantMessage)) &&
+      (!lastAssistantMessage ||
+        !assistantAskedForTargetDirection(lastAssistantMessage)) &&
       !shouldAcceptStandaloneTargetDirectionAnswer(answer, profileOverview)
     ) {
       return null;
@@ -616,7 +653,10 @@ export function ConversationPanel({
         return creditReply;
       }
 
-      return payload.error?.message ?? "I understood the direction, but could not save it to your profile yet.";
+      return (
+        payload.error?.message ??
+        "I understood the direction, but could not save it to your profile yet."
+      );
     }
 
     return `Done. I saved “${answer}” as your working direction. You’ll see it in Profile & Resume, and I’ll use it when shaping your master resume, role fit, and job recommendations.`;
@@ -624,13 +664,18 @@ export function ConversationPanel({
 
   async function processApplicationAction(text: string) {
     if (looksLikeMaterialGenerationRequest(text)) {
-      const candidates = applicationOverview.recentApplications.filter((application) =>
-        !application.archivedAt && ["draft", "applied", "interview_in_progress"].includes(application.status),
+      const candidates = applicationOverview.recentApplications.filter(
+        (application) =>
+          !application.archivedAt &&
+          ["draft", "applied", "interview_in_progress"].includes(
+            application.status,
+          ),
       );
       const matchedCandidates = candidates.filter((application) =>
         applicationMatchesText(application, text),
       );
-      const actionableCandidates = matchedCandidates.length > 0 ? matchedCandidates : candidates;
+      const actionableCandidates =
+        matchedCandidates.length > 0 ? matchedCandidates : candidates;
 
       if (actionableCandidates.length !== 1) {
         return actionableCandidates.length === 0
@@ -639,9 +684,12 @@ export function ConversationPanel({
       }
 
       const application = actionableCandidates[0];
-      const response = await fetch(`/api/applications/${application.id}/materials`, {
-        method: "POST",
-      });
+      const response = await fetch(
+        `/api/applications/${application.id}/materials`,
+        {
+          method: "POST",
+        },
+      );
       const payload = await response.json();
 
       if (!response.ok) {
@@ -651,7 +699,10 @@ export function ConversationPanel({
           return creditReply;
         }
 
-        return payload.error?.message ?? "I could not create that application packet yet.";
+        return (
+          payload.error?.message ??
+          "I could not create that application packet yet."
+        );
       }
 
       const exportSummary = await exportApplicationMaterials(application.id);
@@ -662,13 +713,18 @@ export function ConversationPanel({
     const inferredStatus = inferApplicationStatus(text);
 
     if (inferredStatus) {
-      const candidates = applicationOverview.recentApplications.filter((application) =>
-        !application.archivedAt && ["applied", "interview_in_progress", "draft"].includes(application.status),
+      const candidates = applicationOverview.recentApplications.filter(
+        (application) =>
+          !application.archivedAt &&
+          ["applied", "interview_in_progress", "draft"].includes(
+            application.status,
+          ),
       );
       const matchedCandidates = candidates.filter((application) =>
         applicationMatchesText(application, text),
       );
-      const actionableCandidates = matchedCandidates.length > 0 ? matchedCandidates : candidates;
+      const actionableCandidates =
+        matchedCandidates.length > 0 ? matchedCandidates : candidates;
 
       if (actionableCandidates.length !== 1) {
         return actionableCandidates.length === 0
@@ -677,11 +733,14 @@ export function ConversationPanel({
       }
 
       const application = actionableCandidates[0];
-      const response = await fetch(`/api/applications/${application.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "chat", status: inferredStatus }),
-      });
+      const response = await fetch(
+        `/api/applications/${application.id}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: "chat", status: inferredStatus }),
+        },
+      );
       const payload = await response.json();
 
       if (!response.ok) {
@@ -691,7 +750,10 @@ export function ConversationPanel({
           return creditReply;
         }
 
-        return payload.error?.message ?? "I could not update that application status yet.";
+        return (
+          payload.error?.message ??
+          "I could not update that application status yet."
+        );
       }
 
       return `Updated ${formatApplicationLabel(application)} to ${formatApplicationStatus(inferredStatus)}.`;
@@ -714,7 +776,10 @@ export function ConversationPanel({
     const response = await fetch("/api/applications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobIngestionId: readyJobs[0].id, status: "draft" }),
+      body: JSON.stringify({
+        jobIngestionId: readyJobs[0].id,
+        status: "draft",
+      }),
     });
     const payload = await response.json();
 
@@ -739,9 +804,12 @@ export function ConversationPanel({
   }
 
   async function generateAndExportApplicationMaterials(applicationId: string) {
-    const response = await fetch(`/api/applications/${applicationId}/materials`, {
-      method: "POST",
-    });
+    const response = await fetch(
+      `/api/applications/${applicationId}/materials`,
+      {
+        method: "POST",
+      },
+    );
     const payload = await response.json();
 
     if (!response.ok) {
@@ -751,7 +819,10 @@ export function ConversationPanel({
         return creditReply;
       }
 
-      return payload.error?.message ?? "I could not create the role-specific application packet yet.";
+      return (
+        payload.error?.message ??
+        "I could not create the role-specific application packet yet."
+      );
     }
 
     const exportSummary = await exportApplicationMaterials(applicationId);
@@ -760,9 +831,12 @@ export function ConversationPanel({
   }
 
   async function exportApplicationMaterials(applicationId: string) {
-    const response = await fetch(`/api/applications/${applicationId}/materials/export`, {
-      method: "POST",
-    });
+    const response = await fetch(
+      `/api/applications/${applicationId}/materials/export`,
+      {
+        method: "POST",
+      },
+    );
     const payload = await response.json();
 
     if (!response.ok) {
@@ -772,7 +846,10 @@ export function ConversationPanel({
         return creditReply;
       }
 
-      return payload.error?.message ?? "The editable materials are saved, but file preparation needs another attempt from Applications.";
+      return (
+        payload.error?.message ??
+        "The editable materials are saved, but file preparation needs another attempt from Applications."
+      );
     }
 
     return payload.review?.exportReadiness?.status === "exported"
@@ -804,8 +881,12 @@ export function ConversationPanel({
     setStatus(null);
 
     return {
-      suggestedActions: Array.isArray(payload.suggestedActions) ? payload.suggestedActions : [],
-      suggestedLinks: Array.isArray(payload.suggestedLinks) ? payload.suggestedLinks : [],
+      suggestedActions: Array.isArray(payload.suggestedActions)
+        ? payload.suggestedActions
+        : [],
+      suggestedLinks: Array.isArray(payload.suggestedLinks)
+        ? payload.suggestedLinks
+        : [],
       text: cleanPlainChatText(payload.assistantMessage as string),
     };
   }
@@ -814,7 +895,10 @@ export function ConversationPanel({
     const response = await fetch("/api/conversation/advisor", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, surface: mapActiveViewToAdvisorSurface(activeView) }),
+      body: JSON.stringify({
+        message: text,
+        surface: mapActiveViewToAdvisorSurface(activeView),
+      }),
     });
     const payload = await response.json();
 
@@ -839,8 +923,12 @@ export function ConversationPanel({
     }
 
     return {
-      suggestedActions: Array.isArray(payload.suggestedActions) ? payload.suggestedActions : [],
-      suggestedLinks: Array.isArray(payload.suggestedLinks) ? payload.suggestedLinks : [],
+      suggestedActions: Array.isArray(payload.suggestedActions)
+        ? payload.suggestedActions
+        : [],
+      suggestedLinks: Array.isArray(payload.suggestedLinks)
+        ? payload.suggestedLinks
+        : [],
       text: cleanPlainChatText(payload.assistantMessage as string),
     };
   }
@@ -863,7 +951,9 @@ export function ConversationPanel({
           return creditReply;
         }
 
-        return payload.error?.message ?? "I could not update that profile field yet.";
+        return (
+          payload.error?.message ?? "I could not update that profile field yet."
+        );
       }
 
       return profilePatch.reply;
@@ -917,12 +1007,7 @@ export function ConversationPanel({
 
     if (!extraction.ok) {
       if (extraction.billingBlocked) {
-        return buildCreditExhaustionReply({
-          category: "billing",
-          code: "billing.credits_exhausted",
-          message: extraction.message,
-          status: 402,
-        });
+        return buildCreditExhaustionReply();
       }
 
       return source.source_type === "linkedin"
@@ -984,7 +1069,9 @@ export function ConversationPanel({
         return creditReply;
       }
 
-      return payload.error?.message ?? "I could not save that profile link yet.";
+      return (
+        payload.error?.message ?? "I could not save that profile link yet."
+      );
     }
 
     if (!payload.source?.id) {
@@ -995,12 +1082,7 @@ export function ConversationPanel({
 
     if (!extraction.ok) {
       if (extraction.billingBlocked) {
-        return buildCreditExhaustionReply({
-          category: "billing",
-          code: "billing.credits_exhausted",
-          message: extraction.message,
-          status: 402,
-        });
+        return buildCreditExhaustionReply();
       }
 
       return sourceType === "linkedin"
@@ -1036,7 +1118,9 @@ export function ConversationPanel({
     setProcessingStep(0);
     beginProcessing();
     appendUserMessage(
-      fileList.length === 1 ? "Dropped a file" : `Dropped ${fileList.length} files`,
+      fileList.length === 1
+        ? "Dropped a file"
+        : `Dropped ${fileList.length} files`,
       fileList.length === 1 ? buildMessageAttachment(fileList[0]) : undefined,
     );
     persistConversationMessage(
@@ -1056,7 +1140,9 @@ export function ConversationPanel({
       appendAssistantMessage(joinAssistantSummaries(summaries), true);
       router.refresh();
     } catch {
-      setError("I could not finish reading that file. Try again, or paste the most important text directly.");
+      setError(
+        "I could not finish reading that file. Try again, or paste the most important text directly.",
+      );
     } finally {
       endProcessing();
       setProcessingIntent("");
@@ -1076,7 +1162,9 @@ export function ConversationPanel({
       (window as SpeechWindow).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      setError("Voice input is not available in this browser yet. You can still type or paste.");
+      setError(
+        "Voice input is not available in this browser yet. You can still type or paste.",
+      );
       return;
     }
 
@@ -1087,7 +1175,11 @@ export function ConversationPanel({
     recognition.onresult = (event) => {
       let transcript = "";
 
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      for (
+        let index = event.resultIndex;
+        index < event.results.length;
+        index += 1
+      ) {
         if (event.results[index].isFinal) {
           transcript += event.results[index][0].transcript;
         }
@@ -1111,7 +1203,9 @@ export function ConversationPanel({
     };
     recognitionRef.current = recognition;
     setError(null);
-    setStatus("Listening. I will place the transcript in the box so you can steer it before sending.");
+    setStatus(
+      "Listening. I will place the transcript in the box so you can steer it before sending.",
+    );
     setIsListening(true);
     recognition.start();
   }
@@ -1168,12 +1262,7 @@ export function ConversationPanel({
 
       if (!extraction.ok) {
         if (extraction.billingBlocked) {
-          return buildCreditExhaustionReply({
-            category: "billing",
-            code: "billing.credits_exhausted",
-            message: extraction.message,
-            status: 402,
-          });
+          return buildCreditExhaustionReply();
         }
 
         return buildFileExtractionFailureMessage({
@@ -1223,7 +1312,9 @@ export function ConversationPanel({
     return (await response.json()) as SourceCreateResponse;
   }
 
-  async function extractSource(sourceId: string): Promise<SourceExtractionResult> {
+  async function extractSource(
+    sourceId: string,
+  ): Promise<SourceExtractionResult> {
     const response = await fetch(`/api/profile/sources/${sourceId}/extract`, {
       method: "POST",
     });
@@ -1250,7 +1341,9 @@ export function ConversationPanel({
 
     return {
       assistantMessage: payload.intake?.assistantMessage ?? null,
-      extractedFactCount: Array.isArray(payload.intake?.facts) ? payload.intake.facts.length : 0,
+      extractedFactCount: Array.isArray(payload.intake?.facts)
+        ? payload.intake.facts.length
+        : 0,
       followUpQuestions: Array.isArray(payload.intake?.followUpQuestions)
         ? payload.intake.followUpQuestions
         : [],
@@ -1291,9 +1384,12 @@ export function ConversationPanel({
         const issueMessage = await logSupportIssue({
           area: "master_resume",
           errorCode: payload.error?.code ?? "MASTER_RESUME_REFRESH_FAILED",
-          errorMessage: payload.error?.message ?? "Master resume refresh failed after source intake.",
+          errorMessage:
+            payload.error?.message ??
+            "Master resume refresh failed after source intake.",
           source: "background_refresh_failure",
-          systemResponse: "The career context saved, but the master resume refresh did not complete.",
+          systemResponse:
+            "The career context saved, but the master resume refresh did not complete.",
           title: "Master resume refresh failed",
           userMessage: processingIntent,
         });
@@ -1304,19 +1400,26 @@ export function ConversationPanel({
         return;
       }
 
-      setStatus("I refreshed the master resume draft from the new source. Open Profile & Resume to review it.");
+      setStatus(
+        "I refreshed the master resume draft from the new source. Open Profile & Resume to review it.",
+      );
       router.refresh();
     } catch {
       const issueMessage = await logSupportIssue({
         area: "master_resume",
         errorCode: "MASTER_RESUME_REFRESH_EXCEPTION",
-        errorMessage: "Master resume refresh threw an exception after career context intake.",
+        errorMessage:
+          "Master resume refresh threw an exception after career context intake.",
         source: "background_refresh_failure",
-        systemResponse: "The career context saved, but the master resume refresh did not complete.",
+        systemResponse:
+          "The career context saved, but the master resume refresh did not complete.",
         title: "Master resume refresh failed",
         userMessage: processingIntent,
       });
-      setStatus(issueMessage ?? "I updated your career context. The master resume refresh needs another attempt.");
+      setStatus(
+        issueMessage ??
+          "I updated your career context. The master resume refresh needs another attempt.",
+      );
     }
   }
 
@@ -1351,7 +1454,9 @@ export function ConversationPanel({
   }) {
     const creditReply = getCreditExhaustionReply({
       error: {
-        category: input.errorCode.toLowerCase().includes("billing") ? "billing" : undefined,
+        category: input.errorCode.toLowerCase().includes("billing")
+          ? "billing"
+          : undefined,
         code: input.errorCode,
         message: input.errorMessage ?? input.systemResponse,
       },
@@ -1425,7 +1530,10 @@ export function ConversationPanel({
     }
   }
 
-  function appendAssistantMessage(messageDraft: string | AssistantMessageDraft, persist = false) {
+  function appendAssistantMessage(
+    messageDraft: string | AssistantMessageDraft,
+    persist = false,
+  ) {
     const cleanText = cleanPlainChatText(
       typeof messageDraft === "string" ? messageDraft : messageDraft.text,
     );
@@ -1433,8 +1541,14 @@ export function ConversationPanel({
       ...current,
       {
         speaker: "assistant",
-        suggestedActions: typeof messageDraft === "string" ? [] : messageDraft.suggestedActions ?? [],
-        suggestedLinks: typeof messageDraft === "string" ? [] : messageDraft.suggestedLinks ?? [],
+        suggestedActions:
+          typeof messageDraft === "string"
+            ? []
+            : (messageDraft.suggestedActions ?? []),
+        suggestedLinks:
+          typeof messageDraft === "string"
+            ? []
+            : (messageDraft.suggestedLinks ?? []),
         text: cleanText,
       },
     ]);
@@ -1456,7 +1570,9 @@ export function ConversationPanel({
 
   return (
     <aside
-      className={isDragActive ? "conversation-pane drag-active" : "conversation-pane"}
+      className={
+        isDragActive ? "conversation-pane drag-active" : "conversation-pane"
+      }
       aria-labelledby="conversation-title"
       onDragEnter={(event) => {
         event.preventDefault();
@@ -1485,6 +1601,10 @@ export function ConversationPanel({
         <Sparkles size={20} aria-hidden="true" />
       </div>
 
+      {creditSummary.isExhausted ? (
+        <ConversationCreditNotice onSelectView={onSelectView} />
+      ) : null}
+
       <div className="message-list" ref={messageListRef}>
         {sessionPrompt ? (
           <div className="session-prompt" aria-label="Suggested next step">
@@ -1493,7 +1613,9 @@ export function ConversationPanel({
         ) : null}
         {messages.map((item, index) => (
           <div
-            className={item.speaker === "user" ? "user-message" : "assistant-message"}
+            className={
+              item.speaker === "user" ? "user-message" : "assistant-message"
+            }
             key={item.id ?? `${item.text}-${index}`}
           >
             <strong>{item.speaker === "user" ? "You" : brand.name}</strong>
@@ -1516,7 +1638,14 @@ export function ConversationPanel({
         {isSubmitting ? (
           <div className="assistant-message pending-message" aria-live="polite">
             <strong>{brand.name}</strong>
-            <p>{getProcessingMessage(processingMode, processingStep, activeView, processingIntent)}</p>
+            <p>
+              {getProcessingMessage(
+                processingMode,
+                processingStep,
+                activeView,
+                processingIntent,
+              )}
+            </p>
           </div>
         ) : null}
         {isDragActive ? <div className="drop-hint">Drop it here.</div> : null}
@@ -1524,7 +1653,11 @@ export function ConversationPanel({
         {error ? <div className="system-note error">{error}</div> : null}
       </div>
 
-      <form className="chat-input" aria-label="Conversation input" onSubmit={handleSubmit}>
+      <form
+        className="chat-input"
+        aria-label="Conversation input"
+        onSubmit={handleSubmit}
+      >
         <button
           aria-label="Attach file"
           className="attach-button"
@@ -1579,7 +1712,11 @@ export function ConversationPanel({
           suppressHydrationWarning
           type="file"
         />
-        <button disabled={message.trim().length < 3} type="submit" aria-label="Send message">
+        <button
+          disabled={message.trim().length < 3}
+          type="submit"
+          aria-label="Send message"
+        >
           {isSubmitting ? (
             <SendHorizontal size={18} aria-hidden="true" />
           ) : (
@@ -1589,9 +1726,37 @@ export function ConversationPanel({
       </form>
 
       {activeAttachment ? (
-        <AttachmentViewer attachment={activeAttachment} onClose={() => setActiveAttachment(null)} />
+        <AttachmentViewer
+          attachment={activeAttachment}
+          onClose={() => setActiveAttachment(null)}
+        />
       ) : null}
     </aside>
+  );
+}
+
+function ConversationCreditNotice({
+  onSelectView,
+}: {
+  onSelectView: (view: AppView) => void;
+}) {
+  return (
+    <section className="conversation-credit-notice" aria-live="polite">
+      <strong>Credits are paused, not your progress.</strong>
+      <p>
+        You can still review everything in your workspace. Add credits when you
+        want Pramania to read sources, analyze jobs, generate materials, or
+        export files.
+      </p>
+      <div className="conversation-credit-actions">
+        <button type="button" onClick={() => onSelectView("settings")}>
+          Add credits
+        </button>
+        <a href="/credits" target="_blank" rel="noreferrer">
+          How credits work
+        </a>
+      </div>
+    </section>
   );
 }
 
@@ -1645,7 +1810,9 @@ function AdvisorActionChips({
     })),
     ...actions.map((action) => ({
       id: `action-${action.id}`,
-      label: action.creditCost ? `${action.label} (${action.creditCost} cr)` : action.label,
+      label: action.creditCost
+        ? `${action.label} (${action.creditCost} cr)`
+        : action.label,
       reason: action.reason,
       view: action.view,
     })),
@@ -1679,15 +1846,23 @@ function joinAssistantSummaries(items: Array<string | AssistantMessageDraft>) {
   const actionableDraft = items.find(
     (item): item is AssistantMessageDraft =>
       typeof item !== "string" &&
-      ((item.suggestedActions?.length ?? 0) > 0 || (item.suggestedLinks?.length ?? 0) > 0),
+      ((item.suggestedActions?.length ?? 0) > 0 ||
+        (item.suggestedLinks?.length ?? 0) > 0),
   );
 
   return actionableDraft ? { ...actionableDraft, text } : text;
 }
 
-function getProcessingMessage(mode: ProcessingMode, step: number, activeView: AppView, intent: string) {
+function getProcessingMessage(
+  mode: ProcessingMode,
+  step: number,
+  activeView: AppView,
+  intent: string,
+) {
   const surface = formatActiveViewForMessage(activeView);
-  const hasFileIntent = /\.(pdf|docx?|txt|png|jpe?g|webp|csv|zip)\b/i.test(intent);
+  const hasFileIntent = /\.(pdf|docx?|txt|png|jpe?g|webp|csv|zip)\b/i.test(
+    intent,
+  );
   const recoveryMessages = isFrustratedOrCorrectionIntent(intent)
     ? [
         "You're right to expect this to use what is already saved. I'm checking the profile, resume, sources, and recent conversation together.",
@@ -1699,7 +1874,10 @@ function getProcessingMessage(mode: ProcessingMode, step: number, activeView: Ap
       ]
     : null;
 
-  if (recoveryMessages && ["advisor", "profile", "resume", "source"].includes(mode)) {
+  if (
+    recoveryMessages &&
+    ["advisor", "profile", "resume", "source"].includes(mode)
+  ) {
     return recoveryMessages[step % recoveryMessages.length];
   }
 
@@ -1820,7 +1998,10 @@ function inferProcessingMode(text: string): ProcessingMode {
     return "advisor";
   }
 
-  if (looksLikeMasterResumeRequest(text) || looksLikeMasterResumeExportRequest(text)) {
+  if (
+    looksLikeMasterResumeRequest(text) ||
+    looksLikeMasterResumeExportRequest(text)
+  ) {
     return "resume";
   }
 
@@ -1867,7 +2048,9 @@ function formatSourceIntakeReply({
   savedFactCount: number;
   suggestedDirection: string | null;
 }) {
-  const advisorRead = assistantMessage ? cleanPlainChatText(assistantMessage) : null;
+  const advisorRead = assistantMessage
+    ? cleanPlainChatText(assistantMessage)
+    : null;
   const direction = suggestedDirection?.trim()
     ? `My current read: ${suggestedDirection.trim()}`
     : null;
@@ -1879,9 +2062,13 @@ function formatSourceIntakeReply({
     savedFactCount > 0 || extractedFactCount > 0
       ? `What I learned:\n- I read ${label} and refreshed your career profile.\n- I will carry the useful experience, skills, scope, and impact evidence into your master resume and role-fit advice.`
       : `What happened:\n- I saved ${label} in your Library.\n- I need another pass before changing your master profile, so I will retry from the saved copy instead of asking you to upload it again.`;
-  const directionRead = direction ? `Current direction:\n- ${direction.replace(/^My current read:\s*/i, "")}` : null;
+  const directionRead = direction
+    ? `Current direction:\n- ${direction.replace(/^My current read:\s*/i, "")}`
+    : null;
   const advisorSection = advisorRead ? `Advisor read:\n${advisorRead}` : null;
-  const nextSection = nextQuestion ? `Next best move:\n- ${nextQuestion}` : null;
+  const nextSection = nextQuestion
+    ? `Next best move:\n- ${nextQuestion}`
+    : null;
 
   return [sourceRead, advisorSection, directionRead, nextSection]
     .filter(Boolean)
@@ -1900,7 +2087,9 @@ function selectSourceFollowUp({
 
     return (
       question.trim().length > 0 &&
-      !/which role lane should i optimize|which role lane|optimize for first/.test(normalized)
+      !/which role lane should i optimize|which role lane|optimize for first/.test(
+        normalized,
+      )
     );
   });
 
@@ -1912,7 +2101,9 @@ function selectSourceFollowUp({
     return `I would start by shaping the master resume around ${suggestedDirection.trim().toLowerCase()}, then pressure-test the strongest metrics and scope.`;
   }
 
-  return followUpQuestions.find((question) => question.trim().length > 0) ?? null;
+  return (
+    followUpQuestions.find((question) => question.trim().length > 0) ?? null
+  );
 }
 
 function cleanPlainChatText(value: string) {
@@ -1936,10 +2127,16 @@ function cleanPlainChatText(value: string) {
       "",
     )
     .replace(/\bRoot cause:\s*[A-Z0-9_.-]+\.?\s*/gi, "")
-    .replace(/\bstructured AI analysis needs another pass\.?\s*/gi, "the analysis needs another pass. ")
+    .replace(
+      /\bstructured AI analysis needs another pass\.?\s*/gi,
+      "the analysis needs another pass. ",
+    )
     .replace(/\bProof of impact\s*:/gi, "Impact evidence:")
     .replace(/\bFound\s+\d+\s+(?:useful\s+)?profile\s+signals?\.?\s*/gi, "")
-    .replace(/\b(?:Saved|stored)\s+\d+\s+(?:new\s+)?profile\s+details?\.?\s*/gi, "")
+    .replace(
+      /\b(?:Saved|stored)\s+\d+\s+(?:new\s+)?profile\s+details?\.?\s*/gi,
+      "",
+    )
     .replace(
       /\bI could not complete the deeper advisor read right now\. Share the resume, role, or profile point again and I will keep it grounded in your career context\.?/gi,
       "I hit a context-reading issue on my side. Your saved profile, sources, resume, jobs, applications, and generated files are still intact; I logged enough context for review and will retry from the saved workspace before asking you to repeat anything.",
@@ -2013,17 +2210,27 @@ function ChatMessageBody({ text }: { text: string }) {
           return (
             <ul key={`list-${index}`}>
               {block.items.map((item, itemIndex) => (
-                <li key={`${item}-${itemIndex}`}>{renderInlineChatText(item)}</li>
+                <li key={`${item}-${itemIndex}`}>
+                  {renderInlineChatText(item)}
+                </li>
               ))}
             </ul>
           );
         }
 
         if (block.kind === "heading") {
-          return <h3 key={`${block.text}-${index}`}>{renderInlineChatText(block.text)}</h3>;
+          return (
+            <h3 key={`${block.text}-${index}`}>
+              {renderInlineChatText(block.text)}
+            </h3>
+          );
         }
 
-        return <p key={`${block.text}-${index}`}>{renderInlineChatText(block.text)}</p>;
+        return (
+          <p key={`${block.text}-${index}`}>
+            {renderInlineChatText(block.text)}
+          </p>
+        );
       })}
     </div>
   );
@@ -2109,7 +2316,10 @@ function parseChatMessageBlocks(text: string): ChatMessageBlock[] {
 
     if (labelledParagraph) {
       flushList();
-      blocks.push({ kind: "heading", text: toDisplayLabel(labelledParagraph[1]) });
+      blocks.push({
+        kind: "heading",
+        text: toDisplayLabel(labelledParagraph[1]),
+      });
       blocks.push({ kind: "paragraph", text: labelledParagraph[2].trim() });
       continue;
     }
@@ -2251,7 +2461,8 @@ function inferProfilePatch(text: string) {
   if (headline && isSafeDirectProfileField(headline, 180)) {
     return {
       patch: { headline },
-      reply: "Updated your profile headline. I will use that positioning as a starting point, and we can keep sharpening it as more evidence comes in.",
+      reply:
+        "Updated your profile headline. I will use that positioning as a starting point, and we can keep sharpening it as more evidence comes in.",
     };
   }
 
@@ -2265,7 +2476,8 @@ function inferProfilePatch(text: string) {
   if (summary && isSafeDirectProfileField(summary, 900)) {
     return {
       patch: { summary },
-      reply: "Updated your profile summary. I will treat it as your working read, not a final resume claim until the evidence supports it.",
+      reply:
+        "Updated your profile summary. I will treat it as your working read, not a final resume claim until the evidence supports it.",
     };
   }
 
@@ -2275,7 +2487,11 @@ function inferProfilePatch(text: string) {
     "update my name to",
   ]);
 
-  if (displayName && isSafeDirectProfileField(displayName, 120) && !/\b(role|title|company|team|target)\b/.test(normalized)) {
+  if (
+    displayName &&
+    isSafeDirectProfileField(displayName, 120) &&
+    !/\b(role|title|company|team|target)\b/.test(normalized)
+  ) {
     return {
       patch: { displayName },
       reply: `Updated your profile name to ${displayName}.`,
@@ -2317,7 +2533,9 @@ function assistantAskedForTargetDirection(text: string) {
   const normalized = text.toLowerCase().replace(/\s+/g, " ");
 
   return (
-    /\bwhich\b.{0,90}\b(direction|lane|path|positioning|target)\b/.test(normalized) ||
+    /\bwhich\b.{0,90}\b(direction|lane|path|positioning|target)\b/.test(
+      normalized,
+    ) ||
     /\bfeels most accurate\b/.test(normalized) ||
     /\btarget market positioning\b/.test(normalized) ||
     /\bshould i optimize\b/.test(normalized)
@@ -2360,7 +2578,8 @@ function shouldAcceptStandaloneTargetDirectionAnswer(
 
 function isSafeDirectProfileField(value: string, maxLength: number) {
   if (value.length > maxLength) return false;
-  if (value.split(/[.!?]/).filter((part) => part.trim().length > 0).length > 1) return false;
+  if (value.split(/[.!?]/).filter((part) => part.trim().length > 0).length > 1)
+    return false;
 
   return true;
 }
@@ -2410,8 +2629,12 @@ function looksLikeSupportIssueReport(text: string) {
   const normalized = text.toLowerCase();
 
   return (
-    /\b(issue|bug|error|failed|failure|broken|not working|wrong|not right|support|help with)\b/.test(normalized) &&
-    /\b(app|pramania|resume|profile|job|application|source|chat|master|ats|upload|pdf|docx|linkedin)\b/.test(normalized)
+    /\b(issue|bug|error|failed|failure|broken|not working|wrong|not right|support|help with)\b/.test(
+      normalized,
+    ) &&
+    /\b(app|pramania|resume|profile|job|application|source|chat|master|ats|upload|pdf|docx|linkedin)\b/.test(
+      normalized,
+    )
   );
 }
 
@@ -2419,9 +2642,12 @@ function inferSupportIssueArea(text: string) {
   const normalized = text.toLowerCase();
 
   if (/\b(master|ats|resume)\b/.test(normalized)) return "master_resume";
-  if (/\b(profile|source|upload|pdf|docx|linkedin|file)\b/.test(normalized)) return "profile_intake";
-  if (/\b(job|application|apply|cover letter|materials)\b/.test(normalized)) return "job_application";
-  if (/\b(chat|conversation|response|advisor|pramania)\b/.test(normalized)) return "advisor";
+  if (/\b(profile|source|upload|pdf|docx|linkedin|file)\b/.test(normalized))
+    return "profile_intake";
+  if (/\b(job|application|apply|cover letter|materials)\b/.test(normalized))
+    return "job_application";
+  if (/\b(chat|conversation|response|advisor|pramania)\b/.test(normalized))
+    return "advisor";
 
   return "general";
 }
@@ -2441,8 +2667,12 @@ function processSourceExplanationQuestion(text: string) {
   const normalized = text.toLowerCase();
 
   if (
-    !/\b(why|what happened|could not|couldn't|cant|can't|failed|not working)\b/.test(normalized) ||
-    !/\b(linkedin|public profile|profile link|external profile|profile)\b/.test(normalized)
+    !/\b(why|what happened|could not|couldn't|cant|can't|failed|not working)\b/.test(
+      normalized,
+    ) ||
+    !/\b(linkedin|public profile|profile link|external profile|profile)\b/.test(
+      normalized,
+    )
   ) {
     return null;
   }
@@ -2510,7 +2740,9 @@ function looksLikeExistingSourceRequest(text: string) {
   );
 }
 
-function formatSourceReference(source: ProfileOverview["recentSources"][number]) {
+function formatSourceReference(
+  source: ProfileOverview["recentSources"][number],
+) {
   if (source.source_type === "linkedin") {
     return "your saved LinkedIn profile link";
   }
@@ -2519,7 +2751,9 @@ function formatSourceReference(source: ProfileOverview["recentSources"][number])
     return source.original_filename;
   }
 
-  return source.source_url ? formatJobUrl(source.source_url) : "your saved profile source";
+  return source.source_url
+    ? formatJobUrl(source.source_url)
+    : "your saved profile source";
 }
 
 function formatSourceTypeForPrompt(sourceType: string) {
@@ -2591,7 +2825,11 @@ function AttachmentViewer({
   onClose: () => void;
 }) {
   return (
-    <div className="attachment-viewer-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className="attachment-viewer-backdrop"
+      role="presentation"
+      onClick={onClose}
+    >
       <div
         aria-label={`Preview ${attachment.name}`}
         aria-modal="true"
@@ -2604,7 +2842,11 @@ function AttachmentViewer({
             <strong>{attachment.name}</strong>
             <span>{formatAttachmentType(attachment.type)}</span>
           </div>
-          <button className="secondary-action compact-action" onClick={onClose} type="button">
+          <button
+            className="secondary-action compact-action"
+            onClick={onClose}
+            type="button"
+          >
             Close
           </button>
         </header>
@@ -2638,7 +2880,10 @@ function AttachmentViewer({
           ) : (
             <div className="attachment-viewer-empty">
               {getAttachmentIcon(attachment.type)}
-              <p>Preview is not available for this file type yet, but the source is saved.</p>
+              <p>
+                Preview is not available for this file type yet, but the source
+                is saved.
+              </p>
             </div>
           )}
         </div>
@@ -2679,31 +2924,37 @@ function buildMessageAttachment(file: File): MessageAttachment {
         ? "archive"
         : sourceType === "image"
           ? "image"
-        : sourceType === "pdf"
-          ? "pdf"
-        : sourceType === "txt"
-          ? "text"
-          : "document",
+          : sourceType === "pdf"
+            ? "pdf"
+            : sourceType === "txt"
+              ? "text"
+              : "document",
   };
 }
 
-function formatJobIntakeReply(job: {
-  company?: string | null;
-  fitAnalysis?: {
-    missingKeywords?: string[];
-    questions?: string[];
-    recommendation?: string;
-    risks?: string[];
-    score?: number | null;
-    summary?: string;
-  } | null;
-  title?: string | null;
-} | null | undefined) {
+function formatJobIntakeReply(
+  job:
+    | {
+        company?: string | null;
+        fitAnalysis?: {
+          missingKeywords?: string[];
+          questions?: string[];
+          recommendation?: string;
+          risks?: string[];
+          score?: number | null;
+          summary?: string;
+        } | null;
+        title?: string | null;
+      }
+    | null
+    | undefined,
+) {
   if (!job) {
     return "I saved that job post. We can review fit once Pramania has enough job detail.";
   }
 
-  const roleLabel = [job.title, job.company].filter(Boolean).join(" at ") || "that job post";
+  const roleLabel =
+    [job.title, job.company].filter(Boolean).join(" at ") || "that job post";
   const fit = job.fitAnalysis;
 
   if (!fit || fit.score === null || fit.score === undefined) {
@@ -2714,8 +2965,11 @@ function formatJobIntakeReply(job: {
   const gaps = fit.missingKeywords?.length
     ? `Before applying, I would verify evidence for ${fit.missingKeywords.slice(0, 4).join(", ")}.`
     : null;
-  const risk = fit.risks?.length ? `Watch-outs: ${fit.risks.slice(0, 2).join(" ")}` : null;
-  const question = "Would you like me to log this as an application and create a tailored resume plus cover letter for review?";
+  const risk = fit.risks?.length
+    ? `Watch-outs: ${fit.risks.slice(0, 2).join(" ")}`
+    : null;
+  const question =
+    "Would you like me to log this as an application and create a tailored resume plus cover letter for review?";
 
   return [
     `I read ${roleLabel}. My recommendation: ${recommendation} ${fit.summary ?? `Fit is ${fit.score}%.`}`,
@@ -2731,8 +2985,10 @@ function formatFitRecommendation(recommendation: string | undefined) {
   const labels: Record<string, string> = {
     needs_profile: "hold until we add stronger profile evidence.",
     possible_match: "worth a closer look, but not a blind apply.",
-    strong_match: "pursue it, assuming the role scope matches what you want next.",
-    weak_match: "treat it as a stretch unless you can prove the missing requirements.",
+    strong_match:
+      "pursue it, assuming the role scope matches what you want next.",
+    weak_match:
+      "treat it as a stretch unless you can prove the missing requirements.",
   };
 
   return labels[recommendation ?? ""] ?? "review carefully before applying.";
@@ -2755,7 +3011,8 @@ function buildSessionPrompt({
     return null;
   }
 
-  const name = profileOverview.profile?.displayName ?? userEmail?.split("@")[0] ?? null;
+  const name =
+    profileOverview.profile?.displayName ?? userEmail?.split("@")[0] ?? null;
   const greeting = `Welcome back${name ? `, ${name}` : ""}.`;
   const applicationPrompt = buildApplicationFollowUpPrompt(applicationOverview);
 
@@ -2778,16 +3035,24 @@ function buildSessionPrompt({
   return `${greeting} We can keep building from your last conversation.`;
 }
 
-function readFirstName(profileOverview: ProfileOverview, userEmail: string | null) {
-  const name = profileOverview.profile?.displayName ?? userEmail?.split("@")[0] ?? null;
+function readFirstName(
+  profileOverview: ProfileOverview,
+  userEmail: string | null,
+) {
+  const name =
+    profileOverview.profile?.displayName ?? userEmail?.split("@")[0] ?? null;
   const firstName = name?.trim().split(/\s+/)[0];
 
   return firstName || null;
 }
 
-function buildApplicationFollowUpPrompt(applicationOverview: ApplicationOverview) {
-  const followUpApplications = applicationOverview.recentApplications.filter((application) =>
-    !application.archivedAt && ["applied", "interview_in_progress"].includes(application.status),
+function buildApplicationFollowUpPrompt(
+  applicationOverview: ApplicationOverview,
+) {
+  const followUpApplications = applicationOverview.recentApplications.filter(
+    (application) =>
+      !application.archivedAt &&
+      ["applied", "interview_in_progress"].includes(application.status),
   );
 
   if (followUpApplications.length === 0) {
@@ -2795,7 +3060,9 @@ function buildApplicationFollowUpPrompt(applicationOverview: ApplicationOverview
   }
 
   const application = followUpApplications[0];
-  const roleLabel = [application.jobTitle, application.companyName].filter(Boolean).join(" at ");
+  const roleLabel = [application.jobTitle, application.companyName]
+    .filter(Boolean)
+    .join(" at ");
 
   return `You have ${followUpApplications.length} application${followUpApplications.length === 1 ? "" : "s"} that may need a status check. Did you hear back on ${roleLabel}? Reply with the outcome and I will update the right record carefully.`;
 }
@@ -2808,8 +3075,10 @@ function buildProfileGapPrompt(profileOverview: ProfileOverview) {
   const missing: string[] = [];
 
   if (!profileOverview.profile.summary) missing.push("a sharp profile summary");
-  if (!profileOverview.profile.targetDirection) missing.push("target role direction");
-  if (profileOverview.factCount < 3) missing.push("stronger outcomes or role examples");
+  if (!profileOverview.profile.targetDirection)
+    missing.push("target role direction");
+  if (profileOverview.factCount < 3)
+    missing.push("stronger outcomes or role examples");
 
   if (missing.length === 0) {
     return null;
@@ -2820,7 +3089,10 @@ function buildProfileGapPrompt(profileOverview: ProfileOverview) {
 
 function buildJobPrompt(jobOverview: JobOverview) {
   const highFitJob = jobOverview.recentJobs.find(
-    (job) => !job.archived_at && typeof job.fitSnapshot.score === "number" && job.fitSnapshot.score >= 70,
+    (job) =>
+      !job.archived_at &&
+      typeof job.fitSnapshot.score === "number" &&
+      job.fitSnapshot.score >= 70,
   );
 
   if (!highFitJob) {
@@ -2842,13 +3114,20 @@ function looksLikeAdvisorQuestion(text: string) {
 }
 
 function shouldRouteToAdvisor(text: string) {
-  if (!looksLikeAdvisorQuestion(text) || looksLikeConcreteWorkflowCommand(text)) {
+  if (
+    !looksLikeAdvisorQuestion(text) ||
+    looksLikeConcreteWorkflowCommand(text)
+  ) {
     return false;
   }
 
   const normalized = text.toLowerCase();
 
-  if (/\b(i am|i'm|i have|i did|i led|i managed|i built|i created|my role|my experience)\b/.test(normalized)) {
+  if (
+    /\b(i am|i'm|i have|i did|i led|i managed|i built|i created|my role|my experience)\b/.test(
+      normalized,
+    )
+  ) {
     return /\b(what should|advice|recommend|where do i fit|how would you|what metrics|quantif|business value)\b/.test(
       normalized,
     );
@@ -2857,14 +3136,22 @@ function shouldRouteToAdvisor(text: string) {
   return true;
 }
 
-function shouldTreatAsAdvisorReply(text: string, messages: ConversationMessage[]) {
-  if (looksLikeConcreteWorkflowCommand(text) || looksLikeProfileEvidenceToSave(text)) {
+function shouldTreatAsAdvisorReply(
+  text: string,
+  messages: ConversationMessage[],
+) {
+  if (
+    looksLikeConcreteWorkflowCommand(text) ||
+    looksLikeProfileEvidenceToSave(text)
+  ) {
     return false;
   }
 
   const lastAssistantMessage = [...messages]
     .reverse()
-    .find((item) => item.speaker === "assistant" && item.text.trim().length > 0)?.text;
+    .find(
+      (item) => item.speaker === "assistant" && item.text.trim().length > 0,
+    )?.text;
 
   if (!lastAssistantMessage) {
     return false;
@@ -2888,7 +3175,12 @@ function shouldTreatAsAdvisorReply(text: string, messages: ConversationMessage[]
     return false;
   }
 
-  return wordCount <= 28 || /\b(direction|lane|path|target|role|focus|yes|no|that one|this one)\b/.test(normalizedText);
+  return (
+    wordCount <= 28 ||
+    /\b(direction|lane|path|target|role|focus|yes|no|that one|this one)\b/.test(
+      normalizedText,
+    )
+  );
 }
 
 function looksLikeProfileEvidenceToSave(text: string) {
@@ -2898,7 +3190,9 @@ function looksLikeProfileEvidenceToSave(text: string) {
     return false;
   }
 
-  const hasCareerSubject = /\b(i|i'm|i am|i've|i have|my|we|our)\b/.test(normalized);
+  const hasCareerSubject = /\b(i|i'm|i am|i've|i have|my|we|our)\b/.test(
+    normalized,
+  );
   const hasEvidenceVerb =
     /\b(led|built|managed|owned|delivered|created|scaled|improved|reduced|launched|implemented|served|drove|grew|saved|increased|decreased|transformed|ran|headed|directed|responsible|accountable|oversaw|worked)\b/.test(
       normalized,
@@ -2912,7 +3206,11 @@ function looksLikeProfileEvidenceToSave(text: string) {
       normalized,
     );
 
-  return (hasCareerSubject && hasEvidenceVerb) || (hasEvidenceVerb && hasOutcomeOrScope) || hasResumeStructure;
+  return (
+    (hasCareerSubject && hasEvidenceVerb) ||
+    (hasEvidenceVerb && hasOutcomeOrScope) ||
+    hasResumeStructure
+  );
 }
 
 function looksLikeConcreteWorkflowCommand(text: string) {
@@ -2996,19 +3294,35 @@ function looksLikeUrlInstruction(text: string) {
 function inferApplicationStatus(text: string) {
   const normalized = text.toLowerCase();
 
-  if (/\b(interviewed but|interviewed,? not selected|after interview.*rejected)\b/.test(normalized)) {
+  if (
+    /\b(interviewed but|interviewed,? not selected|after interview.*rejected)\b/.test(
+      normalized,
+    )
+  ) {
     return "interviewed_not_selected";
   }
 
-  if (/\b(rejected|declined|not selected|passed on me|turned me down)\b/.test(normalized)) {
+  if (
+    /\b(rejected|declined|not selected|passed on me|turned me down)\b/.test(
+      normalized,
+    )
+  ) {
     return "rejected";
   }
 
-  if (/\b(no reply|no response|haven't heard|have not heard|ghosted)\b/.test(normalized)) {
+  if (
+    /\b(no reply|no response|haven't heard|have not heard|ghosted)\b/.test(
+      normalized,
+    )
+  ) {
     return "no_reply";
   }
 
-  if (/\b(interviewing|interview scheduled|interview in progress|next round)\b/.test(normalized)) {
+  if (
+    /\b(interviewing|interview scheduled|interview in progress|next round)\b/.test(
+      normalized,
+    )
+  ) {
     return "interview_in_progress";
   }
 
@@ -3032,7 +3346,9 @@ function looksLikeApplicationLogRequest(text: string) {
 
   return (
     /\b(log|track|create)\b.*\bapplication\b/.test(normalized) ||
-    /\b(proceed|go ahead|move forward)\b.*\b(apply|application|role|job)\b/.test(normalized)
+    /\b(proceed|go ahead|move forward)\b.*\b(apply|application|role|job)\b/.test(
+      normalized,
+    )
   );
 }
 
@@ -3044,8 +3360,12 @@ function looksLikeMaterialGenerationRequest(text: string) {
   }
 
   return (
-    /\b(generate|create|draft|write|make)\b.*\b(resume|cover letter|materials)\b/.test(normalized) ||
-    /\b(resume|cover letter|materials)\b.*\b(generate|create|draft|write|make)\b/.test(normalized)
+    /\b(generate|create|draft|write|make)\b.*\b(resume|cover letter|materials)\b/.test(
+      normalized,
+    ) ||
+    /\b(resume|cover letter|materials)\b.*\b(generate|create|draft|write|make)\b/.test(
+      normalized,
+    )
   );
 }
 
@@ -3056,17 +3376,29 @@ function looksLikeMasterResumeRequest(text: string) {
     return false;
   }
 
-  if (/\b(cover letter|job-specific|targeted|for this role|for the role)\b/.test(normalized)) {
+  if (
+    /\b(cover letter|job-specific|targeted|for this role|for the role)\b/.test(
+      normalized,
+    )
+  ) {
     return false;
   }
 
   return (
-    /\b(rebuild|restructure|rework|fix|refresh|regenerate)\b.*\b(master resume|base resume|core resume|resume|cv|chronology|role-by-role|work history)\b/.test(normalized) ||
-    /\b(master resume|base resume|core resume|resume|cv|chronology|role-by-role|work history)\b.*\b(rebuild|restructure|rework|fix|refresh|regenerate)\b/.test(normalized) ||
-    /\b(make|sound|tone|voice|rewrite|revise|adjust)\b.*\b(senior|executive|less ai|more human|voice|resume|cv)\b/.test(normalized) ||
+    /\b(rebuild|restructure|rework|fix|refresh|regenerate)\b.*\b(master resume|base resume|core resume|resume|cv|chronology|role-by-role|work history)\b/.test(
+      normalized,
+    ) ||
+    /\b(master resume|base resume|core resume|resume|cv|chronology|role-by-role|work history)\b.*\b(rebuild|restructure|rework|fix|refresh|regenerate)\b/.test(
+      normalized,
+    ) ||
+    /\b(make|sound|tone|voice|rewrite|revise|adjust)\b.*\b(senior|executive|less ai|more human|voice|resume|cv)\b/.test(
+      normalized,
+    ) ||
     /\b(more senior|less ai|more human|my voice)\b/.test(normalized) ||
     /\b(master resume|base resume|core resume)\b/.test(normalized) ||
-    /\b(generate|create|draft|build|make)\b.*\b(resume|cv)\b/.test(normalized) ||
+    /\b(generate|create|draft|build|make)\b.*\b(resume|cv)\b/.test(
+      normalized,
+    ) ||
     /\b(resume|cv)\b.*\b(generate|create|draft|build|make)\b/.test(normalized)
   );
 }
@@ -3102,21 +3434,33 @@ function looksLikeMasterResumeExportRequest(text: string) {
   }
 
   return (
-    /\b(export|download)\b.*\b(master resume|base resume|core resume|resume)\b.*\b(pdf|docx|word|file|files)\b/.test(normalized) ||
-    /\b(master resume|base resume|core resume|resume)\b.*\b(export|download)\b.*\b(pdf|docx|word|file|files)\b/.test(normalized) ||
-    /\b(make|create|generate)\b.*\b(pdf|docx|word file)\b.*\b(master resume|base resume|core resume|resume)\b/.test(normalized)
+    /\b(export|download)\b.*\b(master resume|base resume|core resume|resume)\b.*\b(pdf|docx|word|file|files)\b/.test(
+      normalized,
+    ) ||
+    /\b(master resume|base resume|core resume|resume)\b.*\b(export|download)\b.*\b(pdf|docx|word|file|files)\b/.test(
+      normalized,
+    ) ||
+    /\b(make|create|generate)\b.*\b(pdf|docx|word file)\b.*\b(master resume|base resume|core resume|resume)\b/.test(
+      normalized,
+    )
   );
 }
 
 function looksLikeReflectiveQuestion(normalized: string) {
   return (
     normalized.includes("?") &&
-    /\b(what|why|how|where|which|should|could|would|do you think|based on)\b/.test(normalized)
+    /\b(what|why|how|where|which|should|could|would|do you think|based on)\b/.test(
+      normalized,
+    )
   );
 }
 
-function formatApplicationLabel(application: ApplicationOverview["recentApplications"][number]) {
-  return [application.jobTitle, application.companyName].filter(Boolean).join(" at ");
+function formatApplicationLabel(
+  application: ApplicationOverview["recentApplications"][number],
+) {
+  return [application.jobTitle, application.companyName]
+    .filter(Boolean)
+    .join(" at ");
 }
 
 function applicationMatchesText(
@@ -3124,11 +3468,17 @@ function applicationMatchesText(
   text: string,
 ) {
   const normalizedText = text.toLowerCase();
-  const searchableValues = [application.companyName, application.jobTitle, formatJobUrl(application.jobUrl)]
+  const searchableValues = [
+    application.companyName,
+    application.jobTitle,
+    formatJobUrl(application.jobUrl),
+  ]
     .filter((value): value is string => Boolean(value))
     .map((value) => value.toLowerCase());
 
-  return searchableValues.some((value) => value.length >= 3 && normalizedText.includes(value));
+  return searchableValues.some(
+    (value) => value.length >= 3 && normalizedText.includes(value),
+  );
 }
 
 function formatApplicationStatus(status: string) {
@@ -3170,7 +3520,9 @@ function isLegacyAssistantNoise(text: string) {
 function isLegacyUserTestMessage(text: string) {
   const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
 
-  return ["what llm are you using?", "what llm are you using"].includes(normalized);
+  return ["what llm are you using?", "what llm are you using"].includes(
+    normalized,
+  );
 }
 
 async function persistConversationMessage(
@@ -3225,7 +3577,12 @@ function getUnsupportedFileReason(file: File) {
     return `${file.name} is an older Word .doc file. For reliable intake, save or export it as PDF or DOCX and drop it here. I will read that directly from the chat.`;
   }
 
-  if (extension === "heic" || extension === "heif" || mimeType === "image/heic" || mimeType === "image/heif") {
+  if (
+    extension === "heic" ||
+    extension === "heif" ||
+    mimeType === "image/heic" ||
+    mimeType === "image/heif"
+  ) {
     return `${file.name} is a HEIC/HEIF image. Convert it to JPG, PNG, or WebP and drop it here so Pramania can read it cleanly.`;
   }
 
@@ -3252,17 +3609,25 @@ function looksLikeJobUrl(url: string, message: string) {
     return true;
   }
 
-  return [
-    "ashbyhq.com",
-    "greenhouse.io",
-    "lever.co",
-    "myworkdayjobs.com",
-    "smartrecruiters.com",
-    "workable.com",
-  ].some((domain) => hostname.endsWith(domain)) ||
-    ["career", "careers", "job", "jobs", "opening", "position", "requisition"].some(
-      (part) => path.includes(part),
-    );
+  return (
+    [
+      "ashbyhq.com",
+      "greenhouse.io",
+      "lever.co",
+      "myworkdayjobs.com",
+      "smartrecruiters.com",
+      "workable.com",
+    ].some((domain) => hostname.endsWith(domain)) ||
+    [
+      "career",
+      "careers",
+      "job",
+      "jobs",
+      "opening",
+      "position",
+      "requisition",
+    ].some((part) => path.includes(part))
+  );
 }
 
 function sanitizeFilename(filename: string) {

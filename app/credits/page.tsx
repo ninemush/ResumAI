@@ -38,20 +38,25 @@ export default function CreditsPage() {
         <section className="credits-help-hero">
           <div>
             <p className="eyebrow">Credits</p>
-            <h1 id="credits-title">Credits should be clear before you spend them.</h1>
+            <h1 id="credits-title">How Pramania credits work</h1>
             <p>
-              {brand.name} uses credits only for higher-cost work: reading career sources,
-              analyzing jobs, generating materials, preparing files, and deeper AI reasoning.
-              Your balance, usage history, purchases, and invoices live in Settings.
+              {brand.name} uses credits only for higher-cost work: reading
+              career sources, analyzing jobs, generating materials, preparing
+              files, and deeper AI reasoning. Your balance, usage history,
+              purchases, and invoices live in Settings.
             </p>
           </div>
 
-          <aside className="credits-help-summary" aria-label="Credit model summary">
+          <aside
+            className="credits-help-summary"
+            aria-label="Credit model summary"
+          >
             <CircleDollarSign size={22} aria-hidden="true" />
             <strong>Job hunting is a phase.</strong>
             <p>
-              Add credits when you need more support. {brand.name} does not auto-charge,
-              auto-renew credit packs, or refill your balance without your explicit action.
+              Add credits when you need more support. {brand.name} does not
+              auto-charge, auto-renew credit packs, or refill your balance
+              without your explicit action.
             </p>
           </aside>
         </section>
@@ -60,17 +65,26 @@ export default function CreditsPage() {
           <article>
             <CheckCircle2 size={18} aria-hidden="true" />
             <strong>Saved work stays available</strong>
-            <p>Viewing prepared files, browsing your workspace, and reviewing saved context are free.</p>
+            <p>
+              Viewing prepared files, browsing your workspace, and reviewing
+              saved context are free.
+            </p>
           </article>
           <article>
             <ReceiptText size={18} aria-hidden="true" />
             <strong>Usage is auditable</strong>
-            <p>Settings shows the action, date, and amount for every credit event.</p>
+            <p>
+              Settings shows the action, date, and amount for every credit
+              event.
+            </p>
           </article>
           <article>
             <ShieldCheck size={18} aria-hidden="true" />
             <strong>No surprise deductions</strong>
-            <p>High-cost actions are priced by outcome, not hidden token counters.</p>
+            <p>
+              High-cost actions are priced by outcome, not hidden token
+              counters.
+            </p>
           </article>
         </section>
 
@@ -87,7 +101,9 @@ export default function CreditsPage() {
               <article className="credits-cost-card" key={action.name}>
                 <div>
                   <strong>{action.name}</strong>
-                  <span>{action.cost} credit{action.cost === 1 ? "" : "s"}</span>
+                  <span>
+                    {action.cost} credit{action.cost === 1 ? "" : "s"}
+                  </span>
                 </div>
                 <p>{action.examples}</p>
                 <small>{action.value}</small>
@@ -120,7 +136,10 @@ export default function CreditsPage() {
                 <h2>Typical journeys</h2>
               </div>
             </div>
-            <div className="credits-example-stack" aria-label="Example credit usage">
+            <div
+              className="credits-example-stack"
+              aria-label="Example credit usage"
+            >
               {CREDIT_EXAMPLE_JOURNEYS.map((journey) => (
                 <article className="credits-example-card" key={journey.title}>
                   <span>{journey.credits} credits</span>
@@ -145,13 +164,18 @@ export default function CreditsPage() {
             </div>
           </div>
           <p className="credits-section-copy">
-            The larger pack is better value for a full search cycle, but both are one-time
-            purchases. You stay in control.
+            The larger pack is better value for a full search cycle, but both
+            are one-time purchases. You stay in control.
           </p>
-          <div className="credits-pack-grid credits-pack-grid-modern" aria-label="Credit packs">
+          <div
+            className="credits-pack-grid credits-pack-grid-modern"
+            aria-label="Credit packs"
+          >
             {CREDIT_PURCHASE_OPTIONS.map((option) => (
               <article className="credits-pack-card" key={option.productId}>
-                <span>{option.recommended ? "Best value" : "Focused pack"}</span>
+                <span>
+                  {option.recommended ? "Best value" : "Focused pack"}
+                </span>
                 <h3>{option.label}</h3>
                 <strong>
                   ${option.priceUsd} for {option.credits} credits
@@ -167,9 +191,10 @@ export default function CreditsPage() {
             <p className="eyebrow">Low balance</p>
             <h2>What happens when credits run low?</h2>
             <p>
-              {brand.name} warns at 50%, 75%, and 90% usage. When credits are exhausted,
-              new source reading, generation, job analysis, and export are blocked until
-              more credits are added. Your existing workspace remains available.
+              {brand.name} warns at 50%, 75%, and 90% usage. When credits are
+              exhausted, new source reading, generation, job analysis, and
+              export are blocked until more credits are added. Your existing
+              workspace remains available.
             </p>
           </div>
           <div className="credits-legal-links">

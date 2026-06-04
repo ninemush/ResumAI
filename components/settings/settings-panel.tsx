@@ -18,7 +18,11 @@ import type { AppView } from "@/components/app-shell/side-nav";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import { CREDIT_USAGE_GUIDE } from "@/lib/billing/credit-catalog";
-import type { CreditHistory, CreditLedgerEvent, CreditSummary } from "@/lib/billing/credits";
+import type {
+  CreditHistory,
+  CreditLedgerEvent,
+  CreditSummary,
+} from "@/lib/billing/credits";
 import type { WorkspaceSession } from "@/lib/commands/session";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 import { createClient } from "@/lib/supabase/browser";
@@ -37,9 +41,15 @@ type BillingHistoryResponse = {
   history?: CreditHistory;
 };
 
-export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate, session }: SettingsPanelProps) {
+export function SettingsPanel({
+  creditSummary: initialCreditSummary,
+  onNavigate,
+  session,
+}: SettingsPanelProps) {
   const [creditSummary, setCreditSummary] = useState(initialCreditSummary);
-  const [creditHistory, setCreditHistory] = useState<CreditHistory | null>(null);
+  const [creditHistory, setCreditHistory] = useState<CreditHistory | null>(
+    null,
+  );
   const [historyStatus, setHistoryStatus] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [isRedeeming, setIsRedeeming] = useState(false);
@@ -74,7 +84,9 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
         const payload = (await response.json()) as BillingHistoryResponse;
 
         if (!response.ok || !payload.history) {
-          throw new Error(payload.error?.message ?? "Unable to load usage history.");
+          throw new Error(
+            payload.error?.message ?? "Unable to load usage history.",
+          );
         }
 
         if (isMounted) {
@@ -82,7 +94,11 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
         }
       } catch (error) {
         if (isMounted) {
-          setHistoryStatus(error instanceof Error ? error.message : "Unable to load usage history.");
+          setHistoryStatus(
+            error instanceof Error
+              ? error.message
+              : "Unable to load usage history.",
+          );
         }
       } finally {
         if (isMounted) {
@@ -114,7 +130,9 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
       };
 
       if (!response.ok || !payload.summary) {
-        setPromoStatus(payload.error?.message ?? "That promo code could not be applied.");
+        setPromoStatus(
+          payload.error?.message ?? "That promo code could not be applied.",
+        );
         return;
       }
 
@@ -143,17 +161,24 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
     });
 
     setIsSendingReset(false);
-    setResetStatus(error ? error.message : "Check your email for a secure password reset link.");
+    setResetStatus(
+      error
+        ? error.message
+        : "Check your email for a secure password reset link.",
+    );
   }
 
   return (
-    <main className="profile-pane settings-pane" aria-labelledby="settings-title">
+    <main
+      className="profile-pane settings-pane"
+      aria-labelledby="settings-title"
+    >
       <div className="pane-heading compact-pane-heading">
         <p className="eyebrow">Settings</p>
         <h1 id="settings-title">Account, billing, and access</h1>
         <p>
-          Review your identity, credit usage, purchase records, security options, and support history
-          from one place.
+          Review your identity, credit usage, purchase records, security
+          options, and support history from one place.
         </p>
       </div>
 
@@ -165,8 +190,8 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
             <strong>{session.user.fullName ?? email ?? "Pramania user"}</strong>
             {email ? <p>{email}</p> : null}
             <p className="settings-card-note">
-              Profile naming stays separate from your sign-in email, so resume edits do not change
-              account access.
+              Profile naming stays separate from your sign-in email, so resume
+              edits do not change account access.
             </p>
           </div>
         </article>
@@ -191,8 +216,9 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
             <span>Security</span>
             <strong>Password reset</strong>
             <p>
-              Local password accounts can reset by email. Three failed password attempts trigger an
-              account lock, and email-code verification protects new sessions.
+              Local password accounts can reset by email. Three failed password
+              attempts trigger an account lock, and email-code verification
+              protects new sessions.
             </p>
             <button
               className="settings-small-action"
@@ -202,10 +228,14 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
             >
               {isSendingReset ? "Sending reset link..." : "Send reset link"}
             </button>
-            {resetStatus ? <p className="settings-card-note">{resetStatus}</p> : null}
+            {resetStatus ? (
+              <p className="settings-card-note">{resetStatus}</p>
+            ) : null}
           </div>
         </article>
       </section>
+
+      {creditSummary.isExhausted ? <CreditExhaustedNotice /> : null}
 
       <section className="settings-panel-section" aria-labelledby="usage-title">
         <div className="settings-section-heading">
@@ -213,7 +243,10 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
           <div>
             <p className="eyebrow">Usage</p>
             <h2 id="usage-title">Credit usage</h2>
-            <p>Credits are consumed only by high-cost actions such as source reading, job analysis, generation, and export.</p>
+            <p>
+              Credits are consumed only by high-cost actions such as source
+              reading, job analysis, generation, and export.
+            </p>
           </div>
         </div>
 
@@ -226,7 +259,10 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
           ))}
         </div>
 
-        <article className="settings-cost-guide" aria-labelledby="settings-cost-title">
+        <article
+          className="settings-cost-guide"
+          aria-labelledby="settings-cost-title"
+        >
           <div>
             <h3 id="settings-cost-title">What actions use credits</h3>
             <a className="inline-link" href="/credits">
@@ -255,16 +291,21 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
         />
       </section>
 
-      <section className="settings-panel-section" aria-labelledby="billing-title">
+      <section
+        className="settings-panel-section"
+        id="add-credits"
+        aria-labelledby="billing-title"
+      >
         <div className="settings-section-heading">
           <Sparkles size={18} aria-hidden="true" />
           <div>
             <p className="eyebrow">Billing</p>
             <h2 id="billing-title">Add credits</h2>
             <p>
-              Pick a pack when you need more space for role analysis, tailored materials, and
-              validated exports. The larger pack is priced for users applying to multiple roles
-              and revising materials over a search sprint.
+              Pick a pack when you need more space for role analysis, tailored
+              materials, and validated exports. The larger pack is priced for
+              users applying to multiple roles and revising materials over a
+              search sprint.
             </p>
           </div>
         </div>
@@ -273,8 +314,16 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
           {creditSummary.purchaseOptions.map((option) => (
             <a
               aria-disabled={!option.url}
-              className={option.recommended ? "settings-pack recommended" : "settings-pack"}
-              href={option.url ? buildPurchaseUrl(option.url, session.user.id, email) : "#"}
+              className={
+                option.recommended
+                  ? "settings-pack recommended"
+                  : "settings-pack"
+              }
+              href={
+                option.url
+                  ? buildPurchaseUrl(option.url, session.user.id, email)
+                  : "#"
+              }
               key={option.productId}
               onClick={(event) => {
                 if (!option.url) event.preventDefault();
@@ -316,7 +365,10 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
           <div>
             <span>Promo code</span>
             <strong>Apply a one-time credit grant</strong>
-            <p>Promo credits are added to your account and stay auditable in your usage history.</p>
+            <p>
+              Promo credits are added to your account and stay auditable in your
+              usage history.
+            </p>
             <div className="settings-promo-row">
               <input
                 aria-label="Promo code"
@@ -325,11 +377,17 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
                 placeholder="ENTER-CODE"
                 value={promoCode}
               />
-              <button disabled={isRedeeming || !promoCode.trim()} onClick={redeemPromo} type="button">
+              <button
+                disabled={isRedeeming || !promoCode.trim()}
+                onClick={redeemPromo}
+                type="button"
+              >
                 {isRedeeming ? "Applying..." : "Apply"}
               </button>
             </div>
-            {promoStatus ? <p className="settings-card-note">{promoStatus}</p> : null}
+            {promoStatus ? (
+              <p className="settings-card-note">{promoStatus}</p>
+            ) : null}
           </div>
         </article>
 
@@ -339,8 +397,9 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
             <span>Privacy</span>
             <strong>Private workspace</strong>
             <p>
-              Profile sources, generated materials, and applications remain scoped to your
-              authenticated account. Exports and billing events are retained for audit and support.
+              Profile sources, generated materials, and applications remain
+              scoped to your authenticated account. Exports and billing events
+              are retained for audit and support.
             </p>
           </div>
         </article>
@@ -349,17 +408,29 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
           <FileText size={18} aria-hidden="true" />
           <div>
             <span>Terms</span>
-            <strong>{session.legal?.termsAcceptedAt ? "Accepted" : "Action needed"}</strong>
+            <strong>
+              {session.legal?.termsAcceptedAt ? "Accepted" : "Action needed"}
+            </strong>
             <p>
               {session.legal?.termsAcceptedAt
                 ? `Accepted ${formatDate(session.legal.termsAcceptedAt)}.`
                 : "Please accept the current Terms and Conditions to continue using Pramania."}
             </p>
             <div className="settings-link-row">
-              <a className="inline-link" href="/terms" target="_blank" rel="noreferrer">
+              <a
+                className="inline-link"
+                href="/terms"
+                target="_blank"
+                rel="noreferrer"
+              >
                 Review terms
               </a>
-              <a className="inline-link" href="/privacy" target="_blank" rel="noreferrer">
+              <a
+                className="inline-link"
+                href="/privacy"
+                target="_blank"
+                rel="noreferrer"
+              >
                 Review privacy policy
               </a>
             </div>
@@ -372,11 +443,15 @@ export function SettingsPanel({ creditSummary: initialCreditSummary, onNavigate,
             <span>Support</span>
             <strong>Issue history available</strong>
             <p>
-              Use Pramania chat for help. Product issues are logged with context and visible in the
-              Support area.
+              Use Pramania chat for help. Product issues are logged with context
+              and visible in the Support area.
             </p>
             <div className="settings-link-row">
-              <button className="inline-link button-link" onClick={() => onNavigate?.("support")} type="button">
+              <button
+                className="inline-link button-link"
+                onClick={() => onNavigate?.("support")}
+                type="button"
+              >
                 Open support
               </button>
             </div>
@@ -402,11 +477,36 @@ function CreditMeter({ summary }: { summary: CreditSummary }) {
       </p>
       {summary.isExhausted ? (
         <p className="settings-card-note danger">
-          Credits are exhausted. Generation, ingestion, and export actions are blocked until credits
-          are added.
+          All available credits have been used. Your workspace stays open;
+          source reading, job analysis, generation, and exports resume after you
+          add credits.
         </p>
       ) : null}
     </div>
+  );
+}
+
+function CreditExhaustedNotice() {
+  return (
+    <section className="settings-credit-empty-state" aria-live="polite">
+      <div>
+        <p className="eyebrow">Credits</p>
+        <h2>Your workspace is still yours.</h2>
+        <p>
+          You can keep reviewing saved profile details, jobs, applications,
+          Library items, support history, and settings. Credit-consuming work
+          pauses until you choose a pack.
+        </p>
+      </div>
+      <div className="settings-credit-actions">
+        <a className="settings-primary-link" href="#add-credits">
+          Choose a credit pack
+        </a>
+        <a className="inline-link" href="/credits">
+          How credits work
+        </a>
+      </div>
+    </section>
   );
 }
 
@@ -429,8 +529,12 @@ function HistoryList({
         <ReceiptText size={16} aria-hidden="true" />
         <h3>{title}</h3>
       </div>
-      {isLoading ? <p className="settings-history-empty">Loading history...</p> : null}
-      {!isLoading && status ? <p className="settings-history-empty danger">{status}</p> : null}
+      {isLoading ? (
+        <p className="settings-history-empty">Loading history...</p>
+      ) : null}
+      {!isLoading && status ? (
+        <p className="settings-history-empty danger">{status}</p>
+      ) : null}
       {!isLoading && !status && rows.length === 0 ? (
         <p className="settings-history-empty">{emptyText}</p>
       ) : null}
@@ -465,12 +569,18 @@ async function refreshHistory(
     const payload = (await response.json()) as BillingHistoryResponse;
 
     if (!response.ok || !payload.history) {
-      throw new Error(payload.error?.message ?? "Unable to refresh usage history.");
+      throw new Error(
+        payload.error?.message ?? "Unable to refresh usage history.",
+      );
     }
 
     setCreditHistory(payload.history);
   } catch (error) {
-    setHistoryStatus(error instanceof Error ? error.message : "Unable to refresh usage history.");
+    setHistoryStatus(
+      error instanceof Error
+        ? error.message
+        : "Unable to refresh usage history.",
+    );
   }
 }
 

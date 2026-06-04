@@ -762,13 +762,20 @@ input:focus {
 
 .credits-help-page {
   background:
-    radial-gradient(circle at 12% 8%, rgba(185, 155, 103, 0.14), transparent 26%),
-    radial-gradient(circle at 86% 18%, rgba(17, 27, 42, 0.045), transparent 28%),
+    radial-gradient(
+      circle at 12% 8%,
+      rgba(185, 155, 103, 0.14),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 86% 18%,
+      rgba(17, 27, 42, 0.045),
+      transparent 28%
+    ),
     var(--background);
   color: var(--foreground);
-  height: 100svh;
-  overflow-x: hidden;
-  overflow-y: auto;
+  min-height: 100svh;
+  overflow-x: clip;
   padding: clamp(18px, 4vw, 42px);
 }
 
@@ -1067,7 +1074,11 @@ input:focus {
 .terms-gate-page {
   align-items: center;
   background:
-    radial-gradient(circle at 20% 15%, rgba(185, 155, 103, 0.12), transparent 32%),
+    radial-gradient(
+      circle at 20% 15%,
+      rgba(185, 155, 103, 0.12),
+      transparent 32%
+    ),
     var(--background);
   display: grid;
   min-height: 100svh;
@@ -1399,7 +1410,9 @@ input:focus {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  transition: opacity 0.14s ease, transform 0.14s ease;
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
   white-space: nowrap;
   z-index: 20;
 }
@@ -1498,7 +1511,10 @@ input:focus {
   gap: 8px;
   min-height: 38px;
   padding: 0 14px;
-  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
   white-space: nowrap;
 }
 
@@ -1522,6 +1538,83 @@ input:focus {
   min-height: 0;
   overflow-y: auto;
   padding: 34px;
+}
+
+.credit-status-banner {
+  align-items: center;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 250, 243, 0.96),
+    rgba(236, 230, 218, 0.76)
+  );
+  border: 1px solid rgba(185, 155, 103, 0.38);
+  border-radius: var(--pr-radius-md);
+  box-shadow: 0 16px 42px rgba(17, 31, 48, 0.07);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+}
+
+.credit-status-banner.warning {
+  background: rgba(255, 250, 243, 0.78);
+}
+
+.credit-status-banner svg {
+  color: var(--sage-strong);
+}
+
+.credit-status-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.credit-status-copy strong {
+  color: var(--foreground);
+  font-size: 1rem;
+}
+
+.credit-status-copy p {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.credit-status-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.credit-status-primary,
+.credit-status-secondary {
+  align-items: center;
+  border-radius: var(--pr-radius-pill);
+  display: inline-flex;
+  font-size: 0.84rem;
+  font-weight: 900;
+  gap: 8px;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  text-decoration: none;
+}
+
+.credit-status-primary {
+  background: var(--foreground);
+  border: 1px solid var(--foreground);
+  color: var(--panel);
+}
+
+.credit-status-secondary {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(185, 155, 103, 0.36);
+  color: var(--foreground);
 }
 
 .resize-handle {
@@ -2157,7 +2250,11 @@ input:focus {
 
 .owner-bar-chart span {
   align-self: end;
-  background: linear-gradient(180deg, var(--pr-antique-gold), var(--sage-strong));
+  background: linear-gradient(
+    180deg,
+    var(--pr-antique-gold),
+    var(--sage-strong)
+  );
   border-radius: var(--pr-radius-pill) var(--pr-radius-pill) 4px 4px;
   display: block;
   min-height: 4px;
@@ -2676,7 +2773,9 @@ input:focus {
   align-items: end;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(140px, 0.8fr) minmax(180px, 1fr) minmax(240px, 1.8fr) auto;
+  grid-template-columns:
+    minmax(140px, 0.8fr) minmax(180px, 1fr) minmax(240px, 1.8fr)
+    auto;
 }
 
 .support-issue-actions label {
@@ -2792,7 +2891,11 @@ input:focus {
 }
 
 .outcome-bar i {
-  background: linear-gradient(90deg, var(--sage-strong), var(--pr-antique-gold));
+  background: linear-gradient(
+    90deg,
+    var(--sage-strong),
+    var(--pr-antique-gold)
+  );
   border-radius: inherit;
   display: block;
   height: 100%;
@@ -2800,7 +2903,11 @@ input:focus {
 }
 
 .outcome-bar.muted i {
-  background: linear-gradient(90deg, rgba(173, 74, 64, 0.72), rgba(173, 74, 64, 0.34));
+  background: linear-gradient(
+    90deg,
+    rgba(173, 74, 64, 0.72),
+    rgba(173, 74, 64, 0.34)
+  );
 }
 
 .owner-generated-note {
@@ -4489,7 +4596,9 @@ input:focus {
 }
 
 .job-record-header {
-  grid-template-columns: minmax(0, 1fr) minmax(82px, auto) minmax(78px, auto) minmax(210px, auto);
+  grid-template-columns:
+    minmax(0, 1fr) minmax(82px, auto) minmax(78px, auto)
+    minmax(210px, auto);
 }
 
 .application-record-header {
@@ -4634,7 +4743,9 @@ input:focus {
 }
 
 .job-record {
-  grid-template-columns: minmax(0, 1fr) minmax(82px, auto) minmax(78px, auto) auto;
+  grid-template-columns:
+    minmax(0, 1fr) minmax(82px, auto) minmax(78px, auto)
+    auto;
 }
 
 .application-record {
@@ -5114,6 +5225,55 @@ input:focus {
   display: grid;
   gap: 16px;
   padding: 18px;
+}
+
+.settings-credit-empty-state {
+  align-items: center;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 250, 243, 0.9),
+    rgba(236, 230, 218, 0.72)
+  );
+  border: 1px solid rgba(185, 155, 103, 0.38);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 18px;
+}
+
+.settings-credit-empty-state h2 {
+  color: var(--foreground);
+  font-size: 1.2rem;
+  margin: 0 0 8px;
+}
+
+.settings-credit-empty-state p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.settings-credit-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.settings-primary-link {
+  align-items: center;
+  background: var(--foreground);
+  border-radius: var(--pr-radius-pill);
+  color: var(--panel);
+  display: inline-flex;
+  font-size: 0.86rem;
+  font-weight: 900;
+  min-height: 38px;
+  padding: 0 14px;
+  text-decoration: none;
 }
 
 .settings-section-heading {
@@ -6134,7 +6294,7 @@ input:focus {
 .conversation-pane {
   border-width: 0 0 0 1px;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
   height: 100svh;
   min-width: 0;
   overflow: hidden;
@@ -6158,6 +6318,57 @@ input:focus {
   font-size: 1.08rem;
   font-weight: 600;
   margin: 0;
+}
+
+.conversation-credit-notice {
+  background: rgba(255, 250, 243, 0.86);
+  border: 1px solid rgba(185, 155, 103, 0.38);
+  border-radius: 14px;
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px 14px;
+}
+
+.conversation-credit-notice strong {
+  color: var(--foreground);
+  font-size: 0.9rem;
+}
+
+.conversation-credit-notice p {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.conversation-credit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.conversation-credit-actions button,
+.conversation-credit-actions a {
+  border-radius: var(--pr-radius-pill);
+  font-size: 0.78rem;
+  font-weight: 900;
+  min-height: 32px;
+  padding: 0 12px;
+  text-decoration: none;
+}
+
+.conversation-credit-actions button {
+  background: var(--foreground);
+  border: 1px solid var(--foreground);
+  color: var(--panel);
+}
+
+.conversation-credit-actions a {
+  align-items: center;
+  border: 1px solid rgba(185, 155, 103, 0.36);
+  color: var(--foreground);
+  display: inline-flex;
 }
 
 .message-list {
@@ -6929,7 +7140,7 @@ input:focus {
     background: var(--background);
     border-width: 0;
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     height: calc(100svh - 78px - env(safe-area-inset-bottom));
     min-height: 500px;
     overflow: hidden;
@@ -6958,6 +7169,16 @@ input:focus {
     padding: 18px 18px 96px;
     position: relative;
     z-index: 1;
+  }
+
+  .credit-status-banner,
+  .settings-credit-empty-state {
+    grid-template-columns: 1fr;
+  }
+
+  .credit-status-actions,
+  .settings-credit-actions {
+    justify-content: flex-start;
   }
 
   .workspace-shell.workspace-first .workspace-main {
@@ -6995,7 +7216,10 @@ input:focus {
     gap: 12px;
   }
 
-  .workspace-shell.conversation-first .profile-heading .pane-heading p:not(.eyebrow) {
+  .workspace-shell.conversation-first
+    .profile-heading
+    .pane-heading
+    p:not(.eyebrow) {
     display: none;
   }
 
