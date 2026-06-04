@@ -27,7 +27,7 @@ import {
 import { extractExperienceSectionsFromText } from "@/lib/resumes/source-experience";
 import { createClient } from "@/lib/supabase/server";
 
-export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v7";
+export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v8";
 const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
 const PDF_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
@@ -576,19 +576,17 @@ function enrichMasterResumeWithSourceEvidence(
   sourceEvidence: SourceEvidence[],
 ) {
   const sourceSections = extractExperienceSectionsFromSources(sourceEvidence);
-  const sourceContact = extractResumeContactFromSources(sourceEvidence);
-  const sourceEducation = extractResumeEducationFromSources(sourceEvidence);
-  const sourceCertifications = extractResumeCertificationsFromSources(sourceEvidence);
-  const sourceLanguages = extractResumeLanguagesFromSources(sourceEvidence);
-  const sourceSpecialProjects = extractResumeSpecialProjectsFromSources(sourceEvidence);
+  const optionalResume = enrichMasterResumeWithOptionalSourceEvidence(resume, sourceEvidence);
 
   if (
     sourceSections.length === 0 &&
-    sourceEducation.length === 0 &&
-    sourceCertifications.length === 0 &&
-    sourceLanguages.length === 0 &&
-    sourceSpecialProjects.length === 0 &&
-    Object.values(sourceContact).every((value) => !value)
+    optionalResume.education.length === resume.education.length &&
+    optionalResume.certifications.length === resume.certifications.length &&
+    optionalResume.languages.length === resume.languages.length &&
+    optionalResume.specialProjects.length === resume.specialProjects.length &&
+    Object.entries(optionalResume.contact).every(
+      ([key, value]) => value === resume.contact[key as keyof ResumeContent["contact"]],
+    )
   ) {
     return normalizeResumeContent({
       ...resume,
@@ -599,12 +597,35 @@ function enrichMasterResumeWithSourceEvidence(
     });
   }
 
-  const nextEducation = resume.education.length > 0 ? resume.education : sourceEducation;
-  const nextCertifications =
-    resume.certifications.length > 0 ? resume.certifications : sourceCertifications;
-  const nextLanguages = resume.languages.length > 0 ? resume.languages : sourceLanguages;
-  const nextSpecialProjects =
-    resume.specialProjects.length > 0 ? resume.specialProjects : sourceSpecialProjects;
+  return normalizeResumeContent({
+    ...optionalResume,
+    experienceSections:
+      sourceSections.length > 0
+        ? mergeExperienceSections(sourceSections, optionalResume.experienceSections)
+        : optionalResume.experienceSections,
+    reviewerNotes: [
+      ...optionalResume.reviewerNotes,
+      ...(sourceSections.length > 0
+        ? ["Review the imported role timeline for exact dates, company names, and ownership scope before downloading files."]
+        : []),
+      ...readOptionalResumeReviewNotes({
+        education: optionalResume.education,
+        languages: optionalResume.languages,
+        specialProjects: optionalResume.specialProjects,
+      }),
+    ].slice(0, 8),
+  });
+}
+
+export function enrichMasterResumeWithOptionalSourceEvidence(
+  resume: ResumeContent,
+  sourceEvidence: SourceEvidence[],
+) {
+  const sourceContact = extractResumeContactFromSources(sourceEvidence);
+  const sourceEducation = extractResumeEducationFromSources(sourceEvidence);
+  const sourceCertifications = extractResumeCertificationsFromSources(sourceEvidence);
+  const sourceLanguages = extractResumeLanguagesFromSources(sourceEvidence);
+  const sourceSpecialProjects = extractResumeSpecialProjectsFromSources(sourceEvidence);
 
   return normalizeResumeContent({
     ...resume,
@@ -616,25 +637,10 @@ function enrichMasterResumeWithSourceEvidence(
       phone: resume.contact.phone ?? sourceContact.phone,
       website: resume.contact.website ?? sourceContact.website,
     },
-    experienceSections:
-      sourceSections.length > 0
-        ? mergeExperienceSections(sourceSections, resume.experienceSections)
-        : resume.experienceSections,
-    education: nextEducation,
-    certifications: nextCertifications,
-    languages: nextLanguages,
-    specialProjects: nextSpecialProjects,
-    reviewerNotes: [
-      ...resume.reviewerNotes,
-      ...(sourceSections.length > 0
-        ? ["Review the imported role timeline for exact dates, company names, and ownership scope before downloading files."]
-        : []),
-      ...readOptionalResumeReviewNotes({
-        education: nextEducation,
-        languages: nextLanguages,
-        specialProjects: nextSpecialProjects,
-      }),
-    ].slice(0, 8),
+    education: resume.education.length > 0 ? resume.education : sourceEducation,
+    certifications: resume.certifications.length > 0 ? resume.certifications : sourceCertifications,
+    languages: resume.languages.length > 0 ? resume.languages : sourceLanguages,
+    specialProjects: resume.specialProjects.length > 0 ? resume.specialProjects : sourceSpecialProjects,
   });
 }
 
@@ -1017,6 +1023,7 @@ export async function updateMasterResume(
       content_json: normalizedResume,
       docx_storage_path: null,
       pdf_storage_path: null,
+      prompt_version: MASTER_RESUME_PROMPT_VERSION,
       status: "draft",
     })
     .eq("id", latestResume.id)
@@ -1043,7 +1050,7 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
 
   const { data: latestResume, error: resumeReadError } = await supabase
     .from("generated_resumes")
-    .select("id, content_json")
+    .select("id, content_json, prompt_version")
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .eq("resume_type", "master")
@@ -1060,8 +1067,28 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
     throw new Error("MASTER_RESUME_NOT_FOUND");
   }
 
+  const { data: sourceEvidence, error: sourceError } = await supabase
+    .from("profile_sources")
+    .select("source_type, source_url, original_filename, extracted_text")
+    .eq("profile_id", profile.id)
+    .eq("user_id", userId)
+    .not("extracted_text", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (sourceError) {
+    console.warn("master_resume.source_evidence_read_failed", {
+      profileId: profile.id,
+      userIdHash: hashUserId(userId),
+    });
+  }
+
   const resume = parseResumeContent(latestResume.content_json);
-  const normalizedResume = normalizeResumeContent(resume);
+  const normalizedResume = normalizeResumeForSavedRead({
+    resume,
+    sourceEvidence: sourceError ? [] : prioritizeSourceEvidence(sourceEvidence ?? []),
+    promptVersion: latestResume.prompt_version,
+  });
   const templateInput = {
     contextLine: [profile.target_direction, profile.target_level].filter(Boolean).join(" | "),
     displayName: profile.display_name,
@@ -1216,7 +1243,11 @@ async function buildOverview({
     confirmedFactCount: confirmedFacts.length,
     latestResume: latestResume
       ? {
-          content: normalizeResumeContent(parseResumeContent(latestResume.content_json)),
+          content: normalizeResumeForSavedRead({
+            resume: parseResumeContent(latestResume.content_json),
+            sourceEvidence,
+            promptVersion: latestResume.prompt_version,
+          }),
           docxDownloadUrl: await createSignedArtifactUrl(latestResume.docx_storage_path),
           id: latestResume.id,
           model: latestResume.model,
@@ -1228,6 +1259,24 @@ async function buildOverview({
       : null,
     missingEvidence,
   });
+}
+
+function normalizeResumeForSavedRead({
+  promptVersion,
+  resume,
+  sourceEvidence,
+}: {
+  promptVersion: string | null;
+  resume: ResumeContent;
+  sourceEvidence: SourceEvidence[];
+}) {
+  const normalizedResume = normalizeResumeContent(resume);
+
+  if (promptVersion === MASTER_RESUME_PROMPT_VERSION || sourceEvidence.length === 0) {
+    return normalizedResume;
+  }
+
+  return enrichMasterResumeWithOptionalSourceEvidence(normalizedResume, sourceEvidence);
 }
 
 function buildEmptyOverview({
@@ -1315,6 +1364,12 @@ Never treat LinkedIn Recommendations, testimonials, references, endorsements,
 third-party praise, or "worked with" sections as work experience. Those sources
 can inform reviewerNotes only if useful, but they must not become roleTitle,
 company, dates, location, or work-history bullets.
+
+Never write placeholder resume bullets. Do not output phrases like "Held [role]
+at [company]", "Add measurable scope and outcomes", "responsibilities
+included", or any bullet that asks the user to add details. If a role has no
+real responsibility, scope, or outcome evidence, keep bullets empty and add a
+reviewerNote asking for the missing scope outside the resume body.
 
 Use this standard ATS section order: Professional Summary, Core Skills,
 Selected Highlights, Professional Experience, Special Projects, Languages,

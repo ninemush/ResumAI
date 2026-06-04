@@ -74,9 +74,7 @@ export function extractExperienceSectionsFromText(text: string) {
     }
 
     const section = {
-      bullets: bulletLines.length > 0
-        ? bulletLines
-        : [`Held ${roleTitle}${company ? ` at ${company}` : ""}${dates ? ` (${dates})` : ""}. Add measurable scope and outcomes.`],
+      bullets: bulletLines,
       company,
       dates,
       location,

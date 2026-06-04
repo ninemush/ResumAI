@@ -84,20 +84,30 @@ export function normalizeResumeContent(value: z.input<typeof resumeContentSchema
     .map((section) => ({
       bullets: section.bullets
         .map((bullet) => cleanResumeText(bullet, 320))
-        .filter((bullet) => bullet && !looksLikeRecommendationOrTestimonial(bullet))
+        .filter(
+          (bullet) =>
+            bullet &&
+            !looksLikeGeneratedPlaceholderBullet(bullet) &&
+            !looksLikeRecommendationOrTestimonial(bullet),
+        )
         .slice(0, 7),
       company: cleanResumeCompany(section.company),
       dates: cleanResumeDateRange(section.dates),
       location: cleanNullableText(section.location, 120),
       roleTitle: stripResumeUiLabels(cleanResumeText(section.roleTitle, 140)) || "Role",
     }))
-    .filter((section) => section.bullets.length > 0 || section.roleTitle !== "Role")
+    .filter((section) => section.bullets.length > 0 || Boolean(section.company || section.dates))
     .filter((section) => !looksLikeRecommendationExperienceSection(section)),
   )
     .slice(0, MAX_RESUME_EXPERIENCE_SECTIONS);
   const experienceBullets = parsed.experienceBullets
     .map((bullet) => cleanResumeText(bullet, 320))
-    .filter((bullet) => bullet && !looksLikeRecommendationOrTestimonial(bullet))
+    .filter(
+      (bullet) =>
+        bullet &&
+        !looksLikeGeneratedPlaceholderBullet(bullet) &&
+        !looksLikeRecommendationOrTestimonial(bullet),
+    )
     .slice(0, 14);
   const education = dedupeResumeEducation(
     parsed.education
@@ -143,7 +153,12 @@ export function normalizeResumeContent(value: z.input<typeof resumeContentSchema
       .map((item) => ({
         bullets: item.bullets
           .map((bullet) => cleanResumeText(bullet, 320))
-          .filter((bullet) => bullet && !looksLikeRecommendationOrTestimonial(bullet))
+          .filter(
+            (bullet) =>
+              bullet &&
+              !looksLikeGeneratedPlaceholderBullet(bullet) &&
+              !looksLikeRecommendationOrTestimonial(bullet),
+          )
           .slice(0, 5),
         context: cleanNullableText(item.context ?? null, 160),
         dates: cleanResumeDateRange(item.dates),
@@ -318,7 +333,10 @@ export function looksLikeEmploymentTypeLabel(value: string | null | undefined) {
 }
 
 export function cleanResumeDateRange(value: string | null | undefined) {
-  const cleanValue = cleanNullableText(value ?? null, 80);
+  const cleanValue = cleanResumeText(value ?? "", 240)
+    .replace(/\s*[-–—]\s*/g, " - ")
+    .replace(/\s+/g, " ")
+    .trim();
 
   if (!cleanValue) {
     return null;
@@ -336,7 +354,7 @@ export function cleanResumeDateRange(value: string | null | undefined) {
     return null;
   }
 
-  return cleanValue;
+  return cleanValue.slice(0, 80);
 }
 
 function cleanNullableText(value: string | null, maxLength: number) {
@@ -558,6 +576,10 @@ function looksLikeRecommendationOrTestimonial(value: string) {
   return /\b(recommendation|recommendations received|recommendations given|received from|testimonial|endorsement|endorsements received|endorsements given|reference|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed|s)?\b|he is an?|she is an?|pleasure to share|excellent professional|best of the new generation|top skills)\b/i.test(
     value,
   );
+}
+
+function looksLikeGeneratedPlaceholderBullet(value: string) {
+  return /^Held\s+.+?\.\s*Add measurable scope and outcomes\.?$/i.test(value.trim());
 }
 
 function looksLikePersonName(value: string) {

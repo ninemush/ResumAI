@@ -105,6 +105,28 @@ test("extracts a LinkedIn-style role timeline without flattening companies or da
   expect(JSON.stringify(sections)).not.toMatch(/Juan Pajon|worked with Sumeet|recommend/i);
 });
 
+test("does not fabricate placeholder bullets for sparse source roles", () => {
+  const sections = extractExperienceSectionsFromText(`
+Experience
+GE Capital
+Information Security Specialist
+November 2008 - June 20
+United States
+
+Education
+Example University
+`);
+
+  expect(sections).toHaveLength(1);
+  expect(sections[0]).toMatchObject({
+    bullets: [],
+    company: "GE Capital",
+    dates: null,
+    roleTitle: "Information Security Specialist",
+  });
+  expect(JSON.stringify(sections)).not.toMatch(/Add measurable scope and outcomes|Held Information Security Specialist/i);
+});
+
 test("keeps internal resume UI labels out of generated resume content", () => {
   const normalized = normalizeResumeContent({
     contact: {
@@ -265,6 +287,80 @@ test("removes clipped partial date ranges from source-derived roles", () => {
   });
 
   expect(normalized.experienceSections[0].dates).toBeNull();
+});
+
+test("strips legacy generated filler from saved resume JSON", () => {
+  const normalized = normalizeResumeContent({
+    contact: {
+      email: "candidate@example.com",
+      linkedin: null,
+      location: "Dubai",
+      phone: null,
+      website: null,
+    },
+    experienceBullets: [
+      "Held Information Security Specialist at GE Capital (November 2008 - June 20). Add measurable scope and outcomes.",
+      "Strengthened security controls and supported enterprise risk remediation.",
+    ],
+    experienceSections: [
+      {
+        bullets: [
+          "Held Information Security Specialist at GE Capital (November 2008 - June 20). Add measurable scope and outcomes.",
+        ],
+        company: "GE Capital",
+        dates: "November 2008 - June 20",
+        location: "United States",
+        roleTitle: "Information Security Specialist",
+      },
+    ],
+    headline: "Information Security Leader",
+    keywordGaps: [],
+    reviewerNotes: [],
+    skills: ["Security Controls"],
+    summary: "Builds reliable controls.",
+  });
+
+  expect(JSON.stringify(normalized)).not.toMatch(/Add measurable scope and outcomes|Held Information Security Specialist/i);
+  expect(normalized.experienceBullets).toEqual([
+    "Strengthened security controls and supported enterprise risk remediation.",
+  ]);
+  expect(normalized.experienceSections[0]).toMatchObject({
+    bullets: [],
+    company: "GE Capital",
+    dates: null,
+    roleTitle: "Information Security Specialist",
+  });
+});
+
+test("preserves user-deleted roles when saved resume content is normalized", () => {
+  const normalized = normalizeResumeContent({
+    contact: {
+      email: "candidate@example.com",
+      linkedin: null,
+      location: "Dubai",
+      phone: null,
+      website: null,
+    },
+    experienceBullets: ["Led global services operations across portfolio, pricing, governance, and execution."],
+    experienceSections: [
+      {
+        bullets: ["Led global services operations across portfolio, pricing, governance, and execution."],
+        company: "AutomationCo",
+        dates: "June 2022 - Present",
+        location: "Dubai",
+        roleTitle: "Global Vice President of Professional Services, GTM & Operations",
+      },
+    ],
+    headline: "Enterprise Transformation Executive",
+    keywordGaps: [],
+    reviewerNotes: [],
+    skills: ["Transformation"],
+    summary: "Builds operating models and measurable value.",
+  });
+
+  expect(normalized.experienceSections).toHaveLength(1);
+  expect(normalized.experienceSections.map((section) => section.company)).not.toContain("IndustrialCo");
+  expect(normalized.experienceSections.map((section) => section.roleTitle)).not.toContain("Senior Audit Manager");
 });
 
 test("keeps optional resume sections off the draft unless evidence exists", () => {
