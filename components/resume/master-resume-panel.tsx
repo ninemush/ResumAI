@@ -5,10 +5,13 @@ import {
   ArrowRight,
   Building2,
   CheckCircle2,
+  ClipboardPaste,
   Download,
   Edit3,
   ExternalLink,
+  FileUp,
   FileText,
+  Link2,
   Plus,
   RotateCcw,
   Save,
@@ -18,6 +21,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { brand } from "@/lib/brand";
 import {
   looksLikeEmploymentTypeLabel,
   normalizeResumeContent,
@@ -25,6 +29,7 @@ import {
 } from "@/lib/resumes/resume-content";
 import type { MasterResumeOverview } from "@/lib/resumes/master-resume";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
+import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
 
 type MasterResumePanelProps = {
   onDirtyChange?: (isDirty: boolean) => void;
@@ -86,6 +91,10 @@ export function MasterResumePanel({
       })),
     ];
   }, [currentOverview.missingEvidence, draft?.keywordGaps, draft?.reviewerNotes]);
+  const sourceProof = useMemo(
+    () => buildResumeSourceProof({ overview: currentOverview, profileOverview }),
+    [currentOverview, profileOverview],
+  );
 
   useEffect(() => {
     onDirtyChange?.(isDirty);
@@ -300,6 +309,77 @@ export function MasterResumePanel({
       </div>
 
       {message ? <p className="system-note success">{message}</p> : null}
+
+      <section className="intake-action-panel resume-intake-panel" aria-label="Resume intake options">
+        <div className="section-heading">
+          <p className="eyebrow">Build from evidence</p>
+          <h2>Feed the master resume before polishing it</h2>
+          <p>
+            Add a resume, LinkedIn export, profile link, screenshot, or rough
+            notes through chat. {brand.name} will save the source first, then
+            you can rebuild the draft explicitly when you are ready.
+          </p>
+        </div>
+        <div className="intake-action-grid compact">
+          <button
+            className="intake-action-card"
+            onClick={() =>
+              draftResumeIntakePrompt(
+                "I want to improve my master resume from an uploaded resume/source. I will drop the file now.",
+              )
+            }
+            type="button"
+          >
+            <FileUp size={17} aria-hidden="true" />
+            <strong>Upload source</strong>
+            <span>Resume, certificate, screenshot, or export</span>
+          </button>
+          <button
+            className="intake-action-card"
+            onClick={() =>
+              draftResumeIntakePrompt(
+                "Use this public profile or portfolio link as resume evidence: ",
+              )
+            }
+            type="button"
+          >
+            <Link2 size={17} aria-hidden="true" />
+            <strong>Add link</strong>
+            <span>LinkedIn, portfolio, project, publication</span>
+          </button>
+          <button
+            className="intake-action-card"
+            onClick={() =>
+              draftResumeIntakePrompt(
+                "Here are resume facts, metrics, dates, or role details to add before rebuilding the master resume: ",
+              )
+            }
+            type="button"
+          >
+            <ClipboardPaste size={17} aria-hidden="true" />
+            <strong>Paste facts</strong>
+            <span>Metrics, dates, impact, gaps, corrections</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="resume-proof-panel" aria-label="Resume source proof">
+        <div>
+          <span>Sources used</span>
+          <strong>{sourceProof.sourceSummary}</strong>
+          <p>{sourceProof.sourceDetail}</p>
+        </div>
+        <div>
+          <span>Chronology</span>
+          <strong>{sourceProof.chronologyStatus}</strong>
+          <p>{sourceProof.chronologyDetail}</p>
+        </div>
+        <div>
+          <span>Claims to verify</span>
+          <strong>{sourceProof.verificationStatus}</strong>
+          <p>{sourceProof.verificationDetail}</p>
+        </div>
+      </section>
 
       {draft ? (
         <section className="materials-review master-resume-editor resume-studio-surface" aria-label="Master resume editor">
@@ -708,8 +788,9 @@ export function MasterResumePanel({
                 </div>
               ) : (
                 <p className="resume-empty-note">
-                  No role-by-role work history yet. Drop a resume, LinkedIn PDF, or work history note into Pramania,
-                  then regenerate this master resume.
+                  {profileOverview.recentSources.some((source) => source.extraction_status === "succeeded")
+                    ? "Pramania has saved source evidence, but this draft does not yet contain a role-by-role timeline. Rebuild the resume, then check the source receipt in Library if chronology is still missing."
+                    : "No role-by-role work history yet. Drop a resume, LinkedIn PDF, or rough work-history note into Pramania, then regenerate this master resume."}
                 </p>
               )}
             </section>
@@ -1176,8 +1257,8 @@ export function MasterResumePanel({
             {isGenerating
               ? "Creating..."
               : currentOverview.latestResume
-                ? "Rebuild resume"
-                : "Create resume"}
+                ? `Rebuild resume - ${formatCreditCost(CREDIT_COSTS.masterResumeGenerate)}`
+                : `Create resume - ${formatCreditCost(CREDIT_COSTS.masterResumeGenerate)}`}
           </button>
           <button
             className="secondary-action"
@@ -1197,7 +1278,9 @@ export function MasterResumePanel({
             type="button"
           >
             <Download size={15} aria-hidden="true" />
-            {isExporting ? "Preparing..." : "Download PDF + DOCX"}
+            {isExporting
+              ? "Preparing..."
+              : `Download PDF + DOCX - ${formatCreditCost(CREDIT_COSTS.masterResumeExport)}`}
           </button>
           {currentOverview.latestResume?.pdfDownloadUrl ? (
             <a
@@ -1279,6 +1362,132 @@ export function MasterResumePanel({
       </section>
     </main>
   );
+}
+
+function draftResumeIntakePrompt(text: string) {
+  window.dispatchEvent(
+    new CustomEvent("pramania:conversation-draft", {
+      detail: {
+        focus: true,
+        source: "master-resume-intake-action",
+        text,
+      },
+    }),
+  );
+  window.dispatchEvent(
+    new CustomEvent("pramania:focus-chat", {
+      detail: {
+        reason: "master-resume-intake",
+      },
+    }),
+  );
+}
+
+function buildResumeSourceProof({
+  overview,
+  profileOverview,
+}: {
+  overview: MasterResumeOverview;
+  profileOverview: ProfileOverview;
+}) {
+  const readySources = profileOverview.recentSources.filter(
+    (source) => source.extraction_status === "succeeded",
+  );
+  const sourceNames = readySources
+    .slice(0, 3)
+    .map((source) => source.original_filename ?? formatResumeSourceType(source.source_type));
+  const hasChronology = Boolean(overview.latestResume?.content.experienceSections.length);
+  const hasReadySources = readySources.length > 0;
+  const sourcesWithTimeline = readySources.filter((source) => source.detectedRoleCount > 0);
+  const detectedRoleCount = sourcesWithTimeline.reduce(
+    (sum, source) => sum + source.detectedRoleCount,
+    0,
+  );
+  const detectedCompanyNames = uniqueResumeProofItems(
+    sourcesWithTimeline.flatMap((source) => source.detectedCompanyNames),
+  ).slice(0, 4);
+  const openGaps = [
+    ...overview.missingEvidence,
+    ...(overview.latestResume?.content.keywordGaps ?? []),
+    ...(overview.latestResume?.content.reviewerNotes ?? []),
+  ].filter(Boolean);
+  const sourceDetail = hasReadySources
+    ? [
+        `Latest ready source${readySources.length === 1 ? "" : "s"}: ${sourceNames.join(", ")}${readySources.length > sourceNames.length ? ", and more" : ""}.`,
+        detectedRoleCount > 0
+          ? `Detected ${detectedRoleCount} role timeline item${detectedRoleCount === 1 ? "" : "s"}${detectedCompanyNames.length > 0 ? ` across ${formatResumeProofList(detectedCompanyNames)}` : ""}.`
+          : "No obvious role timeline was detected in the latest ready sources yet.",
+      ].join(" ")
+    : "No read source has landed yet. Uploads and notes will appear in Library when Pramania can use them.";
+
+  return {
+    chronologyDetail: hasChronology
+      ? "Company, role, date, location, and bullet sections are present in this draft."
+      : detectedRoleCount > 0
+        ? "Ready sources contain role timeline evidence, but this draft does not show it yet. Rebuild the resume; if it still misses chronology, review the source receipt in Library."
+        : hasReadySources
+          ? "Saved sources exist, but Pramania has not detected a clear role-by-role timeline in them yet. Add a resume, LinkedIn export, or rough work-history note with company, title, and dates."
+        : "Add a resume, LinkedIn export, portfolio evidence, or rough work-history note to build chronology.",
+    chronologyStatus: hasChronology ? "Role timeline present" : "Needs role timeline",
+    sourceDetail,
+    sourceSummary: hasReadySources
+      ? `${readySources.length} ready source${readySources.length === 1 ? "" : "s"}`
+      : "No ready sources yet",
+    verificationDetail:
+      openGaps.length > 0
+        ? openGaps.slice(0, 2).join(" ")
+        : "No open resume gaps are currently shown, but review all claims before exporting.",
+    verificationStatus:
+      openGaps.length > 0
+        ? `${openGaps.length} open prompt${openGaps.length === 1 ? "" : "s"}`
+        : "Review before export",
+  };
+}
+
+function uniqueResumeProofItems(items: string[]) {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+
+  for (const item of items) {
+    const normalized = item.replace(/\s+/g, " ").trim();
+    const key = normalized.toLowerCase();
+
+    if (!normalized || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(normalized);
+  }
+
+  return unique;
+}
+
+function formatResumeProofList(items: string[]) {
+  if (items.length === 0) {
+    return "";
+  }
+
+  if (items.length === 1) {
+    return items[0];
+  }
+
+  if (items.length === 2) {
+    return `${items[0]} and ${items[1]}`;
+  }
+
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+function formatResumeSourceType(sourceType: string) {
+  if (sourceType === "docx") return "Word document";
+  if (sourceType === "pdf") return "PDF";
+  if (sourceType === "txt") return "text note";
+  if (sourceType === "image") return "image";
+  if (sourceType === "linkedin") return "LinkedIn source";
+  if (sourceType === "portfolio") return "portfolio source";
+
+  return sourceType.replaceAll("_", " ");
 }
 
 function ResumeReviewSection({

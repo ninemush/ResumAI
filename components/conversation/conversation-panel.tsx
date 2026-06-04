@@ -166,7 +166,7 @@ type SpeechWindow = Window &
 const PROFILE_SOURCE_BUCKET = "profile-sources";
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 const welcomeMessage = (name: string | null) =>
-  `Hi${name ? `, ${name}` : ""}. I'm ${brand.name}. Tell me your target role, or drop a resume/link and I will help shape your profile.`;
+  `Hi${name ? `, ${name}` : ""}. I'm ${brand.name}. Tell me your target role, drop a resume/link, or start with rough notes like "warehouse supervisor, 8 years, OSHA, 20 people." Certificate photos, portfolio links, and target-market notes like "UAE roles, English/Hindi, visa support" are welcome too.`;
 const acceptedFileTypes = new Map<
   string,
   "pdf" | "docx" | "txt" | "image" | "linkedin"
@@ -208,6 +208,17 @@ function getApiError(payload: unknown) {
 
   const candidate = payload as ApiErrorPayload;
   return candidate.error ?? candidate;
+}
+
+function resizeChatInput(input: HTMLTextAreaElement) {
+  const maxHeight =
+    typeof window === "undefined"
+      ? 132
+      : Math.min(window.innerHeight * 0.28, window.innerWidth < 760 ? 128 : 168);
+
+  input.style.height = "auto";
+  input.style.height = `${Math.min(input.scrollHeight, maxHeight)}px`;
+  input.style.overflowY = input.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
 function isCreditExhaustionPayload(payload: unknown) {
@@ -289,6 +300,7 @@ export function ConversationPanel({
   const [activeAttachment, setActiveAttachment] =
     useState<MessageAttachment | null>(null);
   const isSubmitting = pendingRequestCount > 0;
+  const isLongDraft = message.length > 96 || message.includes("\n");
 
   useEffect(() => {
     const messageList = messageListRef.current;
@@ -306,8 +318,7 @@ export function ConversationPanel({
       return;
     }
 
-    input.style.height = "auto";
-    input.style.height = `${input.scrollHeight}px`;
+    resizeChatInput(input);
   }, [message]);
 
   useEffect(() => {
@@ -338,8 +349,7 @@ export function ConversationPanel({
           return;
         }
 
-        input.style.height = "auto";
-        input.style.height = `${input.scrollHeight}px`;
+        resizeChatInput(input);
 
         if (detail.focus) {
           input.focus();
@@ -1637,7 +1647,7 @@ export function ConversationPanel({
       </div>
 
       <form
-        className="chat-input"
+        className={isLongDraft ? "chat-input expanded" : "chat-input"}
         aria-label="Conversation input"
         onSubmit={handleSubmit}
       >
@@ -1661,7 +1671,10 @@ export function ConversationPanel({
         <textarea
           ref={messageInputRef}
           onChange={(event) => handleMessageInput(event.target.value)}
-          onInput={(event) => handleMessageInput(event.currentTarget.value)}
+          onInput={(event) => {
+            resizeChatInput(event.currentTarget);
+            handleMessageInput(event.currentTarget.value);
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
@@ -1676,7 +1689,7 @@ export function ConversationPanel({
               handleFiles(files);
             }
           }}
-          placeholder="Share background, role, link, or resume..."
+          placeholder="Share rough notes, role, link, certificate photo, or resume..."
           rows={1}
           suppressHydrationWarning
           value={message}
@@ -1827,8 +1840,8 @@ function buildAdvisorActionChips({
     byView.set(action.view, {
       id: `action-${action.id}`,
       label: action.creditCost
-        ? `${action.label} (${action.creditCost} cr)`
-        : action.label,
+        ? `${formatNavigationChipLabel(action.view)} (${action.creditCost} cr)`
+        : formatNavigationChipLabel(action.view),
       reason: action.reason,
       view: action.view,
     });
@@ -1841,13 +1854,31 @@ function buildAdvisorActionChips({
 
     byView.set(link.view, {
       id: `link-${link.view}-${link.label}`,
-      label: link.label,
+      label: formatNavigationChipLabel(link.view),
       reason: link.reason,
       view: link.view,
     });
   }
 
   return Array.from(byView.values()).slice(0, 4);
+}
+
+function formatNavigationChipLabel(view: AdvisorSuggestedAction["view"]) {
+  const labels: Record<string, string> = {
+    applications: "Applications",
+    artifacts: "Library",
+    billing: "Settings",
+    jobs: "Jobs",
+    knowledgebase: "Library",
+    library: "Library",
+    owner: "Owner Console",
+    profile: "Profile",
+    resume: "Profile & Resume",
+    settings: "Settings",
+    support: "Support",
+  };
+
+  return `Go to ${labels[view] ?? view.replaceAll("_", " ")}`;
 }
 
 function joinAssistantSummaries(items: Array<string | AssistantMessageDraft>) {
@@ -3217,11 +3248,21 @@ function looksLikeProfileEvidenceToSave(text: string) {
     /\b(experience|education|certification|skill|skills|company|role|title|from\s+\d{4}|since\s+\d{4}|present)\b/.test(
       normalized,
     );
+  const looksLikeRoughWorkNotes =
+    /\b(supervisor|manager|operator|coordinator|analyst|teacher|nurse|engineer|designer|warehouse|dispatch|inventory|fleet|logistics|clinic|patient|revenue cycle|salesforce|portfolio|github|certificate|osha|forklift|team lead|shift|visa|uae|india|dubai|relocation|language|languages)\b/.test(
+      normalized,
+    ) &&
+    (/\b\d+\s*(yrs?|years?|people|staff|sites|locations|orders|shipments|trucks|patients|clinics|projects)\b/.test(
+      normalized,
+    ) ||
+      normalized.includes(",") ||
+      normalized.includes(";"));
 
   return (
     (hasCareerSubject && hasEvidenceVerb) ||
     (hasEvidenceVerb && hasOutcomeOrScope) ||
-    hasResumeStructure
+    hasResumeStructure ||
+    looksLikeRoughWorkNotes
   );
 }
 

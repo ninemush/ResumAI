@@ -188,5 +188,8 @@ function readResumeLabel(contentJson: unknown, resumeType: string) {
     }
   }
 
-  return resumeType === "master" ? "Master resume" : "Targeted resume";
+  if (resumeType === "master") return "Master resume";
+  if (resumeType === "cover_letter") return "Cover letter";
+
+  return "Targeted resume";
 }

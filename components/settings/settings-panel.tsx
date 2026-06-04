@@ -2,6 +2,7 @@
 
 import {
   CreditCard,
+  Download,
   FileText,
   Gift,
   HelpCircle,
@@ -9,6 +10,7 @@ import {
   ReceiptText,
   ShieldCheck,
   Sparkles,
+  Trash2,
   UserRound,
   WalletCards,
 } from "lucide-react";
@@ -44,6 +46,12 @@ type BillingHistoryResponse = {
   history?: CreditHistory;
 };
 
+type PrivacyRequestType =
+  | "account_delete"
+  | "drafts_delete"
+  | "data_export"
+  | "privacy_question";
+
 export function SettingsPanel({
   creditSummary: initialCreditSummary,
   onNavigate,
@@ -58,6 +66,9 @@ export function SettingsPanel({
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [promoCode, setPromoCode] = useState("");
+  const [privacyRequestLoading, setPrivacyRequestLoading] =
+    useState<PrivacyRequestType | null>(null);
+  const [privacyRequestStatus, setPrivacyRequestStatus] = useState<string | null>(null);
   const [promoStatus, setPromoStatus] = useState<string | null>(null);
   const [resetStatus, setResetStatus] = useState<string | null>(null);
 
@@ -174,6 +185,45 @@ export function SettingsPanel({
     );
   }
 
+  async function createPrivacyRequest(type: PrivacyRequestType) {
+    const config = privacyRequestConfig[type];
+
+    setPrivacyRequestLoading(type);
+    setPrivacyRequestStatus(null);
+
+    try {
+      const response = await fetch("/api/support/issues", {
+        body: JSON.stringify({
+          area: "privacy",
+          errorCode: `USER_PRIVACY_${type.toUpperCase()}`,
+          metadata: {
+            requestType: type,
+            sourceSurface: "settings_data_privacy",
+          },
+          source: "settings_data_privacy",
+          title: config.title,
+          userMessage: config.message,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setPrivacyRequestStatus(
+          payload.error?.message ?? "Unable to create that privacy request.",
+        );
+        return;
+      }
+
+      setPrivacyRequestStatus(
+        `Created ${payload.issue?.shortId ?? "a support issue"} for ${config.label.toLowerCase()}.`,
+      );
+    } finally {
+      setPrivacyRequestLoading(null);
+    }
+  }
+
   return (
     <main
       className="profile-pane settings-pane"
@@ -242,6 +292,51 @@ export function SettingsPanel({
       </section>
 
       {creditSummary.isExhausted ? <CreditExhaustedNotice /> : null}
+
+      <section className="settings-panel-section" aria-labelledby="data-rights-title">
+        <div className="settings-section-heading">
+          <ShieldCheck size={18} aria-hidden="true" />
+          <div>
+            <p className="eyebrow">Data and privacy</p>
+            <h2 id="data-rights-title">Data rights requests</h2>
+            <p>
+              Create a routed request for export, deletion, privacy questions,
+              or account deletion. Requests are reviewed against audit-safe
+              retention rules before any destructive action.
+            </p>
+          </div>
+        </div>
+        <div className="settings-privacy-action-grid">
+          {(Object.keys(privacyRequestConfig) as PrivacyRequestType[]).map((type) => {
+            const config = privacyRequestConfig[type];
+            const Icon = config.icon === "delete" ? Trash2 : config.icon === "export" ? Download : HelpCircle;
+
+            return (
+              <button
+                className={`settings-privacy-action ${config.tone === "danger" ? "danger" : ""}`}
+                disabled={privacyRequestLoading !== null}
+                key={type}
+                onClick={() => void createPrivacyRequest(type)}
+                type="button"
+              >
+                <Icon size={16} aria-hidden="true" />
+                <strong>
+                  {privacyRequestLoading === type ? "Creating..." : config.label}
+                </strong>
+                <span>{config.helper}</span>
+              </button>
+            );
+          })}
+        </div>
+        {privacyRequestStatus ? (
+          <p className="settings-card-note">{privacyRequestStatus}</p>
+        ) : null}
+        <p className="settings-card-note">
+          You can also use Support for a human fallback. Application and quota
+          records may retain minimum audit evidence where required by the V1
+          retention policy.
+        </p>
+      </section>
 
       <section className="settings-panel-section" aria-labelledby="usage-title">
         <div className="settings-section-heading">
@@ -359,6 +454,12 @@ export function SettingsPanel({
             title="Invoices and receipts"
           />
         </div>
+        <p className="settings-card-note">
+          Purchase rows show post-purchase confirmation once RevenueCat or
+          checkout webhooks credit the account. Refund, payment, and receipt
+          questions should be opened through Support so the owner can reconcile
+          the credit ledger before changing balances.
+        </p>
       </section>
 
       <section className="settings-section-grid" aria-label="Account controls">
@@ -484,6 +585,7 @@ function CreditPackOption({
       <strong>${option.priceUsd}</strong>
       <p>{option.credits} credits</p>
       <small>{option.description}</small>
+      <small>One-time credit pack. No auto-charge or auto-renew.</small>
       {option.recommended ? <em>Best value</em> : null}
     </>
   );
@@ -515,6 +617,52 @@ function CreditPackOption({
     </article>
   );
 }
+
+const privacyRequestConfig: Record<
+  PrivacyRequestType,
+  {
+    helper: string;
+    icon: "delete" | "export" | "question";
+    label: string;
+    message: string;
+    title: string;
+    tone?: "danger";
+  }
+> = {
+  account_delete: {
+    helper: "Request account closure and retention review",
+    icon: "delete",
+    label: "Delete account",
+    message:
+      "I want to request account deletion. Please review what can be deleted now and what minimum audit evidence must be retained.",
+    title: "Account deletion request",
+    tone: "danger",
+  },
+  data_export: {
+    helper: "Request a copy of profile, sources, jobs, and materials",
+    icon: "export",
+    label: "Export my data",
+    message:
+      "I want to request an export of my account data, including profile data, uploaded source records, jobs, applications, and generated materials where available.",
+    title: "Data export request",
+  },
+  drafts_delete: {
+    helper: "Request deletion of editable sources and unsubmitted drafts",
+    icon: "delete",
+    label: "Delete sources/drafts",
+    message:
+      "I want to delete uploaded sources, editable profile data, generated master resume drafts, or other non-submitted drafts where deletion is allowed.",
+    title: "Delete uploaded sources or drafts",
+  },
+  privacy_question: {
+    helper: "Ask about privacy, retention, or support fallback",
+    icon: "question",
+    label: "Privacy request",
+    message:
+      "I have a privacy, retention, or data-handling question and want support to review it.",
+    title: "Privacy support request",
+  },
+};
 
 function CreditMeter({ summary }: { summary: CreditSummary }) {
   const percent = Math.min(Math.max(summary.usagePercent, 0), 100);

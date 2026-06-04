@@ -24,6 +24,11 @@ test.describe("authenticated workspace", () => {
       await expect(page.getByText("Career advisor")).toBeVisible();
       await expect(page.getByRole("button", { name: /^Chat$/i })).toBeVisible();
       await expect(page.getByRole("button", { name: /^Profile$/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^More$/i })).toBeVisible();
+      await page.getByRole("button", { name: /^More$/i }).click();
+      await expect(page.getByRole("button", { name: /^Library$/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Settings$/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Support$/i })).toBeVisible();
     } else {
       await expect(page.getByRole("button", { name: /Cockpit/i })).toBeVisible();
       await expect(page.getByRole("button", { name: /Profile & Resume/i })).toBeVisible();
@@ -38,7 +43,7 @@ test.describe("authenticated workspace", () => {
     await page.goto("/");
 
     const conversation = page.locator(".conversation-pane");
-    await expect(conversation.getByPlaceholder(/Share background, role, link, or resume/i)).toBeVisible();
+    await expect(conversation.getByPlaceholder(/Share rough notes, role, link, certificate photo, or resume/i)).toBeVisible();
 
     const accept = await conversation.locator('input[type="file"]').getAttribute("accept");
 
@@ -171,14 +176,14 @@ test.describe("authenticated workspace", () => {
 
     await page.goto("/");
 
-    const input = page.getByPlaceholder(/Share background, role, link, or resume/i);
+    const input = page.getByPlaceholder(/Share rough notes, role, link, certificate photo, or resume/i);
     await input.fill("What credits do I have?");
     await page.getByRole("button", { name: /Send message/i }).click();
 
     const latestAssistant = page.locator(".assistant-message").last();
     await expect(latestAssistant.getByText(/You have credits available/i)).toBeVisible();
-    await expect(latestAssistant.getByRole("button", { name: "Open Credits" })).toHaveCount(1);
-    await expect(latestAssistant.getByRole("button", { name: "Open Library" })).toHaveCount(1);
+    await expect(latestAssistant.getByRole("button", { name: "Go to Settings" })).toHaveCount(1);
+    await expect(latestAssistant.getByRole("button", { name: "Go to Library" })).toHaveCount(1);
     await expect(latestAssistant.locator(".advisor-action-row button")).toHaveCount(2);
   });
 
@@ -214,6 +219,7 @@ test.describe("authenticated workspace", () => {
     await expect(page.getByRole("heading", { name: /Credit usage/i })).toBeVisible();
     await expect(page.getByRole("heading", { name: /Purchase history/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /Send reset link/i })).toBeVisible();
+    await expect(page.getByText(/One-time credit pack. No auto-charge or auto-renew/i)).toHaveCount(2);
     await expect(page.getByText("Purchase link pending", { exact: false })).toHaveCount(0);
     await expect(page.getByText("Workspace controls")).toHaveCount(0);
   });
@@ -224,6 +230,12 @@ test.describe("authenticated workspace", () => {
     await page.goto("/");
     await page.locator(".side-nav").getByRole("button", { name: /Profile & Resume/i }).click();
     await expect(page.getByRole("heading", { name: /Master profile and resume/i })).toBeVisible();
+    const proofPanel = page.getByRole("region", { name: /Resume source proof/i });
+    await expect(proofPanel).toBeVisible();
+    await expect(proofPanel.getByText(/Sources used/i)).toBeVisible();
+    await expect(proofPanel.getByText("Chronology", { exact: true })).toBeVisible();
+    await expect(proofPanel.getByText(/Claims to verify/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Rebuild resume - 2 credits|Create resume - 2 credits/i })).toBeVisible();
 
     const preview = page.locator(".resume-document-preview").first();
     await expect(preview).toBeVisible();
@@ -269,6 +281,10 @@ test.describe("authenticated workspace", () => {
     await ownerNav.click();
 
     await expect(page.getByRole("main", { name: /Operating command center/i })).toBeVisible();
+    await expect(page.locator(".workspace-shell")).toHaveClass(/owner-focus-mode/);
+    await expect(page.locator(".conversation-pane")).toHaveCount(0);
+    const ownerHeaderBox = await page.locator(".owner-console-header").boundingBox();
+    expect(ownerHeaderBox?.width ?? 0).toBeGreaterThan(560);
     await expect(page.getByRole("button", { name: /Today/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /30 days/i })).toBeVisible();
     await expect(page.getByRole("region", { name: /Operating metrics/i })).toBeVisible();

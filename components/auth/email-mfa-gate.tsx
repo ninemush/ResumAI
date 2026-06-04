@@ -11,7 +11,7 @@ export function EmailMfaGate({ email }: EmailMfaGateProps) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(
-    "Enter the 6-digit code we sent to your email to finish signing in.",
+    "Enter the 6-digit code we sent to your email to finish signing in. Codes expire after a short window; resend if the newest code is not accepted.",
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -53,7 +53,7 @@ export function EmailMfaGate({ email }: EmailMfaGateProps) {
       return;
     }
 
-    setStatus("I sent a fresh code to your email.");
+    setStatus("I sent a fresh code to your email. Use the newest code only, and check spam or promotions if it does not arrive.");
   }
 
   async function signOut() {
@@ -69,7 +69,11 @@ export function EmailMfaGate({ email }: EmailMfaGateProps) {
             <MailCheck size={18} aria-hidden="true" />
           </span>
           <h1>Check your email</h1>
-          <p>Pramania sent a 6-digit code to {email}. This keeps your career workspace protected.</p>
+          <p>
+            Pramania sent a 6-digit code to {email}. This keeps your career
+            workspace protected. If the address looks wrong, sign out and use
+            the correct account.
+          </p>
         </div>
 
         <label>
@@ -101,6 +105,18 @@ export function EmailMfaGate({ email }: EmailMfaGateProps) {
           <button disabled={isSubmitting} onClick={() => void resendCode()} type="button">
             Resend code
           </button>
+          <a href="/auth/reset-password">Reset password</a>
+          <button
+            disabled={isSubmitting}
+            onClick={() =>
+              setStatus(
+                "If you cannot access this email, sign out and use another account. For account recovery, create a Support issue from the email address you want to use and include the inaccessible address, but do not include passwords or private employer records.",
+              )
+            }
+            type="button"
+          >
+            Cannot access email
+          </button>
           <button disabled={isSubmitting} onClick={() => void signOut()} type="button">
             Sign out
           </button>
@@ -123,5 +139,5 @@ function readAuthErrorMessage(payload: unknown) {
     return payload.error.message;
   }
 
-  return "The email code could not be verified. Please try again.";
+  return "The email code could not be verified. Check that you entered the newest 6-digit code, then resend if it may have expired.";
 }

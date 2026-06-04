@@ -57,6 +57,12 @@ export type RecentProfileSource = {
   created_at: string;
 };
 
+export type RemovedProfileSource = {
+  id: string;
+  originalFilename: string | null;
+  removedStorageObject: boolean;
+};
+
 export async function ingestProfileSource(
   input: ProfileSourceRequest,
 ): Promise<ProfileSourceIngestionResult> {
@@ -137,6 +143,94 @@ export async function getRecentProfileSources(limit = 12): Promise<RecentProfile
   }
 
   return data ?? [];
+}
+
+export async function removeProfileSource(sourceId: string): Promise<RemovedProfileSource> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const { data: source, error: sourceError } = await supabase
+    .from("profile_sources")
+    .select("id, storage_path, original_filename")
+    .eq("id", sourceId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (sourceError || !source) {
+    throw new Error("SOURCE_NOT_FOUND");
+  }
+
+  let removedStorageObject = false;
+
+  if (source.storage_path) {
+    if (!source.storage_path.startsWith(`${user.id}/`)) {
+      throw new Error("INVALID_STORAGE_PATH");
+    }
+
+    const { error: storageError } = await supabase.storage
+      .from("profile-sources")
+      .remove([source.storage_path]);
+
+    removedStorageObject = !storageError;
+  }
+
+  await detachSourceFromProfileFacts({
+    sourceId,
+    userId: user.id,
+  });
+
+  const { error: deleteError } = await supabase
+    .from("profile_sources")
+    .delete()
+    .eq("id", sourceId)
+    .eq("user_id", user.id);
+
+  if (deleteError) {
+    throw new Error("SOURCE_DELETE_FAILED");
+  }
+
+  return {
+    id: source.id,
+    originalFilename: source.original_filename,
+    removedStorageObject,
+  };
+}
+
+async function detachSourceFromProfileFacts({
+  sourceId,
+  userId,
+}: {
+  sourceId: string;
+  userId: string;
+}) {
+  const supabase = await createClient();
+  const { data: facts, error } = await supabase
+    .from("profile_facts")
+    .select("id, source_ids")
+    .eq("user_id", userId)
+    .contains("source_ids", [sourceId]);
+
+  if (error || !facts) {
+    return;
+  }
+
+  await Promise.all(
+    facts.map((fact) =>
+      supabase
+        .from("profile_facts")
+        .update({
+          source_ids: (fact.source_ids ?? []).filter((id: string) => id !== sourceId),
+        })
+        .eq("id", fact.id)
+        .eq("user_id", userId),
+    ),
+  );
 }
 
 function validateSourceShape(input: ProfileSourceRequest) {

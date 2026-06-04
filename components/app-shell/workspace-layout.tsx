@@ -7,7 +7,14 @@ import {
   BriefcaseBusiness,
   ClipboardList,
   FileText,
+  HelpCircle,
+  Library,
   MessageCircle,
+  MoreHorizontal,
+  PanelRightClose,
+  PanelRightOpen,
+  Settings,
+  Shield,
   WalletCards,
 } from "lucide-react";
 
@@ -37,10 +44,16 @@ import type { MasterResumeOverview } from "@/lib/resumes/master-resume";
 const DEFAULT_NAV_WIDTH = 280;
 const COLLAPSED_NAV_WIDTH = 78;
 const DEFAULT_CONVERSATION_WIDTH = 400;
+const CONVERSATION_LAYOUT_STORAGE_KEY = "pramania:conversation-layout";
 const MIN_NAV_WIDTH = 220;
 const MAX_NAV_WIDTH = 340;
 const MIN_CONVERSATION_WIDTH = 340;
 const MAX_CONVERSATION_WIDTH = 540;
+const CONVERSATION_WIDTH_PRESETS = [
+  { label: "S", value: 340 },
+  { label: "M", value: 400 },
+  { label: "L", value: 500 },
+];
 
 type WorkspaceLayoutProps = {
   applicationOverview: ApplicationOverview;
@@ -55,6 +68,7 @@ type WorkspaceLayoutProps = {
 };
 
 type WorkspaceLayoutState = {
+  conversationCollapsed: boolean;
   conversationWidth: number;
   activeView: AppView;
   applicationStageFilter: StageFilter;
@@ -80,18 +94,15 @@ export function WorkspaceLayout({
   profileOverview,
   session,
 }: WorkspaceLayoutProps) {
-  const [layout, setLayout] = useState<WorkspaceLayoutState>({
-    activeView: "profile",
-    applicationStageFilter: "All",
-    conversationWidth: DEFAULT_CONVERSATION_WIDTH,
-    navCollapsed: false,
-    navWidth: DEFAULT_NAV_WIDTH,
-  });
+  const [layout, setLayout] = useState<WorkspaceLayoutState>(() =>
+    readInitialLayoutState(),
+  );
   const [mobileSurface, setMobileSurface] = useState<"workspace" | "chat">(
     "chat",
   );
   const [hasUnsavedResumeChanges, setHasUnsavedResumeChanges] = useState(false);
 
+  const isOwnerConsoleActive = layout.activeView === "owner";
   const shellStyle = useMemo(
     () =>
       ({
@@ -100,6 +111,16 @@ export function WorkspaceLayout({
       }) as CSSProperties,
     [layout],
   );
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      CONVERSATION_LAYOUT_STORAGE_KEY,
+      JSON.stringify({
+        collapsed: layout.conversationCollapsed,
+        width: layout.conversationWidth,
+      }),
+    );
+  }, [layout.conversationCollapsed, layout.conversationWidth]);
 
   function startNavResize(event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -180,7 +201,10 @@ export function WorkspaceLayout({
   }
 
   return (
-    <div className={`workspace-shell ${mobileFocusClass}`} style={shellStyle}>
+    <div
+      className={`workspace-shell ${mobileFocusClass} ${isOwnerConsoleActive ? "owner-focus-mode" : ""} ${layout.conversationCollapsed ? "conversation-collapsed" : ""}`}
+      style={shellStyle}
+    >
       <WorkspaceTelemetry activeView={layout.activeView} />
       <SideNav
         activeView={layout.activeView}
@@ -224,34 +248,143 @@ export function WorkspaceLayout({
         })}
       </div>
 
-      <button
-        aria-label="Resize conversational AI panel"
-        className="resize-handle conversation-resize-handle"
-        onPointerDown={startConversationResize}
-        title="Resize conversational AI panel"
-        type="button"
-      />
-
-      <ConversationPanel
-        applicationOverview={applicationOverview}
-        activeView={layout.activeView}
-        creditSummary={creditSummary}
-        initialMessages={conversationMessages}
-        jobOverview={jobOverview}
-        onSelectView={selectView}
-        profileOverview={profileOverview}
-        userEmail={session.user.email}
-        userId={session.user.id}
-      />
+      {isOwnerConsoleActive ? null : (
+        <>
+          <button
+            aria-label="Resize conversational AI panel"
+            className="resize-handle conversation-resize-handle"
+            onPointerDown={startConversationResize}
+            title="Resize conversational AI panel"
+            type="button"
+          />
+          {layout.conversationCollapsed ? (
+            <aside className="conversation-collapsed-rail" aria-label="AI advisor collapsed">
+              <button
+                aria-label="Expand conversational AI panel"
+                onClick={() =>
+                  setLayout((currentLayout) => ({
+                    ...currentLayout,
+                    conversationCollapsed: false,
+                  }))
+                }
+                title="Expand AI advisor"
+                type="button"
+              >
+                <PanelRightOpen size={18} aria-hidden="true" />
+                <span>AI</span>
+              </button>
+            </aside>
+          ) : (
+            <aside className="conversation-panel-shell">
+              <div className="conversation-pane-controls" aria-label="AI pane controls">
+                <button
+                  aria-label="Collapse conversational AI panel"
+                  className="conversation-pane-icon-action"
+                  onClick={() =>
+                    setLayout((currentLayout) => ({
+                      ...currentLayout,
+                      conversationCollapsed: true,
+                    }))
+                  }
+                  title="Collapse AI advisor"
+                  type="button"
+                >
+                  <PanelRightClose size={16} aria-hidden="true" />
+                </button>
+                <div className="conversation-width-presets" aria-label="AI pane width">
+                  {CONVERSATION_WIDTH_PRESETS.map((preset) => (
+                    <button
+                      aria-pressed={layout.conversationWidth === preset.value}
+                      className={
+                        layout.conversationWidth === preset.value
+                          ? "active"
+                          : undefined
+                      }
+                      key={preset.label}
+                      onClick={() =>
+                        setLayout((currentLayout) => ({
+                          ...currentLayout,
+                          conversationWidth: preset.value,
+                        }))
+                      }
+                      title={`${preset.label} AI pane width`}
+                      type="button"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <ConversationPanel
+                applicationOverview={applicationOverview}
+                activeView={layout.activeView}
+                creditSummary={creditSummary}
+                initialMessages={conversationMessages}
+                jobOverview={jobOverview}
+                onSelectView={selectView}
+                profileOverview={profileOverview}
+                userEmail={session.user.email}
+                userId={session.user.id}
+              />
+            </aside>
+          )}
+        </>
+      )}
 
       <MobileWorkspaceNav
         activeView={layout.activeView}
         mobileSurface={mobileSurface}
         onSelectChat={() => setMobileSurface("chat")}
         onSelectView={selectView}
+        session={session}
       />
     </div>
   );
+}
+
+function readInitialLayoutState(): WorkspaceLayoutState {
+  const fallback: WorkspaceLayoutState = {
+    activeView: "profile",
+    applicationStageFilter: "All",
+    conversationCollapsed: false,
+    conversationWidth: DEFAULT_CONVERSATION_WIDTH,
+    navCollapsed: false,
+    navWidth: DEFAULT_NAV_WIDTH,
+  };
+
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(CONVERSATION_LAYOUT_STORAGE_KEY);
+
+    if (!raw) {
+      return fallback;
+    }
+
+    const saved = JSON.parse(raw) as {
+      collapsed?: unknown;
+      width?: unknown;
+    };
+
+    return {
+      ...fallback,
+      conversationCollapsed:
+        typeof saved.collapsed === "boolean"
+          ? saved.collapsed
+          : fallback.conversationCollapsed,
+      conversationWidth: clamp(
+        typeof saved.width === "number" ? saved.width : undefined,
+        MIN_CONVERSATION_WIDTH,
+        MAX_CONVERSATION_WIDTH,
+        fallback.conversationWidth,
+      ),
+    };
+  } catch {
+    window.localStorage.removeItem(CONVERSATION_LAYOUT_STORAGE_KEY);
+    return fallback;
+  }
 }
 
 function CreditStatusBanner({
@@ -315,12 +448,15 @@ function MobileWorkspaceNav({
   mobileSurface,
   onSelectChat,
   onSelectView,
+  session,
 }: {
   activeView: AppView;
   mobileSurface: "workspace" | "chat";
   onSelectChat: () => void;
   onSelectView: (target: WorkspaceNavigationTarget) => void;
+  session: WorkspaceSession;
 }) {
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
   const items = [
     {
       icon: MessageCircle,
@@ -331,32 +467,96 @@ function MobileWorkspaceNav({
     { icon: FileText, label: "Profile", target: "resume" as const },
     { icon: BriefcaseBusiness, label: "Jobs", target: "jobs" as const },
     { icon: ClipboardList, label: "Apps", target: "applications" as const },
+    {
+      icon: MoreHorizontal,
+      label: "More",
+      target: "settings" as const,
+      more: true,
+    },
+  ];
+  const moreItems = [
+    { icon: Library, label: "Library", target: "library" as const },
+    { icon: Settings, label: "Settings", target: "settings" as const },
+    { icon: HelpCircle, label: "Support", target: "support" as const },
   ];
 
   return (
-    <nav className="mobile-workspace-nav" aria-label="Workspace sections">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const isActive = item.chat
-          ? mobileSurface === "chat"
-          : mobileSurface === "workspace" && activeView === item.target;
+    <>
+      {isMoreOpen ? (
+        <div className="mobile-more-drawer" role="dialog" aria-label="More workspace destinations">
+          {moreItems.map((item) => {
+            const Icon = item.icon;
 
-        return (
-          <button
-            aria-current={isActive ? "page" : undefined}
-            className={isActive ? "active" : undefined}
-            key={`${item.label}-${item.target}`}
-            onClick={() =>
-              item.chat ? onSelectChat() : onSelectView(item.target)
-            }
-            type="button"
-          >
-            <Icon size={18} aria-hidden="true" />
-            <span>{item.label}</span>
-          </button>
-        );
-      })}
-    </nav>
+            return (
+              <button
+                className={activeView === item.target ? "active" : undefined}
+                key={item.target}
+                onClick={() => {
+                  setIsMoreOpen(false);
+                  onSelectView(item.target);
+                }}
+                type="button"
+              >
+                <Icon size={17} aria-hidden="true" />
+                {item.label}
+              </button>
+            );
+          })}
+          {session.admin.isOwner ? (
+            <button
+              className={activeView === "owner" ? "active" : undefined}
+              onClick={() => {
+                setIsMoreOpen(false);
+                onSelectView("owner");
+              }}
+              type="button"
+            >
+              <Shield size={17} aria-hidden="true" />
+              Owner
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <nav className="mobile-workspace-nav" aria-label="Workspace sections">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const isActive = item.chat
+            ? mobileSurface === "chat"
+            : "more" in item
+              ? isMoreOpen ||
+                (mobileSurface === "workspace" &&
+                  ["library", "settings", "support", "owner"].includes(activeView))
+              : mobileSurface === "workspace" && activeView === item.target;
+
+          return (
+            <button
+              aria-current={isActive ? "page" : undefined}
+              className={isActive ? "active" : undefined}
+              key={`${item.label}-${item.target}`}
+              onClick={() => {
+                if (item.chat) {
+                  setIsMoreOpen(false);
+                  onSelectChat();
+                  return;
+                }
+
+                if ("more" in item) {
+                  setIsMoreOpen((current) => !current);
+                  return;
+                }
+
+                setIsMoreOpen(false);
+                onSelectView(item.target);
+              }}
+              type="button"
+            >
+              <Icon size={18} aria-hidden="true" />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+    </>
   );
 }
 

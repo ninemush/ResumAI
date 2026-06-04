@@ -99,3 +99,16 @@ These are not newly discovered, but should remain visible during launch QA:
   conversation, user message, system response, and error detail.
 - Owner Console Support now surfaces that context in an organized incident
   snapshot and shows an open-ticket badge on the Support tab.
+- Source chronology detection now covers stacked LinkedIn-style history plus
+  common one-line resume rows such as `Role | Company | Dates | Location` and
+  dash-separated timelines.
+- Library proof receipts and the Profile & Resume proof strip now surface
+  detected role counts, companies, and timeline evidence so a ready source with
+  missing resume chronology is called out as a concrete rebuild/review state.
+- The cockpit now includes a compact "Since your last visit" orientation strip
+  for newest source state, generated materials, application follow-ups, and jobs
+  needing review.
+- Library sources now include authenticated removal. Removing a source clears the
+  owned stored file or link record, detaches that source ID from saved profile
+  facts, and refreshes the Library while telling users that editable profile text
+  may still need review.

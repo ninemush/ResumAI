@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, HelpCircle, MessageSquareText, RefreshCw } from "lucide-react";
+import type { FormEvent } from "react";
+import { AlertCircle, CheckCircle2, HelpCircle, MessageSquareText, RefreshCw, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type SupportIssue = {
@@ -23,6 +24,12 @@ type SupportIssue = {
 export function SupportPanel() {
   const [issues, setIssues] = useState<SupportIssue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [category, setCategory] = useState("product");
+  const [severity, setSeverity] = useState("normal");
+  const [subject, setSubject] = useState("");
+  const [details, setDetails] = useState("");
+  const [includeContext, setIncludeContext] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
   async function loadIssues() {
@@ -51,15 +58,68 @@ export function SupportPanel() {
     void fetchIssues();
   }, []);
 
+  async function createIssue(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedSubject = subject.trim();
+    const trimmedDetails = details.trim();
+
+    if (!trimmedSubject || !trimmedDetails) {
+      setMessage("Add a short subject and the details you want support to review.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/support/issues", {
+        body: JSON.stringify({
+          area: category,
+          errorCode: `USER_${category.toUpperCase()}_${severity.toUpperCase()}`,
+          metadata: {
+            attachmentConsent: false,
+            category,
+            includeSupportContext: includeContext,
+            severity,
+            sourceSurface: "support_form",
+          },
+          source: "support_form",
+          title: trimmedSubject,
+          userMessage: trimmedDetails,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to create that support issue.");
+        return;
+      }
+
+      setSubject("");
+      setDetails("");
+      setCategory("product");
+      setSeverity("normal");
+      setIncludeContext(true);
+      setMessage(
+        `Created issue ${payload.issue?.shortId ?? ""}. Human review is expected within the response window shown here.`,
+      );
+      await fetchIssues();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <main className="profile-pane" aria-labelledby="support-title">
       <div className="pane-heading compact-pane-heading">
         <p className="eyebrow">Support</p>
         <h1 id="support-title">Help and issue history</h1>
         <p>
-          Ask Pramania for help in the chat. If the app behaves unexpectedly,
-          Pramania logs an issue with the relevant context so you do not have to
-          repeat the whole story.
+          Create a support issue directly for product problems, billing/refund
+          questions, privacy or security requests, and account recovery help.
+          Chat can still help with quick guidance.
         </p>
       </div>
 
@@ -85,6 +145,90 @@ export function SupportPanel() {
             </p>
           </div>
         </article>
+        <article className="support-user-card warning">
+          <AlertCircle size={18} aria-hidden="true" />
+          <div>
+            <strong>Keep sensitive details out</strong>
+            <p>
+              Do not include patient names, MRNs, DOBs, clinical notes, SSNs,
+              private employer records, or other unauthorized sensitive data in
+              support messages. Use de-identified examples instead.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section className="support-request-panel" aria-label="Create support issue">
+        <div className="section-heading inline-section-heading">
+          <div>
+            <p className="eyebrow">New issue</p>
+            <h2>Route this to support</h2>
+          </div>
+          <span className="support-response-pill">Expected first response: 1 business day</span>
+        </div>
+        <form className="support-request-form" onSubmit={createIssue}>
+          <div className="support-form-grid">
+            <label>
+              Category
+              <select value={category} onChange={(event) => setCategory(event.target.value)}>
+                <option value="product">Product issue</option>
+                <option value="billing_refund">Billing or refund</option>
+                <option value="privacy">Privacy or data rights</option>
+                <option value="security">Security concern</option>
+                <option value="account_recovery">Account recovery</option>
+              </select>
+            </label>
+            <label>
+              Severity
+              <select value={severity} onChange={(event) => setSeverity(event.target.value)}>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            Subject
+            <input
+              maxLength={180}
+              onChange={(event) => setSubject(event.target.value)}
+              placeholder="Short description"
+              value={subject}
+            />
+          </label>
+          <label>
+            Details
+            <textarea
+              maxLength={2000}
+              onChange={(event) => setDetails(event.target.value)}
+              placeholder="What happened, what you expected, and whether this involves billing, privacy, security, or account access."
+              rows={5}
+              value={details}
+            />
+          </label>
+          <label className="support-context-consent">
+            <input
+              checked={includeContext}
+              onChange={(event) => setIncludeContext(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              Include support-safe workspace context such as recent errors,
+              affected area, and issue history. Do not include sensitive
+              personal records in the message.
+            </span>
+          </label>
+          <div className="support-request-footer">
+            <p>
+              Privacy, security, refund, and account-access issues are routed
+              for human escalation review.
+            </p>
+            <button className="secondary-action" disabled={isSubmitting} type="submit">
+              <Send size={15} aria-hidden="true" />
+              {isSubmitting ? "Creating..." : "Create issue"}
+            </button>
+          </div>
+        </form>
       </section>
 
       <section className="support-user-list" aria-label="Your support issues">

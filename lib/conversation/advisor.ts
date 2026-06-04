@@ -173,6 +173,20 @@ export async function runConversationAdvisor(
     surface: input.surface,
     workspace,
   });
+  const deterministicResumeReply = buildResumeSectionDiagnosticReply({
+    latestResume: resumeError ? null : latestResume,
+    message: input.message,
+    workspace,
+  });
+
+  if (deterministicResumeReply) {
+    return normalizeAdvisorPayload({
+      isOwner,
+      message: input.message,
+      payload: deterministicResumeReply,
+      surface: input.surface,
+    });
+  }
 
   try {
     const response = await createOpenAIResponse({
@@ -629,6 +643,97 @@ function normalizeAdvisorPayload({
   };
 }
 
+function buildResumeSectionDiagnosticReply({
+  latestResume,
+  message,
+  workspace,
+}: {
+  latestResume: unknown;
+  message: string;
+  workspace: AdvisorWorkspaceContext;
+}): z.infer<typeof advisorResponseSchema> | null {
+  const normalized = message.toLowerCase().replace(/\s+/g, " ");
+  const asksAboutResumeSections =
+    /\b(resume|cv|rebuilt|rebuild|generated|draft|export|pdf|docx)\b/.test(normalized) &&
+    /\b(section|sections|education|special projects?|projects?|languages?|certifications?|missing|not see|don't see|dont see|omitted|why|issue)\b/.test(
+      normalized,
+    );
+  const challengesCapability =
+    /\b(why|what.*issue|not able|can't|cannot|couldn't|couldnt|make sure|ensure)\b/.test(
+      normalized,
+    ) && /\b(resume|sections?|education|projects?|languages?)\b/.test(normalized);
+
+  if (!asksAboutResumeSections && !challengesCapability) {
+    return null;
+  }
+
+  const snapshot = readResumeSectionSnapshot(latestResume);
+  const readySources = workspace.sources.recent.filter(
+    (source) => source.extraction_status === "succeeded",
+  );
+
+  if (!snapshot.exists) {
+    return {
+      assistantMessage:
+        "You are right to ask for a real diagnosis. I do not see a saved master resume draft yet, so I cannot compare generated sections against the resume body. The useful next step is to open Profile & Resume and generate the master resume from the saved sources, then I can inspect the saved draft instead of asking you to paste headings.",
+      suggestedActions: [],
+      suggestedLinks: [
+        {
+          label: "Open Profile & Resume",
+          reason: "Generate or inspect the saved master resume draft.",
+          view: "resume",
+        },
+      ],
+    };
+  }
+
+  const missingOptional = [
+    snapshot.specialProjects === 0 ? "Special Projects" : null,
+    snapshot.languages === 0 ? "Languages" : null,
+    snapshot.education === 0 ? "Education" : null,
+    snapshot.certifications === 0 ? "Certifications" : null,
+  ].filter((item): item is string => Boolean(item));
+  const presentOptional = [
+    snapshot.specialProjects > 0 ? `Special Projects (${snapshot.specialProjects})` : null,
+    snapshot.languages > 0 ? `Languages (${snapshot.languages})` : null,
+    snapshot.education > 0 ? `Education (${snapshot.education})` : null,
+    snapshot.certifications > 0 ? `Certifications (${snapshot.certifications})` : null,
+  ].filter((item): item is string => Boolean(item));
+  const chronology = snapshot.experienceSections > 0
+    ? `Professional Experience (${snapshot.experienceSections} role section${snapshot.experienceSections === 1 ? "" : "s"})`
+    : "no role-by-role Professional Experience";
+  const sourceContext = readySources.length > 0
+    ? `${readySources.length} readable source${readySources.length === 1 ? "" : "s"} in Library`
+    : "no readable source text in Library";
+  const diagnosis =
+    missingOptional.length > 0
+      ? `The saved draft is missing ${formatListForSentence(missingOptional, "optional sections")}. That can happen when the source extraction did not expose those facts, or when the previous resume assembly path did not backfill optional source sections into the saved draft/export.`
+      : `The saved draft already contains ${formatListForSentence(presentOptional, "the optional sections")}. If you cannot see them in the file, the issue is likely preview/export rendering rather than missing resume content.`;
+
+  return {
+    assistantMessage: `You are right: I should not ask you to paste headings first. I can inspect the saved master resume snapshot.
+
+What I see: ${chronology}; ${presentOptional.length > 0 ? `optional sections present: ${presentOptional.join(", ")}` : "no optional sections currently saved"}; ${sourceContext}.
+
+Issue: ${diagnosis}
+
+Best next move: open Profile & Resume and rebuild/export once after the latest normalization fix. If the saved draft still shows zero for a section that exists in a readable Library source, that is a source-to-resume mapping bug, not a user-data problem.`,
+    suggestedActions: [],
+    suggestedLinks: [
+      {
+        label: "Open Profile & Resume",
+        reason: "Review the saved section counts and rebuild/export the master resume.",
+        view: "resume",
+      },
+      {
+        label: "Open Library",
+        reason: "Confirm the underlying source was read successfully.",
+        view: "library",
+      },
+    ],
+  };
+}
+
 async function readAdvisorWorkspaceContext({
   includeOwnerMetrics,
   profileId,
@@ -1070,6 +1175,42 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
     `- Certifications: ${certifications.join(" || ") || "None"}`,
     `- Gaps: ${readArray("keywordGaps").slice(0, 6).join(" / ") || "None"}`,
   ].join("\n");
+}
+
+function readResumeSectionSnapshot(latestResume: unknown) {
+  if (
+    !latestResume ||
+    typeof latestResume !== "object" ||
+    !("content_json" in latestResume)
+  ) {
+    return {
+      certifications: 0,
+      education: 0,
+      exists: false,
+      experienceSections: 0,
+      languages: 0,
+      specialProjects: 0,
+    };
+  }
+
+  const content = (latestResume as { content_json?: unknown }).content_json;
+  const readCount = (key: string) => {
+    if (!content || typeof content !== "object") {
+      return 0;
+    }
+
+    const value = (content as Record<string, unknown>)[key];
+    return Array.isArray(value) ? value.length : 0;
+  };
+
+  return {
+    certifications: readCount("certifications"),
+    education: readCount("education"),
+    exists: true,
+    experienceSections: readCount("experienceSections"),
+    languages: readCount("languages"),
+    specialProjects: readCount("specialProjects"),
+  };
 }
 
 function buildContextAwareAdvisorFallback({

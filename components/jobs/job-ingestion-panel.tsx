@@ -1,17 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Archive,
   CheckCircle2,
+  ClipboardPaste,
   CircleHelp,
   ExternalLink,
+  Link2,
   RefreshCcw,
+  Send,
   Sparkles,
 } from "lucide-react";
 import type { JobOverview } from "@/lib/jobs/job-overview";
+import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
 
 type JobIngestionPanelProps = {
   overview: JobOverview;
@@ -29,6 +34,9 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
   const [archiveView, setArchiveView] = useState<ArchiveView>("active");
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [jobUrl, setJobUrl] = useState("");
+  const [jobText, setJobText] = useState("");
+  const [isIngestingJob, setIsIngestingJob] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   if (overview.recentJobs.length === 0 && !showEmptyState) {
@@ -40,6 +48,70 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
   );
   const visibleJobs = jobsInArchiveView.filter((job) => jobMatchesFilter(job, activeJobFilter));
   const filterCounts = buildJobFilterCounts(jobsInArchiveView);
+
+  async function ingestJobFromUrl(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedUrl = jobUrl.trim();
+
+    if (!trimmedUrl) {
+      setMessage("Paste a public job URL before adding it to review.");
+      return;
+    }
+
+    setIsIngestingJob(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/jobs/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobUrl: trimmedUrl }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to read that job post.");
+        return;
+      }
+
+      setJobUrl("");
+      setMessage(
+        payload.job?.title
+          ? `Added ${payload.job.title} for fit review. Open the row to decide whether to pursue it.`
+          : "Added that job for fit review. Open the row to decide whether to pursue it.",
+      );
+      router.refresh();
+    } finally {
+      setIsIngestingJob(false);
+    }
+  }
+
+  function moveJobTextToChat() {
+    const text = jobText.trim();
+
+    if (!text) {
+      setMessage("Paste the job description text first, then send it to chat for review.");
+      return;
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("pramania:conversation-draft", {
+        detail: {
+          focus: true,
+          source: "job-description-fallback",
+          text: `Evaluate this pasted job description against my profile. If it is worth pursuing, help me save it as a job decision:\n\n${text}`,
+        },
+      }),
+    );
+    window.dispatchEvent(
+      new CustomEvent("pramania:focus-chat", {
+        detail: {
+          reason: "job-description-fallback",
+        },
+      }),
+    );
+    setMessage("I moved the pasted job text into chat so Pramania can review it with your profile context.");
+  }
 
   async function logApplication(jobId: string) {
     setPendingJobId(jobId);
@@ -70,30 +142,15 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         return;
       }
 
-      const materialResult = await generateMaterialsForPreview(applicationId);
-
       setMessage(
         payload.created
-          ? `Application logged. ${materialResult}`
-          : `That application was already logged. ${materialResult}`,
+          ? "Application logged as a draft pursuit. Open Applications to generate and preview the packet when you are ready."
+          : "That application was already logged. Open Applications to preview or generate its packet.",
       );
       router.refresh();
     } finally {
       setPendingJobId(null);
     }
-  }
-
-  async function generateMaterialsForPreview(applicationId: string) {
-    const materialResponse = await fetch(`/api/applications/${applicationId}/materials`, {
-      method: "POST",
-    });
-    const materialPayload = await materialResponse.json();
-
-    if (!materialResponse.ok) {
-      return materialPayload.error?.message ?? "Targeted materials could not be generated yet.";
-    }
-
-    return `${materialPayload.summary ?? "Targeted materials generated."} Open Applications to preview the packet before preparing PDF/DOCX downloads.`;
   }
 
   async function updateReviewStatus(jobId: string, reviewStatus: "accepted" | "rejected") {
@@ -159,6 +216,47 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         </p>
       </div>
 
+      <section className="job-add-panel" aria-label="Add a job for review">
+        <form className="job-url-form" onSubmit={ingestJobFromUrl}>
+          <label>
+            <Link2 size={16} aria-hidden="true" />
+            <span className="sr-only">Public job URL</span>
+            <input
+              inputMode="url"
+              onChange={(event) => setJobUrl(event.target.value)}
+              placeholder="Paste a public job URL"
+              value={jobUrl}
+            />
+          </label>
+          <button disabled={isIngestingJob || !jobUrl.trim()} type="submit">
+            <Send size={15} aria-hidden="true" />
+            {isIngestingJob
+              ? "Reading..."
+              : `Review fit - ${formatCreditCost(CREDIT_COSTS.jobIngest)}`}
+          </button>
+        </form>
+        <div className="job-text-fallback">
+          <label>
+            <ClipboardPaste size={16} aria-hidden="true" />
+            <span>Unreadable posting or private page</span>
+            <textarea
+              onChange={(event) => setJobText(event.target.value)}
+              placeholder="Paste job description text here, then send it to chat for profile-aware review."
+              rows={3}
+              value={jobText}
+            />
+          </label>
+          <button
+            className="secondary-action compact-action"
+            disabled={!jobText.trim()}
+            onClick={moveJobTextToChat}
+            type="button"
+          >
+            Send pasted text to chat
+          </button>
+        </div>
+      </section>
+
       {overview.recentJobs.length > 0 ? (
         <div className="record-list-controls">
           <div className="record-view-toggle" aria-label="Job archive view">
@@ -222,7 +320,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
             <span>Role</span>
             <span>Decision</span>
             <span>Fit</span>
-            <span>Actions</span>
+            <span>Next action</span>
           </div>
         ) : null}
         {visibleJobs.map((job) => (
@@ -254,6 +352,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
               {job.fitSnapshot.score !== null ? (
                 <span className="fit-score-pill">{job.fitSnapshot.score}% match</span>
               ) : null}
+              <span className="record-next-action">{readJobNextAction(job)}</span>
             </div>
 
             <div className="record-actions">
@@ -292,11 +391,13 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                   className="secondary-action compact-action"
                   disabled={pendingJobId === job.id}
                   onClick={() => logApplication(job.id)}
-                  title="Create an application record and prepare role-specific resume and letter drafts"
+                  title="Create a draft application record before generating role-specific materials"
                   type="button"
                 >
                   <Sparkles size={14} aria-hidden="true" />
-                  {pendingJobId === job.id ? "Preparing" : "Create packet"}
+                  {pendingJobId === job.id
+                    ? "Preparing"
+                    : "Save to pursue"}
                 </button>
               ) : null}
             </div>
@@ -372,6 +473,30 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       </div>
     </section>
   );
+}
+
+function readJobNextAction(job: JobOverview["recentJobs"][number]) {
+  if (job.archived_at) {
+    return "Restore if you want to revisit this role.";
+  }
+
+  if (job.ingestion_status === "failed") {
+    return "Try a clearer public job post.";
+  }
+
+  if (job.ingestion_status !== "succeeded") {
+    return "Wait for Pramania to finish reading.";
+  }
+
+  if (job.review_status === "accepted") {
+    return "Create application packet.";
+  }
+
+  if (job.review_status === "rejected") {
+    return "Archive or restore for review.";
+  }
+
+  return "Review fit, then accept or reject.";
 }
 
 function formatReviewStatus(status: string) {

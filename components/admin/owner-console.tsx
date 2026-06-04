@@ -83,6 +83,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [promoMessage, setPromoMessage] = useState<string | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [query, setQuery] = useState("");
+  const [issueUpdateMessage, setIssueUpdateMessage] = useState<string | null>(null);
   const [grantTargetQuery, setGrantTargetQuery] = useState("");
   const [selectedGrantTargets, setSelectedGrantTargets] = useState<CreditGrantTarget[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -186,6 +187,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
 
       if (payload.metrics) {
         setMetrics(payload.metrics);
+      } else {
+        setIssueUpdateMessage("Owner metrics could not be refreshed. Try again before acting on stale data.");
       }
     });
   }
@@ -200,6 +203,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     },
   ) {
     setIssueUpdatingId(issueId);
+    setIssueUpdateMessage(null);
 
     try {
       const response = await fetch(`/api/admin/issues/${issueId}`, {
@@ -209,10 +213,15 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       });
 
       if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        setIssueUpdateMessage(
+          payload?.error?.message ?? "Support issue update failed. The queue was not changed.",
+        );
         return;
       }
 
       await loadPeriod(periodDays);
+      setIssueUpdateMessage("Support issue updated.");
     } finally {
       setIssueUpdatingId(null);
     }
@@ -249,16 +258,33 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     setPromoMessage(null);
     const formData = new FormData(event.currentTarget);
     const expiresAt = formData.get("expiresAt")?.toString() ?? "";
+    const creditAmount = Number(formData.get("creditAmount") ?? 0);
+    const maxRedemptions = Number(formData.get("maxRedemptions") ?? 1);
+    const description = formData.get("description")?.toString().trim() ?? "";
+
+    if (description.length < 8) {
+      setPromoMessage("Add an owner reason before creating a promo code.");
+      return;
+    }
+
+    if (
+      creditAmount * maxRedemptions >= 250 &&
+      !window.confirm(
+        `This promo can grant up to ${creditAmount * maxRedemptions} credits. Confirm that the owner reason and redemption scope are correct.`,
+      )
+    ) {
+      return;
+    }
 
     try {
       const response = await fetch("/api/admin/promo-codes", {
         body: JSON.stringify({
           assignedUserEmail: formData.get("assignedUserEmail")?.toString() ?? "",
           code: formData.get("code")?.toString() ?? "",
-          creditAmount: Number(formData.get("creditAmount") ?? 0),
-          description: formData.get("description")?.toString() ?? "",
+          creditAmount,
+          description,
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : "",
-          maxRedemptions: Number(formData.get("maxRedemptions") ?? 1),
+          maxRedemptions,
         }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
@@ -287,7 +313,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     const form = event.currentTarget;
     const formData = new FormData(form);
     const creditAmount = Number(formData.get("creditAmount") ?? 0);
-    const description = formData.get("description")?.toString() ?? "";
+    const description = formData.get("description")?.toString().trim() ?? "";
     const manualTarget = grantTargetQuery.trim();
     const targets = selectedGrantTargets.map((target) => ({
       label: formatGrantTargetLabel(target),
@@ -305,6 +331,20 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
 
     if (targets.length === 0) {
       setGrantMessage("Choose at least one user before adding credits.");
+      return;
+    }
+
+    if (description.length < 8) {
+      setGrantMessage("Add an owner note before granting credits.");
+      return;
+    }
+
+    if (
+      creditAmount * targets.length >= 100 &&
+      !window.confirm(
+        `This will add ${creditAmount} credits to ${targets.length} user${targets.length === 1 ? "" : "s"}. Confirm the reason and recipients before writing ledger events.`,
+      )
+    ) {
       return;
     }
 
@@ -664,6 +704,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             title="Support queue"
             body="Each issue has a plain-English summary, likely root cause, suggested fix, supporting logs, status, and owner notes. Use this to decide whether to fix, resolve, cancel, or escalate."
           />
+          {issueUpdateMessage ? <p className="owner-generated-note">{issueUpdateMessage}</p> : null}
           {filteredSupportTickets.length > 0 ? (
             <div className="support-issue-list" aria-label="Support issues">
               {filteredSupportTickets.map((ticket) => (
@@ -1088,8 +1129,11 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                 </label>
                 <label className="owner-credit-description">
                   <span>Description</span>
-                  <input name="description" placeholder="Why this code exists" />
+                  <input name="description" placeholder="Why this code exists" required />
                 </label>
+                <p className="owner-credit-guardrail">
+                  Owner reason is required. High-total codes ask for confirmation before creation.
+                </p>
                 <div className="owner-form-actions">
                   <button className="owner-action-button primary" disabled={promoLoading} type="submit">
                     Create code
@@ -1193,8 +1237,11 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                 </label>
                 <label className="owner-credit-description">
                   <span>Owner note</span>
-                  <input name="description" placeholder="Beta goodwill, support fix, launch grant..." />
+                  <input name="description" placeholder="Beta goodwill, support fix, launch grant..." required />
                 </label>
+                <p className="owner-credit-guardrail">
+                  Each recipient receives a separate ledger event. High-total grants ask for confirmation.
+                </p>
                 <div className="owner-form-actions">
                   <button className="owner-action-button primary" disabled={grantLoading} type="submit">
                     Add credits
@@ -1240,7 +1287,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       ) : null}
 
       <p className="owner-generated-note">
-        Generated {formatDateTime(metrics.generatedAt)} for {metrics.period.days} day period.
+        Generated {formatDateTime(metrics.generatedAt)} for {formatOwnerPeriod(metrics.period.days, periodDays)}.
       </p>
     </main>
   );
@@ -1844,6 +1891,14 @@ function formatDate(value: string) {
     month: "short",
     day: "numeric",
   }).format(new Date(value));
+}
+
+function formatOwnerPeriod(metricsDays: number, selectedDays: number) {
+  if (selectedDays === 0) {
+    return "all-time reporting";
+  }
+
+  return `${metricsDays} day period`;
 }
 
 function formatDateTime(value: string) {

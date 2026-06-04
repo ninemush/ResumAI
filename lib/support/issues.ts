@@ -115,6 +115,32 @@ export function buildSupportIssueAnalysis(input: SupportIssueCreateInput): Issue
     };
   }
 
+  if (
+    area.includes("privacy") ||
+    area.includes("security") ||
+    area.includes("billing") ||
+    area.includes("refund") ||
+    area.includes("account_recovery") ||
+    /\b(delete account|export my data|privacy|security|refund|billing|receipt|invoice|cannot access|wrong email)\b/.test(
+      combined,
+    )
+  ) {
+    const isUrgent = area.includes("security") || /\bsecurity|account access|cannot access|breach\b/.test(combined);
+
+    return {
+      fixStatus: "investigating",
+      priority: isUrgent ? "urgent" : "high",
+      rootCause:
+        "A trust-critical support request needs human review. The owner should route this through privacy, security, billing/refund, or account recovery handling and avoid exposing unnecessary personal data.",
+      rootCauseCategory: area.includes("billing") || area.includes("refund") ? "billing_support" : "trust_request",
+      summary:
+        "The user created a trust-critical support request that should not be handled as generic product guidance.",
+      suggestedFix:
+        "Review the user-visible request, support-safe context consent, account metadata, billing ledger if relevant, and privacy/audit retention obligations before taking action. Record the outcome in owner notes.",
+      title: input.title ?? "Trust or account support request",
+    };
+  }
+
   return {
     fixStatus: "investigating",
     priority: "normal",

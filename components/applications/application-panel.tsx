@@ -11,12 +11,14 @@ import {
   Pencil,
   RefreshCcw,
   Save,
+  Search,
   ShieldCheck,
   WandSparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
 import type { ResumeContent } from "@/lib/resumes/resume-content";
 
 type ApplicationPanelProps = {
@@ -70,6 +72,7 @@ const applicationStatuses = [
 export type StageFilter = "All" | "Review" | "Applied" | "Interview" | "Selected" | "Closed";
 type ArchiveView = "active" | "archived";
 type MaterialReviewMode = "preview" | "edit";
+type ApplicationSort = "recent" | "oldest" | "needs_action";
 
 export function ApplicationPanel({
   initialStageFilter = "All",
@@ -81,6 +84,8 @@ export function ApplicationPanel({
   const [activeReviewMode, setActiveReviewMode] = useState<MaterialReviewMode>("preview");
   const [archiveView, setArchiveView] = useState<ArchiveView>("active");
   const [activeStageFilter, setActiveStageFilter] = useState<StageFilter>(initialStageFilter);
+  const [applicationQuery, setApplicationQuery] = useState("");
+  const [applicationSort, setApplicationSort] = useState<ApplicationSort>("recent");
   const [coverLetterDraft, setCoverLetterDraft] = useState("");
   const [resumeDraft, setResumeDraft] = useState<ResumeContent | null>(null);
   const [exportingApplicationId, setExportingApplicationId] = useState<string | null>(null);
@@ -97,8 +102,11 @@ export function ApplicationPanel({
   const applicationsInArchiveView = overview.recentApplications.filter((application) =>
     archiveView === "archived" ? Boolean(application.archivedAt) : !application.archivedAt,
   );
-  const visibleApplications = applicationsInArchiveView.filter((application) =>
-    applicationMatchesStage(application.status, activeStageFilter),
+  const visibleApplications = sortApplications(
+    applicationsInArchiveView
+      .filter((application) => applicationMatchesStage(application.status, activeStageFilter))
+      .filter((application) => applicationMatchesSearch(application, applicationQuery)),
+    applicationSort,
   );
   const stageCounts = buildStageFilterCounts(applicationsInArchiveView);
 
@@ -344,6 +352,26 @@ export function ApplicationPanel({
               </button>
             ))}
           </div>
+          <div className="record-search-sort-row" aria-label="Application search and sort">
+            <label className="record-search-field">
+              <Search size={15} aria-hidden="true" />
+              <input
+                onChange={(event) => setApplicationQuery(event.target.value)}
+                placeholder="Search role, company, stage"
+                value={applicationQuery}
+              />
+            </label>
+            <select
+              aria-label="Sort applications"
+              className="record-sort-select"
+              onChange={(event) => setApplicationSort(event.target.value as ApplicationSort)}
+              value={applicationSort}
+            >
+              <option value="recent">Recently updated</option>
+              <option value="oldest">Oldest first</option>
+              <option value="needs_action">Needs action first</option>
+            </select>
+          </div>
         </div>
       ) : null}
 
@@ -388,10 +416,16 @@ export function ApplicationPanel({
               <span className="record-meta">
                 {cleanDisplayText(application.companyName)} · Updated {formatShortDate(application.updatedAt)}
               </span>
-              <span className="record-subtle-line">
-                {formatLatestActivity(application)}
-              </span>
-            </button>
+                  <span className="record-subtle-line">
+                    {formatLatestActivity(application)}
+                  </span>
+                  <span className="record-next-action">
+                    Next: {readApplicationNextAction(application)}
+                  </span>
+                  {isStaleApplication(application) ? (
+                    <span className="record-stale-marker">Stale/no reply</span>
+                  ) : null}
+                </button>
 
             <div className="application-material-cell">
               <button
@@ -467,7 +501,9 @@ export function ApplicationPanel({
                   }
                 >
                   <WandSparkles size={14} aria-hidden="true" />
-                  {generatingApplicationId === application.id ? "Creating" : "Create packet"}
+                  {generatingApplicationId === application.id
+                    ? "Creating"
+                    : `Create packet - ${formatCreditCost(CREDIT_COSTS.applicationMaterialsGenerate)}`}
                 </button>
               )}
               <button
@@ -559,7 +595,7 @@ export function ApplicationPanel({
                   ? "Preparing..."
                   : activeReview.exportReadiness.status === "exported"
                     ? "Files prepared"
-                    : "Prepare downloads"}
+                    : `Prepare downloads - ${formatCreditCost(CREDIT_COSTS.applicationMaterialsExport)}`}
               </button>
             </div>
           </div>
@@ -720,6 +756,91 @@ export function ApplicationPanel({
       ) : null}
     </section>
   );
+}
+
+function readApplicationNextAction(
+  application: ApplicationOverview["recentApplications"][number],
+) {
+  if (application.archivedAt) {
+    return "Restore if this role becomes active again";
+  }
+
+  if (!hasApplicationPacket(application)) {
+    return "Create tailored materials";
+  }
+
+  if (!application.latestResumeHasPdf || !application.latestCoverLetterHasPdf) {
+    return `Export files - ${formatCreditCost(CREDIT_COSTS.applicationMaterialsExport)}`;
+  }
+
+  if (application.status === "draft") {
+    return "Apply or update stage";
+  }
+
+  if (application.status === "applied" || application.status === "no_reply") {
+    return "Plan follow-up";
+  }
+
+  if (application.status === "interview_in_progress") {
+    return "Track interview loop";
+  }
+
+  return "Keep status current";
+}
+
+function applicationMatchesSearch(
+  application: ApplicationOverview["recentApplications"][number],
+  query: string,
+) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  return [
+    application.companyName,
+    application.jobTitle,
+    application.status,
+    application.latestResumeHeadline,
+  ]
+    .filter(Boolean)
+    .some((value) => value?.toLowerCase().includes(normalizedQuery));
+}
+
+function sortApplications(
+  applications: ApplicationOverview["recentApplications"],
+  sort: ApplicationSort,
+) {
+  return [...applications].sort((left, right) => {
+    if (sort === "needs_action") {
+      return Number(isNeedsActionApplication(right)) - Number(isNeedsActionApplication(left));
+    }
+
+    const leftTime = new Date(left.updatedAt).getTime();
+    const rightTime = new Date(right.updatedAt).getTime();
+
+    return sort === "oldest" ? leftTime - rightTime : rightTime - leftTime;
+  });
+}
+
+function isNeedsActionApplication(
+  application: ApplicationOverview["recentApplications"][number],
+) {
+  return !hasApplicationPacket(application) || isStaleApplication(application);
+}
+
+function isStaleApplication(
+  application: ApplicationOverview["recentApplications"][number],
+) {
+  if (application.status !== "applied" && application.status !== "no_reply") {
+    return false;
+  }
+
+  const updatedAt = new Date(application.updatedAt).getTime();
+  const daysSinceUpdate = (Date.now() - updatedAt) / (24 * 60 * 60 * 1000);
+
+  return daysSinceUpdate >= 14;
 }
 
 function formatStatus(status: string) {

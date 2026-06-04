@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText, RefreshCw } from "lucide-react";
+import { Download, FileText, RefreshCw, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -65,6 +65,37 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
     }
   }
 
+  async function removeSource(source: ProfileOverview["recentSources"][number]) {
+    const label = source.original_filename ?? formatSourceUrl(source.source_url);
+    const confirmed = window.confirm(
+      `Remove ${label} from your Library? The original saved file or link record will be removed. Profile text already saved from it may still appear in your editable profile until you revise it.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setPendingId(source.id);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/profile/sources/${source.id}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to remove that source.");
+        return;
+      }
+
+      setMessage("Source removed from Library.");
+      router.refresh();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   const content = (
     <>
       {embedded ? null : (
@@ -84,7 +115,8 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
         <div>
           <strong>Your career record</strong>
           <p>
-            Every resume, LinkedIn export, screenshot, note, and link you share
+            Every resume, LinkedIn export, portfolio link, certificate photo,
+            screenshot, note, and link you share
             in chat is kept here in order.
           </p>
         </div>
@@ -93,6 +125,13 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
           <p>
             Pramania uses these sources to keep advice, resumes, and job-fit
             reviews grounded in what you actually shared.
+          </p>
+        </div>
+        <div>
+          <strong>Privacy reminder</strong>
+          <p>
+            Do not upload patient names, MRNs, DOBs, clinical notes, or other
+            unauthorized sensitive details. Use de-identified operational results.
           </p>
         </div>
       </section>
@@ -160,6 +199,9 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
                         <p>{source.extractedTextPreview}</p>
                       </details>
                     ) : null}
+                    <p className="source-proof-note">
+                      {formatSourceProofNote(source)}
+                    </p>
                     {source.source_type === "image" && source.extraction_status === "failed" ? (
                       <div className="source-fallback" aria-label="Image import options">
                         <FileText size={15} aria-hidden="true" />
@@ -213,7 +255,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
                       disabled={pendingId === source.id}
                       onClick={() => retrySourceExtraction(source.id)}
                       title={
-                        source.extraction_status === "succeeded"
+                        isSourceReady(source)
                           ? "Read this saved item again"
                           : "Try reading this saved item again"
                       }
@@ -222,11 +264,21 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
                       <RefreshCw size={14} aria-hidden="true" />
                       {pendingId === source.id
                         ? "Working..."
-                        : source.extraction_status === "succeeded"
+                        : isSourceReady(source)
                           ? "Read again"
                           : "Try again"}
                     </button>
                   ) : null}
+                  <button
+                    className="secondary-action compact-action danger-action"
+                    disabled={pendingId === source.id}
+                    onClick={() => void removeSource(source)}
+                    title="Remove this source from Library"
+                    type="button"
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                    Remove
+                  </button>
                 </div>
               </article>
             ))}
@@ -234,7 +286,8 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
         ) : (
           <p className="empty-state">
             Drop a resume, LinkedIn export, screenshot, portfolio link, or career note
-            into Pramania. The source record will appear here.
+            into Pramania. Rough notes and certificate photos are welcome. The source
+            record will appear here.
           </p>
         )}
       </section>
@@ -520,9 +573,46 @@ function formatSourceGuidance(source: ProfileOverview["recentSources"][number]) 
   return "Saved in your career record.";
 }
 
+function formatSourceProofNote(source: ProfileOverview["recentSources"][number]) {
+  if (isSourceReady(source)) {
+    const readableCount = source.readableCharacterCount;
+    const companySummary = formatShortList(source.detectedCompanyNames);
+    const roleSummary = formatShortList(source.detectedRoleTitles);
+
+    if (source.detectedRoleCount > 0) {
+      return [
+        `Proof receipt: Pramania detected ${source.detectedRoleCount} role timeline item${source.detectedRoleCount === 1 ? "" : "s"}`,
+        companySummary ? `across ${companySummary}` : null,
+        roleSummary ? `including ${roleSummary}` : null,
+        "and can use this for profile, resume, and job-fit work.",
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    return readableCount > 0
+      ? `Proof receipt: Pramania read this source and has ${readableCount.toLocaleString()} readable characters available for profile, resume, and job-fit work.`
+      : "Proof receipt: Pramania read this source and marked it profile-ready.";
+  }
+
+  if (isSourceBlocked(source)) {
+    return "Proof receipt: the original is saved, but this source has not safely updated your profile yet.";
+  }
+
+  if (source.extraction_status === "processing") {
+    return "Proof receipt: this source is still being read, so Pramania should not claim it changed your profile yet.";
+  }
+
+  if (source.extraction_status === "pending") {
+    return "Proof receipt: this source is saved and waiting to be read.";
+  }
+
+  return "Proof receipt: this source is preserved in your Library.";
+}
+
 function formatSourceStatusLabel(status: string) {
-  if (status === "succeeded") return "Ready";
-  if (status === "failed") return "Needs help";
+  if (["succeeded", "ready"].includes(status)) return "Ready";
+  if (["failed", "error"].includes(status)) return "Needs help";
   if (status === "processing") return "Reading";
   if (status === "pending") return "Saved";
   if (status === "deleted") return "Removed";
@@ -533,8 +623,15 @@ function formatSourceStatusLabel(status: string) {
 function buildSourceCapabilities(source: ProfileOverview["recentSources"][number]) {
   const capabilities: { label: string; tone: string }[] = [];
 
-  if (source.extraction_status === "succeeded") {
+  if (isSourceReady(source)) {
     capabilities.push({ label: "Profile-ready", tone: "ready" });
+  }
+
+  if (source.detectedRoleCount > 0) {
+    capabilities.push({
+      label: `${source.detectedRoleCount} role${source.detectedRoleCount === 1 ? "" : "s"} found`,
+      tone: "ready",
+    });
   }
 
   if (source.previewUrl) {
@@ -548,14 +645,14 @@ function buildSourceCapabilities(source: ProfileOverview["recentSources"][number
   } else if (source.source_type === "image") {
     capabilities.push({ label: "Image saved", tone: "neutral" });
   } else if (source.source_type === "linkedin" && source.source_url) {
-    capabilities.push({ label: "Public profile link", tone: source.extraction_status === "failed" ? "warning" : "neutral" });
+    capabilities.push({ label: "Public profile link", tone: isSourceBlocked(source) ? "warning" : "neutral" });
   } else if (source.source_type === "linkedin" && source.storage_path) {
     capabilities.push({ label: "LinkedIn export", tone: "neutral" });
   } else if (["link", "portfolio"].includes(source.source_type)) {
     capabilities.push({ label: "Public page saved", tone: "neutral" });
   }
 
-  if (source.extraction_status === "failed") {
+  if (isSourceBlocked(source)) {
     capabilities.push({ label: "Needs a clearer copy", tone: "warning" });
   }
 
@@ -571,11 +668,11 @@ function sourceMatchesFilter(
   }
 
   if (filter === "Ready") {
-    return source.extraction_status === "succeeded";
+    return isSourceReady(source);
   }
 
   if (filter === "Needs help") {
-    return source.extraction_status === "failed";
+    return isSourceBlocked(source);
   }
 
   if (filter === "Files") {
@@ -609,11 +706,11 @@ function buildSourceFilterCounts(sources: ProfileOverview["recentSources"]) {
 function buildSourceHealth(sources: ProfileOverview["recentSources"]) {
   return sources.reduce(
     (summary, source) => {
-      if (source.extraction_status === "succeeded") {
+      if (isSourceReady(source)) {
         summary.read += 1;
       }
 
-      if (source.extraction_status === "failed") {
+      if (isSourceBlocked(source)) {
         summary.needsAttention += 1;
       }
 
@@ -624,4 +721,28 @@ function buildSourceHealth(sources: ProfileOverview["recentSources"]) {
       read: 0,
     },
   );
+}
+
+function isSourceReady(source: ProfileOverview["recentSources"][number]) {
+  return ["succeeded", "ready"].includes(source.extraction_status);
+}
+
+function isSourceBlocked(source: ProfileOverview["recentSources"][number]) {
+  return ["failed", "error"].includes(source.extraction_status);
+}
+
+function formatShortList(items: string[]) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  if (items.length === 1) {
+    return items[0];
+  }
+
+  if (items.length === 2) {
+    return `${items[0]} and ${items[1]}`;
+  }
+
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
 }

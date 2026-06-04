@@ -14,9 +14,20 @@ export function extractExperienceSectionsFromText(text: string) {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     const followingLines = lines.slice(index + 1, index + 4);
+    const inlineSection = parseInlineExperienceSection(line);
 
     if (looksLikeRecommendationBoundary(line)) {
       break;
+    }
+
+    if (inlineSection) {
+      sections.push(inlineSection);
+
+      if (sections.length >= MAX_RESUME_EXPERIENCE_SECTIONS) {
+        break;
+      }
+
+      continue;
     }
 
     if (looksLikeResumeCompanyHeading(line, followingLines)) {
@@ -93,6 +104,61 @@ export function extractExperienceSectionsFromText(text: string) {
   }
 
   return sections.sort(compareResumeSectionsByRecency);
+}
+
+function parseInlineExperienceSection(line: string) {
+  const parts = splitInlineExperienceParts(line);
+
+  if (parts.length < 3 || looksLikeRecommendationOrTestimonial(line)) {
+    return null;
+  }
+
+  const dateIndex = parts.findIndex((part) => looksLikeDateRange(part));
+  const roleIndex = parts.findIndex(
+    (part, index) => index !== dateIndex && looksLikeResumeRoleTitle(part),
+  );
+
+  if (dateIndex < 0 || roleIndex < 0) {
+    return null;
+  }
+
+  const companyIndex = parts.findIndex(
+    (part, index) =>
+      index !== dateIndex &&
+      index !== roleIndex &&
+      looksLikeResumeCompany(part),
+  );
+  const location =
+    parts.find(
+      (part, index) =>
+        index !== dateIndex &&
+        index !== roleIndex &&
+        index !== companyIndex &&
+        looksLikeResumeLocation(part),
+    ) ?? null;
+  const section = {
+    bullets: [],
+    company: companyIndex >= 0 ? parts[companyIndex] : null,
+    dates: cleanResumeDateRange(parts[dateIndex]),
+    location,
+    roleTitle: parts[roleIndex],
+  };
+
+  return section.company || section.dates ? section : null;
+}
+
+function splitInlineExperienceParts(line: string) {
+  const normalized = line.replace(/\s+/g, " ").trim();
+
+  if (normalized.includes("|")) {
+    return normalized.split(/\s*\|\s*/).map(cleanResumeSourceLine).filter(Boolean);
+  }
+
+  if (/\s+[—–]\s+/.test(normalized)) {
+    return normalized.split(/\s+[—–]\s+/).map(cleanResumeSourceLine).filter(Boolean);
+  }
+
+  return [];
 }
 
 function readExperienceText(text: string) {
@@ -203,7 +269,7 @@ function decodeResumeSourceText(value: string) {
 function looksLikeResumeRoleTitle(value: string) {
   return (
     value.length <= 140 &&
-    /\b(chief|\bcio\b|founder|president|vice president|\bvp\b|director|head|manager|lead|leader|leadership program|consultant|advisor|officer|architect|engineer|analyst|specialist|partner|principal|owner|executive)\b/i.test(
+    /\b(chief|\bcio\b|founder|president|vice president|\bvp\b|director|head|manager|supervisor|lead|leader|leadership program|consultant|advisor|officer|architect|engineer|analyst|specialist|partner|principal|owner|executive)\b/i.test(
       value,
     ) &&
     !/^(?:i|we|my|our|led|built|managed|owned|developed|reduced|scaled|created|established|supported|completed)\b/i.test(
@@ -323,7 +389,7 @@ function looksLikePersonName(value: string) {
     words.length >= 2 &&
     words.length <= 5 &&
     words.every((word) => /^[A-Z][a-z.'-]+$/.test(word)) &&
-    !/\b(Inc|LLC|Ltd|Limited|Group|Company|Corp|Corporation|Capital|Services|Technologies|Technology|Systems|Bank|University|UiPath|GE|Microsoft|Oracle|SAP)\b/.test(
+    !/\b(Inc|LLC|Ltd|Limited|Group|Company|Corp|Corporation|Capital|Services|Logistics|Technologies|Technology|Systems|Bank|University|UiPath|GE|Microsoft|Oracle|SAP)\b/.test(
       trimmed,
     )
   );

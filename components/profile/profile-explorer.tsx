@@ -5,7 +5,10 @@ import type { CSSProperties } from "react";
 import {
   Camera,
   CheckCircle2,
+  ClipboardPaste,
   Compass,
+  FileUp,
+  Link2,
   Save,
   Sparkles,
   UserRound,
@@ -64,6 +67,12 @@ export function ProfileExplorer({
     jobOverview,
     overview,
     profileGaps,
+  });
+  const returnBrief = readReturnBrief({
+    applicationOverview,
+    artifactOverview,
+    jobOverview,
+    overview,
   });
   const [draft, setDraft] = useState<ProfileDraft>({
     displayName: overview.profile?.displayName ?? "",
@@ -273,6 +282,93 @@ export function ProfileExplorer({
             </div>
           </div>
         ) : null}
+      </section>
+
+      <section className="return-brief-panel" aria-label="Since your last visit">
+        <div className="section-heading">
+          <p className="eyebrow">Since your last visit</p>
+          <h2>What needs attention now</h2>
+        </div>
+        <div className="return-brief-grid">
+          {returnBrief.map((item) => (
+            <button
+              className="return-brief-item"
+              key={item.label}
+              onClick={() => onNavigate(item.target)}
+              type="button"
+            >
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <p>{item.detail}</p>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="intake-action-panel" aria-label="Build profile from source material">
+        <div className="section-heading">
+          <p className="eyebrow">Build my profile</p>
+          <h2>Start with the easiest evidence you have</h2>
+          <p>
+            Use the chat intake path for uploads, links, screenshots, and rough
+            notes. {brand.name} will save sources in Library and ask before it
+            trusts inferred facts.
+          </p>
+        </div>
+        <div className="intake-action-grid">
+          <button
+            className="intake-action-card"
+            onClick={() =>
+              draftProfileIntakePrompt(
+                "I am going to drop or upload my resume now. Please extract profile facts, chronology, skills, and useful resume evidence.",
+              )
+            }
+            type="button"
+          >
+            <FileUp size={17} aria-hidden="true" />
+            <strong>Drop resume</strong>
+            <span>PDF, DOCX, TXT, or image</span>
+          </button>
+          <button
+            className="intake-action-card"
+            onClick={() =>
+              draftProfileIntakePrompt(
+                "I want to add LinkedIn evidence. I can upload a LinkedIn PDF/export, paste a public LinkedIn URL, or paste visible profile text.",
+              )
+            }
+            type="button"
+          >
+            <FileUp size={17} aria-hidden="true" />
+            <strong>LinkedIn source</strong>
+            <span>PDF/export, URL, or pasted text</span>
+          </button>
+          <button
+            className="intake-action-card"
+            onClick={() =>
+              draftProfileIntakePrompt(
+                "Add this public profile, portfolio, or project link to my career profile: ",
+              )
+            }
+            type="button"
+          >
+            <Link2 size={17} aria-hidden="true" />
+            <strong>Add link</strong>
+            <span>Portfolio, profile, writing, work samples</span>
+          </button>
+          <button
+            className="intake-action-card"
+            onClick={() =>
+              draftProfileIntakePrompt(
+                "Here are rough career notes to add to my profile. Please separate confirmed facts from questions: ",
+              )
+            }
+            type="button"
+          >
+            <ClipboardPaste size={17} aria-hidden="true" />
+            <strong>Paste notes</strong>
+            <span>Fastest path when files are not ready</span>
+          </button>
+        </div>
       </section>
 
       <section className="cockpit-panel" aria-label="Career cockpit">
@@ -548,6 +644,34 @@ export function ProfileExplorer({
         </button>
       </section>
 
+      <section className="profile-editor-panel" aria-label="Market and resume format guidance">
+        <div className="section-heading">
+          <p className="eyebrow">Market details</p>
+          <h2>Target market and format</h2>
+          <p>
+            If you are targeting a specific country or region, add the details
+            Pramania should respect before resume generation.
+          </p>
+        </div>
+        <div className="profile-market-prompt-grid">
+          {[
+            "Target country/cities and whether you are open to relocation",
+            "Work authorization, sponsorship needs, and notice period",
+            "Languages to show on the resume or CV",
+            "Preferred format, such as UAE CV, India resume, UK CV, or US resume",
+          ].map((prompt) => (
+            <button
+              className="profile-market-prompt"
+              key={prompt}
+              onClick={() => draftMarketPrompt(prompt)}
+              type="button"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      </section>
+
       {overview.roleRecommendations.length > 0 ? (
         <section className="roles-panel" aria-label="Role recommendations">
           <div className="section-heading">
@@ -630,6 +754,29 @@ export function ProfileExplorer({
   );
 }
 
+function draftMarketPrompt(prompt: string) {
+  draftProfileIntakePrompt(`Add this profile guidance: ${prompt}. My answer: `);
+}
+
+function draftProfileIntakePrompt(text: string) {
+  window.dispatchEvent(
+    new CustomEvent("pramania:conversation-draft", {
+      detail: {
+        focus: true,
+        source: "profile-intake-action",
+        text,
+      },
+    }),
+  );
+  window.dispatchEvent(
+    new CustomEvent("pramania:focus-chat", {
+      detail: {
+        reason: "market-profile-guidance",
+      },
+    }),
+  );
+}
+
 function mapStatusToStageFilter(status: string) {
   if (status === "draft") return "Review";
   if (status === "interview_in_progress") return "Interview";
@@ -645,6 +792,90 @@ function readStageWidth(value: number, total: number) {
   }
 
   return Math.max(8, Math.round((value / total) * 100));
+}
+
+function readReturnBrief({
+  applicationOverview,
+  artifactOverview,
+  jobOverview,
+  overview,
+}: {
+  applicationOverview: ApplicationOverview;
+  artifactOverview: ArtifactOverview;
+  jobOverview: JobOverview;
+  overview: ProfileOverview;
+}) {
+  const latestSource = overview.recentSources[0] ?? null;
+  const latestArtifact = artifactOverview.artifacts[0] ?? null;
+  const followUpCount = applicationOverview.openFollowUpCount;
+  const jobsToReview = jobOverview.summary.readyForReview;
+
+  return [
+    {
+      detail: latestSource
+        ? `Newest source: ${latestSource.original_filename ?? formatSourceLabel(latestSource.source_type)}`
+        : "Add a resume, LinkedIn export, portfolio link, screenshot, or rough note.",
+      label: "Sources",
+      target: "library" as const,
+      value: latestSource
+        ? latestSource.detectedRoleCount > 0
+          ? `${latestSource.detectedRoleCount} roles found`
+          : formatSourceStatus(latestSource.extraction_status)
+        : "None yet",
+    },
+    {
+      detail: latestArtifact
+        ? `Latest generated item: ${latestArtifact.label}`
+        : "Generated resumes and letters will appear in Library.",
+      label: "Generated",
+      target: "library" as const,
+      value:
+        artifactOverview.summary.total > 0
+          ? artifactOverview.summary.total
+          : "None yet",
+    },
+    {
+      detail:
+        followUpCount > 0
+          ? "Update status, prepare materials, or decide the next move."
+          : "No tracked applications currently need follow-up.",
+      label: "Follow-ups",
+      target: { applicationStageFilter: "Applied", view: "applications" } as const,
+      value: followUpCount,
+    },
+    {
+      detail:
+        jobsToReview > 0
+          ? "Review fit, gaps, risks, and whether each role is worth pursuing."
+          : "Paste a role into chat when you want a fit read.",
+      label: "Jobs to review",
+      target: "jobs" as const,
+      value: jobsToReview,
+    },
+  ] satisfies Array<{
+    detail: string;
+    label: string;
+    target: WorkspaceNavigationTarget;
+    value: number | string;
+  }>;
+}
+
+function formatSourceStatus(status: string) {
+  if (["succeeded", "ready"].includes(status)) return "Ready";
+  if (["failed", "error"].includes(status)) return "Needs help";
+  if (status === "processing") return "Reading";
+  if (status === "pending") return "Saved";
+  return status.replaceAll("_", " ");
+}
+
+function formatSourceLabel(sourceType: string) {
+  if (sourceType === "docx") return "Word document";
+  if (sourceType === "pdf") return "PDF";
+  if (sourceType === "txt") return "text note";
+  if (sourceType === "image") return "image";
+  if (sourceType === "linkedin") return "LinkedIn source";
+  if (sourceType === "portfolio") return "portfolio source";
+  return sourceType.replaceAll("_", " ");
 }
 
 function readProfileGaps(overview: ProfileOverview) {

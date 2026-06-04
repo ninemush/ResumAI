@@ -4,6 +4,7 @@ import {
   buildProfileIntelligence,
   type ProfileIntelligence,
 } from "@/lib/profile/profile-intelligence";
+import { extractExperienceSectionsFromText } from "@/lib/resumes/source-experience";
 import { createClient } from "@/lib/supabase/server";
 
 type ProfileFact = {
@@ -21,6 +22,9 @@ type ProfileSource = {
   source_url: string | null;
   storage_path: string | null;
   downloadUrl: string | null;
+  detectedCompanyNames: string[];
+  detectedRoleCount: number;
+  detectedRoleTitles: string[];
   extractedTextPreview: string | null;
   readableCharacterCount: number;
   previewUrl: string | null;
@@ -224,22 +228,64 @@ async function addSourcePreviewUrls(
   supabase: Awaited<ReturnType<typeof createClient>>,
   sources: (Omit<
     ProfileSource,
-    "downloadUrl" | "extractedTextPreview" | "previewUrl" | "readableCharacterCount"
+    | "detectedCompanyNames"
+    | "detectedRoleCount"
+    | "detectedRoleTitles"
+    | "downloadUrl"
+    | "extractedTextPreview"
+    | "previewUrl"
+    | "readableCharacterCount"
   > & {
     extracted_text?: string | null;
   })[],
 ) {
   return Promise.all(
-    sources.map(async ({ extracted_text: extractedText, ...source }) => ({
-      ...source,
-      downloadUrl: source.storage_path ? `/api/profile/sources/${source.id}/download` : null,
-      extractedTextPreview: formatSourceTextPreview(extractedText),
-      readableCharacterCount: extractedText?.replace(/\s+/g, " ").trim().length ?? 0,
-      previewUrl: ["docx", "image", "pdf", "txt", "linkedin"].includes(source.source_type)
-        ? await createProfileSourceUrl(supabase, source.storage_path)
-        : null,
-    })),
+    sources.map(async ({ extracted_text: extractedText, ...source }) => {
+      const detectedExperience = summarizeDetectedExperience(extractedText);
+
+      return {
+        ...source,
+        detectedCompanyNames: detectedExperience.companyNames,
+        detectedRoleCount: detectedExperience.roleCount,
+        detectedRoleTitles: detectedExperience.roleTitles,
+        downloadUrl: source.storage_path ? `/api/profile/sources/${source.id}/download` : null,
+        extractedTextPreview: formatSourceTextPreview(extractedText),
+        readableCharacterCount: extractedText?.replace(/\s+/g, " ").trim().length ?? 0,
+        previewUrl: ["docx", "image", "pdf", "txt", "linkedin"].includes(source.source_type)
+          ? await createProfileSourceUrl(supabase, source.storage_path)
+          : null,
+      };
+    }),
   );
+}
+
+function summarizeDetectedExperience(value: string | null | undefined) {
+  const sections = value ? extractExperienceSectionsFromText(value) : [];
+
+  return {
+    companyNames: uniqueNonEmpty(sections.map((section) => section.company)).slice(0, 4),
+    roleCount: sections.length,
+    roleTitles: uniqueNonEmpty(sections.map((section) => section.roleTitle)).slice(0, 4),
+  };
+}
+
+function uniqueNonEmpty(values: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+
+  for (const value of values) {
+    const normalized = value?.replace(/\s+/g, " ").trim();
+    const key = normalized?.toLowerCase();
+
+    if (!normalized || !key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(normalized);
+  }
+
+  return unique;
 }
 
 function formatSourceTextPreview(value: string | null | undefined) {

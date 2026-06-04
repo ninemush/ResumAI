@@ -209,7 +209,7 @@ export const ownerMetricsSchema = z.object({
   }),
   period: z
     .object({
-      days: z.number().int().positive(),
+      days: z.number().int().nonnegative(),
       endedAt: isoDateSchema,
       startedAt: isoDateSchema,
     })
@@ -441,7 +441,7 @@ function buildProfitabilityModel({
   usersList: OwnerMetrics["usersList"];
 }): OwnerMetrics["profitability"] {
   const assumptions = readCostAssumptions();
-  const periodAllocationDays = periodDays > 0 ? periodDays : 30;
+  const periodAllocationDays = periodDays > 0 ? periodDays : Math.max(1, metrics.period.days);
   const platformFixedCostUsd = roundMoney(
     ((assumptions.vercelMonthlyUsd +
       assumptions.supabaseMonthlyUsd +
@@ -476,7 +476,7 @@ function buildProfitabilityModel({
         value: `$${assumptions.costPerCreditUsd.toFixed(2)}`,
       },
       {
-        detail: "Allocated across the selected period. All-time uses a 30-day baseline so fixed costs do not become misleading.",
+        detail: "Allocated across the same selected reporting window as metrics, credits, and revenue. All-time uses the all-time window returned by the metrics function.",
         label: "Fixed platform baseline",
         value: `$${(assumptions.vercelMonthlyUsd + assumptions.supabaseMonthlyUsd + assumptions.revenueCatMonthlyUsd + assumptions.miscMonthlyUsd).toFixed(2)}/mo`,
       },

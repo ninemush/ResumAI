@@ -127,6 +127,60 @@ Example University
   expect(JSON.stringify(sections)).not.toMatch(/Add measurable scope and outcomes|Held Information Security Specialist/i);
 });
 
+test("extracts pipe-separated resume timeline rows", () => {
+  const sections = extractExperienceSectionsFromText(`
+Professional Experience
+Senior Operations Manager | Northstar Logistics | Jan 2020 - Present | Dubai, UAE
+Operations Supervisor | Northstar Logistics | Mar 2017 - Dec 2019 | Dubai, UAE
+Education
+Example College
+`);
+
+  expect(sections).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        company: "Northstar Logistics",
+        dates: "Jan 2020 - Present",
+        location: "Dubai, UAE",
+        roleTitle: "Senior Operations Manager",
+      }),
+      expect.objectContaining({
+        company: "Northstar Logistics",
+        dates: "Mar 2017 - Dec 2019",
+        location: "Dubai, UAE",
+        roleTitle: "Operations Supervisor",
+      }),
+    ]),
+  );
+});
+
+test("extracts dash-separated resume timeline rows", () => {
+  const sections = extractExperienceSectionsFromText(`
+Experience
+Engineering Manager — PlatformCo — Feb 2021 - Present — Remote
+Senior Backend Engineer — PlatformCo — Jun 2018 - Jan 2021 — United States
+Skills
+Distributed systems
+`);
+
+  expect(sections).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        company: "PlatformCo",
+        dates: "Feb 2021 - Present",
+        location: "Remote",
+        roleTitle: "Engineering Manager",
+      }),
+      expect.objectContaining({
+        company: "PlatformCo",
+        dates: "Jun 2018 - Jan 2021",
+        location: "United States",
+        roleTitle: "Senior Backend Engineer",
+      }),
+    ]),
+  );
+});
+
 test("keeps internal resume UI labels out of generated resume content", () => {
   const normalized = normalizeResumeContent({
     contact: {
