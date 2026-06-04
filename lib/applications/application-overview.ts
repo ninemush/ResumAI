@@ -191,7 +191,7 @@ async function readApplications(userId: string): Promise<RawApplication[]> {
     return data ?? [];
   }
 
-  if (!error.message.toLowerCase().includes("archived_at")) {
+  if (!isMissingOptionalApplicationColumn(error.message)) {
     throw new Error("APPLICATION_OVERVIEW_READ_FAILED");
   }
 
@@ -216,6 +216,20 @@ async function readApplications(userId: string): Promise<RawApplication[]> {
     notes: null,
     priority: "normal",
   }));
+}
+
+function isMissingOptionalApplicationColumn(message: string) {
+  const normalized = message.toLowerCase();
+
+  return [
+    "archived_at",
+    "contact_channel",
+    "contact_name",
+    "follow_up_at",
+    "next_action",
+    "notes",
+    "priority",
+  ].some((column) => normalized.includes(column));
 }
 
 async function readApplicationStatusEvents({ applicationIds }: { applicationIds: string[] }) {

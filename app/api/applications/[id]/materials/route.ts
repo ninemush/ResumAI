@@ -19,6 +19,7 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = {
   params: Promise<{
@@ -90,6 +91,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
+    await requireSignedInUser();
     await requireCredits("applicationMaterialsGenerate");
     const result = await generateApplicationMaterials(parsed.data);
     await consumeCredits({
@@ -140,6 +142,17 @@ export async function POST(request: Request, context: RouteContext) {
 
 function isBillingError(error: unknown) {
   return error instanceof Error && error.message.startsWith("CREDITS_");
+}
+
+async function requireSignedInUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
 }
 
 export async function PATCH(request: Request, context: RouteContext) {

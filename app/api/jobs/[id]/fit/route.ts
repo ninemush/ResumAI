@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 
 import { analyzeJobFitForJobId, jobFitRequestSchema } from "@/lib/jobs/job-fit";
 
-export async function GET(_request: Request, context: RouteContext<"/api/jobs/[id]/fit">) {
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+export async function GET(_request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
   const params = await context.params;
   const parsed = jobFitRequestSchema.safeParse({ jobId: params.id });
