@@ -122,13 +122,13 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     const normalizedQuery = grantTargetQuery.trim().toLowerCase();
     const selectedIds = new Set(selectedGrantTargets.map((target) => target.userId));
 
+    if (!normalizedQuery) {
+      return [];
+    }
+
     return metrics.usersList
       .filter((user) => !selectedIds.has(user.userId))
       .filter((user) => {
-        if (!normalizedQuery) {
-          return true;
-        }
-
         return [user.email, user.displayName, user.userId]
           .filter(Boolean)
           .some((value) => value?.toLowerCase().includes(normalizedQuery));
@@ -364,6 +364,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     }
   }
 
+  const shouldShowGrantTargetSuggestions = grantTargetQuery.trim().length > 0;
+
   return (
     <main className="owner-console" aria-labelledby="owner-console-title">
       <div className="owner-console-header">
@@ -477,16 +479,16 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           ["overview", "Overview"],
           ["users", "Users"],
           ["errors", "Errors"],
-          ["support", "Support"],
+          ["support", "Support", metrics.support.ticketsOpen],
           ["outcomes", "Outcomes"],
           ["profitability", "Profitability"],
           ["promos", "Promo codes"],
-        ].map(([key, label]) => (
+        ].map(([key, label, count]) => (
           <button
             className={activeTab === key ? "active" : ""}
             key={key}
             onClick={() => {
-              setActiveTab(key);
+              setActiveTab(String(key));
               if (key === "promos" && promoCodes.length === 0) {
                 void loadPromoCodes();
               }
@@ -494,6 +496,11 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             type="button"
           >
             {label}
+            {typeof count === "number" && count > 0 ? (
+              <span className="owner-tab-badge" aria-hidden="true" title={`${count} open support tickets`}>
+                {count}
+              </span>
+            ) : null}
           </button>
         ))}
       </nav>
@@ -694,6 +701,10 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       </p>
                     </div>
                     <div>
+                      <span>Diagnostic context</span>
+                      <p>{formatTicketDiagnosticContext(ticket.metadata)}</p>
+                    </div>
+                    <div>
                       <span>User-visible update</span>
                       <p>
                         {ticket.ownerNotes ||
@@ -702,8 +713,23 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                     </div>
                   </div>
 
+                  {renderSupportIncidentSnapshot(ticket.metadata)}
+
                   <details className="support-log-details">
-                    <summary>Supporting logs ({ticket.supportingLogs.length})</summary>
+                    <summary>
+                      Supporting logs and conversation ({ticket.supportingLogs.length + readRecentConversation(ticket.metadata).length})
+                    </summary>
+                    {readRecentConversation(ticket.metadata).length > 0 ? (
+                      <ol className="support-conversation-snapshot">
+                        {readRecentConversation(ticket.metadata).map((message, index) => (
+                          <li key={`${message.at}-${index}`}>
+                            <strong>{formatLabel(message.speaker)}</strong>
+                            <span>{message.at ? formatDateTime(message.at) : "Recent"}</span>
+                            <p>{message.text}</p>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : null}
                     {ticket.supportingLogs.length > 0 ? (
                       <ul>
                         {ticket.supportingLogs.map((log) => (
@@ -1092,69 +1118,73 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               <form className="owner-credit-form owner-credit-form-direct" onSubmit={grantCreditsDirectly}>
                 <div className="owner-user-picker">
                   <span className="owner-field-label">Recipients</span>
-                  <div className="owner-user-picker-input">
-                    {selectedGrantTargets.map((target) => (
-                      <button
-                        className="owner-user-chip"
-                        key={target.userId}
-                        onClick={() => removeGrantTarget(target.userId)}
-                        title="Remove recipient"
-                        type="button"
-                      >
-                        <span>{formatGrantTargetLabel(target)}</span>
-                        <small>{target.email && target.displayName ? target.email : target.userId}</small>
-                      </button>
-                    ))}
-                    <input
-                      aria-autocomplete="list"
-                      aria-controls="owner-credit-user-suggestions"
-                      aria-expanded={grantTargetSuggestions.length > 0}
-                      id="credit-grant-recipient-search"
-                      onChange={(event) => setGrantTargetQuery(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          selectFirstGrantTargetSuggestion();
+                  <div className="owner-user-picker-combobox">
+                    <div className="owner-user-picker-input">
+                      {selectedGrantTargets.map((target) => (
+                        <button
+                          className="owner-user-chip"
+                          key={target.userId}
+                          onClick={() => removeGrantTarget(target.userId)}
+                          title="Remove recipient"
+                          type="button"
+                        >
+                          <span>{formatGrantTargetLabel(target)}</span>
+                          <small>{target.email && target.displayName ? target.email : target.userId}</small>
+                        </button>
+                      ))}
+                      <input
+                        aria-autocomplete="list"
+                        aria-controls={
+                          shouldShowGrantTargetSuggestions ? "owner-credit-user-suggestions" : undefined
                         }
+                        aria-expanded={shouldShowGrantTargetSuggestions}
+                        id="credit-grant-recipient-search"
+                        onChange={(event) => setGrantTargetQuery(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            selectFirstGrantTargetSuggestion();
+                          }
 
-                        if (
-                          event.key === "Backspace" &&
-                          !grantTargetQuery &&
+                          if (
+                            event.key === "Backspace" &&
+                            !grantTargetQuery &&
+                            selectedGrantTargets.length > 0
+                          ) {
+                            removeGrantTarget(selectedGrantTargets[selectedGrantTargets.length - 1].userId);
+                          }
+                        }}
+                        placeholder={
                           selectedGrantTargets.length > 0
-                        ) {
-                          removeGrantTarget(selectedGrantTargets[selectedGrantTargets.length - 1].userId);
+                            ? "Add another user..."
+                            : "Search name, email, or user id"
                         }
-                      }}
-                      placeholder={
-                        selectedGrantTargets.length > 0
-                          ? "Add another user..."
-                          : "Search name, email, or user id"
-                      }
-                      role="combobox"
-                      value={grantTargetQuery}
-                    />
-                  </div>
-                  {grantTargetQuery || selectedGrantTargets.length === 0 ? (
-                    <div className="owner-user-suggestions" id="owner-credit-user-suggestions" role="listbox">
-                      {grantTargetSuggestions.length > 0 ? (
-                        grantTargetSuggestions.map((target) => (
-                          <button
-                            aria-selected="false"
-                            className="owner-user-suggestion"
-                            key={target.userId}
-                            onClick={() => addGrantTarget(target)}
-                            role="option"
-                            type="button"
-                          >
-                            <strong>{formatGrantTargetLabel(target)}</strong>
-                            <small>{[target.email, target.userId].filter(Boolean).join(" · ")}</small>
-                          </button>
-                        ))
-                      ) : (
-                        <p>No matching user. Paste an exact email or user id and submit.</p>
-                      )}
+                        role="combobox"
+                        value={grantTargetQuery}
+                      />
                     </div>
-                  ) : null}
+                    {shouldShowGrantTargetSuggestions ? (
+                      <div className="owner-user-suggestions" id="owner-credit-user-suggestions" role="listbox">
+                        {grantTargetSuggestions.length > 0 ? (
+                          grantTargetSuggestions.map((target) => (
+                            <button
+                              aria-selected="false"
+                              className="owner-user-suggestion"
+                              key={target.userId}
+                              onClick={() => addGrantTarget(target)}
+                              role="option"
+                              type="button"
+                            >
+                              <strong>{formatGrantTargetLabel(target)}</strong>
+                              <small>{[target.email, target.userId].filter(Boolean).join(" · ")}</small>
+                            </button>
+                          ))
+                        ) : (
+                          <p>No matching user. Paste an exact email or user id and submit.</p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                   <small>Choose one or more users. Each grant is written as a separate ledger event.</small>
                 </div>
                 <label className="owner-field-small">
@@ -1174,7 +1204,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               {grantMessage ? <p className="owner-generated-note">{grantMessage}</p> : null}
             </article>
           </div>
-          <div className="owner-table" role="table" aria-label="Promo code list">
+          <div className="owner-table owner-promo-table" role="table" aria-label="Promo code list">
             <div className="owner-table-row owner-table-head" role="row">
               <span>Code</span>
               <span>Credits</span>
@@ -1703,6 +1733,102 @@ function buildOperatingActions(metrics: OwnerMetrics, rootCauseCounts: Record<st
   }
 
   return actions.slice(0, 3);
+}
+
+function formatTicketDiagnosticContext(metadata: Record<string, unknown>) {
+  const parts = [
+    readMetadataString(metadata, "activeView") ? `view ${readMetadataString(metadata, "activeView")}` : null,
+    readMetadataString(metadata, "path") ? `path ${readMetadataString(metadata, "path")}` : null,
+    readMetadataString(metadata, "requestId") ? `request ${readMetadataString(metadata, "requestId")}` : null,
+    typeof metadata.creditBalance === "number" ? `${metadata.creditBalance} credits` : null,
+    typeof metadata.applicationCount === "number" ? `${metadata.applicationCount} applications` : null,
+    typeof metadata.jobCount === "number" ? `${metadata.jobCount} jobs` : null,
+  ].filter(Boolean);
+
+  const recentConversation = readRecentConversation(metadata);
+
+  if (recentConversation.length > 0) {
+    parts.push(`${recentConversation.length} recent chat messages`);
+  }
+
+  return parts.length > 0 ? parts.join(" · ") : "No diagnostic context captured yet.";
+}
+
+function renderSupportIncidentSnapshot(metadata: Record<string, unknown>) {
+  const fields = [
+    ["User asked", readMetadataString(metadata, "userMessage")],
+    ["System response", readMetadataString(metadata, "systemResponse")],
+    ["Error detail", readMetadataString(metadata, "errorMessage")],
+    ["Failed action", formatRequestContext(metadata.requestContext)],
+    ["Context", formatTicketDiagnosticContext(metadata)],
+  ].filter((field): field is [string, string] => Boolean(field[1]));
+
+  if (fields.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="support-incident-snapshot" aria-label="Incident snapshot">
+      <span>Incident snapshot</span>
+      <dl>
+        {fields.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function readRecentConversation(metadata: Record<string, unknown>) {
+  const value = metadata.recentConversation;
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const record = entry as Record<string, unknown>;
+      const text = typeof record.text === "string" ? record.text : "";
+
+      if (!text.trim()) {
+        return null;
+      }
+
+      return {
+        at: typeof record.at === "string" ? record.at : "",
+        speaker: typeof record.speaker === "string" ? record.speaker : "message",
+        text,
+      };
+    })
+    .filter((entry): entry is { at: string; speaker: string; text: string } => Boolean(entry))
+    .slice(-8);
+}
+
+function readMetadataString(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function formatRequestContext(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const context = value as Record<string, unknown>;
+  const parts = ["title", "area", "source", "errorCode"]
+    .map((key) => (typeof context[key] === "string" ? context[key] : null))
+    .filter((part): part is string => Boolean(part?.trim()));
+
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function formatLabel(value: string) {

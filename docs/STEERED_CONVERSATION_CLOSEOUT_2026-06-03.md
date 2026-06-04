@@ -9,6 +9,20 @@ launch-readiness backlog.
 
 ## Actioned Now
 
+### Billing Checkout Fallback
+
+The credit-pack UI could expose deployment setup state to users when checkout
+URLs were not configured.
+
+Resolution:
+
+- Removed the user-facing "Purchase link pending" state from Settings.
+- Kept live credit-pack links clickable when configured.
+- Added a graceful fallback for unavailable checkout that points users to promo
+  codes or support-assisted credit grants.
+- Added authenticated workspace regression coverage so the old pending label
+  does not return.
+
 ### Profile Intake Follow-Up Discipline
 
 The profile intake prompt still allowed up to three follow-up questions, which
@@ -66,7 +80,22 @@ or recent fixes:
 These are not newly discovered, but should remain visible during launch QA:
 
 - Ensure RevenueCat/Stripe purchase links are set in deployed environment
-  variables so "Purchase link pending" never appears to users.
+  variables before live credit purchases are expected to grant credits
+  automatically.
 - Re-run the user-simulation QA after any major conversation or resume-template
   changes.
 - Keep prompt/schema changes versioned so regressions can be traced.
+
+## Follow-Up Completed - 2026-06-04
+
+- Application packets now separate free preview/editing from the credit-consuming
+  export step. Users can open and review the packet before preparing PDF/DOCX
+  downloads.
+- Applications list rows were tightened around one primary packet action and
+  compact secondary controls so the surface stays aligned under desktop-width
+  pressure.
+- Support issue logging now carries richer incident context from chat failures:
+  active view, path, credit state, application/job counts, failed action, recent
+  conversation, user message, system response, and error detail.
+- Owner Console Support now surfaces that context in an organized incident
+  snapshot and shows an open-ticket badge on the Support tab.

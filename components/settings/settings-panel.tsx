@@ -74,6 +74,9 @@ export function SettingsPanel({
     ],
     [creditSummary],
   );
+  const hasLiveCheckout = creditSummary.purchaseOptions.some(
+    (option) => option.url,
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -311,34 +314,32 @@ export function SettingsPanel({
           </div>
         </div>
 
+        {!hasLiveCheckout ? (
+          <div className="settings-checkout-note" role="status">
+            <strong>Checkout is unavailable right now.</strong>
+            <span>
+              Promo codes and support-assisted credit grants are still
+              available.
+            </span>
+            <button
+              className="inline-link button-link"
+              onClick={() => onNavigate?.("support")}
+              type="button"
+            >
+              Open support
+            </button>
+          </div>
+        ) : null}
+
         <div className="settings-pack-grid">
           {creditSummary.purchaseOptions.map((option) => (
-            <a
-              aria-disabled={!option.url}
-              className={
-                option.recommended
-                  ? "settings-pack recommended"
-                  : "settings-pack"
-              }
-              href={
-                option.url
-                  ? buildPurchaseUrl(option.url, session.user.id, email)
-                  : "#"
-              }
+            <CreditPackOption
+              email={email}
               key={option.productId}
-              onClick={(event) => {
-                if (!option.url) event.preventDefault();
-              }}
-              target={option.url ? "_blank" : undefined}
-              rel="noreferrer"
-            >
-              <span>{option.label}</span>
-              <strong>${option.priceUsd}</strong>
-              <p>{option.credits} credits</p>
-              <small>{option.description}</small>
-              {option.recommended ? <em>Best value</em> : null}
-              {!option.url ? <small>Purchase link pending</small> : null}
-            </a>
+              onOpenSupport={() => onNavigate?.("support")}
+              option={option}
+              userId={session.user.id}
+            />
           ))}
         </div>
 
@@ -460,6 +461,58 @@ export function SettingsPanel({
         </article>
       </section>
     </main>
+  );
+}
+
+function CreditPackOption({
+  email,
+  onOpenSupport,
+  option,
+  userId,
+}: {
+  email: string | null;
+  onOpenSupport: () => void;
+  option: CreditSummary["purchaseOptions"][number];
+  userId: string;
+}) {
+  const className = option.recommended
+    ? "settings-pack recommended"
+    : "settings-pack";
+  const content = (
+    <>
+      <span>{option.label}</span>
+      <strong>${option.priceUsd}</strong>
+      <p>{option.credits} credits</p>
+      <small>{option.description}</small>
+      {option.recommended ? <em>Best value</em> : null}
+    </>
+  );
+
+  if (option.url) {
+    return (
+      <a
+        className={className}
+        href={buildPurchaseUrl(option.url, userId, email)}
+        target="_blank"
+        rel="noreferrer"
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <article className={`${className} unavailable`}>
+      {content}
+      <small>Use a promo code or contact support to add credits.</small>
+      <button
+        className="inline-link button-link settings-pack-support"
+        onClick={onOpenSupport}
+        type="button"
+      >
+        Open support
+      </button>
+    </article>
   );
 }
 

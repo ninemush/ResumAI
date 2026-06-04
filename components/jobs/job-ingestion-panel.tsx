@@ -70,7 +70,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         return;
       }
 
-      const materialResult = await generateAndExportMaterials(applicationId);
+      const materialResult = await generateMaterialsForPreview(applicationId);
 
       setMessage(
         payload.created
@@ -83,7 +83,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
     }
   }
 
-  async function generateAndExportMaterials(applicationId: string) {
+  async function generateMaterialsForPreview(applicationId: string) {
     const materialResponse = await fetch(`/api/applications/${applicationId}/materials`, {
       method: "POST",
     });
@@ -93,16 +93,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       return materialPayload.error?.message ?? "Targeted materials could not be generated yet.";
     }
 
-    const exportResponse = await fetch(`/api/applications/${applicationId}/materials/export`, {
-      method: "POST",
-    });
-    const exportPayload = await exportResponse.json();
-
-    if (!exportResponse.ok) {
-      return `${materialPayload.summary ?? "Targeted materials generated."} ${exportPayload.error?.message ?? "Export needs another attempt from Applications."}`;
-    }
-
-    return `${materialPayload.summary ?? "Targeted materials generated."} Validated PDF and DOCX files are ready in Applications and Library.`;
+    return `${materialPayload.summary ?? "Targeted materials generated."} Open Applications to preview the packet before preparing PDF/DOCX downloads.`;
   }
 
   async function updateReviewStatus(jobId: string, reviewStatus: "accepted" | "rejected") {

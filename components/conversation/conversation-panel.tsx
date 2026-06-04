@@ -707,9 +707,7 @@ export function ConversationPanel({
         );
       }
 
-      const exportSummary = await exportApplicationMaterials(application.id);
-
-      return `${payload.summary} ${exportSummary}`;
+      return `${payload.summary} Open Applications to preview the packet before preparing PDF/DOCX downloads.`;
     }
 
     const inferredStatus = inferApplicationStatus(text);
@@ -797,7 +795,7 @@ export function ConversationPanel({
 
     const applicationId = payload.application?.id;
     const materialSummary = applicationId
-      ? await generateAndExportApplicationMaterials(applicationId)
+      ? await generateApplicationMaterialsForPreview(applicationId)
       : "Next, we should draft the job-specific materials before marking it applied.";
 
     return payload.created
@@ -805,7 +803,7 @@ export function ConversationPanel({
       : `That application is already logged. ${materialSummary}`;
   }
 
-  async function generateAndExportApplicationMaterials(applicationId: string) {
+  async function generateApplicationMaterialsForPreview(applicationId: string) {
     const response = await fetch(
       `/api/applications/${applicationId}/materials`,
       {
@@ -827,36 +825,7 @@ export function ConversationPanel({
       );
     }
 
-    const exportSummary = await exportApplicationMaterials(applicationId);
-
-    return `${payload.summary} ${exportSummary}`;
-  }
-
-  async function exportApplicationMaterials(applicationId: string) {
-    const response = await fetch(
-      `/api/applications/${applicationId}/materials/export`,
-      {
-        method: "POST",
-      },
-    );
-    const payload = await response.json();
-
-    if (!response.ok) {
-      const creditReply = getCreditExhaustionReply(payload);
-
-      if (creditReply) {
-        return creditReply;
-      }
-
-      return (
-        payload.error?.message ??
-        "The editable materials are saved, but file preparation needs another attempt from Applications."
-      );
-    }
-
-    return payload.review?.exportReadiness?.status === "exported"
-      ? "I also prepared validated PDF and DOCX files and saved them in Applications and Library."
-      : "The editable materials are saved; Applications will show what still needs file preparation.";
+    return `${payload.summary} Open Applications to preview the packet before preparing PDF/DOCX downloads.`;
   }
 
   async function processProfileText(text: string) {
@@ -1495,7 +1464,19 @@ export function ConversationPanel({
           errorMessage: input.errorMessage,
           metadata: {
             activeView,
+            applicationCount: applicationOverview.recentApplications.length,
+            creditBalance: creditSummary.balance,
+            exhaustedCredits: creditSummary.isExhausted,
+            jobCount: jobOverview.recentJobs.length,
             path: window.location.pathname,
+            recentConversation: buildSupportConversationSnapshot(messages, input.userMessage),
+            requestContext: {
+              area: input.area,
+              errorCode: input.errorCode ?? null,
+              source: input.source,
+              title: input.title,
+            },
+            userAgent: window.navigator.userAgent,
           },
           source: input.source,
           systemResponse: input.systemResponse,
@@ -1803,22 +1784,7 @@ function AdvisorActionChips({
   links: AdvisorSuggestedLink[];
   onSelectView: (view: AppView) => void;
 }) {
-  const merged = [
-    ...links.map((link) => ({
-      id: `link-${link.view}-${link.label}`,
-      label: link.label,
-      reason: link.reason,
-      view: link.view,
-    })),
-    ...actions.map((action) => ({
-      id: `action-${action.id}`,
-      label: action.creditCost
-        ? `${action.label} (${action.creditCost} cr)`
-        : action.label,
-      reason: action.reason,
-      view: action.view,
-    })),
-  ].slice(0, 4);
+  const merged = buildAdvisorActionChips({ actions, links });
 
   if (merged.length === 0) {
     return null;
@@ -1838,6 +1804,50 @@ function AdvisorActionChips({
       ))}
     </div>
   );
+}
+
+function buildAdvisorActionChips({
+  actions,
+  links,
+}: {
+  actions: AdvisorSuggestedAction[];
+  links: AdvisorSuggestedLink[];
+}) {
+  const byView = new Map<
+    AdvisorSuggestedAction["view"],
+    {
+      id: string;
+      label: string;
+      reason: string;
+      view: AdvisorSuggestedAction["view"];
+    }
+  >();
+
+  for (const action of actions) {
+    byView.set(action.view, {
+      id: `action-${action.id}`,
+      label: action.creditCost
+        ? `${action.label} (${action.creditCost} cr)`
+        : action.label,
+      reason: action.reason,
+      view: action.view,
+    });
+  }
+
+  for (const link of links) {
+    if (byView.has(link.view)) {
+      continue;
+    }
+
+    byView.set(link.view, {
+      id: `link-${link.view}-${link.label}`,
+      label: link.label,
+      reason: link.reason,
+      view: link.view,
+    });
+  }
+
+  return Array.from(byView.values()).slice(0, 4);
 }
 
 function joinAssistantSummaries(items: Array<string | AssistantMessageDraft>) {
@@ -3589,6 +3599,27 @@ function getUnsupportedFileReason(file: File) {
   }
 
   return null;
+}
+
+function buildSupportConversationSnapshot(
+  messages: ConversationMessage[],
+  pendingUserMessage?: string,
+) {
+  const recentMessages = messages.slice(-8).map((item) => ({
+    at: "",
+    speaker: item.speaker,
+    text: item.text.slice(0, 900),
+  }));
+
+  if (pendingUserMessage?.trim()) {
+    recentMessages.push({
+      at: new Date().toISOString(),
+      speaker: "user",
+      text: pendingUserMessage.trim().slice(0, 900),
+    });
+  }
+
+  return recentMessages;
 }
 
 function inferLinkSourceType(value: string) {

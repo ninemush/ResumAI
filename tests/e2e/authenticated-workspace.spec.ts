@@ -134,6 +134,54 @@ test.describe("authenticated workspace", () => {
     );
   });
 
+  test("deduplicates advisor chips that navigate to the same place", async ({ page }) => {
+    await page.route("**/api/conversation/advisor", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          assistantMessage:
+            "You have credits available. Settings is the right place to review balance and usage.",
+          suggestedActions: [
+            {
+              creditCost: null,
+              id: "open-settings-credits",
+              kind: "navigate",
+              label: "Open Credits",
+              reason: "Open Settings to review credit balance and history.",
+              view: "settings",
+            },
+          ],
+          suggestedLinks: [
+            {
+              label: "Open Credits",
+              reason: "Review credit balance and history.",
+              view: "settings",
+            },
+            {
+              label: "Open Library",
+              reason: "Review files and generated materials.",
+              view: "library",
+            },
+          ],
+        }),
+        status: 200,
+      });
+    });
+
+    await page.goto("/");
+
+    const input = page.getByPlaceholder(/Share background, role, link, or resume/i);
+    await input.fill("What credits do I have?");
+    await page.getByRole("button", { name: /Send message/i }).click();
+
+    const latestAssistant = page.locator(".assistant-message").last();
+    await expect(latestAssistant.getByText(/You have credits available/i)).toBeVisible();
+    await expect(latestAssistant.getByRole("button", { name: "Open Credits" })).toHaveCount(1);
+    await expect(latestAssistant.getByRole("button", { name: "Open Library" })).toHaveCount(1);
+    await expect(latestAssistant.locator(".advisor-action-row button")).toHaveCount(2);
+  });
+
   test("keeps record-heavy desktop surfaces compact and action oriented", async ({ page, isMobile }) => {
     test.skip(isMobile, "Desktop record density is covered separately from mobile focus.");
 
@@ -166,6 +214,7 @@ test.describe("authenticated workspace", () => {
     await expect(page.getByRole("heading", { name: /Credit usage/i })).toBeVisible();
     await expect(page.getByRole("heading", { name: /Purchase history/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /Send reset link/i })).toBeVisible();
+    await expect(page.getByText("Purchase link pending", { exact: false })).toHaveCount(0);
     await expect(page.getByText("Workspace controls")).toHaveCount(0);
   });
 
@@ -239,6 +288,37 @@ test.describe("authenticated workspace", () => {
 
     await ownerTabs.getByRole("button", { name: /^Outcomes$/i }).click();
     await expect(page.getByRole("heading", { name: /Outcome by tier/i })).toBeVisible();
+
+    await ownerTabs.getByRole("button", { name: /^Promo codes$/i }).click();
+    await expect(page.getByRole("heading", { name: /Promo code management/i })).toBeVisible();
+
+    const creditCards = page.locator(".owner-credit-actions .owner-credit-card");
+    await expect(creditCards).toHaveCount(2);
+    const cardBoxes = await creditCards.evaluateAll((cards) =>
+      cards.map((card) => {
+        const box = card.getBoundingClientRect();
+        return {
+          bottom: box.bottom,
+          top: box.top,
+        };
+      }),
+    );
+    expect(cardBoxes[1].top).toBeGreaterThan(cardBoxes[0].bottom - 1);
+
+    const recipientSearch = page.getByPlaceholder(/Search name, email, or user id/i);
+    await expect(recipientSearch).toBeVisible();
+    await expect(page.locator("#owner-credit-user-suggestions")).toHaveCount(0);
+    await recipientSearch.fill("a");
+    await expect(page.locator("#owner-credit-user-suggestions")).toBeVisible();
+    await recipientSearch.fill("");
+    await expect(page.locator("#owner-credit-user-suggestions")).toHaveCount(0);
+
+    const promoHead = page.locator(".owner-promo-table .owner-table-head");
+    await expect(promoHead).toBeVisible();
+    const promoColumnCount = await promoHead.evaluate(
+      (row) => getComputedStyle(row).gridTemplateColumns.split(" ").filter(Boolean).length,
+    );
+    expect(promoColumnCount).toBe(4);
   });
 
   test("warns before leaving unsaved master resume edits", async ({ page, isMobile }) => {

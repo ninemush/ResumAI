@@ -5,8 +5,10 @@ import {
   AlertTriangle,
   Archive,
   Download,
+  Eye,
   ExternalLink,
   FileText,
+  Pencil,
   RefreshCcw,
   Save,
   ShieldCheck,
@@ -67,6 +69,7 @@ const applicationStatuses = [
 
 export type StageFilter = "All" | "Review" | "Applied" | "Interview" | "Selected" | "Closed";
 type ArchiveView = "active" | "archived";
+type MaterialReviewMode = "preview" | "edit";
 
 export function ApplicationPanel({
   initialStageFilter = "All",
@@ -75,6 +78,7 @@ export function ApplicationPanel({
 }: ApplicationPanelProps) {
   const router = useRouter();
   const [activeReview, setActiveReview] = useState<MaterialReview | null>(null);
+  const [activeReviewMode, setActiveReviewMode] = useState<MaterialReviewMode>("preview");
   const [archiveView, setArchiveView] = useState<ArchiveView>("active");
   const [activeStageFilter, setActiveStageFilter] = useState<StageFilter>(initialStageFilter);
   const [coverLetterDraft, setCoverLetterDraft] = useState("");
@@ -171,31 +175,34 @@ export function ApplicationPanel({
         return;
       }
 
-      const exportResponse = await fetch(`/api/applications/${applicationId}/materials/export`, {
-        method: "POST",
-      });
-      const exportPayload = await exportResponse.json();
+      const review = await fetchMaterialReview(applicationId);
 
-      if (!exportResponse.ok) {
-        setMessage(
-          `${payload.summary ?? "Created role-specific resume and cover-letter drafts."} ${
-            exportPayload.error?.message ??
-            "Open the packet, review the drafts, then download PDF and DOCX files."
-          }`,
-        );
-        await loadReview(applicationId);
-        router.refresh();
-        return;
+      if (review) {
+        setActiveReview(review);
+        setActiveReviewMode("preview");
+        setResumeDraft(review.resume?.content ?? null);
+        setCoverLetterDraft(review.coverLetter?.content ?? "");
       }
 
-      setActiveReview(exportPayload.review);
-      setResumeDraft(exportPayload.review.resume?.content ?? null);
-      setCoverLetterDraft(exportPayload.review.coverLetter?.content ?? "");
-      setMessage("Created and prepared downloadable resume and cover-letter PDF/DOCX files.");
+      setMessage(
+        `${payload.summary ?? "Created role-specific resume and cover-letter drafts."} Preview the packet before preparing downloads.`,
+      );
       router.refresh();
     } finally {
       setGeneratingApplicationId(null);
     }
+  }
+
+  async function fetchMaterialReview(applicationId: string) {
+    const response = await fetch(`/api/applications/${applicationId}/materials`);
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setMessage(payload.error?.message ?? "Unable to load materials.");
+      return null;
+    }
+
+    return payload.review as MaterialReview;
   }
 
   async function loadReview(applicationId: string) {
@@ -203,17 +210,16 @@ export function ApplicationPanel({
     setMessage(null);
 
     try {
-      const response = await fetch(`/api/applications/${applicationId}/materials`);
-      const payload = await response.json();
+      const review = await fetchMaterialReview(applicationId);
 
-      if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to load materials.");
+      if (!review) {
         return;
       }
 
-      setActiveReview(payload.review);
-      setResumeDraft(payload.review.resume?.content ?? null);
-      setCoverLetterDraft(payload.review.coverLetter?.content ?? "");
+      setActiveReview(review);
+      setActiveReviewMode("preview");
+      setResumeDraft(review.resume?.content ?? null);
+      setCoverLetterDraft(review.coverLetter?.content ?? "");
     } finally {
       setLoadingReviewApplicationId(null);
     }
@@ -244,6 +250,7 @@ export function ApplicationPanel({
       }
 
       setActiveReview(payload.review);
+      setActiveReviewMode("preview");
       setResumeDraft(payload.review.resume?.content ?? null);
       setCoverLetterDraft(payload.review.coverLetter?.content ?? "");
       setMessage("Saved material edits. Exports were reset so downloads match the latest content.");
@@ -273,9 +280,10 @@ export function ApplicationPanel({
       }
 
       setActiveReview(payload.review);
+      setActiveReviewMode("preview");
       setResumeDraft(payload.review.resume?.content ?? null);
       setCoverLetterDraft(payload.review.coverLetter?.content ?? "");
-      setMessage("PDF and DOCX files exported and stored securely.");
+      setMessage("PDF and DOCX files are prepared. You can download them from this packet.");
       router.refresh();
     } finally {
       setExportingApplicationId(null);
@@ -406,33 +414,6 @@ export function ApplicationPanel({
                   </span>
                 </span>
               </button>
-              {application.latestResumePdfUrl ||
-              application.latestResumeDocxUrl ||
-              application.latestCoverLetterPdfUrl ||
-              application.latestCoverLetterDocxUrl ? (
-                <span className="record-download-row">
-                  {application.latestResumePdfUrl ? (
-                    <a href={application.latestResumePdfUrl} rel="noreferrer" target="_blank">
-                      Resume PDF
-                    </a>
-                  ) : null}
-                  {application.latestResumeDocxUrl ? (
-                    <a href={application.latestResumeDocxUrl} rel="noreferrer" target="_blank">
-                      Resume DOCX
-                    </a>
-                  ) : null}
-                  {application.latestCoverLetterPdfUrl ? (
-                    <a href={application.latestCoverLetterPdfUrl} rel="noreferrer" target="_blank">
-                      Letter PDF
-                    </a>
-                  ) : null}
-                  {application.latestCoverLetterDocxUrl ? (
-                    <a href={application.latestCoverLetterDocxUrl} rel="noreferrer" target="_blank">
-                      Letter DOCX
-                    </a>
-                  ) : null}
-                </span>
-              ) : null}
             </div>
 
             <div className="application-stage-cell">
@@ -463,38 +444,34 @@ export function ApplicationPanel({
                 <ExternalLink size={14} aria-hidden="true" />
                 Job
               </a>
+              {hasApplicationPacket(application) ? (
+                <button
+                  className="secondary-action compact-action compact-action-primary"
+                  disabled={loadingReviewApplicationId === application.id}
+                  onClick={() => loadReview(application.id)}
+                  type="button"
+                >
+                  <Eye size={14} aria-hidden="true" />
+                  {loadingReviewApplicationId === application.id ? "Opening" : "Preview packet"}
+                </button>
+              ) : (
+                <button
+                  className="secondary-action compact-action compact-action-primary"
+                  disabled={generatingApplicationId === application.id || Boolean(application.archivedAt)}
+                  onClick={() => generateMaterials(application.id)}
+                  type="button"
+                  title={
+                    application.archivedAt
+                      ? "Restore this application before generating materials"
+                      : "Create a role-specific resume and cover letter for preview"
+                  }
+                >
+                  <WandSparkles size={14} aria-hidden="true" />
+                  {generatingApplicationId === application.id ? "Creating" : "Create packet"}
+                </button>
+              )}
               <button
-                className="secondary-action compact-action"
-                disabled={generatingApplicationId === application.id || Boolean(application.archivedAt)}
-                onClick={() => generateMaterials(application.id)}
-                type="button"
-                title={
-                  application.archivedAt
-                    ? "Restore this application before generating materials"
-                    : "Create a role-specific resume and cover letter, then export PDF and DOCX files"
-                }
-              >
-                <WandSparkles size={14} aria-hidden="true" />
-                {generatingApplicationId === application.id
-                  ? "Creating"
-                  : application.latestResumeHasPdf &&
-                      application.latestResumeHasDocx &&
-                      application.latestCoverLetterHasPdf &&
-                      application.latestCoverLetterHasDocx
-                    ? "Regenerate"
-                    : "Create packet"}
-              </button>
-              <button
-                className="secondary-action compact-action"
-                disabled={loadingReviewApplicationId === application.id}
-                onClick={() => loadReview(application.id)}
-                type="button"
-              >
-                <FileText size={14} aria-hidden="true" />
-                {loadingReviewApplicationId === application.id ? "Opening" : "Open packet"}
-              </button>
-              <button
-                className="secondary-action compact-action"
+                className="secondary-action compact-action icon-only-action"
                 disabled={pendingApplicationId === application.id}
                 onClick={() => updateArchiveState(application.id, !application.archivedAt)}
                 title={
@@ -509,7 +486,7 @@ export function ApplicationPanel({
                 ) : (
                   <Archive size={14} aria-hidden="true" />
                 )}
-                {application.archivedAt ? "Restore" : "Archive"}
+                <span>{application.archivedAt ? "Restore" : "Archive"}</span>
               </button>
             </div>
           </article>
@@ -527,9 +504,33 @@ export function ApplicationPanel({
               </h2>
             </div>
             <div className="review-actions">
+              <div className="packet-mode-toggle" aria-label="Packet view mode">
+                <button
+                  aria-pressed={activeReviewMode === "preview"}
+                  className={activeReviewMode === "preview" ? "active" : ""}
+                  onClick={() => setActiveReviewMode("preview")}
+                  type="button"
+                >
+                  <Eye size={14} aria-hidden="true" />
+                  Preview
+                </button>
+                <button
+                  aria-pressed={activeReviewMode === "edit"}
+                  className={activeReviewMode === "edit" ? "active" : ""}
+                  onClick={() => setActiveReviewMode("edit")}
+                  type="button"
+                >
+                  <Pencil size={14} aria-hidden="true" />
+                  Edit
+                </button>
+              </div>
               <button
                 className="secondary-action"
-                disabled={!resumeDraft || savingApplicationId === activeReview.application.id}
+                disabled={
+                  activeReviewMode !== "edit" ||
+                  !resumeDraft ||
+                  savingApplicationId === activeReview.application.id
+                }
                 onClick={saveReview}
                 type="button"
               >
@@ -540,18 +541,25 @@ export function ApplicationPanel({
                 className="secondary-action"
                 disabled={
                   !activeReview.exportReadiness.canExport ||
+                  activeReview.exportReadiness.status === "exported" ||
                   exportingApplicationId === activeReview.application.id
                 }
                 onClick={exportFiles}
                 title={
-                  activeReview.exportReadiness.canExport
-                    ? "Download resume and cover-letter PDF/DOCX files"
+                  activeReview.exportReadiness.status === "exported"
+                    ? "Files are already prepared. Use the links below."
+                    : activeReview.exportReadiness.canExport
+                      ? "Prepare resume and cover-letter PDF/DOCX files after previewing. This costs 1 credit."
                     : "Create both resume and cover-letter drafts before downloading"
                 }
                 type="button"
               >
                 <Download size={15} aria-hidden="true" />
-                {exportingApplicationId === activeReview.application.id ? "Preparing..." : "Download files"}
+                {exportingApplicationId === activeReview.application.id
+                  ? "Preparing..."
+                  : activeReview.exportReadiness.status === "exported"
+                    ? "Files prepared"
+                    : "Prepare downloads"}
               </button>
             </div>
           </div>
@@ -571,12 +579,22 @@ export function ApplicationPanel({
                 ))}
               </ul>
             ) : (
-              <p>Files are ready for PDF and DOCX download.</p>
+              <p>
+                {activeReview.exportReadiness.status === "exported"
+                  ? "Files are prepared. Opening these links does not prepare a new export."
+                  : "Previewing and editing this packet costs 0 credits. Preparing PDF/DOCX downloads costs 1 credit."}
+              </p>
             )}
           </div>
 
           {!resumeDraft || !activeReview.coverLetter ? (
             <p className="empty-state">Create the packet first, then this review area becomes editable.</p>
+          ) : activeReviewMode === "preview" ? (
+            <PacketPreview
+              application={activeReview.application}
+              coverLetter={coverLetterDraft}
+              resume={resumeDraft}
+            />
           ) : (
             <div className="materials-review-layout">
               <section className="material-document-editor" aria-label="Targeted resume editor">
@@ -746,14 +764,92 @@ function materialPillClass(status: string | null) {
   return "material-pill";
 }
 
+function hasApplicationPacket(application: ApplicationOverview["recentApplications"][number]) {
+  return Boolean(application.latestResumeStatus || application.latestCoverLetterStatus);
+}
+
 function formatExportStatus(status: MaterialReview["exportReadiness"]["status"]) {
   const labels: Record<MaterialReview["exportReadiness"]["status"], string> = {
     exported: "Files exported",
     missing_materials: "Packet incomplete",
-    ready_to_export: "Ready to download",
+    ready_to_export: "Preview ready",
   };
 
   return labels[status];
+}
+
+function PacketPreview({
+  application,
+  coverLetter,
+  resume,
+}: {
+  application: MaterialReview["application"];
+  coverLetter: string;
+  resume: ResumeContent;
+}) {
+  const experienceSections =
+    resume.experienceSections.length > 0
+      ? resume.experienceSections
+      : [
+          {
+            bullets: resume.experienceBullets,
+            company: null,
+            dates: null,
+            location: null,
+            roleTitle: "Selected experience",
+          },
+        ];
+  const coverLetterParagraphs = coverLetter
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="packet-preview-grid">
+      <article className="packet-preview-document" aria-label="Resume preview">
+        <div className="packet-preview-kicker">Resume preview</div>
+        <h3>{resume.headline}</h3>
+        <p>{resume.summary}</p>
+        {resume.skills.length > 0 ? (
+          <div className="packet-preview-skills" aria-label="Resume skills">
+            {resume.skills.slice(0, 12).map((skill) => (
+              <span key={skill}>{skill}</span>
+            ))}
+          </div>
+        ) : null}
+        <div className="packet-preview-section">
+          <h4>Experience</h4>
+          {experienceSections.slice(0, 4).map((section) => (
+            <section key={`${section.roleTitle}-${section.company ?? ""}`}>
+              <div>
+                <strong>{section.roleTitle}</strong>
+                {[section.company, section.location, section.dates].filter(Boolean).length > 0 ? (
+                  <small>{[section.company, section.location, section.dates].filter(Boolean).join(" · ")}</small>
+                ) : null}
+              </div>
+              <ul>
+                {section.bullets.slice(0, 4).map((bullet) => (
+                  <li key={bullet}>{bullet}</li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      </article>
+      <article className="packet-preview-document" aria-label="Cover letter preview">
+        <div className="packet-preview-kicker">Cover letter preview</div>
+        <h3>
+          {application.companyName}
+          {application.jobTitle ? ` · ${application.jobTitle}` : ""}
+        </h3>
+        <div className="packet-preview-letter">
+          {coverLetterParagraphs.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
+        </div>
+      </article>
+    </div>
+  );
 }
 
 function formatShortDate(value: string) {

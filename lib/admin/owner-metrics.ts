@@ -68,6 +68,7 @@ const adminSupportTicketSchema = z.object({
   fixStatus: z.string().default("not_started"),
   id: z.string(),
   l1Disposition: z.string(),
+  metadata: z.record(z.string(), z.unknown()).default({}),
   ownerNotes: z.string().default(""),
   priority: z.string(),
   rootCause: z.string().default("Needs owner review."),
@@ -569,6 +570,7 @@ async function readSupportIssues(
         "subject",
         "summary",
         "l1_disposition",
+        "metadata",
         "escalated_to_l2",
         "escalation_reason",
         "area",
@@ -600,6 +602,7 @@ async function readSupportIssues(
     fix_status: string | null;
     id: string;
     l1_disposition: string;
+    metadata: Record<string, unknown> | null;
     owner_notes: string | null;
     priority: string;
     root_cause: string | null;
@@ -656,6 +659,7 @@ async function readSupportIssues(
       fixStatus: ticket.fix_status ?? "not_started",
       id: ticket.id,
       l1Disposition: ticket.l1_disposition,
+      metadata: ticket.metadata ?? {},
       ownerNotes: ticket.owner_notes ?? "",
       priority: ticket.priority,
       rootCause: ticket.root_cause ?? "Needs owner review.",

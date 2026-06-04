@@ -601,31 +601,26 @@ export function ProfileExplorer({
                     ))}
                   </ul>
                 ) : null}
-                <button
-                  className="secondary-action"
-                  disabled={
-                    pendingId === recommendation.id ||
-                    recommendation.user_acknowledged ||
-                    recommendation.role_family.trim().toLowerCase() ===
-                      activeDirection
-                  }
-                  onClick={() => acknowledgeRecommendation(recommendation.id)}
-                  title="Sets this as your working target direction for profile positioning, resume focus, job fit, and application materials."
-                  type="button"
-                >
-                  {recommendation.user_acknowledged ||
-                  recommendation.role_family.trim().toLowerCase() ===
-                    activeDirection ? (
+                {recommendation.user_acknowledged ||
+                recommendation.role_family.trim().toLowerCase() ===
+                  activeDirection ? (
+                  <span className="role-current-target">
                     <CheckCircle2 size={15} aria-hidden="true" />
-                  ) : null}
-                  {recommendation.user_acknowledged ||
-                  recommendation.role_family.trim().toLowerCase() ===
-                    activeDirection
-                    ? "Current target"
-                    : pendingId === recommendation.id
+                    Current target
+                  </span>
+                ) : (
+                  <button
+                    className="secondary-action"
+                    disabled={pendingId === recommendation.id}
+                    onClick={() => acknowledgeRecommendation(recommendation.id)}
+                    title="Sets this as your working target direction for profile positioning, resume focus, job fit, and application materials."
+                    type="button"
+                  >
+                    {pendingId === recommendation.id
                       ? "Saving..."
                       : "Set as target direction"}
-                </button>
+                  </button>
+                )}
               </article>
             ))}
           </div>
