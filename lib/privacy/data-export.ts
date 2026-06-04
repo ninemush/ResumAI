@@ -41,17 +41,14 @@ export async function createUserDataExport(): Promise<PrivacyExportResult> {
     throw new Error("PRIVACY_EXPORT_UPLOAD_FAILED");
   }
 
-  await supabase
-    .from("privacy_requests")
-    .update({
-      export_storage_path: storagePath,
-      resolution_summary:
-        "Structured JSON export generated in private user-scoped storage. Uploaded binary files are referenced by metadata only in v1.",
-      status: "completed",
-      resolved_at: new Date().toISOString(),
-    })
-    .eq("id", privacyRequest.id)
-    .eq("user_id", user.id);
+  const { error: completeError } = await supabase.rpc("complete_privacy_export", {
+    p_export_storage_path: storagePath,
+    p_request_id: privacyRequest.id,
+  });
+
+  if (completeError) {
+    throw new Error("PRIVACY_EXPORT_COMPLETE_FAILED");
+  }
 
   return {
     exportJson,
