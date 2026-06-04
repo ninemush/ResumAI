@@ -1,0 +1,48 @@
+import Link from "next/link";
+
+import { brand } from "@/lib/brand";
+import { complianceHardeningChecklist } from "@/lib/privacy/compliance-config";
+
+export default function SecurityPage() {
+  return (
+    <main className="legal-page">
+      <section className="legal-document" aria-labelledby="security-title">
+        <Link className="legal-back-link" href="/">
+          Back to {brand.name}
+        </Link>
+        <p className="eyebrow">Security overview</p>
+        <h1 id="security-title">Security Overview</h1>
+        <p className="legal-meta">Operational overview. No audit or certification claim is made.</p>
+
+        <p>
+          {brand.name} is designed around authenticated access, Supabase Row
+          Level Security, private storage buckets, server-side validation, rate
+          limits on mutations, and avoidance of sensitive profile or resume text
+          in telemetry.
+        </p>
+
+        <h2>Current Controls</h2>
+        <p>
+          User workspace records are scoped by authenticated user id. Admin-only
+          records are protected by database policies. Uploaded files and
+          generated artifacts use private storage paths.
+        </p>
+
+        <h2>Incident Response</h2>
+        <p>
+          Security incidents are tracked in an admin-only incident log.
+          Notification deadlines are surfaced for operational review when
+          notification may be required, but final notification decisions require
+          qualified review.
+        </p>
+
+        <h2>Production Hardening Backlog</h2>
+        {complianceHardeningChecklist.map((item) => (
+          <p key={item.item}>
+            {item.item}: {item.status}.
+          </p>
+        ))}
+      </section>
+    </main>
+  );
+}
