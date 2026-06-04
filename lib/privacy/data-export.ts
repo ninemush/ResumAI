@@ -61,7 +61,6 @@ export async function createUserDataExport(): Promise<PrivacyExportResult> {
 }
 
 export async function assembleUserDataExport(userId: string, requestId: string) {
-  const supabase = await createClient();
   const [
     profile,
     profileFacts,
