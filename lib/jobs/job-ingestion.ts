@@ -1,17 +1,16 @@
 import "server-only";
 
-import { isIP } from "node:net";
 import * as cheerio from "cheerio";
 import { z } from "zod";
 
 import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
+import { safeFetchExternalHtml } from "@/lib/security/safe-fetch";
+import { assertExternalHttpUrl, isHttpUrl } from "@/lib/security/url-safety";
 import { createClient } from "@/lib/supabase/server";
 
 const MAX_JOB_HTML_BYTES = 1_500_000;
 const MAX_JOB_TEXT_CHARS = 20_000;
 const FETCH_TIMEOUT_MS = 8000;
-
-const blockedHostnames = new Set(["localhost", "localhost.localdomain"]);
 
 export const jobIngestionRequestSchema = z.object({
   jobUrl: z
@@ -48,7 +47,7 @@ export async function ingestJobUrl({
     throw new Error("AUTH_REQUIRED");
   }
 
-  assertSafeUrl(jobUrl);
+  assertSafeJobUrl(jobUrl);
 
   const { data: startedJob, error: insertError } = await supabase
     .from("job_ingestions")
@@ -66,7 +65,7 @@ export async function ingestJobUrl({
 
   try {
     const fetched = await fetchJobPage(jobUrl);
-    assertSafeUrl(fetched.resolvedUrl);
+    assertSafeJobUrl(fetched.resolvedUrl);
 
     const parsed = extractJobPageText(fetched.html);
 
@@ -127,12 +126,15 @@ export async function ingestJobUrl({
 }
 
 async function fetchJobPage(jobUrl: string) {
-  const response = await fetch(jobUrl, {
+  const { finalUrl, response } = await safeFetchExternalHtml(jobUrl, {
+    blockedErrorCode: "JOB_URL_BLOCKED",
+    dnsLookupErrorCode: "JOB_FETCH_FAILED",
+    fetchErrorCode: "JOB_FETCH_FAILED",
     headers: {
       accept: "text/html,application/xhtml+xml",
       "user-agent": "PramaniaJobIngestion/0.1",
     },
-    redirect: "follow",
+    maxRedirects: 3,
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
@@ -160,7 +162,7 @@ async function fetchJobPage(jobUrl: string) {
 
   return {
     html,
-    resolvedUrl: response.url,
+    resolvedUrl: finalUrl,
   };
 }
 
@@ -191,53 +193,9 @@ function extractJobPageText(html: string) {
   };
 }
 
-function assertSafeUrl(value: string) {
-  const url = new URL(value);
-  const hostname = url.hostname.toLowerCase();
-
-  if (blockedHostnames.has(hostname) || hostname.endsWith(".localhost")) {
-    throw new Error("JOB_URL_BLOCKED");
-  }
-
-  if (isPrivateIp(hostname)) {
-    throw new Error("JOB_URL_BLOCKED");
-  }
-}
-
-function isPrivateIp(hostname: string) {
-  if (!isIP(hostname)) {
-    return false;
-  }
-
-  if (hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0") {
-    return true;
-  }
-
-  if (hostname.startsWith("10.") || hostname.startsWith("192.168.")) {
-    return true;
-  }
-
-  const parts = hostname.split(".").map(Number);
-
-  if (parts.length === 4) {
-    const [first, second] = parts;
-
-    if (first === 172 && second >= 16 && second <= 31) {
-      return true;
-    }
-
-    if (first === 169 && second === 254) {
-      return true;
-    }
-  }
-
-  return hostname.startsWith("fc") || hostname.startsWith("fd") || hostname.startsWith("fe80:");
-}
-
-function isHttpUrl(value: string) {
-  try {
-    return ["http:", "https:"].includes(new URL(value).protocol);
-  } catch {
-    return false;
-  }
+function assertSafeJobUrl(value: string) {
+  assertExternalHttpUrl(value, {
+    blockedErrorCode: "JOB_URL_BLOCKED",
+    unsupportedProtocolErrorCode: "JOB_URL_BLOCKED",
+  });
 }

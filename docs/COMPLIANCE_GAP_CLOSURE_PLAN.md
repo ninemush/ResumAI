@@ -12,6 +12,7 @@ This plan tracks practical compliance readiness work for the product currently b
 - `security_incidents` table with admin-only RLS and notification deadline tracking when review may be required.
 - Owner Console Compliance tab for privacy request aging, data inventory, subprocessors, retention status, incident summary, and hardening checklist.
 - Public draft pages for privacy, data retention, AI use, subprocessors, and security overview.
+- SSRF-hardened direct URL ingestion for user-provided job, profile, portfolio, and public page links, including protocol/credential blocking, local/private/reserved address blocking, DNS resolution checks, and redirect revalidation before content is fetched.
 
 ## Remaining Non-Code Tasks
 
@@ -23,7 +24,6 @@ This plan tracks practical compliance readiness work for the product currently b
 - Breach response owner, escalation rota, and communication approval workflow.
 - External security review before public launch.
 - Durable/distributed rate limiting for production instead of in-process development buckets.
-- Stronger SSRF protection for URL ingestion, including DNS resolution and redirect revalidation.
 - Admin access review cadence, including owner/admin role inventory and removal workflow.
 - Privacy request operating procedure, including identity verification escalation and response templates.
 - Incident tabletop exercise for unauthorized access, provider breach, and accidental disclosure scenarios.

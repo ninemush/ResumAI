@@ -1,6 +1,5 @@
 import "server-only";
 
-import { isIP } from "node:net";
 import * as cheerio from "cheerio";
 import JSZip from "jszip";
 import mammoth from "mammoth";
@@ -9,6 +8,8 @@ import { z } from "zod";
 
 import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
 import { extractProfileFactsFromText, type ProfileIntakeResult } from "@/lib/profile/profile-intake";
+import { safeFetchExternalHtml } from "@/lib/security/safe-fetch";
+import { assertExternalHttpUrl } from "@/lib/security/url-safety";
 import { createClient } from "@/lib/supabase/server";
 
 const PROFILE_SOURCE_BUCKET = "profile-sources";
@@ -26,7 +27,6 @@ const IMAGE_OCR_MAX_ATTEMPTS = 3;
 const PDF_TEXT_MAX_ATTEMPTS = 3;
 const PDF_AI_MAX_ATTEMPTS = 2;
 const LINKEDIN_WEB_SEARCH_MAX_ATTEMPTS = 2;
-const blockedHostnames = new Set(["localhost", "localhost.localdomain"]);
 const supportedOcrMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export const profileSourceExtractionRequestSchema = z.object({
@@ -632,7 +632,7 @@ async function extractPublicProfilePage(sourceUrl: string) {
 
   const response = await fetchPublicProfilePage(sourceUrl);
 
-  if (!response.ok) {
+  if (!response.response.ok) {
     if (isLinkedInProfile) {
       throw new Error("LINKEDIN_PUBLIC_PROFILE_BLOCKED");
     }
@@ -640,21 +640,21 @@ async function extractPublicProfilePage(sourceUrl: string) {
     throw new Error("PROFILE_LINK_FETCH_FAILED");
   }
 
-  assertSafeProfileUrl(response.url);
+  assertSafeProfileUrl(response.finalUrl);
 
-  const contentType = response.headers.get("content-type") ?? "";
+  const contentType = response.response.headers.get("content-type") ?? "";
 
   if (!contentType.includes("text/html") && !contentType.includes("application/xhtml")) {
     throw new Error("PROFILE_LINK_UNSUPPORTED_CONTENT_TYPE");
   }
 
-  const contentLength = Number(response.headers.get("content-length") ?? 0);
+  const contentLength = Number(response.response.headers.get("content-length") ?? 0);
 
   if (contentLength > MAX_PROFILE_HTML_BYTES) {
     throw new Error("PROFILE_LINK_TOO_LARGE");
   }
 
-  const html = await response.text();
+  const html = await response.response.text();
 
   if (html.length > MAX_PROFILE_HTML_BYTES) {
     throw new Error("PROFILE_LINK_TOO_LARGE");
@@ -682,12 +682,15 @@ async function fetchPublicProfilePage(sourceUrl: string) {
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      return await fetch(sourceUrl, {
+      return await safeFetchExternalHtml(sourceUrl, {
+        blockedErrorCode: "PROFILE_LINK_BLOCKED",
+        dnsLookupErrorCode: "PROFILE_LINK_FETCH_FAILED",
+        fetchErrorCode: "PROFILE_LINK_FETCH_FAILED",
         headers: {
           accept: "text/html,application/xhtml+xml",
           "user-agent": "PramaniaProfileIngestion/0.1",
         },
-        redirect: "follow",
+        maxRedirects: 3,
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
     } catch (error) {
@@ -1055,20 +1058,10 @@ async function blobToDataUrl(data: Blob, mimeType: string) {
 }
 
 function assertSafeProfileUrl(value: string) {
-  const url = new URL(value);
-  const hostname = url.hostname.toLowerCase();
-
-  if (!["http:", "https:"].includes(url.protocol)) {
-    throw new Error("PROFILE_LINK_UNSUPPORTED_PROTOCOL");
-  }
-
-  if (blockedHostnames.has(hostname) || hostname.endsWith(".localhost")) {
-    throw new Error("PROFILE_LINK_BLOCKED");
-  }
-
-  if (isPrivateIp(hostname)) {
-    throw new Error("PROFILE_LINK_BLOCKED");
-  }
+  assertExternalHttpUrl(value, {
+    blockedErrorCode: "PROFILE_LINK_BLOCKED",
+    unsupportedProtocolErrorCode: "PROFILE_LINK_UNSUPPORTED_PROTOCOL",
+  });
 }
 
 function isLinkedInUrl(value: string) {
@@ -1087,36 +1080,6 @@ function looksLikeLinkedInAuthWall(text: string) {
     "sign up to see",
     "people you may know",
   ].some((phrase) => normalized.includes(phrase));
-}
-
-function isPrivateIp(hostname: string) {
-  if (!isIP(hostname)) {
-    return false;
-  }
-
-  if (hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0") {
-    return true;
-  }
-
-  if (hostname.startsWith("10.") || hostname.startsWith("192.168.")) {
-    return true;
-  }
-
-  const parts = hostname.split(".").map(Number);
-
-  if (parts.length === 4) {
-    const [first, second] = parts;
-
-    if (first === 172 && second >= 16 && second <= 31) {
-      return true;
-    }
-
-    if (first === 169 && second === 254) {
-      return true;
-    }
-  }
-
-  return hostname.startsWith("fc") || hostname.startsWith("fd") || hostname.startsWith("fe80:");
 }
 
 function buildInputLabel({
