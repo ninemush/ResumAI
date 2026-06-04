@@ -5,8 +5,11 @@ import {
   ArrowRight,
   Brain,
   Compass,
+  Database,
+  ExternalLink,
   FileText,
   Loader2,
+  LockKeyhole,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -15,7 +18,8 @@ import Image from "next/image";
 
 import { CREDIT_PURCHASE_OPTIONS } from "@/lib/billing/credit-catalog";
 import { brand } from "@/lib/brand";
-import { TERMS_VERSION } from "@/lib/legal/terms";
+import { PRIVACY_POLICY_VERSION, TERMS_VERSION } from "@/lib/legal/terms";
+import { publicPolicyPaths } from "@/lib/privacy/compliance-config";
 import { createClient } from "@/lib/supabase/browser";
 
 type AuthMode = "sign-in" | "sign-up" | "reset-password";
@@ -35,7 +39,7 @@ const authHighlights = [
   {
     icon: FileText,
     title: "Start with your story",
-    body: "Share a resume, LinkedIn profile, or career note. Pramania will help turn it into clear, useful direction.",
+    body: `Share a resume, LinkedIn profile, or career note. ${brand.name} will help turn it into clear, useful direction.`,
   },
   {
     icon: Compass,
@@ -53,7 +57,7 @@ const featureHighlights = [
   {
     icon: Brain,
     title: "When your head is full, start anywhere",
-    body: "Pramania can work from rough notes, resumes, job links, profile pages, or a spoken thought. You do not need to organize everything first.",
+    body: `${brand.name} can work from rough notes, resumes, job links, profile pages, or a spoken thought. You do not need to organize everything first.`,
   },
   {
     icon: Compass,
@@ -67,7 +71,34 @@ const featureHighlights = [
   },
 ];
 
-const pageLinks = ["Overview", "Features", "Pricing"];
+const trustDetailLinks = [
+  {
+    body: "How profile data, applications, generated materials, quota evidence, and audit records are handled over time.",
+    href: publicPolicyPaths.dataRetention,
+    icon: Database,
+    label: "Data Retention",
+  },
+  {
+    body: "Where AI helps, what it does not decide, and why every generated output needs user review.",
+    href: publicPolicyPaths.aiUse,
+    icon: Brain,
+    label: "AI Use",
+  },
+  {
+    body: "The service providers currently tracked for hosting, storage, AI processing, and purchase entitlements.",
+    href: publicPolicyPaths.subprocessors,
+    icon: ExternalLink,
+    label: "Subprocessors",
+  },
+  {
+    body: "The current security posture, incident-review approach, and production-hardening backlog.",
+    href: publicPolicyPaths.security,
+    icon: LockKeyhole,
+    label: "Security",
+  },
+];
+
+const pageLinks = ["Overview", "Features", "Trust", "Pricing"];
 
 export function AuthPanel() {
   const [mode, setMode] = useState<AuthMode>("sign-in");
@@ -124,6 +155,7 @@ export function AuthPanel() {
                 name: fullName,
                 terms_accepted_at: termsAcceptedAt,
                 terms_version: TERMS_VERSION,
+                privacy_policy_version: PRIVACY_POLICY_VERSION,
               },
             },
           })
@@ -238,6 +270,7 @@ export function AuthPanel() {
       redirectUrl.searchParams.set("terms", "accepted");
       redirectUrl.searchParams.set("termsVersion", TERMS_VERSION);
       redirectUrl.searchParams.set("termsAcceptedAt", new Date().toISOString());
+      redirectUrl.searchParams.set("privacyPolicyVersion", PRIVACY_POLICY_VERSION);
     }
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
@@ -326,7 +359,7 @@ export function AuthPanel() {
                 ? "Enter your email and we will send a secure reset link."
                 : mode === "sign-in"
                   ? "Pick up where your profile, applications, and career context left off."
-                  : "Start with a resume, LinkedIn link, or career note. Pramania will shape it with you."}
+                  : `Start with a resume, LinkedIn link, or career note. ${brand.name} will shape it with you.`}
           </p>
         </div>
         {!emailCodeTarget && mode !== "reset-password" ? (
@@ -539,7 +572,7 @@ export function AuthPanel() {
         <h2 id="features-title">For the moments when job hunting feels heavy.</h2>
         <p>
           Whether you are actively searching, recovering from a layoff, or unsure how
-          to explain your next move, Pramania helps turn the blur into a practical
+          to explain your next move, {brand.name} helps turn the blur into a practical
           path forward.
         </p>
         <div className="auth-section-grid">
@@ -559,11 +592,37 @@ export function AuthPanel() {
         </div>
       </section>
 
+      <section className="auth-section auth-trust-section" id="trust" aria-labelledby="trust-title">
+        <p className="eyebrow">Trust and data controls</p>
+        <h2 id="trust-title">See how the workspace handles privacy, AI, and operational evidence.</h2>
+        <p>
+          {brand.name} is built for a sensitive workflow: resumes, career history,
+          job targets, generated drafts, and application records. These public
+          pages explain the current controls and the items still marked for
+          operational or legal review.
+        </p>
+        <div className="auth-trust-grid" aria-label="Trust and policy details">
+          {trustDetailLinks.map((detail) => {
+            const Icon = detail.icon;
+
+            return (
+              <a className="auth-trust-card" href={detail.href} key={detail.href}>
+                <span className="auth-section-icon">
+                  <Icon size={18} aria-hidden="true" />
+                </span>
+                <strong>{detail.label}</strong>
+                <p>{detail.body}</p>
+              </a>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="auth-section auth-pricing-section" id="pricing" aria-labelledby="pricing-title">
         <p className="eyebrow">Pricing</p>
         <h2 id="pricing-title">Pricing for a job search, not a forever subscription.</h2>
         <p>
-          We know job hunting is usually a focused phase. Pramania uses credits so you can
+          We know job hunting is usually a focused phase. {brand.name} uses credits so you can
           start with what you need, add more as you go, and stay in control. There are no
           automatic top-ups or surprise recurring charges.
         </p>
@@ -582,6 +641,16 @@ export function AuthPanel() {
           See exactly how credits are used
         </a>
       </section>
+
+      <footer className="auth-public-footer" aria-label="Public policy links">
+        <span>{brand.name}</span>
+        <a href="/terms">Terms</a>
+        <a href={publicPolicyPaths.privacy}>Privacy</a>
+        <a href={publicPolicyPaths.dataRetention}>Data Retention</a>
+        <a href={publicPolicyPaths.aiUse}>AI Use</a>
+        <a href={publicPolicyPaths.subprocessors}>Subprocessors</a>
+        <a href={publicPolicyPaths.security}>Security</a>
+      </footer>
     </div>
   );
 }

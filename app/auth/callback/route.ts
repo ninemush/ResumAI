@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { TERMS_VERSION } from "@/lib/legal/terms";
+import { PRIVACY_POLICY_VERSION, TERMS_VERSION } from "@/lib/legal/terms";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -39,12 +39,12 @@ async function ensureProfileFromAuthMetadata({
   email: string | null;
   fullName: string | null;
   supabase: Awaited<ReturnType<typeof createClient>>;
-  terms: { acceptedAt: string | null; version: string | null };
+  terms: { acceptedAt: string | null; privacyPolicyVersion: string | null; version: string | null };
   userId: string;
 }) {
   const { data: existingProfile } = await supabase
     .from("profiles")
-    .select("id, display_name, terms_accepted_at, terms_version")
+    .select("id, display_name, terms_accepted_at, terms_version, privacy_policy_accepted_at, privacy_policy_version")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -52,6 +52,8 @@ async function ensureProfileFromAuthMetadata({
     await supabase.from("profiles").insert({
       user_id: userId,
       display_name: fullName ?? email,
+      privacy_policy_accepted_at: terms.acceptedAt,
+      privacy_policy_version: terms.privacyPolicyVersion,
       terms_accepted_at: terms.acceptedAt,
       terms_version: terms.version,
     });
@@ -60,6 +62,8 @@ async function ensureProfileFromAuthMetadata({
 
   const patch = {
     display_name: !existingProfile.display_name && (fullName || email) ? fullName ?? email : undefined,
+    privacy_policy_accepted_at: !existingProfile.privacy_policy_accepted_at ? terms.acceptedAt : undefined,
+    privacy_policy_version: !existingProfile.privacy_policy_version ? terms.privacyPolicyVersion : undefined,
     terms_accepted_at: !existingProfile.terms_accepted_at ? terms.acceptedAt : undefined,
     terms_version: !existingProfile.terms_version ? terms.version : undefined,
   };
@@ -82,20 +86,25 @@ function readAuthFullName(metadata: Record<string, unknown>) {
 function readTermsAcceptance(requestUrl: URL, metadata: Record<string, unknown>) {
   const queryAccepted = requestUrl.searchParams.get("terms") === "accepted";
   const queryAcceptedAt = requestUrl.searchParams.get("termsAcceptedAt");
+  const queryPrivacyPolicyVersion = requestUrl.searchParams.get("privacyPolicyVersion");
   const queryVersion = requestUrl.searchParams.get("termsVersion");
   const metadataAcceptedAt =
     typeof metadata.terms_accepted_at === "string" ? metadata.terms_accepted_at : null;
+  const metadataPrivacyPolicyVersion =
+    typeof metadata.privacy_policy_version === "string" ? metadata.privacy_policy_version : null;
   const metadataVersion = typeof metadata.terms_version === "string" ? metadata.terms_version : null;
 
   if (queryAccepted) {
     return {
       acceptedAt: isValidIsoDate(queryAcceptedAt) ? queryAcceptedAt : new Date().toISOString(),
+      privacyPolicyVersion: queryPrivacyPolicyVersion || PRIVACY_POLICY_VERSION,
       version: queryVersion || TERMS_VERSION,
     };
   }
 
   return {
     acceptedAt: isValidIsoDate(metadataAcceptedAt) ? metadataAcceptedAt : null,
+    privacyPolicyVersion: metadataPrivacyPolicyVersion || PRIVACY_POLICY_VERSION,
     version: metadataVersion,
   };
 }

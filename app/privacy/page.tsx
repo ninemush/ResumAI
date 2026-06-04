@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { brand } from "@/lib/brand";
 import { PRIVACY_POLICY_EFFECTIVE_DATE, PRIVACY_POLICY_VERSION } from "@/lib/legal/terms";
 
 export default function PrivacyPage() {
@@ -7,7 +8,7 @@ export default function PrivacyPage() {
     <main className="legal-page">
       <section className="legal-document" aria-labelledby="privacy-title">
         <Link className="legal-back-link" href="/">
-          Back to Pramania
+          Back to {brand.name}
         </Link>
         <p className="eyebrow">Legal</p>
         <h1 id="privacy-title">Privacy Policy</h1>
@@ -16,7 +17,7 @@ export default function PrivacyPage() {
         </p>
 
         <p>
-          This Privacy Policy explains how Pramania collects, uses, stores, and
+          This Privacy Policy explains how {brand.name} collects, uses, stores, and
           protects information when you use the website, workspace, conversational
           assistant, resume tools, job-post analysis, application tracking, and
           related services.
@@ -34,7 +35,7 @@ export default function PrivacyPage() {
 
         <h2>2. Information Created by the Service</h2>
         <p>
-          Pramania may create derived information such as profile summaries, role
+          {brand.name} may create derived information such as profile summaries, role
           recommendations, seniority reads, job-fit analysis, generated materials,
           source-extraction status, artifact versions, timestamps, usage counts,
           audit events, error logs, and security signals needed to operate the
@@ -53,26 +54,26 @@ export default function PrivacyPage() {
 
         <h2>4. AI Processing</h2>
         <p>
-          Pramania uses AI providers to analyze your submitted content and produce
+          {brand.name} uses AI providers to analyze your submitted content and produce
           drafts, recommendations, and structured outputs. We send only the
           information reasonably needed for the requested workflow. AI output can
           be inaccurate or incomplete, so you remain responsible for reviewing and
-          approving anything you use outside Pramania.
+          approving anything you use outside {brand.name}.
         </p>
 
         <h2>5. Third-Party Services</h2>
         <p>
-          Pramania may rely on service providers for hosting, authentication,
+          {brand.name} may rely on service providers for hosting, authentication,
           database, file storage, AI processing, analytics, logging, payments,
           email, and support. These providers process information only as needed
-          to provide their services to Pramania and are expected to protect it
+          to provide their services to {brand.name} and are expected to protect it
           under their own security and privacy commitments.
         </p>
 
         <h2>6. Public Links and Uploaded Sources</h2>
         <p>
           If you provide a public profile, portfolio, job posting, or website
-          link, Pramania may attempt to read publicly available content from that
+          link, {brand.name} may attempt to read publicly available content from that
           link. Some sites block automated access or require sign-in. You are
           responsible for ensuring you have the right to submit any link, file, or
           content you provide.
@@ -80,7 +81,7 @@ export default function PrivacyPage() {
 
         <h2>7. Data Separation and Access Control</h2>
         <p>
-          User workspace data is scoped to authenticated accounts. Pramania is
+          User workspace data is scoped to authenticated accounts. {brand.name} is
           designed to enforce data separation through server-side validation,
           database access controls, and storage rules. Administrative access is
           limited to operating, securing, supporting, and improving the service.
@@ -98,7 +99,7 @@ export default function PrivacyPage() {
         <h2>9. Your Choices</h2>
         <p>
           You can choose what to upload, paste, save, edit, export, or submit
-          outside Pramania. You may request access, correction, deletion, or export
+          outside {brand.name}. You may request access, correction, deletion, or export
           of your personal information through the support channel made available
           in the product. Some audit-minimum records may be retained where legally
           or operationally required.
@@ -106,7 +107,7 @@ export default function PrivacyPage() {
 
         <h2>10. Security</h2>
         <p>
-          Pramania uses technical and organizational safeguards designed to protect
+          {brand.name} uses technical and organizational safeguards designed to protect
           information against unauthorized access, loss, misuse, alteration, and
           disclosure. No internet service is perfectly secure, and you should not
           upload information you are not authorized or comfortable sharing.
@@ -123,13 +124,13 @@ export default function PrivacyPage() {
         <h2>12. International Processing</h2>
         <p>
           Your information may be processed in countries other than where you live.
-          Where required, Pramania will use appropriate safeguards for transfers
+          Where required, {brand.name} will use appropriate safeguards for transfers
           and processing of personal information.
         </p>
 
         <h2>13. Children</h2>
         <p>
-          Pramania is not intended for children or anyone under the age required
+          {brand.name} is not intended for children or anyone under the age required
           to consent to data processing in their jurisdiction. Do not use the
           service if you are not legally permitted to do so.
         </p>
@@ -137,12 +138,12 @@ export default function PrivacyPage() {
         <h2>14. Changes to This Policy</h2>
         <p>
           We may update this Privacy Policy from time to time. Continued use of
-          Pramania after changes become effective means the updated policy applies.
+          {brand.name} after changes become effective means the updated policy applies.
         </p>
 
         <h2>15. Contact</h2>
         <p>
-          For privacy questions or requests, contact the Pramania operator through
+          For privacy questions or requests, contact the {brand.name} operator through
           the support channel made available in the product.
         </p>
       </section>
