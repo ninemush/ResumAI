@@ -75,7 +75,9 @@ export async function listUserPrivacyRequests() {
     throw new Error("PRIVACY_REQUESTS_READ_FAILED");
   }
 
-  return (data ?? []).map((row) => mapPrivacyRequestRow(row as PrivacyRequestRow, false));
+  return (data ?? []).map((row) =>
+    mapPrivacyRequestRow(row as unknown as PrivacyRequestRow, false),
+  );
 }
 
 export async function createPrivacyRequest(input: z.input<typeof privacyRequestCreateSchema>) {
@@ -102,7 +104,7 @@ export async function createPrivacyRequest(input: z.input<typeof privacyRequestC
     throw new Error("PRIVACY_REQUEST_CREATE_FAILED");
   }
 
-  return mapPrivacyRequestRow(data as PrivacyRequestRow, false);
+  return mapPrivacyRequestRow(data as unknown as PrivacyRequestRow, false);
 }
 
 export async function listAdminPrivacyRequests() {
@@ -119,7 +121,9 @@ export async function listAdminPrivacyRequests() {
     throw new Error("ADMIN_PRIVACY_REQUESTS_READ_FAILED");
   }
 
-  return (data ?? []).map((row) => mapPrivacyRequestRow(row as PrivacyRequestRow, true));
+  return (data ?? []).map((row) =>
+    mapPrivacyRequestRow(row as unknown as PrivacyRequestRow, true),
+  );
 }
 
 export async function updateAdminPrivacyRequest({
@@ -159,7 +163,7 @@ export async function updateAdminPrivacyRequest({
     throw new Error("PRIVACY_REQUEST_UPDATE_FAILED");
   }
 
-  return mapPrivacyRequestRow(data as PrivacyRequestRow, true);
+  return mapPrivacyRequestRow(data as unknown as PrivacyRequestRow, true);
 }
 
 export function defaultSubject(requestType: PrivacyRequestType) {

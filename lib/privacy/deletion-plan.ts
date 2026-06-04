@@ -242,7 +242,7 @@ async function selectRows(
     return [];
   }
 
-  return (data ?? []) as Record<string, unknown>[];
+  return (data ?? []) as unknown as Record<string, unknown>[];
 }
 
 function readStoragePaths(rows: Record<string, unknown>[], keys: string[]) {

@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-import { TERMS_VERSION } from "@/lib/legal/terms";
+import { PRIVACY_POLICY_VERSION, TERMS_VERSION } from "@/lib/legal/terms";
 import { createClient } from "@/lib/supabase/server";
 
 export const acceptTermsSchema = z.object({
@@ -26,6 +26,8 @@ export async function acceptTerms(input: z.input<typeof acceptTermsSchema>) {
     .from("profiles")
     .upsert(
       {
+        privacy_policy_accepted_at: acceptedAt,
+        privacy_policy_version: PRIVACY_POLICY_VERSION,
         user_id: user.id,
         terms_accepted_at: acceptedAt,
         terms_version: parsed.version,

@@ -132,7 +132,7 @@ async function selectMany(table: string, columns: string, userId: string) {
     return [];
   }
 
-  return data ?? [];
+  return (data ?? []) as unknown as Record<string, unknown>[];
 }
 
 async function selectMaybeSingle(table: string, columns: string, userId: string) {
@@ -147,7 +147,7 @@ async function selectMaybeSingle(table: string, columns: string, userId: string)
     return null;
   }
 
-  return data ?? null;
+  return (data ?? null) as unknown as Record<string, unknown> | null;
 }
 
 function readTermsAcceptance(profile: unknown) {

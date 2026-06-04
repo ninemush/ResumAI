@@ -60,7 +60,7 @@ export async function listSecurityIncidents() {
     throw new Error("SECURITY_INCIDENTS_READ_FAILED");
   }
 
-  return (data ?? []).map(mapIncidentRow);
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(mapIncidentRow);
 }
 
 export async function createSecurityIncident(input: z.input<typeof securityIncidentCreateSchema>) {
@@ -93,7 +93,7 @@ export async function createSecurityIncident(input: z.input<typeof securityIncid
     throw new Error("SECURITY_INCIDENT_CREATE_FAILED");
   }
 
-  return mapIncidentRow(data);
+  return mapIncidentRow(data as unknown as Record<string, unknown>);
 }
 
 export async function updateSecurityIncident({
@@ -142,7 +142,7 @@ export async function updateSecurityIncident({
     throw new Error("SECURITY_INCIDENT_UPDATE_FAILED");
   }
 
-  return mapIncidentRow(data);
+  return mapIncidentRow(data as unknown as Record<string, unknown>);
 }
 
 function shouldSetDeadline(input: {

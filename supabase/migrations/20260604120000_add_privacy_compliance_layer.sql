@@ -25,6 +25,10 @@ create table if not exists public.privacy_requests (
   )
 );
 
+alter table public.profiles
+add column if not exists privacy_policy_accepted_at timestamptz,
+add column if not exists privacy_policy_version text;
+
 create index if not exists privacy_requests_user_created_idx
 on public.privacy_requests(user_id, created_at desc);
 
