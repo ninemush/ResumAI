@@ -8,6 +8,9 @@ const ARTIFACT_SIGNED_URL_TTL_SECONDS = 10 * 60;
 export type ApplicationOverview = {
   recentApplications: {
     archivedAt: string | null;
+    contactChannel: string | null;
+    contactName: string | null;
+    followUpAt: string | null;
     id: string;
     companyName: string;
     jobTitle: string | null;
@@ -24,6 +27,9 @@ export type ApplicationOverview = {
     latestResumeHeadline: string | null;
     latestResumePdfUrl: string | null;
     latestResumeStatus: string | null;
+    nextAction: string | null;
+    notes: string | null;
+    priority: "low" | "normal" | "high";
     statusEvents: {
       createdAt: string;
       newStatus: string;
@@ -61,10 +67,16 @@ export type ApplicationOverview = {
 type RawApplication = {
   archived_at?: string | null;
   company_name: string;
+  contact_channel?: string | null;
+  contact_name?: string | null;
   created_at: string;
+  follow_up_at?: string | null;
   id: string;
   job_title: string | null;
   job_url: string;
+  next_action?: string | null;
+  notes?: string | null;
+  priority?: "low" | "normal" | "high";
   status: string;
   updated_at: string;
 };
@@ -123,6 +135,9 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
 
   const recentApplications = data.map((application) => ({
     archivedAt: application.archived_at ?? null,
+    contactChannel: application.contact_channel ?? null,
+    contactName: application.contact_name ?? null,
+    followUpAt: application.follow_up_at ?? null,
     id: application.id,
     companyName: application.company_name,
     jobTitle: application.job_title,
@@ -139,6 +154,9 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
     latestResumeHeadline: resumeArtifacts.get(application.id)?.headline ?? null,
     latestResumePdfUrl: resumeArtifacts.get(application.id)?.pdfUrl ?? null,
     latestResumeStatus: resumeArtifacts.get(application.id)?.status ?? null,
+    nextAction: application.next_action ?? null,
+    notes: application.notes ?? null,
+    priority: application.priority ?? "normal",
     statusEvents: statusEvents.get(application.id) ?? [],
     status: application.status,
     createdAt: application.created_at,
@@ -149,9 +167,7 @@ export async function getApplicationOverview(userId: string): Promise<Applicatio
 
   return {
     recentApplications: recentApplications.slice(0, 50),
-    openFollowUpCount: activeApplications.filter((application) =>
-      followUpStatuses.has(application.status),
-    ).length,
+    openFollowUpCount: activeApplications.filter(needsApplicationFollowUp).length,
     summary: {
       ...summarizeApplications(activeApplications),
       active: activeApplications.length,
@@ -164,7 +180,9 @@ async function readApplications(userId: string): Promise<RawApplication[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("applications")
-    .select("id, company_name, job_title, job_url, status, archived_at, created_at, updated_at")
+    .select(
+      "id, company_name, job_title, job_url, status, archived_at, next_action, follow_up_at, contact_name, contact_channel, priority, notes, created_at, updated_at",
+    )
     .eq("user_id", userId)
     .order("updated_at", { ascending: false })
     .limit(100);
@@ -191,6 +209,12 @@ async function readApplications(userId: string): Promise<RawApplication[]> {
   return (fallback.data ?? []).map((application) => ({
     ...application,
     archived_at: null,
+    contact_channel: null,
+    contact_name: null,
+    follow_up_at: null,
+    next_action: null,
+    notes: null,
+    priority: "normal",
   }));
 }
 
@@ -274,6 +298,21 @@ function summarizeApplications(applications: { status: string }[]) {
       { label: "Closed", value: rejected },
     ],
   };
+}
+
+function needsApplicationFollowUp(application: {
+  followUpAt: string | null;
+  status: string;
+}) {
+  if (!followUpStatuses.has(application.status)) {
+    return false;
+  }
+
+  if (!application.followUpAt) {
+    return true;
+  }
+
+  return new Date(application.followUpAt).getTime() <= Date.now();
 }
 
 async function readLatestResumeArtifacts({ applicationIds }: { applicationIds: string[] }) {

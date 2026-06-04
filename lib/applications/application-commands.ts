@@ -32,13 +32,42 @@ export const updateApplicationArchiveStateSchema = z.object({
   archived: z.boolean(),
 });
 
+const nullableTrimmedText = (max: number) =>
+  z.preprocess(
+    (value) => {
+      if (typeof value !== "string") {
+        return value ?? null;
+      }
+
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    },
+    z.string().max(max).nullable(),
+  );
+
+export const updateApplicationPlanSchema = z.object({
+  applicationId: z.string().uuid(),
+  contactChannel: nullableTrimmedText(160),
+  contactName: nullableTrimmedText(160),
+  followUpAt: nullableTrimmedText(40),
+  nextAction: nullableTrimmedText(180),
+  notes: nullableTrimmedText(1200),
+  priority: z.enum(["low", "normal", "high"]).default("normal"),
+});
+
 export type ApplicationCommandResult = {
   application: {
     archivedAt?: string | null;
+    contactChannel?: string | null;
+    contactName?: string | null;
+    followUpAt?: string | null;
     id: string;
     companyName: string;
     jobTitle: string | null;
     jobUrl: string;
+    nextAction?: string | null;
+    notes?: string | null;
+    priority?: "low" | "normal" | "high";
     status: z.infer<typeof applicationStatusSchema>;
   };
   created: boolean;
@@ -196,6 +225,61 @@ export async function updateApplicationArchiveState(
   };
 }
 
+export async function updateApplicationPlan(
+  input: z.input<typeof updateApplicationPlanSchema>,
+): Promise<ApplicationCommandResult> {
+  const parsed = updateApplicationPlanSchema.parse(input);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const followUpAt = normalizeFollowUpAt(parsed.followUpAt);
+  const { data, error } = await supabase
+    .from("applications")
+    .update({
+      contact_channel: parsed.contactChannel,
+      contact_name: parsed.contactName,
+      follow_up_at: followUpAt,
+      next_action: parsed.nextAction,
+      notes: parsed.notes,
+      priority: parsed.priority,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", parsed.applicationId)
+    .eq("user_id", user.id)
+    .select(
+      "id, company_name, job_title, job_url, status, archived_at, next_action, follow_up_at, contact_name, contact_channel, priority, notes",
+    )
+    .single();
+
+  if (error || !data) {
+    throw new Error("APPLICATION_NOT_FOUND");
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: user.id,
+    event_type: "application.plan.updated",
+    metadata: {
+      has_contact: Boolean(parsed.contactName || parsed.contactChannel),
+      has_follow_up: Boolean(followUpAt),
+      priority: parsed.priority,
+    },
+    resource_id: parsed.applicationId,
+    resource_type: "application",
+    user_id: user.id,
+  });
+
+  return {
+    application: mapApplication(data),
+    created: false,
+  };
+}
+
 export async function updateApplicationStatus(
   input: z.input<typeof updateApplicationStatusSchema>,
 ): Promise<ApplicationCommandResult> {
@@ -234,20 +318,47 @@ export async function updateApplicationStatus(
 
 function mapApplication(application: {
   archived_at?: string | null;
+  contact_channel?: string | null;
+  contact_name?: string | null;
+  follow_up_at?: string | null;
   id: string;
   company_name: string;
   job_title: string | null;
   job_url: string;
+  next_action?: string | null;
+  notes?: string | null;
+  priority?: "low" | "normal" | "high";
   status: z.infer<typeof applicationStatusSchema>;
 }) {
   return {
     archivedAt: application.archived_at ?? null,
+    contactChannel: application.contact_channel ?? null,
+    contactName: application.contact_name ?? null,
+    followUpAt: application.follow_up_at ?? null,
     id: application.id,
     companyName: application.company_name,
     jobTitle: application.job_title,
     jobUrl: application.job_url,
+    nextAction: application.next_action ?? null,
+    notes: application.notes ?? null,
+    priority: application.priority ?? "normal",
     status: application.status,
   };
+}
+
+function normalizeFollowUpAt(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00.000Z` : value;
+  const timestamp = Date.parse(normalized);
+
+  if (Number.isNaN(timestamp)) {
+    throw new Error("APPLICATION_PLAN_INVALID_DATE");
+  }
+
+  return new Date(timestamp).toISOString();
 }
 
 function mapStatusUpdateError(message: string | undefined) {

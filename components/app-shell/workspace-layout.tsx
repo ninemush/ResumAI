@@ -49,6 +49,7 @@ const MIN_NAV_WIDTH = 220;
 const MAX_NAV_WIDTH = 340;
 const MIN_CONVERSATION_WIDTH = 340;
 const MAX_CONVERSATION_WIDTH = 540;
+const LOW_CREDIT_BALANCE_THRESHOLD = 10;
 const CONVERSATION_WIDTH_PRESETS = [
   { label: "S", value: 340 },
   { label: "M", value: 400 },
@@ -394,11 +395,13 @@ function CreditStatusBanner({
   creditSummary: CreditSummary;
   onSelectSettings: () => void;
 }) {
-  if (!creditSummary.isExhausted && !creditSummary.warningThreshold) {
+  const isExhausted = creditSummary.isExhausted;
+  const isLowBalance =
+    !isExhausted && creditSummary.balance < LOW_CREDIT_BALANCE_THRESHOLD;
+
+  if (!isExhausted && !isLowBalance) {
     return null;
   }
-
-  const isExhausted = creditSummary.isExhausted;
 
   return (
     <section

@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   AlertTriangle,
   Archive,
+  CalendarClock,
   Download,
   Eye,
   ExternalLink,
@@ -73,6 +74,23 @@ export type StageFilter = "All" | "Review" | "Applied" | "Interview" | "Selected
 type ArchiveView = "active" | "archived";
 type MaterialReviewMode = "preview" | "edit";
 type ApplicationSort = "recent" | "oldest" | "needs_action";
+type ApplicationPlanDraft = {
+  contactChannel: string;
+  contactName: string;
+  followUpAt: string;
+  nextAction: string;
+  notes: string;
+  priority: "low" | "normal" | "high";
+};
+
+const emptyPlanDraft: ApplicationPlanDraft = {
+  contactChannel: "",
+  contactName: "",
+  followUpAt: "",
+  nextAction: "",
+  notes: "",
+  priority: "normal",
+};
 
 export function ApplicationPanel({
   initialStageFilter = "All",
@@ -89,10 +107,12 @@ export function ApplicationPanel({
   const [coverLetterDraft, setCoverLetterDraft] = useState("");
   const [resumeDraft, setResumeDraft] = useState<ResumeContent | null>(null);
   const [exportingApplicationId, setExportingApplicationId] = useState<string | null>(null);
+  const [editingPlanApplicationId, setEditingPlanApplicationId] = useState<string | null>(null);
   const [generatingApplicationId, setGeneratingApplicationId] = useState<string | null>(null);
   const [loadingReviewApplicationId, setLoadingReviewApplicationId] = useState<string | null>(null);
   const [pendingApplicationId, setPendingApplicationId] = useState<string | null>(null);
   const [savingApplicationId, setSavingApplicationId] = useState<string | null>(null);
+  const [planDraft, setPlanDraft] = useState<ApplicationPlanDraft>(emptyPlanDraft);
   const [message, setMessage] = useState<string | null>(null);
 
   if (overview.recentApplications.length === 0 && !showEmptyState) {
@@ -162,6 +182,44 @@ export function ApplicationPanel({
           ? "Archived that application. It is no longer shown with your current roles."
           : "Restored that application to your current roles.",
       );
+      router.refresh();
+    } finally {
+      setPendingApplicationId(null);
+    }
+  }
+
+  function openPlanEditor(application: ApplicationOverview["recentApplications"][number]) {
+    setEditingPlanApplicationId((current) => (current === application.id ? null : application.id));
+    setPlanDraft({
+      contactChannel: application.contactChannel ?? "",
+      contactName: application.contactName ?? "",
+      followUpAt: formatDateInputValue(application.followUpAt),
+      nextAction: application.nextAction ?? "",
+      notes: application.notes ?? "",
+      priority: application.priority ?? "normal",
+    });
+    setMessage(null);
+  }
+
+  async function saveApplicationPlan(applicationId: string) {
+    setPendingApplicationId(applicationId);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/applications/${applicationId}/plan`, {
+        body: JSON.stringify(planDraft),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to update application plan.");
+        return;
+      }
+
+      setEditingPlanApplicationId(null);
+      setMessage("Saved the application follow-up plan.");
       router.refresh();
     } finally {
       setPendingApplicationId(null);
@@ -405,27 +463,31 @@ export function ApplicationPanel({
           </div>
         ) : null}
         {visibleApplications.map((application) => (
-          <article className="record-row application-record compact-application-row" key={application.id}>
-            <button
-              className="record-main-button application-title-cell"
-              onClick={() => loadReview(application.id)}
-              title="Open tailored materials and application details"
-              type="button"
-            >
-              <span className="record-title">{cleanDisplayText(application.jobTitle ?? "Application")}</span>
-              <span className="record-meta">
-                {cleanDisplayText(application.companyName)} · Updated {formatShortDate(application.updatedAt)}
-              </span>
-                  <span className="record-subtle-line">
-                    {formatLatestActivity(application)}
-                  </span>
-                  <span className="record-next-action">
-                    Next: {readApplicationNextAction(application)}
-                  </span>
-                  {isStaleApplication(application) ? (
-                    <span className="record-stale-marker">Stale/no reply</span>
-                  ) : null}
-                </button>
+          <div className="application-record-shell" key={application.id}>
+            <article className="record-row application-record compact-application-row">
+              <button
+                className="record-main-button application-title-cell"
+                onClick={() => loadReview(application.id)}
+                title="Open tailored materials and application details"
+                type="button"
+              >
+                <span className="record-title">{cleanDisplayText(application.jobTitle ?? "Application")}</span>
+                <span className="record-meta">
+                  {cleanDisplayText(application.companyName)} · Updated {formatShortDate(application.updatedAt)}
+                </span>
+                <span className="record-subtle-line">
+                  {formatLatestActivity(application)}
+                </span>
+                <span className="record-next-action">
+                  Next: {readApplicationNextAction(application)}
+                </span>
+                {formatFollowUpBadge(application) ? (
+                  <span className="record-follow-up-marker">{formatFollowUpBadge(application)}</span>
+                ) : null}
+                {isStaleApplication(application) ? (
+                  <span className="record-stale-marker">Needs follow-up</span>
+                ) : null}
+              </button>
 
             <div className="application-material-cell">
               <button
@@ -507,6 +569,20 @@ export function ApplicationPanel({
                 </button>
               )}
               <button
+                className="secondary-action compact-action"
+                disabled={pendingApplicationId === application.id || Boolean(application.archivedAt)}
+                onClick={() => openPlanEditor(application)}
+                title={
+                  application.archivedAt
+                    ? "Restore this application before editing its follow-up plan"
+                    : "Plan the next follow-up"
+                }
+                type="button"
+              >
+                <CalendarClock size={14} aria-hidden="true" />
+                Plan
+              </button>
+              <button
                 className="secondary-action compact-action icon-only-action"
                 disabled={pendingApplicationId === application.id}
                 onClick={() => updateArchiveState(application.id, !application.archivedAt)}
@@ -525,7 +601,96 @@ export function ApplicationPanel({
                 <span>{application.archivedAt ? "Restore" : "Archive"}</span>
               </button>
             </div>
-          </article>
+            </article>
+            {editingPlanApplicationId === application.id ? (
+              <form
+                className="application-plan-editor"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void saveApplicationPlan(application.id);
+                }}
+              >
+                <label>
+                  <span>Next action</span>
+                  <input
+                    maxLength={180}
+                    onChange={(event) => setPlanDraft({ ...planDraft, nextAction: event.target.value })}
+                    placeholder="Follow up with recruiter, prep interview notes..."
+                    value={planDraft.nextAction}
+                  />
+                </label>
+                <label>
+                  <span>Follow-up date</span>
+                  <input
+                    onChange={(event) => setPlanDraft({ ...planDraft, followUpAt: event.target.value })}
+                    type="date"
+                    value={planDraft.followUpAt}
+                  />
+                </label>
+                <label>
+                  <span>Contact</span>
+                  <input
+                    maxLength={160}
+                    onChange={(event) => setPlanDraft({ ...planDraft, contactName: event.target.value })}
+                    placeholder="Recruiter or hiring manager"
+                    value={planDraft.contactName}
+                  />
+                </label>
+                <label>
+                  <span>Contact channel</span>
+                  <input
+                    maxLength={160}
+                    onChange={(event) => setPlanDraft({ ...planDraft, contactChannel: event.target.value })}
+                    placeholder="Email, LinkedIn, referral..."
+                    value={planDraft.contactChannel}
+                  />
+                </label>
+                <label>
+                  <span>Priority</span>
+                  <select
+                    onChange={(event) =>
+                      setPlanDraft({
+                        ...planDraft,
+                        priority: event.target.value as ApplicationPlanDraft["priority"],
+                      })
+                    }
+                    value={planDraft.priority}
+                  >
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                  </select>
+                </label>
+                <label className="application-plan-notes">
+                  <span>Notes</span>
+                  <textarea
+                    maxLength={1200}
+                    onChange={(event) => setPlanDraft({ ...planDraft, notes: event.target.value })}
+                    placeholder="Interview details, compensation/location notes, recruiter context, or no-reply history."
+                    rows={3}
+                    value={planDraft.notes}
+                  />
+                </label>
+                <div className="application-plan-actions">
+                  <button
+                    className="secondary-action compact-action"
+                    onClick={() => setEditingPlanApplicationId(null)}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="secondary-action compact-action compact-action-primary"
+                    disabled={pendingApplicationId === application.id}
+                    type="submit"
+                  >
+                    <Save size={14} aria-hidden="true" />
+                    {pendingApplicationId === application.id ? "Saving..." : "Save plan"}
+                  </button>
+                </div>
+              </form>
+            ) : null}
+          </div>
         ))}
       </div>
 
@@ -761,6 +926,10 @@ export function ApplicationPanel({
 function readApplicationNextAction(
   application: ApplicationOverview["recentApplications"][number],
 ) {
+  if (application.nextAction) {
+    return application.nextAction;
+  }
+
   if (application.archivedAt) {
     return "Restore if this role becomes active again";
   }
@@ -786,6 +955,35 @@ function readApplicationNextAction(
   }
 
   return "Keep status current";
+}
+
+function formatDateInputValue(value: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
+function formatFollowUpBadge(
+  application: ApplicationOverview["recentApplications"][number],
+) {
+  if (!application.followUpAt) {
+    return null;
+  }
+
+  const date = new Date(application.followUpAt);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const prefix = date.getTime() <= Date.now() ? "Due" : "Follow up";
+  return `${prefix} ${formatShortDate(application.followUpAt)}`;
 }
 
 function applicationMatchesSearch(
@@ -833,8 +1031,13 @@ function isNeedsActionApplication(
 function isStaleApplication(
   application: ApplicationOverview["recentApplications"][number],
 ) {
-  if (application.status !== "applied" && application.status !== "no_reply") {
+  if (!["applied", "no_reply", "interview_in_progress"].includes(application.status)) {
     return false;
+  }
+
+  if (application.followUpAt) {
+    const followUpTime = new Date(application.followUpAt).getTime();
+    return !Number.isNaN(followUpTime) && followUpTime <= Date.now();
   }
 
   const updatedAt = new Date(application.updatedAt).getTime();

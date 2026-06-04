@@ -19,6 +19,7 @@ import {
   MAX_RESUME_LANGUAGE_ITEMS,
   MAX_RESUME_SPECIAL_PROJECT_ITEMS,
   dedupeResumeExperienceSections,
+  dedupeResumeSpecialProjects,
   normalizeResumeContent,
   parseResumeContent,
   resumeContentSchema,
@@ -424,9 +425,12 @@ async function generateMasterResumeDraft({
     if (response.error || response.incomplete_details) {
       strictFailureCode = "AI_MASTER_RESUME_INCOMPLETE";
     } else {
-      return enrichMasterResumeWithSourceEvidence(
-        parseMasterResumeModelOutput(response.output_text),
-        sourceEvidence,
+      return enrichMasterResumeWithConfirmedFacts(
+        enrichMasterResumeWithSourceEvidence(
+          parseMasterResumeModelOutput(response.output_text),
+          sourceEvidence,
+        ),
+        confirmedFacts,
       );
     }
   } catch (error) {
@@ -453,7 +457,7 @@ async function generateMasterResumeDraft({
     throw new Error(strictFailureCode ?? "AI_MASTER_RESUME_FAILED");
   }
 
-  return relaxedResume;
+  return enrichMasterResumeWithConfirmedFacts(relaxedResume, confirmedFacts);
 }
 
 async function runRelaxedMasterResumeModel({
@@ -644,6 +648,25 @@ export function enrichMasterResumeWithOptionalSourceEvidence(
   });
 }
 
+function enrichMasterResumeWithConfirmedFacts(
+  resume: ResumeContent,
+  confirmedFacts: ConfirmedFact[],
+) {
+  const factProjects = extractResumeSpecialProjectsFromFacts(confirmedFacts);
+
+  if (factProjects.length === 0) {
+    return resume;
+  }
+
+  return normalizeResumeContent({
+    ...resume,
+    specialProjects: dedupeResumeSpecialProjects([
+      ...resume.specialProjects,
+      ...factProjects,
+    ]).slice(0, MAX_RESUME_SPECIAL_PROJECT_ITEMS),
+  });
+}
+
 function readOptionalResumeReviewNotes(
   resume: Pick<ResumeContent, "education" | "languages" | "specialProjects">,
 ) {
@@ -797,12 +820,46 @@ function extractResumeLanguagesFromSources(sourceEvidence: SourceEvidence[]) {
   ]);
 
   return sectionText
+    ? parseLanguageLines(sectionText)
+    : [];
+}
+
+function parseLanguageLines(sectionText: string) {
+  const lines = sectionText
     .split(/\n+/)
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter((line) => line.length >= 3)
-    .filter((line) => !/^\d+$/.test(line))
-    .map(parseLanguageLine)
-    .filter((item): item is ResumeContent["languages"][number] => Boolean(item?.name))
+    .filter((line) => !/^\d+$/.test(line));
+  const languages: ResumeContent["languages"] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    if (isLanguageProficiency(line)) {
+      continue;
+    }
+
+    const item = parseLanguageLine(line);
+
+    if (!item) {
+      continue;
+    }
+
+    const nextLine = lines[index + 1];
+
+    if (!item.proficiency && nextLine && isLanguageProficiency(nextLine)) {
+      languages.push({
+        ...item,
+        proficiency: cleanCredentialLine(nextLine),
+      });
+      index += 1;
+      continue;
+    }
+
+    languages.push(item);
+  }
+
+  return languages
     .slice(0, MAX_RESUME_LANGUAGE_ITEMS);
 }
 
@@ -812,8 +869,18 @@ function parseLanguageLine(line: string): ResumeContent["languages"][number] | n
     return null;
   }
 
+  const suffixProficiency = cleaned.match(
+    /^(.{2,60}?)\s+(native or bilingual|full professional|professional working|limited working|elementary proficiency|professional proficiency|working proficiency|native|bilingual|fluent|conversational|intermediate|advanced|basic|beginner)$/i,
+  );
+  if (suffixProficiency && isLikelyLanguageName(suffixProficiency[1])) {
+    return {
+      name: cleanCredentialLine(suffixProficiency[1]),
+      proficiency: cleanCredentialLine(suffixProficiency[2]),
+    };
+  }
+
   const parenthetical = cleaned.match(/^([^()|;:-]{2,80})\s*\(([^()]{2,80})\)$/);
-  if (parenthetical) {
+  if (parenthetical && isLikelyLanguageName(parenthetical[1])) {
     return {
       name: cleanCredentialLine(parenthetical[1]),
       proficiency: cleanCredentialLine(parenthetical[2]),
@@ -821,18 +888,93 @@ function parseLanguageLine(line: string): ResumeContent["languages"][number] | n
   }
 
   const separated = cleaned.split(/\s+(?:-|–|—|\||:|•)\s+/).filter(Boolean);
-  if (separated.length >= 2) {
+  if (separated.length >= 2 && isLikelyLanguageName(separated[0])) {
     return {
       name: cleanCredentialLine(separated[0]),
       proficiency: cleanCredentialLine(separated.slice(1).join(" ")),
     };
   }
 
-  return {
-    name: cleaned,
-    proficiency: null,
-  };
+  return isLikelyLanguageName(cleaned)
+    ? {
+        name: cleaned,
+        proficiency: null,
+      }
+    : null;
 }
+
+function isLikelyLanguageName(value: string) {
+  const cleaned = normalizeLanguageName(value);
+
+  if (!cleaned || cleaned.length > 48) {
+    return false;
+  }
+
+  if (
+    /\b(?:executive|director|manager|summary|profile|automation|technology|enterprise|adoption|dubai|united arab emirates|portfolio|linkedin|experience|skills?)\b/i.test(
+      cleaned,
+    )
+  ) {
+    return false;
+  }
+
+  return KNOWN_LANGUAGE_NAMES.has(cleaned);
+}
+
+function isLanguageProficiency(value: string) {
+  return /^(?:native or bilingual|full professional|professional working|limited working|elementary proficiency|professional proficiency|working proficiency|native|bilingual|fluent|conversational|intermediate|advanced|basic|beginner|mother tongue)$/i.test(
+    cleanCredentialLine(value),
+  );
+}
+
+function normalizeLanguageName(value: string) {
+  return cleanCredentialLine(value)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const KNOWN_LANGUAGE_NAMES = new Set([
+  "afrikaans",
+  "arabic",
+  "bengali",
+  "cantonese",
+  "chinese",
+  "czech",
+  "danish",
+  "dutch",
+  "english",
+  "farsi",
+  "french",
+  "german",
+  "greek",
+  "gujarati",
+  "hebrew",
+  "hindi",
+  "indonesian",
+  "italian",
+  "japanese",
+  "kannada",
+  "korean",
+  "malay",
+  "malayalam",
+  "mandarin",
+  "mandarin chinese",
+  "marathi",
+  "polish",
+  "portuguese",
+  "punjabi",
+  "russian",
+  "spanish",
+  "swedish",
+  "tagalog",
+  "tamil",
+  "telugu",
+  "thai",
+  "turkish",
+  "urdu",
+  "vietnamese",
+]);
 
 function extractResumeSpecialProjectsFromSources(sourceEvidence: SourceEvidence[]) {
   const text = stripRecommendationSourceSections(
@@ -871,25 +1013,48 @@ function extractResumeSpecialProjectsFromSources(sourceEvidence: SourceEvidence[
         ),
     )
     .slice(0, MAX_RESUME_SPECIAL_PROJECT_ITEMS)
-    .map((line) => {
-      const dates = extractYearRange(line);
-      const cleanLine = cleanCredentialLine(line.replace(dates ?? "", ""));
-      const [name, ...rest] = cleanLine.split(/\s+(?:-|–|—|:|•)\s+/).filter(Boolean);
-
-      return {
-        bullets: rest.length > 0 ? [rest.join(" ")] : [cleanLine],
-        context: null,
-        dates,
-        name: name && rest.length > 0 ? cleanCredentialLine(name) : cleanLine.slice(0, 150),
-      };
-    })
+    .map(parseSpecialProjectLine)
     .filter((item) => item.name.length > 0);
+}
+
+function extractResumeSpecialProjectsFromFacts(confirmedFacts: ConfirmedFact[]) {
+  return confirmedFacts
+    .filter((fact) =>
+      /\b(?:project|initiative|program|portfolio|accolade|achievement|award|publication)\b/i.test(
+        fact.fact_type,
+      ),
+    )
+    .map((fact) => fact.fact_value.replace(/\s+/g, " ").trim())
+    .filter((value) => value.length >= 12)
+    .filter(
+      (value) =>
+        !/\b(recommendation|recommended|worked with|pleasure|reported to|managed directly|colleague)\b/i.test(
+          value,
+        ),
+    )
+    .map(parseSpecialProjectLine)
+    .filter((item) => item.name.length > 0)
+    .slice(0, MAX_RESUME_SPECIAL_PROJECT_ITEMS);
+}
+
+function parseSpecialProjectLine(value: string): ResumeContent["specialProjects"][number] {
+  const dates = extractYearRange(value);
+  const cleanLine = cleanCredentialLine(value.replace(dates ?? "", ""));
+  const [name, ...rest] = cleanLine.split(/\s+(?:-|–|—|:|•)\s+/).filter(Boolean);
+  const cleanName = name && rest.length > 0 ? cleanCredentialLine(name) : cleanLine.slice(0, 150);
+
+  return {
+    bullets: rest.length > 0 ? [cleanCredentialLine(rest.join(" "))] : [cleanLine],
+    context: null,
+    dates,
+    name: cleanName,
+  };
 }
 
 function extractNamedSectionText(text: string, starts: string[], stops: string[]) {
   const lines = text.split(/\n+/);
   const startIndex = lines.findIndex((line) =>
-    starts.some((start) => new RegExp(`^\\s*${escapeRegExp(start)}\\s*$`, "i").test(line.trim())),
+    starts.some((start) => sectionHeadingMatches(line, start)),
   );
 
   if (startIndex < 0) {
@@ -899,10 +1064,22 @@ function extractNamedSectionText(text: string, starts: string[], stops: string[]
   const stopIndex = lines.findIndex(
     (line, index) =>
       index > startIndex &&
-      stops.some((stop) => new RegExp(`^\\s*${escapeRegExp(stop)}\\s*$`, "i").test(line.trim())),
+      stops.some((stop) => sectionHeadingMatches(line, stop)),
   );
 
   return lines.slice(startIndex + 1, stopIndex > startIndex ? stopIndex : undefined).join("\n");
+}
+
+function sectionHeadingMatches(line: string, heading: string) {
+  return compactSectionHeading(line) === compactSectionHeading(heading);
+}
+
+function compactSectionHeading(value: string) {
+  return value
+    .trim()
+    .replace(/[:：]+$/g, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
 }
 
 function extractCredential(value: string) {
@@ -919,10 +1096,6 @@ function extractYearRange(value: string) {
 
 function cleanCredentialLine(value: string) {
   return value.replace(/[|,;:•-]+$/g, "").replace(/^[|,;:•-]+/g, "").replace(/\s+/g, " ").trim();
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function normalizeLinkedInUrl(value: string) {
@@ -1083,8 +1256,21 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
     });
   }
 
+  const { data: confirmedFacts, error: factsError } = await supabase
+    .from("profile_facts")
+    .select("fact_type, fact_value, confidence")
+    .eq("profile_id", profile.id)
+    .eq("user_id", userId)
+    .order("confidence", { ascending: false })
+    .limit(80);
+
+  if (factsError) {
+    throw new Error("PROFILE_FACTS_READ_FAILED");
+  }
+
   const resume = parseResumeContent(latestResume.content_json);
   const normalizedResume = normalizeResumeForSavedRead({
+    confirmedFacts: confirmedFacts ?? [],
     resume,
     sourceEvidence: sourceError ? [] : prioritizeSourceEvidence(sourceEvidence ?? []),
     promptVersion: latestResume.prompt_version,
@@ -1242,8 +1428,9 @@ async function buildOverview({
   return buildEmptyOverview({
     confirmedFactCount: confirmedFacts.length,
     latestResume: latestResume
-      ? {
+        ? {
           content: normalizeResumeForSavedRead({
+            confirmedFacts,
             resume: parseResumeContent(latestResume.content_json),
             sourceEvidence,
             promptVersion: latestResume.prompt_version,
@@ -1262,10 +1449,12 @@ async function buildOverview({
 }
 
 function normalizeResumeForSavedRead({
+  confirmedFacts = [],
   promptVersion,
   resume,
   sourceEvidence,
 }: {
+  confirmedFacts?: ConfirmedFact[];
   promptVersion: string | null;
   resume: ResumeContent;
   sourceEvidence: SourceEvidence[];
@@ -1273,10 +1462,13 @@ function normalizeResumeForSavedRead({
   const normalizedResume = normalizeResumeContent(resume);
 
   if (promptVersion === MASTER_RESUME_PROMPT_VERSION || sourceEvidence.length === 0) {
-    return normalizedResume;
+    return enrichMasterResumeWithConfirmedFacts(normalizedResume, confirmedFacts);
   }
 
-  return enrichMasterResumeWithOptionalSourceEvidence(normalizedResume, sourceEvidence);
+  return enrichMasterResumeWithConfirmedFacts(
+    enrichMasterResumeWithOptionalSourceEvidence(normalizedResume, sourceEvidence),
+    confirmedFacts,
+  );
 }
 
 function buildEmptyOverview({

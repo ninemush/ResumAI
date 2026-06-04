@@ -2151,7 +2151,7 @@ input:focus {
 .owner-metric-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
 }
 
 .profile-summary-grid div,
@@ -2318,7 +2318,7 @@ input:focus {
 .owner-action-strip {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 }
 
 .owner-action-strip article,
@@ -2329,6 +2329,7 @@ input:focus {
   color: inherit;
   display: grid;
   gap: 8px;
+  min-width: 0;
   padding: 16px;
   text-align: left;
 }
@@ -2361,6 +2362,7 @@ input:focus {
 
 .owner-action-strip strong {
   color: var(--foreground);
+  overflow-wrap: anywhere;
 }
 
 .owner-action-strip p {
@@ -2687,6 +2689,15 @@ input:focus {
 
 .owner-credit-description {
   grid-column: 1 / -1;
+}
+
+.owner-credit-guardrail {
+  color: var(--foreground);
+  font-size: 0.94rem;
+  grid-column: 1 / -1;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 64ch;
 }
 
 .owner-credit-form-direct .owner-field-small {
@@ -5161,7 +5172,7 @@ input:focus {
   align-items: stretch;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(88px, auto) minmax(150px, 1fr) 38px;
+  grid-template-columns: minmax(72px, auto) minmax(138px, 1fr) minmax(72px, auto) 38px;
   justify-content: stretch;
 }
 
@@ -5178,6 +5189,90 @@ input:focus {
 
 .application-record .record-actions .compact-action-primary:hover {
   background: #1b2b42;
+}
+
+.application-record-shell {
+  display: grid;
+  gap: 10px;
+}
+
+.record-next-action,
+.record-follow-up-marker,
+.record-stale-marker {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.25;
+  padding: 4px 8px;
+  width: fit-content;
+}
+
+.record-next-action {
+  background: rgba(57, 98, 88, 0.1);
+  color: var(--sage-strong);
+}
+
+.record-follow-up-marker {
+  background: rgba(185, 155, 103, 0.13);
+  color: var(--pr-antique-gold);
+}
+
+.record-stale-marker {
+  background: rgba(149, 70, 53, 0.12);
+  color: #954635;
+}
+
+.application-plan-editor {
+  background: rgba(255, 250, 243, 0.76);
+  border: 1px solid rgba(215, 204, 188, 0.72);
+  border-radius: var(--pr-radius-md);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 16px;
+}
+
+.application-plan-editor label {
+  color: var(--ink-soft);
+  display: grid;
+  font-size: 0.76rem;
+  font-weight: 850;
+  gap: 7px;
+}
+
+.application-plan-editor input,
+.application-plan-editor select,
+.application-plan-editor textarea {
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.88rem;
+  min-width: 0;
+  outline: 0;
+  padding: 10px 11px;
+}
+
+.application-plan-editor input:focus,
+.application-plan-editor select:focus,
+.application-plan-editor textarea:focus {
+  border-color: rgba(57, 98, 88, 0.42);
+  box-shadow: 0 0 0 3px rgba(57, 98, 88, 0.1);
+}
+
+.application-plan-notes,
+.application-plan-actions {
+  grid-column: 1 / -1;
+}
+
+.application-plan-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .icon-only-action {
@@ -7075,7 +7170,7 @@ input:focus {
   }
 
   .application-record .record-actions {
-    grid-template-columns: minmax(88px, auto) minmax(150px, 1fr) 38px;
+    grid-template-columns: minmax(72px, auto) minmax(138px, 1fr) minmax(72px, auto) 38px;
   }
 
   .packet-preview-grid {
@@ -7650,6 +7745,15 @@ input:focus {
 .chat-input.expanded {
   align-items: end;
   border-radius: 26px;
+  grid-template-rows: auto auto;
+  padding: 8px;
+}
+
+.chat-input.expanded textarea {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-height: 54px;
+  padding: 8px 12px 4px;
 }
 
 .chat-input:focus-within {
@@ -7663,6 +7767,7 @@ input:focus {
 .chat-input textarea {
   background: transparent;
   border: 0;
+  box-sizing: border-box;
   font-size: 0.95rem;
   line-height: 1.35;
   max-height: 132px;
@@ -8297,6 +8402,16 @@ input:focus {
   .owner-credit-form,
   .owner-credit-form-direct {
     grid-template-columns: 1fr;
+  }
+
+  .application-record .record-actions,
+  .application-plan-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .application-plan-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
   }
 
   .owner-credit-card {

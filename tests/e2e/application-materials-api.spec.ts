@@ -29,3 +29,29 @@ test("requires authentication before archiving an application", async ({ request
   expect(response.status()).toBe(401);
   expect(payload.error.code).toBe("auth.required");
 });
+
+test("requires authentication before updating an application plan", async ({ request }) => {
+  const response = await request.patch(`/api/applications/${applicationId}/plan`, {
+    data: {
+      nextAction: "Follow up with recruiter",
+      priority: "normal",
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});
+
+test("validates application plan payload shape", async ({ request }) => {
+  const response = await request.patch(`/api/applications/${applicationId}/plan`, {
+    data: {
+      followUpAt: "not-a-date",
+      priority: "urgent",
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(400);
+  expect(payload.error.code).toBe("application.invalid_plan");
+});

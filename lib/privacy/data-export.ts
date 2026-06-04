@@ -76,7 +76,7 @@ export async function assembleUserDataExport(userId: string, requestId: string) 
     selectMany("profile_sources", "id, source_type, source_url, storage_path, original_filename, mime_type, extraction_status, failure_reason, created_at, updated_at", userId),
     selectMany("role_recommendations", "id, role_family, role_titles, seniority_level, rationale, assumptions, open_questions, confidence, user_acknowledged, created_at, updated_at", userId),
     selectMany("job_ingestions", "id, job_url, resolved_url, title, company, extracted_text, ingestion_status, failure_reason, archived_at, created_at, updated_at", userId),
-    selectMany("applications", "id, company_name, job_title, job_url, job_ingestion_id, status, quota_event_id, archived_at, created_at, updated_at", userId),
+    selectMany("applications", "id, company_name, job_title, job_url, job_ingestion_id, status, quota_event_id, archived_at, next_action, follow_up_at, contact_name, contact_channel, priority, notes, created_at, updated_at", userId),
     selectMany("application_status_events", "id, application_id, previous_status, new_status, source, metadata, created_at", userId),
     selectMany("generated_resumes", "id, profile_id, application_id, resume_type, prompt_version, model, content_json, storage_path, pdf_storage_path, docx_storage_path, status, created_at, updated_at", userId),
     selectMany("generated_cover_letters", "id, application_id, prompt_version, model, content, pdf_storage_path, docx_storage_path, status, created_at, updated_at", userId),

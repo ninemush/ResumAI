@@ -190,10 +190,10 @@ export default function CreditsPage() {
             <p className="eyebrow">Low balance</p>
             <h2>What happens when credits run low?</h2>
             <p>
-              {brand.name} warns at 50%, 75%, and 90% usage. When credits are
-              exhausted, new source reading, generation, job analysis, and
-              export are blocked until more credits are added. Your existing
-              workspace remains available.
+              {brand.name} warns only when fewer than 10 credits remain. When
+              credits are exhausted, new source reading, generation, job
+              analysis, and export are blocked until more credits are added.
+              Your existing workspace remains available.
             </p>
           </div>
           <div className="credits-legal-links">
