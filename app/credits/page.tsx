@@ -14,12 +14,13 @@ import {
   CREDIT_FREE_ACTIONS,
   CREDIT_PURCHASE_OPTIONS,
   CREDIT_USAGE_GUIDE,
+  formatCreditCost,
 } from "@/lib/billing/credit-catalog";
 import { brand } from "@/lib/brand";
 
 export const metadata = {
   description:
-    "Learn how Pramania credits are used for reading career sources, job analysis, resume drafts, application packets, and downloadable files.",
+    "Learn how Pramania credits are used for reading career sources, job analysis, resume drafts, job-specific materials, and downloadable files.",
   title: `How Credits Work | ${brand.name}`,
 };
 
@@ -101,9 +102,7 @@ export default function CreditsPage() {
               <article className="credits-cost-card" key={action.name}>
                 <div>
                   <strong>{action.name}</strong>
-                  <span>
-                    {action.cost} credit{action.cost === 1 ? "" : "s"}
-                  </span>
+                  <span>{formatCreditCost(action.cost)}</span>
                 </div>
                 <p>{action.examples}</p>
                 <small>{action.value}</small>

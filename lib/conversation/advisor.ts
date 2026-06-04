@@ -5,13 +5,26 @@ import { z } from "zod";
 
 import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
 import { getOwnerMetrics, type OwnerMetrics } from "@/lib/admin/owner-metrics";
-import { getApplicationOverview, type ApplicationOverview } from "@/lib/applications/application-overview";
-import { getArtifactOverview, type ArtifactOverview } from "@/lib/artifacts/artifact-overview";
-import { CREDIT_COSTS, getCreditSummary, type CreditSummary } from "@/lib/billing/credits";
+import {
+  getApplicationOverview,
+  type ApplicationOverview,
+} from "@/lib/applications/application-overview";
+import {
+  getArtifactOverview,
+  type ArtifactOverview,
+} from "@/lib/artifacts/artifact-overview";
+import {
+  getCreditSummary,
+  getCreditUsageSummary,
+  type CreditSummary,
+} from "@/lib/billing/credits";
 import { PROFILE_INTAKE_INSTRUCTIONS } from "@/lib/ai/prompts/profile-intake";
 import { brand } from "@/lib/brand";
 import { getJobOverview, type JobOverview } from "@/lib/jobs/job-overview";
-import { buildProfileIntelligence, type ProfileIntelligence } from "@/lib/profile/profile-intelligence";
+import {
+  buildProfileIntelligence,
+  type ProfileIntelligence,
+} from "@/lib/profile/profile-intelligence";
 import { createClient } from "@/lib/supabase/server";
 import {
   advisorSuggestedActionSchema,
@@ -82,7 +95,9 @@ export async function runConversationAdvisor(
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, display_name, headline, summary, target_direction, target_level")
+    .select(
+      "id, display_name, headline, summary, target_direction, target_level",
+    )
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -139,7 +154,9 @@ export async function runConversationAdvisor(
     );
   }
 
-  const isOwner = (adminRoles ?? []).some(({ role }) => role === "owner" || role === "admin");
+  const isOwner = (adminRoles ?? []).some(
+    ({ role }) => role === "owner" || role === "admin",
+  );
   const workspace = await readAdvisorWorkspaceContext({
     includeOwnerMetrics: isOwner && shouldLoadOwnerContext(input),
     profileId,
@@ -177,7 +194,11 @@ export async function runConversationAdvisor(
           schema: {
             type: "object",
             additionalProperties: false,
-            required: ["assistantMessage", "suggestedActions", "suggestedLinks"],
+            required: [
+              "assistantMessage",
+              "suggestedActions",
+              "suggestedLinks",
+            ],
             properties: {
               assistantMessage: { type: "string" },
               suggestedActions: {
@@ -186,21 +207,49 @@ export async function runConversationAdvisor(
                 items: {
                   type: "object",
                   additionalProperties: false,
-                  required: ["creditCost", "id", "kind", "label", "reason", "view"],
+                  required: [
+                    "creditCost",
+                    "id",
+                    "kind",
+                    "label",
+                    "reason",
+                    "view",
+                  ],
                   properties: {
                     creditCost: {
-                      anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }],
+                      anyOf: [
+                        { type: "integer", minimum: 0 },
+                        { type: "null" },
+                      ],
                     },
                     id: { type: "string" },
                     kind: {
                       type: "string",
-                      enum: ["export", "generate", "navigate", "owner_triage", "redeem", "review", "support", "upload"],
+                      enum: [
+                        "export",
+                        "generate",
+                        "navigate",
+                        "owner_triage",
+                        "redeem",
+                        "review",
+                        "support",
+                        "upload",
+                      ],
                     },
                     label: { type: "string" },
                     reason: { type: "string" },
                     view: {
                       type: "string",
-                      enum: ["applications", "jobs", "library", "owner", "profile", "resume", "settings", "support"],
+                      enum: [
+                        "applications",
+                        "jobs",
+                        "library",
+                        "owner",
+                        "profile",
+                        "resume",
+                        "settings",
+                        "support",
+                      ],
                     },
                   },
                 },
@@ -217,7 +266,16 @@ export async function runConversationAdvisor(
                     reason: { type: "string" },
                     view: {
                       type: "string",
-                      enum: ["applications", "jobs", "library", "owner", "profile", "resume", "settings", "support"],
+                      enum: [
+                        "applications",
+                        "jobs",
+                        "library",
+                        "owner",
+                        "profile",
+                        "resume",
+                        "settings",
+                        "support",
+                      ],
                     },
                   },
                 },
@@ -233,7 +291,9 @@ export async function runConversationAdvisor(
       throw new Error("AI_CONVERSATION_ADVISOR_FAILED");
     }
 
-    const parsed = advisorResponseSchema.parse(JSON.parse(response.output_text));
+    const parsed = advisorResponseSchema.parse(
+      JSON.parse(response.output_text),
+    );
     const normalized = normalizeAdvisorPayload({
       isOwner,
       message: input.message,
@@ -246,7 +306,10 @@ export async function runConversationAdvisor(
     console.warn(
       JSON.stringify({
         event: "conversation_advisor_model_fallback",
-        code: error instanceof Error ? error.message : "UNKNOWN_CONVERSATION_ADVISOR_MODEL_ERROR",
+        code:
+          error instanceof Error
+            ? error.message
+            : "UNKNOWN_CONVERSATION_ADVISOR_MODEL_ERROR",
       }),
     );
 
@@ -276,11 +339,11 @@ export async function runConversationAdvisor(
       message: input.message,
       payload: {
         assistantMessage: buildContextAwareAdvisorFallback({
-        facts: factsError ? [] : ((facts ?? []) as ConversationFact[]),
-        latestResume: resumeError ? null : latestResume,
-        message: input.message,
-        profile,
-        workspace,
+          facts: factsError ? [] : ((facts ?? []) as ConversationFact[]),
+          latestResume: resumeError ? null : latestResume,
+          message: input.message,
+          profile,
+          workspace,
         }),
         suggestedActions: [],
         suggestedLinks: [],
@@ -324,7 +387,11 @@ Use short paragraphs and bullets only when they make the career advice clearer.`
       },
     });
 
-    if (response.error || response.incomplete_details || !response.output_text.trim()) {
+    if (
+      response.error ||
+      response.incomplete_details ||
+      !response.output_text.trim()
+    ) {
       return null;
     }
 
@@ -333,7 +400,10 @@ Use short paragraphs and bullets only when they make the career advice clearer.`
     console.warn(
       JSON.stringify({
         event: "conversation_advisor_relaxed_attempt_failed",
-        code: error instanceof Error ? error.message : "UNKNOWN_CONVERSATION_ADVISOR_RELAXED_ERROR",
+        code:
+          error instanceof Error
+            ? error.message
+            : "UNKNOWN_CONVERSATION_ADVISOR_RELAXED_ERROR",
       }),
     );
 
@@ -454,15 +524,26 @@ Profile:
 - Target level: ${profile?.target_level ?? "Not provided"}
 
 Saved career context:
-${facts.length > 0 ? facts.slice(0, 50).map((fact) => `- ${fact.fact_type}: ${fact.fact_value}`).join("\n") : "No saved evidence yet."}
+${
+  facts.length > 0
+    ? facts
+        .slice(0, 50)
+        .map((fact) => `- ${fact.fact_type}: ${fact.fact_value}`)
+        .join("\n")
+    : "No saved evidence yet."
+}
 
 Profile read:
-${intelligence ? `- Context strength: ${intelligence.evidenceStrength}
+${
+  intelligence
+    ? `- Context strength: ${intelligence.evidenceStrength}
 - Role target read: ${intelligence.roleTargetRead}
 - ${formatDomainSeniorityForAdvisor(intelligence)}
 - Resume focus: ${intelligence.resumeFocus.join(" | ") || "None yet"}
 - Impact themes: ${intelligence.proofThemes.map((theme) => `${theme.label}: ${theme.evidence.join(" / ")}`).join("; ") || "None yet"}
-- High-value gaps: ${intelligence.highValueGaps.map((gap) => `[${gap.severity}] ${gap.label}: ${gap.prompt}`).join("; ") || "None"}` : "No profile intelligence yet."}
+- High-value gaps: ${intelligence.highValueGaps.map((gap) => `[${gap.severity}] ${gap.label}: ${gap.prompt}`).join("; ") || "None"}`
+    : "No profile intelligence yet."
+}
 
 Latest master resume exists: ${latestResume ? "yes" : "no"}
 Latest master resume content:
@@ -478,7 +559,14 @@ Owner operations:
 ${formatOwnerOperationsForAdvisor(workspace.ownerMetrics)}
 
 Recent conversation:
-${recentConversation.length > 0 ? recentConversation.slice(-12).map((item) => `- ${item.speaker}: ${item.message_text}`).join("\n") : "No recent conversation."}
+${
+  recentConversation.length > 0
+    ? recentConversation
+        .slice(-12)
+        .map((item) => `- ${item.speaker}: ${item.message_text}`)
+        .join("\n")
+    : "No recent conversation."
+}
 
 Return JSON only.
 `.trim();
@@ -511,8 +599,9 @@ function formatDomainSeniorityForAdvisor(intelligence: ProfileIntelligence) {
       "Ask for one initiative, the scale, and what changed"
     }`,
     `Resume implications: ${
-      intelligence.advisorPromptPack.resumeImplications.slice(0, 6).join(" | ") ||
-      "Keep claims grounded in verified evidence"
+      intelligence.advisorPromptPack.resumeImplications
+        .slice(0, 6)
+        .join(" | ") || "Keep claims grounded in verified evidence"
     }`,
   ].join("\n- ");
 }
@@ -550,25 +639,30 @@ async function readAdvisorWorkspaceContext({
   userId: string;
 }): Promise<AdvisorWorkspaceContext> {
   const supabase = await createClient();
-  const [applications, artifacts, credits, jobs, ownerMetrics, sourceResult] = await Promise.allSettled([
-    getApplicationOverview(userId),
-    getArtifactOverview(userId),
-    getCreditSummary(),
-    getJobOverview(userId),
-    includeOwnerMetrics ? getOwnerMetrics(30) : Promise.resolve(null),
-    profileId
-      ? supabase
-          .from("profile_sources")
-          .select(
-            "source_type, source_url, original_filename, extracted_text, extraction_status, failure_reason, created_at",
-            { count: "exact" },
-          )
-          .eq("profile_id", profileId)
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(30)
-      : Promise.resolve({ count: 0, data: [] as AdvisorSource[], error: null }),
-  ]);
+  const [applications, artifacts, credits, jobs, ownerMetrics, sourceResult] =
+    await Promise.allSettled([
+      getApplicationOverview(userId),
+      getArtifactOverview(userId),
+      getCreditSummary(),
+      getJobOverview(userId),
+      includeOwnerMetrics ? getOwnerMetrics(30) : Promise.resolve(null),
+      profileId
+        ? supabase
+            .from("profile_sources")
+            .select(
+              "source_type, source_url, original_filename, extracted_text, extraction_status, failure_reason, created_at",
+              { count: "exact" },
+            )
+            .eq("profile_id", profileId)
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false })
+            .limit(30)
+        : Promise.resolve({
+            count: 0,
+            data: [] as AdvisorSource[],
+            error: null,
+          }),
+    ]);
 
   const sourceValue =
     sourceResult.status === "fulfilled" && !sourceResult.value.error
@@ -576,19 +670,25 @@ async function readAdvisorWorkspaceContext({
       : { count: 0, data: [] };
 
   return {
-    applications: applications.status === "fulfilled" ? applications.value : null,
+    applications:
+      applications.status === "fulfilled" ? applications.value : null,
     artifacts: artifacts.status === "fulfilled" ? artifacts.value : null,
     credits: credits.status === "fulfilled" ? credits.value : null,
     jobs: jobs.status === "fulfilled" ? jobs.value : null,
-    ownerMetrics: ownerMetrics.status === "fulfilled" ? ownerMetrics.value : null,
+    ownerMetrics:
+      ownerMetrics.status === "fulfilled" ? ownerMetrics.value : null,
     sources: {
-      recent: prioritizeAdvisorSources((sourceValue.data ?? []) as AdvisorSource[]),
+      recent: prioritizeAdvisorSources(
+        (sourceValue.data ?? []) as AdvisorSource[],
+      ),
       total: sourceValue.count ?? 0,
     },
   };
 }
 
-function shouldLoadOwnerContext(input: z.infer<typeof conversationAdvisorRequestSchema>) {
+function shouldLoadOwnerContext(
+  input: z.infer<typeof conversationAdvisorRequestSchema>,
+) {
   const normalized = input.message.toLowerCase();
 
   return (
@@ -601,7 +701,9 @@ function shouldLoadOwnerContext(input: z.infer<typeof conversationAdvisorRequest
 
 function prioritizeAdvisorSources(sources: AdvisorSource[]) {
   return [...sources]
-    .sort((left, right) => readSourceUsefulness(right) - readSourceUsefulness(left))
+    .sort(
+      (left, right) => readSourceUsefulness(right) - readSourceUsefulness(left),
+    )
     .slice(0, 14);
 }
 
@@ -625,49 +727,68 @@ function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
   const creditLines = workspace.credits
     ? [
         `Credits: ${workspace.credits.balance} available, ${workspace.credits.usedCredits} used of ${workspace.credits.totalCredits} total${workspace.credits.warningThreshold ? `, ${workspace.credits.warningThreshold}% usage warning reached` : ""}.`,
-        `Credit costs: profile/source reading ${CREDIT_COSTS.profileSourceExtract}; job ingest ${CREDIT_COSTS.jobIngest}; master resume generation ${CREDIT_COSTS.masterResumeGenerate}; master resume export ${CREDIT_COSTS.masterResumeExport}; application materials ${CREDIT_COSTS.applicationMaterialsGenerate}; application export ${CREDIT_COSTS.applicationMaterialsExport}.`,
+        `Credit costs: ${getCreditUsageSummary()}.`,
         `Credit packs: ${workspace.credits.purchaseOptions.map((option) => `${option.label} ${option.credits} credits for $${option.priceUsd}`).join("; ") || "not configured"}.`,
       ]
     : ["Credits: no credit summary was available for this reply."];
   const activeApplications =
-    workspace.applications?.recentApplications.filter((application) => !application.archivedAt) ?? [];
-  const activeJobs = workspace.jobs?.recentJobs.filter((job) => !job.archived_at) ?? [];
+    workspace.applications?.recentApplications.filter(
+      (application) => !application.archivedAt,
+    ) ?? [];
+  const activeJobs =
+    workspace.jobs?.recentJobs.filter((job) => !job.archived_at) ?? [];
   const applicationLines = workspace.applications
     ? [
         `Applications: ${workspace.applications.summary.active} active, ${workspace.applications.summary.archived} archived, ${workspace.applications.summary.needsReview} drafts/review, ${workspace.applications.summary.applied} applied, ${workspace.applications.summary.interviewing} interviewing, ${workspace.applications.summary.selected} selected.`,
-        ...activeApplications.slice(0, 5).map(
-          (application) =>
-            `- Application: ${application.jobTitle ?? "Untitled role"} at ${application.companyName}; status ${application.status}; latest resume ${application.latestResumeStatus ?? "not generated"}; latest cover letter ${application.latestCoverLetterStatus ?? "not generated"}.`,
-        ),
+        ...activeApplications
+          .slice(0, 5)
+          .map(
+            (application) =>
+              `- Application: ${application.jobTitle ?? "Untitled role"} at ${application.companyName}; status ${application.status}; latest resume ${application.latestResumeStatus ?? "not generated"}; latest cover letter ${application.latestCoverLetterStatus ?? "not generated"}.`,
+          ),
       ]
     : ["Applications: no application records were available for this reply."];
   const jobLines = workspace.jobs
     ? [
         `Jobs: ${workspace.jobs.summary.active} active, ${workspace.jobs.summary.archived} archived, ${workspace.jobs.summary.readyForReview} ready for review, ${workspace.jobs.summary.failed} failed.`,
-        ...activeJobs.slice(0, 5).map(
-          (job) =>
-            `- Job: ${job.title ?? "Untitled role"} at ${job.company ?? "unknown company"}; status ${job.ingestion_status}; review ${job.review_status}; fit ${job.fitSnapshot.score ?? "unknown"}%; matched ${job.fitSnapshot.matchedKeywords.slice(0, 8).join(", ") || "none"}; gaps ${job.fitSnapshot.missingKeywords.slice(0, 8).join(", ") || "none"}.`,
-        ),
+        ...activeJobs
+          .slice(0, 5)
+          .map(
+            (job) =>
+              `- Job: ${job.title ?? "Untitled role"} at ${job.company ?? "unknown company"}; status ${job.ingestion_status}; review ${job.review_status}; fit ${job.fitSnapshot.score ?? "unknown"}%; matched ${job.fitSnapshot.matchedKeywords.slice(0, 8).join(", ") || "none"}; gaps ${job.fitSnapshot.missingKeywords.slice(0, 8).join(", ") || "none"}.`,
+          ),
       ]
     : ["Jobs: no job records were available for this reply."];
   const sourceLines = [
     "Career material Pramania can use:",
-    ...workspace.sources.recent.slice(0, 8).map(
-      (source) =>
-        `- Material: ${source.original_filename ?? source.source_url ?? source.source_type}; kind ${formatAdvisorSourceType(source.source_type)}; read status ${formatAdvisorSourceStatus(source.extraction_status)}; preview ${formatSourceExcerpt(source.extracted_text)}.`,
-    ),
+    ...workspace.sources.recent
+      .slice(0, 8)
+      .map(
+        (source) =>
+          `- Material: ${source.original_filename ?? source.source_url ?? source.source_type}; kind ${formatAdvisorSourceType(source.source_type)}; read status ${formatAdvisorSourceStatus(source.extraction_status)}; preview ${formatSourceExcerpt(source.extracted_text)}.`,
+      ),
   ];
   const artifactLines = workspace.artifacts
     ? [
         `Generated resumes and letters: ${workspace.artifacts.summary.total} total, ${workspace.artifacts.summary.resumes} resumes, ${workspace.artifacts.summary.coverLetters} cover letters, ${workspace.artifacts.summary.exportedPdfs} PDFs, ${workspace.artifacts.summary.exportedDocx} DOCX.`,
-        ...workspace.artifacts.artifacts.slice(0, 5).map(
-          (artifact) =>
-            `- Generated file: ${artifact.label}; format ${formatArtifactKindForAdvisor(artifact.kind)}; status ${artifact.status}; role ${artifact.roleTitle ?? "master/general"}; company ${artifact.companyName ?? "none"}.`,
-        ),
+        ...workspace.artifacts.artifacts
+          .slice(0, 5)
+          .map(
+            (artifact) =>
+              `- Generated file: ${artifact.label}; format ${formatArtifactKindForAdvisor(artifact.kind)}; status ${artifact.status}; role ${artifact.roleTitle ?? "master/general"}; company ${artifact.companyName ?? "none"}.`,
+          ),
       ]
-    : ["Generated resumes and letters: no generated material records were available for this reply."];
+    : [
+        "Generated resumes and letters: no generated material records were available for this reply.",
+      ];
 
-  return [...creditLines, ...applicationLines, ...jobLines, ...sourceLines, ...artifactLines].join("\n");
+  return [
+    ...creditLines,
+    ...applicationLines,
+    ...jobLines,
+    ...sourceLines,
+    ...artifactLines,
+  ].join("\n");
 }
 
 function formatOwnerOperationsForAdvisor(metrics: OwnerMetrics | null) {
@@ -675,10 +796,13 @@ function formatOwnerOperationsForAdvisor(metrics: OwnerMetrics | null) {
     return "Owner metrics were not loaded for this reply.";
   }
 
-  const rootCauses = metrics.errorDetails.reduce<Record<string, number>>((counts, error) => {
-    counts[error.rootCause] = (counts[error.rootCause] ?? 0) + 1;
-    return counts;
-  }, {});
+  const rootCauses = metrics.errorDetails.reduce<Record<string, number>>(
+    (counts, error) => {
+      counts[error.rootCause] = (counts[error.rootCause] ?? 0) + 1;
+      return counts;
+    },
+    {},
+  );
   const rootCauseLines = Object.entries(rootCauses)
     .sort((left, right) => right[1] - left[1])
     .slice(0, 5)
@@ -713,7 +837,8 @@ function formatReadableSourcesForAdvisor(sources: AdvisorSource[]) {
     .filter((source) => source.extracted_text?.trim())
     .slice(0, 6)
     .map((source) => {
-      const label = source.original_filename ?? source.source_url ?? source.source_type;
+      const label =
+        source.original_filename ?? source.source_url ?? source.source_type;
       const excerpt = buildAdvisorSourceExcerpt(source.extracted_text);
 
       return `- ${label} (${formatAdvisorSourceType(source.source_type)}, ${formatAdvisorSourceStatus(source.extraction_status)}): ${excerpt}`;
@@ -747,7 +872,9 @@ function buildAdvisorSourceExcerpt(text: string | null) {
     return cleanText;
   }
 
-  const windows: Array<{ end: number; start: number }> = [{ start: 0, end: 850 }];
+  const windows: Array<{ end: number; start: number }> = [
+    { start: 0, end: 850 },
+  ];
   const sectionPattern =
     /\b(summary|experience|employment|work history|professional experience|projects?|skills?|languages?|education|certifications?|licenses?|awards?|honou?rs?|publications?|volunteer|recommendations?)\b/gi;
   let match: RegExpExecArray | null;
@@ -781,7 +908,11 @@ function buildAdvisorSourceExcerpt(text: string | null) {
 }
 
 function formatLatestResumeForAdvisor(latestResume: unknown) {
-  if (!latestResume || typeof latestResume !== "object" || !("content_json" in latestResume)) {
+  if (
+    !latestResume ||
+    typeof latestResume !== "object" ||
+    !("content_json" in latestResume)
+  ) {
     return "No master resume found.";
   }
 
@@ -796,50 +927,81 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
   };
   const readArray = (key: string) => {
     const value = (content as Record<string, unknown>)[key];
-    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : [];
   };
   const contact =
-    "contact" in content && content.contact && typeof content.contact === "object"
+    "contact" in content &&
+    content.contact &&
+    typeof content.contact === "object"
       ? (content.contact as Record<string, unknown>)
       : {};
   const contactLine = ["email", "phone", "linkedin", "website", "location"]
     .map((key) => contact[key])
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .filter(
+      (value): value is string =>
+        typeof value === "string" && value.trim().length > 0,
+    )
     .join(" | ");
-  const education = Array.isArray((content as Record<string, unknown>).education)
+  const education = Array.isArray(
+    (content as Record<string, unknown>).education,
+  )
     ? ((content as Record<string, unknown>).education as unknown[])
         .map((item) => {
           if (!item || typeof item !== "object") return null;
           const record = item as Record<string, unknown>;
-          return [record.credential, record.institution, record.location, record.dates]
-            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          return [
+            record.credential,
+            record.institution,
+            record.location,
+            record.dates,
+          ]
+            .filter(
+              (value): value is string =>
+                typeof value === "string" && value.trim().length > 0,
+            )
             .join(" | ");
         })
         .filter((item): item is string => Boolean(item))
         .slice(0, 4)
     : [];
-  const certifications = Array.isArray((content as Record<string, unknown>).certifications)
+  const certifications = Array.isArray(
+    (content as Record<string, unknown>).certifications,
+  )
     ? ((content as Record<string, unknown>).certifications as unknown[])
         .map((item) => {
           if (!item || typeof item !== "object") return null;
           const record = item as Record<string, unknown>;
           return [record.name, record.issuer, record.date]
-            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+            .filter(
+              (value): value is string =>
+                typeof value === "string" && value.trim().length > 0,
+            )
             .join(" | ");
         })
         .filter((item): item is string => Boolean(item))
         .slice(0, 5)
     : [];
-  const specialProjects = Array.isArray((content as Record<string, unknown>).specialProjects)
+  const specialProjects = Array.isArray(
+    (content as Record<string, unknown>).specialProjects,
+  )
     ? ((content as Record<string, unknown>).specialProjects as unknown[])
         .map((item) => {
           if (!item || typeof item !== "object") return null;
           const record = item as Record<string, unknown>;
           const heading = [record.name, record.context, record.dates]
-            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+            .filter(
+              (value): value is string =>
+                typeof value === "string" && value.trim().length > 0,
+            )
             .join(" | ");
           const bullets = Array.isArray(record.bullets)
-            ? record.bullets.filter((bullet): bullet is string => typeof bullet === "string").slice(0, 3)
+            ? record.bullets
+                .filter(
+                  (bullet): bullet is string => typeof bullet === "string",
+                )
+                .slice(0, 3)
             : [];
 
           if (!heading && bullets.length === 0) return null;
@@ -849,28 +1011,42 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
         .filter((item): item is string => Boolean(item))
         .slice(0, 4)
     : [];
-  const languages = Array.isArray((content as Record<string, unknown>).languages)
+  const languages = Array.isArray(
+    (content as Record<string, unknown>).languages,
+  )
     ? ((content as Record<string, unknown>).languages as unknown[])
         .map((item) => {
           if (!item || typeof item !== "object") return null;
           const record = item as Record<string, unknown>;
           return [record.name, record.proficiency]
-            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+            .filter(
+              (value): value is string =>
+                typeof value === "string" && value.trim().length > 0,
+            )
             .join(" | ");
         })
         .filter((item): item is string => Boolean(item))
         .slice(0, 8)
     : [];
-  const experienceSections = Array.isArray((content as Record<string, unknown>).experienceSections)
+  const experienceSections = Array.isArray(
+    (content as Record<string, unknown>).experienceSections,
+  )
     ? ((content as Record<string, unknown>).experienceSections as unknown[])
         .map((item) => {
           if (!item || typeof item !== "object") return null;
           const section = item as Record<string, unknown>;
-          const roleTitle = typeof section.roleTitle === "string" ? section.roleTitle : null;
-          const company = typeof section.company === "string" ? section.company : null;
-          const dates = typeof section.dates === "string" ? section.dates : null;
+          const roleTitle =
+            typeof section.roleTitle === "string" ? section.roleTitle : null;
+          const company =
+            typeof section.company === "string" ? section.company : null;
+          const dates =
+            typeof section.dates === "string" ? section.dates : null;
           const bullets = Array.isArray(section.bullets)
-            ? section.bullets.filter((bullet): bullet is string => typeof bullet === "string").slice(0, 4)
+            ? section.bullets
+                .filter(
+                  (bullet): bullet is string => typeof bullet === "string",
+                )
+                .slice(0, 4)
             : [];
 
           if (!roleTitle && !company && bullets.length === 0) return null;
@@ -965,7 +1141,12 @@ function buildContextAwareAdvisorFallback({
     });
   }
 
-  if (/\b(vp|executive|senior|board|level)\b/.test(normalized) && /\b(metric|impact|cagr|profit|revenue|margin|scale|percentage)\b/.test(normalized)) {
+  if (
+    /\b(vp|executive|senior|board|level)\b/.test(normalized) &&
+    /\b(metric|impact|cagr|profit|revenue|margin|scale|percentage)\b/.test(
+      normalized,
+    )
+  ) {
     const metricClaim = extractMetricClaim(message);
 
     return `Yes, that can be VP+ level evidence. The issue is not whether the metric is senior enough; it is whether the resume connects it to scope, authority, and business levers.
@@ -976,7 +1157,10 @@ For ${roleRead}, I would frame ${metricClaim ? `"${metricClaim}"` : "that metric
   if (normalized.includes("why")) {
     return `You are right to push back. I do have your saved workspace context, so I should not ask you to repeat it.
 
-Based on the current record, the strongest lane is ${roleRead}. The useful missing layer is not more background; it is cleaner resume evidence around ${formatListForSentence(gaps.map((gap) => gap.label), "scope, measurable outcomes, and role focus")}. I should answer from that context first, then ask only for the one detail that would materially improve the result.`;
+Based on the current record, the strongest lane is ${roleRead}. The useful missing layer is not more background; it is cleaner resume evidence around ${formatListForSentence(
+      gaps.map((gap) => gap.label),
+      "scope, measurable outcomes, and role focus",
+    )}. I should answer from that context first, then ask only for the one detail that would materially improve the result.`;
   }
 
   if (normalized.includes("metric") || normalized.includes("missing")) {
@@ -987,7 +1171,11 @@ Based on the current record, the strongest lane is ${roleRead}. The useful missi
 The evidence already visible includes ${formatListForSentence(impactEvidence ?? [], impactEvidenceFallback || "the strongest saved impact themes in your profile")}. What is missing is not whether those examples are senior enough; it is attaching each one to the role, company, scale, and outcome so the master resume reads as precise rather than broadly senior.`;
   }
 
-  if (normalized.includes("resume") || normalized.includes("profile pdf") || normalized.includes("learn")) {
+  if (
+    normalized.includes("resume") ||
+    normalized.includes("profile pdf") ||
+    normalized.includes("learn")
+  ) {
     return `I have enough saved context to answer without asking you to re-upload. The current master resume shows this snapshot: ${resumeText.replace(/\n/g, " ")}
 
 The files and notes you saved add this useful evidence: ${formatListForSentence(sourceEvidence, "role history, scope, skills, and positioning evidence from your saved materials")}. What I would improve next is the experience architecture: group the evidence by role, attach dates and scope, and turn each role into outcome-led bullets. That is the difference between a senior activity list and a resume that reads like credible executive value.`;
@@ -999,13 +1187,16 @@ The next best move is to sharpen the master profile into role-based evidence: wh
 }
 
 function isCreditQuestion(normalized: string) {
-  return /\b(credit|credits|balance|usage|used|cost|costs|paid|price|purchase|buy)\b/.test(normalized);
+  return /\b(credit|credits|balance|usage|used|cost|costs|paid|price|purchase|buy)\b/.test(
+    normalized,
+  );
 }
 
 function isTrackingQuestion(normalized: string) {
   return (
-    /\b(jobs?|applications?|tracking|pipeline|interviews?|applied|roles?)\b/.test(normalized) &&
-    /\b(what|which|tracking|status|show|list|have|am i)\b/.test(normalized)
+    /\b(jobs?|applications?|tracking|pipeline|interviews?|applied|roles?)\b/.test(
+      normalized,
+    ) && /\b(what|which|tracking|status|show|list|have|am i)\b/.test(normalized)
   );
 }
 
@@ -1024,19 +1215,27 @@ function buildCreditAdvisorFallback(credits: CreditSummary | null) {
     ? ` You have crossed the ${credits.warningThreshold}% usage threshold, so I would be deliberate about exports and role-specific generations.`
     : "";
   const packs =
-    credits.purchaseOptions.map((option) => `${option.label}: ${option.credits} credits for $${option.priceUsd}`).join("; ") ||
-    "purchase packs are not configured yet";
+    credits.purchaseOptions
+      .map(
+        (option) =>
+          `${option.label}: ${option.credits} credits for $${option.priceUsd}`,
+      )
+      .join("; ") || "purchase packs are not configured yet";
 
   return `You have ${credits.balance} credits available. You have used ${credits.usedCredits} of ${credits.totalCredits} total credits.${warning}
 
-Typical costs are: reading a profile/resume source ${CREDIT_COSTS.profileSourceExtract} credit, ingesting a job ${CREDIT_COSTS.jobIngest} credit, generating a master resume ${CREDIT_COSTS.masterResumeGenerate} credits, exporting a master resume ${CREDIT_COSTS.masterResumeExport} credit, generating application materials ${CREDIT_COSTS.applicationMaterialsGenerate} credits, and exporting application files ${CREDIT_COSTS.applicationMaterialsExport} credit.
+Typical costs are: ${getCreditUsageSummary()}.
 
 Available packs: ${packs}.`;
 }
 
 function buildTrackingAdvisorFallback(workspace: AdvisorWorkspaceContext) {
-  const applications = workspace.applications?.recentApplications.filter((application) => !application.archivedAt) ?? [];
-  const jobs = workspace.jobs?.recentJobs.filter((job) => !job.archived_at) ?? [];
+  const applications =
+    workspace.applications?.recentApplications.filter(
+      (application) => !application.archivedAt,
+    ) ?? [];
+  const jobs =
+    workspace.jobs?.recentJobs.filter((job) => !job.archived_at) ?? [];
 
   if (applications.length === 0 && jobs.length === 0) {
     return "You are not actively tracking any jobs or applications yet. The next useful move is to paste a job link into Pramania; I will read it, compare it against your profile, and ask before logging it as an application.";
@@ -1084,10 +1283,13 @@ function buildNextMoveAdvisorFallback({
   const resumeText = formatLatestResumeForAdvisor(latestResume);
   const activeApplications = workspace.applications?.summary.active ?? 0;
   const activeJobs = workspace.jobs?.summary.active ?? 0;
-  const missing = intelligence?.highValueGaps.map((gap) => gap.label).slice(0, 3) ?? [];
+  const missing =
+    intelligence?.highValueGaps.map((gap) => gap.label).slice(0, 3) ?? [];
   const evidence = formatListForSentence(
     impactEvidence,
-    impactEvidenceFallback || profile?.summary || "the strongest saved profile evidence",
+    impactEvidenceFallback ||
+      profile?.summary ||
+      "the strongest saved profile evidence",
   );
 
   return `My current read is ${roleRead}. The strongest saved evidence is ${evidence}.
@@ -1160,7 +1362,9 @@ function buildMetricGuidance({
   ]
     .map((item) => item.trim())
     .filter(Boolean);
-  const uniqueContextualRecommendations = Array.from(new Set(contextualRecommendations));
+  const uniqueContextualRecommendations = Array.from(
+    new Set(contextualRecommendations),
+  );
 
   if (uniqueContextualRecommendations.length > 0) {
     return formatListForSentence(
@@ -1184,24 +1388,52 @@ function buildMetricGuidance({
 
   const recommendations: string[] = [];
 
-  if (/\b(gtm|sales|revenue|commercial|pricing|pipeline|services)\b/.test(corpus)) {
-    recommendations.push("revenue or bookings influenced, CAGR, margin/profitability movement, pricing or portfolio impact");
+  if (
+    /\b(gtm|sales|revenue|commercial|pricing|pipeline|services)\b/.test(corpus)
+  ) {
+    recommendations.push(
+      "revenue or bookings influenced, CAGR, margin/profitability movement, pricing or portfolio impact",
+    );
   }
 
-  if (/\b(customer|client|success|retention|renewal|adoption|service)\b/.test(corpus)) {
-    recommendations.push("customer base served, renewal or retention impact, adoption, CSAT/NPS, time-to-value, escalation reduction");
+  if (
+    /\b(customer|client|success|retention|renewal|adoption|service)\b/.test(
+      corpus,
+    )
+  ) {
+    recommendations.push(
+      "customer base served, renewal or retention impact, adoption, CSAT/NPS, time-to-value, escalation reduction",
+    );
   }
 
-  if (/\b(operation|delivery|process|capacity|efficiency|cost|governance|execution)\b/.test(corpus)) {
-    recommendations.push("cycle-time reduction, delivery capacity, operating cost, productivity, governance cadence, execution quality");
+  if (
+    /\b(operation|delivery|process|capacity|efficiency|cost|governance|execution)\b/.test(
+      corpus,
+    )
+  ) {
+    recommendations.push(
+      "cycle-time reduction, delivery capacity, operating cost, productivity, governance cadence, execution quality",
+    );
   }
 
-  if (/\b(ai|automation|data|analytics|cloud|platform|api|technology|digital)\b/.test(corpus)) {
-    recommendations.push("automation throughput, data/AI use cases shipped, platform scale, integration scope, deployment speed, adoption");
+  if (
+    /\b(ai|automation|data|analytics|cloud|platform|api|technology|digital)\b/.test(
+      corpus,
+    )
+  ) {
+    recommendations.push(
+      "automation throughput, data/AI use cases shipped, platform scale, integration scope, deployment speed, adoption",
+    );
   }
 
-  if (/\b(global|regional|emea|mea|board|vp|executive|p&l|budget|team)\b/.test(corpus)) {
-    recommendations.push("team size, geographic scope, budget or P&L exposure, executive stakeholders, decision authority");
+  if (
+    /\b(global|regional|emea|mea|board|vp|executive|p&l|budget|team)\b/.test(
+      corpus,
+    )
+  ) {
+    recommendations.push(
+      "team size, geographic scope, budget or P&L exposure, executive stakeholders, decision authority",
+    );
   }
 
   if (recommendations.length === 0) {
@@ -1220,7 +1452,11 @@ function extractMetricClaim(message: string) {
 
   const metricSentence = message
     .split(/(?<=[.!?])\s+/)
-    .find((sentence) => /\b\d+|%|cagr|revenue|profit|margin|cost|growth|scale|reduced|increased|improved\b/i.test(sentence));
+    .find((sentence) =>
+      /\b\d+|%|cagr|revenue|profit|margin|cost|growth|scale|reduced|increased|improved\b/i.test(
+        sentence,
+      ),
+    );
 
   if (!metricSentence) {
     return null;

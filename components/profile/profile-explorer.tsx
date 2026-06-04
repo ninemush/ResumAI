@@ -40,7 +40,11 @@ type ProfileDraft = {
 
 const PROFILE_PHOTO_BUCKET = "profile-photos";
 const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
-const acceptedProfilePhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const acceptedProfilePhotoTypes = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 export function ProfileExplorer({
   applicationOverview,
@@ -71,7 +75,8 @@ export function ProfileExplorer({
   });
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const activeDirection = overview.profile?.targetDirection?.trim().toLowerCase() ?? "";
+  const activeDirection =
+    overview.profile?.targetDirection?.trim().toLowerCase() ?? "";
 
   async function saveDraft() {
     setPendingId("profile");
@@ -155,12 +160,19 @@ export function ProfileExplorer({
       const payload = await response.json();
 
       if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to save the profile photo.");
+        setMessage(
+          payload.error?.message ?? "Unable to save the profile photo.",
+        );
         return;
       }
 
-      setDraft((currentDraft) => ({ ...currentDraft, photoStoragePath: storagePath }));
-      setMessage("Profile photo saved. ATS-first resumes will still exclude it unless you choose a photo-compatible format.");
+      setDraft((currentDraft) => ({
+        ...currentDraft,
+        photoStoragePath: storagePath,
+      }));
+      setMessage(
+        "Profile photo saved. ATS-first resumes will still exclude it unless you choose a photo-compatible format.",
+      );
       router.refresh();
     } finally {
       setPendingId(null);
@@ -179,11 +191,15 @@ export function ProfileExplorer({
       const payload = await response.json();
 
       if (!response.ok) {
-        setMessage(payload.error?.message ?? "Unable to acknowledge that direction.");
+        setMessage(
+          payload.error?.message ?? "Unable to acknowledge that direction.",
+        );
         return;
       }
 
-      setMessage("Target direction saved. Pramania will use it for your profile read, master resume focus, job-fit reviews, and application materials.");
+      setMessage(
+        "Target direction saved. Pramania will use it for your profile read, master resume focus, job-fit reviews, and application materials.",
+      );
       router.refresh();
     } finally {
       setPendingId(null);
@@ -214,16 +230,24 @@ export function ProfileExplorer({
           </div>
           <label
             className="profile-photo-icon-action"
-            title={draft.photoStoragePath ? "Replace profile photo" : "Add profile photo"}
+            title={
+              draft.photoStoragePath
+                ? "Replace profile photo"
+                : "Add profile photo"
+            }
           >
             <Camera size={15} aria-hidden="true" />
             <span className="sr-only">
-              {draft.photoStoragePath ? "Replace profile photo" : "Add profile photo"}
+              {draft.photoStoragePath
+                ? "Replace profile photo"
+                : "Add profile photo"}
             </span>
             <input
               accept="image/jpeg,image/png,image/webp"
               disabled={pendingId === "photo"}
-              onChange={(event) => uploadProfilePhoto(event.target.files?.[0] ?? null)}
+              onChange={(event) =>
+                uploadProfilePhoto(event.target.files?.[0] ?? null)
+              }
               type="file"
             />
           </label>
@@ -261,25 +285,42 @@ export function ProfileExplorer({
         <CockpitMetric
           detail="Track every role you chose to pursue"
           label="Applications"
-          onClick={() => onNavigate({ applicationStageFilter: "All", view: "applications" })}
+          onClick={() =>
+            onNavigate({ applicationStageFilter: "All", view: "applications" })
+          }
           value={applicationOverview.summary.total}
         />
         <CockpitMetric
           detail="Active interview loops and next steps"
           label="Interviewing"
-          onClick={() => onNavigate({ applicationStageFilter: "Interview", view: "applications" })}
+          onClick={() =>
+            onNavigate({
+              applicationStageFilter: "Interview",
+              view: "applications",
+            })
+          }
           value={applicationOverview.summary.interviewing}
         />
         <CockpitMetric
           detail="Roles sent but not answered yet"
           label="No reply"
-          onClick={() => onNavigate({ applicationStageFilter: "Applied", view: "applications" })}
+          onClick={() =>
+            onNavigate({
+              applicationStageFilter: "Applied",
+              view: "applications",
+            })
+          }
           value={applicationOverview.summary.noReply}
         />
         <CockpitMetric
           detail="Closed or rejected applications"
           label="Closed"
-          onClick={() => onNavigate({ applicationStageFilter: "Closed", view: "applications" })}
+          onClick={() =>
+            onNavigate({
+              applicationStageFilter: "Closed",
+              view: "applications",
+            })
+          }
           value={applicationOverview.summary.rejected}
         />
         <CockpitMetric
@@ -304,13 +345,18 @@ export function ProfileExplorer({
             </strong>
           </div>
           {applicationOverview.summary.total > 0 ? (
-            <div className="stage-progress" aria-label="Application status distribution">
+            <div
+              className="stage-progress"
+              aria-label="Application status distribution"
+            >
               {applicationOverview.summary.byStatus.map((stage) => (
                 <button
                   key={stage.label}
                   onClick={() =>
                     onNavigate({
-                      applicationStageFilter: mapStatusToStageFilter(stage.status),
+                      applicationStageFilter: mapStatusToStageFilter(
+                        stage.status,
+                      ),
                       view: "applications",
                     })
                   }
@@ -334,8 +380,8 @@ export function ProfileExplorer({
             </div>
           ) : (
             <p className="stage-empty-note">
-              When you choose to pursue a role, Pramania will track it from review
-              through interviews and outcomes here.
+              When you choose to pursue a role, Pramania will track it from
+              review through interviews and outcomes here.
             </p>
           )}
         </div>
@@ -369,7 +415,10 @@ export function ProfileExplorer({
         </section>
       ) : null}
 
-      <section className="profile-intelligence-panel" aria-label="Profile intelligence">
+      <section
+        className="profile-intelligence-panel"
+        aria-label="Profile intelligence"
+      >
         <div className="section-heading">
           <p className="eyebrow">Career read</p>
           <h2>Strengths Pramania can use</h2>
@@ -377,7 +426,9 @@ export function ProfileExplorer({
         <div className="profile-signal-grid">
           <article>
             <span>Positioning read</span>
-            <strong>{formatEvidenceStrength(overview.intelligence.evidenceStrength)}</strong>
+            <strong>
+              {formatEvidenceStrength(overview.intelligence.evidenceStrength)}
+            </strong>
             <p>{overview.intelligence.roleTargetRead}</p>
           </article>
           <article>
@@ -402,14 +453,20 @@ export function ProfileExplorer({
       </section>
 
       {overview.intelligence.highValueGaps.length > 0 ? (
-        <section className="profile-intelligence-panel" aria-label="High-value gaps">
+        <section
+          className="profile-intelligence-panel"
+          aria-label="High-value gaps"
+        >
           <div className="section-heading">
             <p className="eyebrow">Sharpen next</p>
             <h2>Questions that create better bullets</h2>
           </div>
           <div className="metric-prompt-list">
             {overview.intelligence.highValueGaps.slice(0, 5).map((gap) => (
-              <article className={gap.severity} key={`${gap.label}-${gap.prompt}`}>
+              <article
+                className={gap.severity}
+                key={`${gap.label}-${gap.prompt}`}
+              >
                 <span>{gap.severity}</span>
                 <strong>{gap.label}</strong>
                 <p>{gap.prompt}</p>
@@ -419,7 +476,10 @@ export function ProfileExplorer({
         </section>
       ) : null}
 
-      <section className="profile-editor-panel" aria-label="Profile direction editor">
+      <section
+        className="profile-editor-panel"
+        aria-label="Profile direction editor"
+      >
         <div className="section-heading">
           <p className="eyebrow">Working profile</p>
           <h2>Your profile direction</h2>
@@ -428,7 +488,9 @@ export function ProfileExplorer({
           <label>
             Name
             <input
-              onChange={(event) => setDraft({ ...draft, displayName: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, displayName: event.target.value })
+              }
               placeholder="Your name"
               value={draft.displayName}
             />
@@ -436,7 +498,9 @@ export function ProfileExplorer({
           <label>
             Headline
             <input
-              onChange={(event) => setDraft({ ...draft, headline: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, headline: event.target.value })
+              }
               placeholder="e.g. Product leader | Fintech platforms | GTM strategy"
               value={draft.headline}
             />
@@ -444,7 +508,9 @@ export function ProfileExplorer({
           <label>
             Target direction
             <input
-              onChange={(event) => setDraft({ ...draft, targetDirection: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, targetDirection: event.target.value })
+              }
               placeholder="Role family, domain, or path"
               value={draft.targetDirection}
             />
@@ -452,7 +518,9 @@ export function ProfileExplorer({
           <label>
             Target level
             <input
-              onChange={(event) => setDraft({ ...draft, targetLevel: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, targetLevel: event.target.value })
+              }
               placeholder="e.g. Senior Manager, Director, VP"
               value={draft.targetLevel}
             />
@@ -460,7 +528,9 @@ export function ProfileExplorer({
           <label className="profile-summary-editor">
             Summary
             <textarea
-              onChange={(event) => setDraft({ ...draft, summary: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, summary: event.target.value })
+              }
               placeholder="A concise read on your experience, strengths, and direction."
               rows={5}
               value={draft.summary}
@@ -489,7 +559,8 @@ export function ProfileExplorer({
               <article
                 className={`role-card ${
                   recommendation.user_acknowledged ||
-                  recommendation.role_family.trim().toLowerCase() === activeDirection
+                  recommendation.role_family.trim().toLowerCase() ===
+                    activeDirection
                     ? "selected"
                     : ""
                 }`}
@@ -515,11 +586,12 @@ export function ProfileExplorer({
                 ) : null}
                 <p>{recommendation.rationale}</p>
                 {recommendation.user_acknowledged ||
-                recommendation.role_family.trim().toLowerCase() === activeDirection ? (
+                recommendation.role_family.trim().toLowerCase() ===
+                  activeDirection ? (
                   <p className="role-selected-note">
                     <CheckCircle2 size={15} aria-hidden="true" />
-                    Current working direction for profile positioning, resume focus,
-                    job-fit reviews, and application materials.
+                    Current working direction for profile positioning, resume
+                    focus, job-fit reviews, and application materials.
                   </p>
                 ) : null}
                 {recommendation.open_questions.length > 0 ? (
@@ -534,18 +606,21 @@ export function ProfileExplorer({
                   disabled={
                     pendingId === recommendation.id ||
                     recommendation.user_acknowledged ||
-                    recommendation.role_family.trim().toLowerCase() === activeDirection
+                    recommendation.role_family.trim().toLowerCase() ===
+                      activeDirection
                   }
                   onClick={() => acknowledgeRecommendation(recommendation.id)}
                   title="Sets this as your working target direction for profile positioning, resume focus, job fit, and application materials."
                   type="button"
                 >
                   {recommendation.user_acknowledged ||
-                  recommendation.role_family.trim().toLowerCase() === activeDirection ? (
+                  recommendation.role_family.trim().toLowerCase() ===
+                    activeDirection ? (
                     <CheckCircle2 size={15} aria-hidden="true" />
                   ) : null}
                   {recommendation.user_acknowledged ||
-                  recommendation.role_family.trim().toLowerCase() === activeDirection
+                  recommendation.role_family.trim().toLowerCase() ===
+                    activeDirection
                     ? "Current target"
                     : pendingId === recommendation.id
                       ? "Saving..."
@@ -564,7 +639,8 @@ function mapStatusToStageFilter(status: string) {
   if (status === "draft") return "Review";
   if (status === "interview_in_progress") return "Interview";
   if (status === "interviewed_selected") return "Selected";
-  if (["rejected", "interviewed_not_selected", "withdrawn"].includes(status)) return "Closed";
+  if (["rejected", "interviewed_not_selected", "withdrawn"].includes(status))
+    return "Closed";
   return "Applied";
 }
 
@@ -620,7 +696,11 @@ function readNextMove({
     };
   }
 
-  if (overview.roleRecommendations.some((recommendation) => !recommendation.user_acknowledged)) {
+  if (
+    overview.roleRecommendations.some(
+      (recommendation) => !recommendation.user_acknowledged,
+    )
+  ) {
     return {
       title: "Choose the working lane",
       body: `Review the role paths ${brand.name} suggested and choose the direction that feels right. This keeps resume and application work focused.`,
@@ -637,14 +717,14 @@ function readNextMove({
   if (jobOverview.summary.readyForReview > 0) {
     return {
       title: "Review the role fit",
-      body: "You have a job post ready for review. Review fit, gaps, and tradeoffs before creating an application packet.",
+      body: "You have a job post ready for review. Review fit, gaps, and tradeoffs before drafting job-specific materials.",
     };
   }
 
   if (applicationOverview.summary.needsReview > 0) {
     return {
       title: "Finish the application record",
-      body: "You have an application waiting for a next action. Create the packet, update status, or decide whether to proceed.",
+      body: "You have an application waiting for a next action. Draft the materials, update status, or decide whether to proceed.",
     };
   }
 
@@ -688,8 +768,13 @@ function formatList(items: string[]) {
   return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
-function formatEvidenceStrength(value: ProfileOverview["intelligence"]["evidenceStrength"]) {
-  const labels: Record<ProfileOverview["intelligence"]["evidenceStrength"], string> = {
+function formatEvidenceStrength(
+  value: ProfileOverview["intelligence"]["evidenceStrength"],
+) {
+  const labels: Record<
+    ProfileOverview["intelligence"]["evidenceStrength"],
+    string
+  > = {
     developing: "Taking shape",
     strong: "Well supported",
     thin: "Needs more evidence",

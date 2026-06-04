@@ -8,6 +8,9 @@ import {
   CREDIT_FREE_ACTIONS,
   CREDIT_PURCHASE_OPTIONS,
   CREDIT_USAGE_GUIDE,
+  formatCreditCost,
+  getCreditUsageItem,
+  getCreditUsageSummary,
   type CreditFeature,
 } from "@/lib/billing/credit-catalog";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -19,6 +22,9 @@ export {
   CREDIT_FREE_ACTIONS,
   CREDIT_PURCHASE_OPTIONS,
   CREDIT_USAGE_GUIDE,
+  formatCreditCost,
+  getCreditUsageItem,
+  getCreditUsageSummary,
 };
 export type { CreditFeature };
 
@@ -157,7 +163,10 @@ export async function getCreditHistory(): Promise<CreditHistory> {
     throw mapCreditError(error.message);
   }
 
-  const rows = z.array(creditLedgerRowSchema).parse(data ?? []).map(mapCreditLedgerRow);
+  const rows = z
+    .array(creditLedgerRowSchema)
+    .parse(data ?? [])
+    .map(mapCreditLedgerRow);
 
   return {
     invoices: rows.filter((row) => row.kind === "purchase"),
@@ -181,11 +190,16 @@ export const createPromoCodeSchema = z.object({
     .max(40)
     .transform((value) => value.toUpperCase().replace(/\s+/g, "-"))
     .refine((value) => /^[A-Z0-9][A-Z0-9_-]{3,39}$/.test(value), {
-      message: "Promo codes can use uppercase letters, numbers, dashes, and underscores.",
+      message:
+        "Promo codes can use uppercase letters, numbers, dashes, and underscores.",
     }),
   creditAmount: z.number().int().min(1).max(500),
   description: z.string().trim().max(240).default(""),
-  expiresAt: z.string().datetime().optional().or(z.literal("").transform(() => undefined)),
+  expiresAt: z
+    .string()
+    .datetime()
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   maxRedemptions: z.number().int().min(1).max(5000).default(1),
 });
 
@@ -200,7 +214,12 @@ export const grantCreditsSchema = z
       .transform((value) => value.toLowerCase())
       .optional()
       .or(z.literal("").transform(() => undefined)),
-    userId: z.string().trim().uuid().optional().or(z.literal("").transform(() => undefined)),
+    userId: z
+      .string()
+      .trim()
+      .uuid()
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
   })
   .superRefine((value, context) => {
     if (!value.userEmail && !value.userId) {
@@ -212,7 +231,9 @@ export const grantCreditsSchema = z
     }
   });
 
-export async function createPromoCode(input: z.input<typeof createPromoCodeSchema>) {
+export async function createPromoCode(
+  input: z.input<typeof createPromoCodeSchema>,
+) {
   const parsed = createPromoCodeSchema.parse(input);
   const supabase = await createClient();
   const user = await requireAdminUser(supabase);
@@ -234,7 +255,9 @@ export async function createPromoCode(input: z.input<typeof createPromoCodeSchem
     .single();
 
   if (error || !data) {
-    throw new Error(error?.code === "42501" ? "ADMIN_REQUIRED" : "PROMO_CREATE_FAILED");
+    throw new Error(
+      error?.code === "42501" ? "ADMIN_REQUIRED" : "PROMO_CREATE_FAILED",
+    );
   }
 
   return {
@@ -251,7 +274,9 @@ export async function createPromoCode(input: z.input<typeof createPromoCodeSchem
   };
 }
 
-export async function grantCreditsToUser(input: z.input<typeof grantCreditsSchema>) {
+export async function grantCreditsToUser(
+  input: z.input<typeof grantCreditsSchema>,
+) {
   const parsed = grantCreditsSchema.parse(input);
   const supabase = await createClient();
   const adminUser = await requireAdminUser(supabase);
@@ -313,7 +338,9 @@ async function resolveCreditGrantTarget(
       return null;
     }
 
-    return data.user ? { email: data.user.email ?? null, id: data.user.id } : null;
+    return data.user
+      ? { email: data.user.email ?? null, id: data.user.id }
+      : null;
   }
 
   if (!userEmail) {
@@ -324,13 +351,18 @@ async function resolveCreditGrantTarget(
   const perPage = 1000;
 
   while (page <= 20) {
-    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
+    const { data, error } = await adminClient.auth.admin.listUsers({
+      page,
+      perPage,
+    });
 
     if (error) {
       throw new Error("CREDIT_TARGET_LOOKUP_FAILED");
     }
 
-    const user = data.users.find((candidate) => candidate.email?.toLowerCase() === userEmail);
+    const user = data.users.find(
+      (candidate) => candidate.email?.toLowerCase() === userEmail,
+    );
 
     if (user) {
       return { email: user.email ?? null, id: user.id };
@@ -356,7 +388,9 @@ const promoCodeRowSchema = z.object({
   id: z.string().uuid(),
   is_active: z.boolean(),
   max_redemptions: z.number().int(),
-  promo_code_redemptions: z.array(z.object({ id: z.string().uuid() })).optional(),
+  promo_code_redemptions: z
+    .array(z.object({ id: z.string().uuid() }))
+    .optional(),
 });
 
 export async function listPromoCodes() {
@@ -371,24 +405,31 @@ export async function listPromoCodes() {
     .limit(100);
 
   if (error) {
-    throw new Error(error.code === "42501" ? "ADMIN_REQUIRED" : "PROMO_LIST_FAILED");
+    throw new Error(
+      error.code === "42501" ? "ADMIN_REQUIRED" : "PROMO_LIST_FAILED",
+    );
   }
 
-  return z.array(promoCodeRowSchema).parse(data ?? []).map((row) => ({
-    assignedUserEmail: row.assigned_user_email,
-    code: row.code,
-    createdAt: row.created_at,
-    creditAmount: row.credit_amount,
-    description: row.description,
-    expiresAt: row.expires_at,
-    id: row.id,
-    isActive: row.is_active,
-    maxRedemptions: row.max_redemptions,
-    redeemedCount: row.promo_code_redemptions?.length ?? 0,
-  }));
+  return z
+    .array(promoCodeRowSchema)
+    .parse(data ?? [])
+    .map((row) => ({
+      assignedUserEmail: row.assigned_user_email,
+      code: row.code,
+      createdAt: row.created_at,
+      creditAmount: row.credit_amount,
+      description: row.description,
+      expiresAt: row.expires_at,
+      id: row.id,
+      isActive: row.is_active,
+      maxRedemptions: row.max_redemptions,
+      redeemedCount: row.promo_code_redemptions?.length ?? 0,
+    }));
 }
 
-async function requireAdminUser(supabase: Awaited<ReturnType<typeof createClient>>) {
+async function requireAdminUser(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+) {
   const {
     data: { user },
     error: userError,
@@ -567,15 +608,28 @@ function normalizeCreditSummary(
   const signupCredits = Math.max(0, summary.signupCredits);
   const promoCredits = Math.max(0, summary.promoCredits);
   const purchasedCredits = Math.max(0, summary.purchasedCredits);
-  const totalCredits = Math.max(0, summary.totalCredits, signupCredits + promoCredits + purchasedCredits);
+  const totalCredits = Math.max(
+    0,
+    summary.totalCredits,
+    signupCredits + promoCredits + purchasedCredits,
+  );
   const usedCredits = Math.max(0, summary.usedCredits);
   const balance = Math.max(0, summary.balance);
   const usagePercent =
     totalCredits > 0
-      ? Math.min(100, Math.max(0, Number(((usedCredits / totalCredits) * 100).toFixed(2))))
+      ? Math.min(
+          100,
+          Math.max(0, Number(((usedCredits / totalCredits) * 100).toFixed(2))),
+        )
       : 0;
   const warningThreshold =
-    usagePercent >= 90 ? 90 : usagePercent >= 75 ? 75 : usagePercent >= 50 ? 50 : null;
+    usagePercent >= 90
+      ? 90
+      : usagePercent >= 75
+        ? 75
+        : usagePercent >= 50
+          ? 50
+          : null;
 
   return {
     ...summary,
@@ -591,7 +645,9 @@ function normalizeCreditSummary(
   };
 }
 
-function withPurchaseOptions(summary: z.infer<typeof creditSummarySchema>): CreditSummary {
+function withPurchaseOptions(
+  summary: z.infer<typeof creditSummarySchema>,
+): CreditSummary {
   const normalizedSummary = normalizeCreditSummary(summary);
 
   return {
@@ -612,12 +668,16 @@ export function getPurchaseOptions(): CreditPurchaseOption[] {
   }));
 }
 
-function mapCreditLedgerRow(row: z.infer<typeof creditLedgerRowSchema>): CreditLedgerEvent {
+function mapCreditLedgerRow(
+  row: z.infer<typeof creditLedgerRowSchema>,
+): CreditLedgerEvent {
   const amount = row.credit_delta;
   const metadata = row.metadata ?? {};
-  const productId = typeof metadata.product_id === "string" ? metadata.product_id : null;
-  const purchaseOption =
-    productId ? CREDIT_PURCHASE_OPTIONS.find((option) => option.productId === productId) : null;
+  const productId =
+    typeof metadata.product_id === "string" ? metadata.product_id : null;
+  const purchaseOption = productId
+    ? CREDIT_PURCHASE_OPTIONS.find((option) => option.productId === productId)
+    : null;
   const kind: CreditLedgerEvent["kind"] =
     row.event_type === "revenuecat_purchase"
       ? "purchase"
@@ -628,7 +688,11 @@ function mapCreditLedgerRow(row: z.infer<typeof creditLedgerRowSchema>): CreditL
   return {
     amount,
     createdAt: row.created_at,
-    description: describeCreditEvent(row.event_type, row.resource_type, purchaseOption?.label),
+    description: describeCreditEvent(
+      row.event_type,
+      row.resource_type,
+      purchaseOption?.label,
+    ),
     eventType: row.event_type,
     id: row.id,
     invoiceStatus: kind === "purchase" ? "receipt_emailed" : "not_applicable",
@@ -637,14 +701,21 @@ function mapCreditLedgerRow(row: z.infer<typeof creditLedgerRowSchema>): CreditL
   };
 }
 
-function describeCreditEvent(eventType: string, resourceType: string | null, purchaseLabel?: string) {
+function describeCreditEvent(
+  eventType: string,
+  resourceType: string | null,
+  purchaseLabel?: string,
+) {
   if (eventType === "signup_bonus") return "Starter credits";
   if (eventType === "owner_credit_grant") return "Owner credit grant";
   if (eventType === "promo_code_redeemed") return "Promo code credit grant";
-  if (eventType === "revenuecat_purchase") return `${purchaseLabel ?? "Credit pack"} purchase`;
+  if (eventType === "revenuecat_purchase")
+    return `${purchaseLabel ?? "Credit pack"} purchase`;
 
   const isHistoricalEstimate = eventType.startsWith("historical_feature_");
-  const feature = eventType.replace(/^historical_/, "").replace(/^feature_/, "");
+  const feature = eventType
+    .replace(/^historical_/, "")
+    .replace(/^feature_/, "");
 
   let description: string;
   switch (feature) {
@@ -652,7 +723,7 @@ function describeCreditEvent(eventType: string, resourceType: string | null, pur
       description = "Downloaded application files";
       break;
     case "applicationMaterialsGenerate":
-      description = "Created role-specific application packet";
+      description = "Drafted job-specific materials";
       break;
     case "jobIngest":
       description = "Read and analyzed a job link";
@@ -667,10 +738,14 @@ function describeCreditEvent(eventType: string, resourceType: string | null, pur
       description = "Read a resume, profile, link, or file";
       break;
     default:
-      description = resourceType ? `Credit activity for ${describeResource(resourceType)}` : "Credit activity";
+      description = resourceType
+        ? `Credit activity for ${describeResource(resourceType)}`
+        : "Credit activity";
   }
 
-  return isHistoricalEstimate ? `Historical estimate: ${description}` : description;
+  return isHistoricalEstimate
+    ? `Historical estimate: ${description}`
+    : description;
 }
 
 function describeResource(resourceType: string | null) {

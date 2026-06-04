@@ -17,7 +17,10 @@ import { useEffect, useMemo, useState } from "react";
 import type { AppView } from "@/components/app-shell/side-nav";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
-import { CREDIT_USAGE_GUIDE } from "@/lib/billing/credit-catalog";
+import {
+  CREDIT_USAGE_GUIDE,
+  formatCreditCost,
+} from "@/lib/billing/credit-catalog";
 import type {
   CreditHistory,
   CreditLedgerEvent,
@@ -273,9 +276,7 @@ export function SettingsPanel({
             {CREDIT_USAGE_GUIDE.map((item) => (
               <div className="settings-cost-row" key={item.feature}>
                 <span>{item.name}</span>
-                <strong>
-                  {item.cost} {item.cost === 1 ? "credit" : "credits"}
-                </strong>
+                <strong>{formatCreditCost(item.cost)}</strong>
                 <p>{item.value}</p>
               </div>
             ))}

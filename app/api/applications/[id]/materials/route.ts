@@ -82,7 +82,8 @@ export async function POST(request: Request, context: RouteContext) {
 
   if (!rateLimit.allowed) {
     return rateLimitResponse({
-      message: "Application packet generation is being requested too quickly. Pause briefly before trying again.",
+      message:
+        "Application packet generation is being requested too quickly. Pause briefly before trying again.",
       requestId,
       result: rateLimit,
     });
@@ -151,7 +152,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (!rateLimit.allowed) {
     return rateLimitResponse({
-      message: "Material edits are being saved too quickly. Pause briefly before trying again.",
+      message:
+        "Material edits are being saved too quickly. Pause briefly before trying again.",
       requestId,
       result: rateLimit,
     });
@@ -189,7 +191,8 @@ export async function PATCH(request: Request, context: RouteContext) {
         error: {
           category: "validation",
           code: "application.invalid_material_update",
-          message: "Use valid resume sections or cover-letter text before saving.",
+          message:
+            "Use valid resume sections or cover-letter text before saving.",
         },
       },
       { status: 400 },
@@ -251,16 +254,21 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "application.job_text_required",
-        message: "The job post needs enough detail before I can create a credible application packet.",
+        message:
+          "The job post needs enough detail before I can draft credible job-specific materials.",
         status: 422,
       };
     }
 
-    if (error.message === "RESUME_NOT_FOUND" || error.message === "COVER_LETTER_NOT_FOUND") {
+    if (
+      error.message === "RESUME_NOT_FOUND" ||
+      error.message === "COVER_LETTER_NOT_FOUND"
+    ) {
       return {
         category: "not_found",
         code: "application.materials_not_found",
-        message: "Create the application packet before reviewing or editing it.",
+        message:
+          "Draft the job-specific materials before reviewing or editing them.",
         status: 404,
       };
     }
@@ -269,7 +277,8 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "profile.context_too_thin",
-        message: "I need a little more profile evidence before creating credible application materials.",
+        message:
+          "I need a little more profile evidence before creating credible application materials.",
         status: 422,
       };
     }
@@ -278,7 +287,8 @@ function toApiError(error: unknown) {
       return {
         category: "server",
         code: "resume.master_read_failed",
-        message: "I could not read the master resume context for this generation.",
+        message:
+          "I could not read the master resume context for this generation.",
         status: 500,
       };
     }
@@ -287,7 +297,8 @@ function toApiError(error: unknown) {
       return {
         category: "server",
         code: "application.material_quota_audit_failed",
-        message: "The materials were generated, but usage tracking could not be finalized.",
+        message:
+          "The materials were generated, but usage tracking could not be finalized.",
         status: 500,
       };
     }

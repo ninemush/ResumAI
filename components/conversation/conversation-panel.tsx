@@ -242,7 +242,9 @@ function buildCreditExhaustionReply(): AssistantMessageDraft {
 }
 
 function getCreditExhaustionReply(payload: unknown) {
-  return isCreditExhaustionPayload(payload) ? buildCreditExhaustionReply() : null;
+  return isCreditExhaustionPayload(payload)
+    ? buildCreditExhaustionReply()
+    : null;
 }
 
 export function ConversationPanel({
@@ -679,7 +681,7 @@ export function ConversationPanel({
 
       if (actionableCandidates.length !== 1) {
         return actionableCandidates.length === 0
-          ? "I can create a role-specific application packet once an application is logged from a job post with enough detail."
+          ? "I can draft job-specific materials once an application is logged from a job post with enough detail."
           : `I can do that, but I need to know which application. Do you mean ${actionableCandidates.map(formatApplicationLabel).join(", ")}?`;
       }
 
@@ -701,7 +703,7 @@ export function ConversationPanel({
 
         return (
           payload.error?.message ??
-          "I could not create that application packet yet."
+          "I could not draft those job-specific materials yet."
         );
       }
 
@@ -796,7 +798,7 @@ export function ConversationPanel({
     const applicationId = payload.application?.id;
     const materialSummary = applicationId
       ? await generateAndExportApplicationMaterials(applicationId)
-      : "Next, we should create the role-specific application packet before marking it applied.";
+      : "Next, we should draft the job-specific materials before marking it applied.";
 
     return payload.created
       ? `Logged ${payload.application?.jobTitle ?? "that role"} at ${payload.application?.companyName ?? "the company"} as an application. ${materialSummary}`
@@ -821,7 +823,7 @@ export function ConversationPanel({
 
       return (
         payload.error?.message ??
-        "I could not create the role-specific application packet yet."
+        "I could not draft the job-specific materials yet."
       );
     }
 
