@@ -29,6 +29,8 @@ import type {
   CreditSummary,
 } from "@/lib/billing/credits";
 import type { WorkspaceSession } from "@/lib/commands/session";
+import { PRIVACY_POLICY_VERSION, TERMS_VERSION } from "@/lib/legal/terms";
+import { aiUseNotices, publicPolicyPaths } from "@/lib/privacy/compliance-config";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 import { createClient } from "@/lib/supabase/browser";
 
@@ -47,15 +49,28 @@ type BillingHistoryResponse = {
 };
 
 type PrivacyRequestType =
-  | "account_delete"
-  | "drafts_delete"
-  | "data_export"
-  | "privacy_question";
+  | "access"
+  | "export"
+  | "deletion"
+  | "correction"
+  | "restriction"
+  | "objection"
+  | "ai_review";
+
+type PrivacyRequestRow = {
+  createdAt: string;
+  dueAt: string | null;
+  id: string;
+  requestType: PrivacyRequestType;
+  resolvedAt: string | null;
+  status: string;
+  subject: string | null;
+};
 
 type PrivacyRequestResponse = {
   error?: { message?: string };
   privacyRequestId?: string;
-  request?: { id?: string };
+  request?: PrivacyRequestRow;
 };
 
 export function SettingsPanel({
@@ -74,6 +89,8 @@ export function SettingsPanel({
   const [promoCode, setPromoCode] = useState("");
   const [privacyRequestLoading, setPrivacyRequestLoading] =
     useState<PrivacyRequestType | null>(null);
+  const [privacyRequests, setPrivacyRequests] = useState<PrivacyRequestRow[]>([]);
+  const [privacyRequestsLoading, setPrivacyRequestsLoading] = useState(true);
   const [privacyRequestStatus, setPrivacyRequestStatus] = useState<string | null>(null);
   const [promoStatus, setPromoStatus] = useState<string | null>(null);
   const [resetStatus, setResetStatus] = useState<string | null>(null);
@@ -131,6 +148,38 @@ export function SettingsPanel({
     }
 
     void loadHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPrivacyRequests() {
+      setPrivacyRequestsLoading(true);
+
+      try {
+        const requests = await fetchPrivacyRequests();
+
+        if (isMounted) {
+          setPrivacyRequests(requests);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setPrivacyRequestStatus(
+            error instanceof Error ? error.message : "Privacy requests could not be loaded.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setPrivacyRequestsLoading(false);
+        }
+      }
+    }
+
+    void loadPrivacyRequests();
 
     return () => {
       isMounted = false;
@@ -199,12 +248,12 @@ export function SettingsPanel({
 
     try {
       const response =
-        type === "data_export"
+        type === "export"
           ? await fetch("/api/privacy/export", { method: "POST" })
           : await fetch("/api/privacy/requests", {
               body: JSON.stringify({
                 details: config.message,
-                requestType: mapPrivacyRequestType(type),
+                requestType: type,
                 subject: config.title,
               }),
               headers: { "Content-Type": "application/json" },
@@ -219,16 +268,18 @@ export function SettingsPanel({
         return;
       }
 
-      if (type === "data_export") {
+      if (type === "export") {
         setPrivacyRequestStatus(
-          `Generated a data export and recorded request ${payload.privacyRequestId ?? ""}.`.trim(),
+          "Generated a data export and recorded a completed privacy request.",
         );
+        setPrivacyRequests(await fetchPrivacyRequests());
         return;
       }
 
       setPrivacyRequestStatus(
         `Created request ${payload.request?.id ?? ""} for ${config.label.toLowerCase()}.`.trim(),
       );
+      setPrivacyRequests(await fetchPrivacyRequests());
     } finally {
       setPrivacyRequestLoading(null);
     }
@@ -307,19 +358,48 @@ export function SettingsPanel({
         <div className="settings-section-heading">
           <ShieldCheck size={18} aria-hidden="true" />
           <div>
-            <p className="eyebrow">Data and privacy</p>
-            <h2 id="data-rights-title">Data rights requests</h2>
+            <p className="eyebrow">Privacy Center</p>
+            <h2 id="data-rights-title">Privacy controls and data rights support</h2>
             <p>
-              Create a routed request for export, deletion, privacy questions,
-              or account deletion. Requests are reviewed against audit-safe
-              retention rules before any destructive action.
+              Create routed requests for export, deletion, correction,
+              restriction, objection, access, or AI-assisted processing review.
+              Deletion starts with operational review because some records
+              require retention or minimization decisions.
+            </p>
+          </div>
+        </div>
+        <div className="settings-stat-grid" aria-label="Privacy account status">
+          <div className="settings-stat-card">
+            <span>Account privacy status</span>
+            <strong>Private workspace</strong>
+            <p>Workspace data is scoped to your authenticated account.</p>
+          </div>
+          <div className="settings-stat-card">
+            <span>Terms accepted</span>
+            <strong>{session.legal.termsVersion ?? TERMS_VERSION}</strong>
+            <p>{session.legal.termsAcceptedAt ? formatDate(session.legal.termsAcceptedAt) : "Not accepted"}</p>
+          </div>
+          <div className="settings-stat-card">
+            <span>Privacy policy</span>
+            <strong>{session.legal.privacyPolicyVersion ?? PRIVACY_POLICY_VERSION}</strong>
+            <p>
+              {session.legal.privacyPolicyAcceptedAt
+                ? formatDate(session.legal.privacyPolicyAcceptedAt)
+                : "Acceptance not recorded"}
             </p>
           </div>
         </div>
         <div className="settings-privacy-action-grid">
           {(Object.keys(privacyRequestConfig) as PrivacyRequestType[]).map((type) => {
             const config = privacyRequestConfig[type];
-            const Icon = config.icon === "delete" ? Trash2 : config.icon === "export" ? Download : HelpCircle;
+            const Icon =
+              config.icon === "delete"
+                ? Trash2
+                : config.icon === "export"
+                  ? Download
+                  : config.icon === "file"
+                    ? FileText
+                    : HelpCircle;
 
             return (
               <button
@@ -342,10 +422,69 @@ export function SettingsPanel({
           <p className="settings-card-note">{privacyRequestStatus}</p>
         ) : null}
         <p className="settings-card-note">
-          You can also use Support for a human fallback. Application and quota
-          records may retain minimum audit evidence where required by the V1
-          retention policy.
+          Application, credit, quota, security, and audit records may retain
+          minimum evidence where needed for accounting, fraud prevention,
+          disputes, or security review.
         </p>
+        <div className="settings-history-grid">
+          <article className="settings-history-card">
+            <div className="settings-history-title">
+              <ReceiptText size={16} aria-hidden="true" />
+              <h3>Recent privacy requests</h3>
+            </div>
+            {privacyRequestsLoading ? (
+              <p className="settings-history-empty">Loading privacy requests...</p>
+            ) : null}
+            {!privacyRequestsLoading && privacyRequests.length === 0 ? (
+              <p className="settings-history-empty">No privacy requests yet.</p>
+            ) : null}
+            {!privacyRequestsLoading && privacyRequests.length > 0 ? (
+              <div className="settings-history-list">
+                {privacyRequests.slice(0, 8).map((item) => (
+                  <div className="settings-history-row" key={item.id}>
+                    <div>
+                      <strong>{item.subject ?? formatLabel(item.requestType)}</strong>
+                      <p>
+                        {formatLabel(item.status)} · submitted {formatDate(item.createdAt)}
+                        {item.dueAt ? ` · target ${formatDate(item.dueAt)}` : ""}
+                      </p>
+                    </div>
+                    <span>{formatLabel(item.requestType)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </article>
+
+          <article className="settings-history-card">
+            <div className="settings-history-title">
+              <ShieldCheck size={16} aria-hidden="true" />
+              <h3>AI and data-use notices</h3>
+            </div>
+            <div className="settings-history-list">
+              {aiUseNotices.map((notice) => (
+                <div className="settings-history-row" key={notice}>
+                  <div>
+                    <strong>{notice}</strong>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="settings-link-row settings-policy-links">
+              {[
+                ["Privacy Policy", publicPolicyPaths.privacy],
+                ["Data Retention Policy", publicPolicyPaths.dataRetention],
+                ["AI Use Notice", publicPolicyPaths.aiUse],
+                ["Subprocessor List", publicPolicyPaths.subprocessors],
+                ["Security Overview", publicPolicyPaths.security],
+              ].map(([label, href]) => (
+                <a className="inline-link" href={href} key={href} target="_blank" rel="noreferrer">
+                  {label}
+                </a>
+              ))}
+            </div>
+          </article>
+        </div>
       </section>
 
       <section className="settings-panel-section" aria-labelledby="usage-title">
@@ -632,14 +771,30 @@ const privacyRequestConfig: Record<
   PrivacyRequestType,
   {
     helper: string;
-    icon: "delete" | "export" | "question";
+    icon: "delete" | "export" | "file" | "question";
     label: string;
     message: string;
     title: string;
     tone?: "danger";
   }
 > = {
-  account_delete: {
+  access: {
+    helper: "Request a review of stored account and profile data",
+    icon: "file",
+    label: "Access review",
+    message:
+      "I want to request access review for stored account, profile, source, job, application, and generated material records.",
+    title: "Access request",
+  },
+  export: {
+    helper: "Generate a structured JSON export",
+    icon: "export",
+    label: "Export my data",
+    message:
+      "I want to request an export of my account data, including profile data, uploaded source records, jobs, applications, and generated materials where available.",
+    title: "Data export request",
+  },
+  deletion: {
     helper: "Request account closure and retention review",
     icon: "delete",
     label: "Delete account",
@@ -648,38 +803,39 @@ const privacyRequestConfig: Record<
     title: "Account deletion request",
     tone: "danger",
   },
-  data_export: {
-    helper: "Request a copy of profile, sources, jobs, and materials",
-    icon: "export",
-    label: "Export my data",
+  correction: {
+    helper: "Ask for correction of stored data",
+    icon: "file",
+    label: "Correct data",
     message:
-      "I want to request an export of my account data, including profile data, uploaded source records, jobs, applications, and generated materials where available.",
-    title: "Data export request",
+      "I want to request correction of stored profile, resume, job, application, or account data.",
+    title: "Correction request",
   },
-  drafts_delete: {
-    helper: "Request deletion of editable sources and unsubmitted drafts",
-    icon: "delete",
-    label: "Delete sources/drafts",
-    message:
-      "I want to delete uploaded sources, editable profile data, generated master resume drafts, or other non-submitted drafts where deletion is allowed.",
-    title: "Delete uploaded sources or drafts",
-  },
-  privacy_question: {
-    helper: "Ask about privacy, retention, or support fallback",
+  restriction: {
+    helper: "Request restriction review",
     icon: "question",
-    label: "Privacy request",
+    label: "Restrict use",
     message:
-      "I have a privacy, retention, or data-handling question and want support to review it.",
-    title: "Privacy support request",
+      "I want to request review of whether processing should be restricted for some stored data.",
+    title: "Restriction request",
+  },
+  objection: {
+    helper: "Request objection review",
+    icon: "question",
+    label: "Object to use",
+    message:
+      "I want to object to some processing and request operational review.",
+    title: "Objection request",
+  },
+  ai_review: {
+    helper: "Request review of AI-assisted processing",
+    icon: "question",
+    label: "AI review",
+    message:
+      "I want to request review of AI-assisted processing, data use, or generated-content handling.",
+    title: "AI-assisted processing review",
   },
 };
-
-function mapPrivacyRequestType(type: PrivacyRequestType) {
-  if (type === "data_export") return "export";
-  if (type === "privacy_question") return "ai_review";
-
-  return "deletion";
-}
 
 function CreditMeter({ summary }: { summary: CreditSummary }) {
   const percent = Math.min(Math.max(summary.usagePercent, 0), 100);
@@ -803,6 +959,20 @@ async function refreshHistory(
   }
 }
 
+async function fetchPrivacyRequests() {
+  const response = await fetch("/api/privacy/requests", { cache: "no-store" });
+  const payload = (await response.json()) as {
+    error?: { message?: string };
+    requests?: PrivacyRequestRow[];
+  };
+
+  if (!response.ok || !payload.requests) {
+    throw new Error(payload.error?.message ?? "Privacy requests could not be loaded.");
+  }
+
+  return payload.requests;
+}
+
 function buildPurchaseUrl(url: string, userId: string, email: string | null) {
   const encodedUserId = encodeURIComponent(userId);
   const encodedEmail = email ? encodeURIComponent(email) : "";
@@ -834,4 +1004,10 @@ function formatDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatLabel(value: string) {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

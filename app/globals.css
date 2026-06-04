@@ -6255,6 +6255,22 @@ input:focus {
   opacity: 0.52;
 }
 
+.settings-policy-links {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .settings-privacy-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .settings-privacy-action-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .job-list {
   display: grid;
   gap: 10px;
