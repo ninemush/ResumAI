@@ -20,6 +20,7 @@ import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState, useTransition } from "react";
 
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
+import type { ComplianceDashboard } from "@/lib/privacy/compliance-dashboard";
 
 type OwnerConsoleProps = {
   metrics: OwnerMetrics;
@@ -86,6 +87,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [issueUpdateMessage, setIssueUpdateMessage] = useState<string | null>(null);
   const [grantTargetQuery, setGrantTargetQuery] = useState("");
   const [selectedGrantTargets, setSelectedGrantTargets] = useState<CreditGrantTarget[]>([]);
+  const [compliance, setCompliance] = useState<ComplianceDashboard | null>(null);
+  const [complianceMessage, setComplianceMessage] = useState<string | null>(null);
+  const [complianceLoading, setComplianceLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const filteredUsers = useMemo(() => {
@@ -191,6 +195,28 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         setIssueUpdateMessage("Owner metrics could not be refreshed. Try again before acting on stale data.");
       }
     });
+  }
+
+  async function loadCompliance() {
+    setComplianceLoading(true);
+    setComplianceMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/compliance", { cache: "no-store" });
+      const payload = (await response.json()) as {
+        compliance?: ComplianceDashboard;
+        error?: { message?: string };
+      };
+
+      if (!response.ok || !payload.compliance) {
+        setComplianceMessage(payload.error?.message ?? "Compliance dashboard could not be loaded.");
+        return;
+      }
+
+      setCompliance(payload.compliance);
+    } finally {
+      setComplianceLoading(false);
+    }
   }
 
   async function updateIssue(
@@ -522,6 +548,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           ["support", "Support", metrics.support.ticketsOpen],
           ["outcomes", "Outcomes"],
           ["profitability", "Profitability"],
+          ["compliance", "Compliance", compliance?.privacyRequests.open ?? undefined],
           ["promos", "Promo codes"],
         ].map(([key, label, count]) => (
           <button
@@ -531,6 +558,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               setActiveTab(String(key));
               if (key === "promos" && promoCodes.length === 0) {
                 void loadPromoCodes();
+              }
+              if (key === "compliance" && !compliance && !complianceLoading) {
+                void loadCompliance();
               }
             }}
             type="button"
@@ -1090,6 +1120,151 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         </section>
       ) : null}
 
+      {activeTab === "compliance" ? (
+        <section className="owner-detail-panel owner-wide-panel" aria-label="Compliance readiness">
+          <SectionHeading
+            eyebrow="Compliance readiness"
+            title="Privacy operations and audit evidence"
+            body="Track practical privacy controls, request aging, incident review, subprocessors, retention posture, and production hardening gaps. This is operational readiness, not a certification claim."
+          />
+          <div className="owner-form-actions">
+            <button className="owner-action-button secondary" disabled={complianceLoading} onClick={loadCompliance} type="button">
+              <RefreshCcw aria-hidden="true" size={16} />
+              {complianceLoading ? "Loading..." : "Refresh compliance"}
+            </button>
+          </div>
+          {complianceMessage ? <p className="owner-generated-note">{complianceMessage}</p> : null}
+          {!compliance && !complianceLoading ? (
+            <p className="empty-state">Open this tab to load compliance readiness data.</p>
+          ) : null}
+          {compliance ? (
+            <>
+              <div className="profitability-grid" aria-label="Compliance summary">
+                <FinancialTile label="Open requests" value={String(compliance.privacyRequests.open)} />
+                <FinancialTile
+                  label="Overdue requests"
+                  tone={compliance.privacyRequests.overdue > 0 ? "warning" : "normal"}
+                  value={String(compliance.privacyRequests.overdue)}
+                />
+                <FinancialTile label="Completed 30d" value={String(compliance.privacyRequests.completedRecent)} />
+                <FinancialTile label="Open incidents" value={String(compliance.incidents.open)} />
+                <FinancialTile
+                  label="72h review overdue"
+                  tone={compliance.incidents.overdueNotificationReview > 0 ? "warning" : "normal"}
+                  value={String(compliance.incidents.overdueNotificationReview)}
+                />
+                <FinancialTile label="Inventory tables" value={String(compliance.dataInventory.length)} />
+              </div>
+
+              <div className="owner-detail-grid two-column">
+                <div className="owner-detail-panel compact-panel">
+                  <SectionHeading
+                    eyebrow="Privacy requests"
+                    title="Open request queue"
+                    body="Requests should move through review without exposing sensitive free text in logs."
+                  />
+                  <dl className="metric-list">
+                    {Object.entries(compliance.privacyRequests.countsByType).map(([type, count]) => (
+                      <div key={type}>
+                        <dt>{formatLabel(type)}</dt>
+                        <dd><span>{count}</span></dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <div className="owner-table compact-owner-table" role="table" aria-label="Open privacy requests">
+                    {compliance.privacyRequests.recentOpen.map((request) => (
+                      <div className="owner-table-row" key={request.id} role="row">
+                        <span>
+                          <strong>{request.subject ?? formatLabel(request.requestType)}</strong>
+                          <small>{formatLabel(request.status)} · due {request.dueAt ? formatDate(request.dueAt) : "not set"}</small>
+                        </span>
+                        <span>
+                          <strong>{formatLabel(request.requestType)}</strong>
+                          <small>{request.userId}</small>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="owner-detail-panel compact-panel">
+                  <SectionHeading
+                    eyebrow="Incidents"
+                    title="Security incident log summary"
+                    body="Notification deadlines are surfaced for review only and are not legal advice."
+                  />
+                  <dl className="metric-list">
+                    <div>
+                      <dt>Notification review flagged</dt>
+                      <dd><span>{compliance.incidents.breachNotificationReviewCount}</span></dd>
+                    </div>
+                    <div>
+                      <dt>Open incident records</dt>
+                      <dd><span>{compliance.incidents.open}</span></dd>
+                    </div>
+                  </dl>
+                  <div className="owner-table compact-owner-table" role="table" aria-label="Recent incidents">
+                    {compliance.incidents.recent.map((incident) => (
+                      <div className="owner-table-row" key={incident.id} role="row">
+                        <span>
+                          <strong>{incident.title}</strong>
+                          <small>{formatLabel(incident.severity)} · {formatLabel(incident.status)} · {formatDate(incident.detectedAt)}</small>
+                        </span>
+                        <span>
+                          <strong>{incident.notificationDeadlineAt ? formatDate(incident.notificationDeadlineAt) : "No deadline"}</strong>
+                          <small>72h-style review target when notification may be required</small>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="owner-table profitability-table" role="table" aria-label="Data inventory summary">
+                <div className="owner-table-row owner-table-head" role="row">
+                  <span>Data category</span>
+                  <span>Table</span>
+                  <span>Records</span>
+                </div>
+                {compliance.dataInventory.map((item) => (
+                  <div className="owner-table-row" key={item.table} role="row">
+                    <span><strong>{item.label}</strong></span>
+                    <span><small>{item.table}</small></span>
+                    <span><strong>{item.count.toLocaleString()}</strong></span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="owner-detail-grid two-column">
+                <ComplianceListPanel title="Subprocessors" items={compliance.subprocessors.map((item) => ({
+                  detail: `${item.processingPurpose} Data: ${item.dataCategories.join(", ")} Region: ${item.hostingRegion}`,
+                  label: item.name,
+                  status: item.status,
+                }))} />
+                <ComplianceListPanel title="Retention policy status" items={compliance.retentionPolicies.map((item) => ({
+                  detail: item.retentionRule,
+                  label: item.dataCategory,
+                  status: item.status,
+                }))} />
+              </div>
+
+              <ComplianceListPanel
+                title="Production hardening checklist"
+                items={compliance.hardeningChecklist.map((item) => ({
+                  detail: "Tracked as a remaining operational task before public launch.",
+                  label: item.item,
+                  status: item.status,
+                }))}
+              />
+
+              <p className="owner-generated-note">
+                Compliance dashboard generated {formatDateTime(compliance.generatedAt)}.
+              </p>
+            </>
+          ) : null}
+        </section>
+      ) : null}
+
       {activeTab === "promos" ? (
         <section className="owner-detail-panel owner-wide-panel" aria-label="Promo codes">
           <SectionHeading
@@ -1348,13 +1523,44 @@ function FinancialTile({
 }: {
   label: string;
   tone?: "normal" | "warning";
-  value: string;
+  value: number | string;
 }) {
   return (
     <article className={tone === "warning" ? "financial-tile warning" : "financial-tile"}>
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong>{typeof value === "number" ? value.toLocaleString() : value}</strong>
     </article>
+  );
+}
+
+function ComplianceListPanel({
+  items,
+  title,
+}: {
+  items: { detail: string; label: string; status: string }[];
+  title: string;
+}) {
+  return (
+    <div className="owner-detail-panel compact-panel">
+      <SectionHeading
+        eyebrow="Compliance"
+        title={title}
+        body="Review status and detail before relying on this in production operations."
+      />
+      <div className="owner-table compact-owner-table" role="table" aria-label={title}>
+        {items.map((item) => (
+          <div className="owner-table-row" key={`${item.label}-${item.status}`} role="row">
+            <span>
+              <strong>{item.label}</strong>
+              <small>{item.detail}</small>
+            </span>
+            <span>
+              <strong>{formatLabel(item.status)}</strong>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
