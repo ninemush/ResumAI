@@ -132,15 +132,7 @@ function isDurableRateLimitResult(value: unknown): value is {
 }
 
 function shouldUseDurableRateLimit() {
-  if (process.env.RATE_LIMIT_BACKEND === "memory") {
-    return false;
-  }
-
-  if (process.env.RATE_LIMIT_BACKEND === "supabase") {
-    return true;
-  }
-
-  return process.env.NODE_ENV === "production";
+  return process.env.RATE_LIMIT_BACKEND === "supabase";
 }
 
 export function getClientRateLimitKey(request: Request, scope: string, subject?: string) {

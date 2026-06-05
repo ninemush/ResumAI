@@ -106,10 +106,10 @@ Risk: attackers or malfunctioning clients overwhelm expensive routes, authentica
 Controls:
 
 - Shared route-handler rate-limit helper.
-- Supabase-backed durable buckets in production.
+- Supabase-backed durable buckets when the hosted migration is applied and `RATE_LIMIT_BACKEND=supabase` is enabled.
 - Hashed rate-limit bucket storage to avoid retaining raw emails or IP-derived keys.
 - Atomic database updates for distributed serverless deployments.
-- Fail-closed production behavior when the durable limiter is unavailable.
+- Fail-closed production behavior when the durable limiter is enabled but unavailable.
 - Local in-memory buckets retained for development fallback.
 
 ### Secret Exposure
