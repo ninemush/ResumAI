@@ -13,7 +13,7 @@ This plan tracks practical compliance readiness work for the product currently b
 - Owner Console Compliance tab for privacy request aging, data inventory, subprocessors, retention status, incident summary, and hardening checklist.
 - Public draft pages for privacy, data retention, AI use, subprocessors, and security overview.
 - SSRF-hardened direct URL ingestion for user-provided job, profile, portfolio, and public page links, including protocol/credential blocking, local/private/reserved address blocking, DNS resolution checks, and redirect revalidation before content is fetched.
-- Durable Supabase-backed API rate limiting for route handlers, with hashed bucket keys, atomic window updates, RLS-protected storage, and local in-memory buckets retained until the hosted migration is applied and `RATE_LIMIT_BACKEND=supabase` is enabled.
+- Durable Supabase-backed API rate limiting enabled for production route handlers, with hashed bucket keys, atomic window updates, RLS-protected storage, and local in-memory buckets retained for non-production fallback.
 
 ## Remaining Non-Code Tasks
 
@@ -24,7 +24,6 @@ This plan tracks practical compliance readiness work for the product currently b
 - Cross-border transfer basis documentation for each processing location and provider.
 - Breach response owner, escalation rota, and communication approval workflow.
 - External security review before public launch.
-- Hosted Supabase migration application and `RATE_LIMIT_BACKEND=supabase` enablement for production durable rate limiting.
 - Admin access review cadence, including owner/admin role inventory and removal workflow.
 - Privacy request operating procedure, including identity verification escalation and response templates.
 - Incident tabletop exercise for unauthorized access, provider breach, and accidental disclosure scenarios.
