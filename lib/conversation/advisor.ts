@@ -14,8 +14,10 @@ import {
   type ArtifactOverview,
 } from "@/lib/artifacts/artifact-overview";
 import {
+  getCreditHistory,
   getCreditSummary,
   getCreditUsageSummary,
+  type CreditHistory,
   type CreditSummary,
 } from "@/lib/billing/credits";
 import { PROFILE_INTAKE_INSTRUCTIONS } from "@/lib/ai/prompts/profile-intake";
@@ -72,6 +74,7 @@ type AdvisorSource = {
 type AdvisorWorkspaceContext = {
   applications: ApplicationOverview | null;
   artifacts: ArtifactOverview | null;
+  creditHistory: CreditHistory | null;
   credits: CreditSummary | null;
   jobs: JobOverview | null;
   sources: {
@@ -157,7 +160,9 @@ export async function runConversationAdvisor(
   const isOwner = (adminRoles ?? []).some(
     ({ role }) => role === "owner" || role === "admin",
   );
+  const normalizedMessage = input.message.toLowerCase();
   const workspace = await readAdvisorWorkspaceContext({
+    includeCreditHistory: isCreditQuestion(normalizedMessage),
     includeOwnerMetrics: isOwner && shouldLoadOwnerContext(input),
     profileId,
     userId: user.id,
@@ -735,39 +740,49 @@ Best next move: open Profile & Resume and rebuild/export once after the latest n
 }
 
 async function readAdvisorWorkspaceContext({
+  includeCreditHistory,
   includeOwnerMetrics,
   profileId,
   userId,
 }: {
+  includeCreditHistory: boolean;
   includeOwnerMetrics: boolean;
   profileId: string | null;
   userId: string;
 }): Promise<AdvisorWorkspaceContext> {
   const supabase = await createClient();
-  const [applications, artifacts, credits, jobs, ownerMetrics, sourceResult] =
-    await Promise.allSettled([
-      getApplicationOverview(userId),
-      getArtifactOverview(userId),
-      getCreditSummary(),
-      getJobOverview(userId),
-      includeOwnerMetrics ? getOwnerMetrics(30) : Promise.resolve(null),
-      profileId
-        ? supabase
-            .from("profile_sources")
-            .select(
-              "source_type, source_url, original_filename, extracted_text, extraction_status, failure_reason, created_at",
-              { count: "exact" },
-            )
-            .eq("profile_id", profileId)
-            .eq("user_id", userId)
-            .order("created_at", { ascending: false })
-            .limit(30)
-        : Promise.resolve({
-            count: 0,
-            data: [] as AdvisorSource[],
-            error: null,
-          }),
-    ]);
+  const [
+    applications,
+    artifacts,
+    credits,
+    creditHistory,
+    jobs,
+    ownerMetrics,
+    sourceResult,
+  ] = await Promise.allSettled([
+    getApplicationOverview(userId),
+    getArtifactOverview(userId),
+    getCreditSummary(),
+    includeCreditHistory ? getCreditHistory() : Promise.resolve(null),
+    getJobOverview(userId),
+    includeOwnerMetrics ? getOwnerMetrics(30) : Promise.resolve(null),
+    profileId
+      ? supabase
+          .from("profile_sources")
+          .select(
+            "source_type, source_url, original_filename, extracted_text, extraction_status, failure_reason, created_at",
+            { count: "exact" },
+          )
+          .eq("profile_id", profileId)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(30)
+      : Promise.resolve({
+          count: 0,
+          data: [] as AdvisorSource[],
+          error: null,
+        }),
+  ]);
 
   const sourceValue =
     sourceResult.status === "fulfilled" && !sourceResult.value.error
@@ -778,6 +793,8 @@ async function readAdvisorWorkspaceContext({
     applications:
       applications.status === "fulfilled" ? applications.value : null,
     artifacts: artifacts.status === "fulfilled" ? artifacts.value : null,
+    creditHistory:
+      creditHistory.status === "fulfilled" ? creditHistory.value : null,
     credits: credits.status === "fulfilled" ? credits.value : null,
     jobs: jobs.status === "fulfilled" ? jobs.value : null,
     ownerMetrics:
@@ -834,6 +851,7 @@ function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
         `Credits: ${workspace.credits.balance} available, ${workspace.credits.usedCredits} used of ${workspace.credits.totalCredits} total${workspace.credits.warningThreshold ? `, ${workspace.credits.warningThreshold}% usage warning reached` : ""}.`,
         `Credit costs: ${getCreditUsageSummary()}.`,
         `Credit packs: ${workspace.credits.purchaseOptions.map((option) => `${option.label} ${option.credits} credits for $${option.priceUsd}`).join("; ") || "not configured"}.`,
+        `Recent credit usage: ${formatRecentCreditUsage(workspace.creditHistory)}.`,
       ]
     : ["Credits: no credit summary was available for this reply."];
   const activeApplications =
@@ -1263,7 +1281,7 @@ function buildContextAwareAdvisorFallback({
   });
 
   if (isCreditQuestion(normalized)) {
-    return buildCreditAdvisorFallback(workspace.credits);
+    return buildCreditAdvisorFallback(workspace.credits, workspace.creditHistory);
   }
 
   if (isTrackingQuestion(normalized)) {
@@ -1347,7 +1365,10 @@ function isNextMoveQuestion(normalized: string) {
   );
 }
 
-function buildCreditAdvisorFallback(credits: CreditSummary | null) {
+function buildCreditAdvisorFallback(
+  credits: CreditSummary | null,
+  creditHistory: CreditHistory | null,
+) {
   if (!credits) {
     return "I cannot read the credit ledger right now. Check Settings for the latest balance, purchase packs, and usage history; I should not guess at credits.";
   }
@@ -1365,9 +1386,41 @@ function buildCreditAdvisorFallback(credits: CreditSummary | null) {
 
   return `You have ${credits.balance} credits available. You have used ${credits.usedCredits} of ${credits.totalCredits} total credits.${warning}
 
+Recent usage: ${formatRecentCreditUsage(creditHistory)}.
+
 Typical costs are: ${getCreditUsageSummary()}.
 
 Available packs: ${packs}.`;
+}
+
+function formatRecentCreditUsage(creditHistory: CreditHistory | null) {
+  const usage = creditHistory?.usage
+    .filter((event) => event.kind === "usage" && event.amount < 0)
+    .slice(0, 3);
+
+  if (!usage || usage.length === 0) {
+    return "no recent credit-consuming actions are recorded";
+  }
+
+  return usage
+    .map((event) => {
+      const credits = Math.abs(event.amount);
+      return `${credits} ${credits === 1 ? "credit" : "credits"} for ${event.description} on ${formatShortAdvisorDate(event.createdAt)}`;
+    })
+    .join("; ");
+}
+
+function formatShortAdvisorDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "recently";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "short",
+  }).format(date);
 }
 
 function buildTrackingAdvisorFallback(workspace: AdvisorWorkspaceContext) {

@@ -146,7 +146,7 @@ test.describe("authenticated workspace", () => {
         body: JSON.stringify({
           ok: true,
           assistantMessage:
-            "You have credits available. Settings is the right place to review balance and usage.",
+            "You have 14 credits available. You have used 6 of 20 total credits. Recent usage: 2 credits for Drafted job-specific materials on Jun 4.",
           suggestedActions: [
             {
               creditCost: null,
@@ -181,7 +181,8 @@ test.describe("authenticated workspace", () => {
     await page.getByRole("button", { name: /Send message/i }).click();
 
     const latestAssistant = page.locator(".assistant-message").last();
-    await expect(latestAssistant.getByText(/You have credits available/i)).toBeVisible();
+    await expect(latestAssistant.getByText(/14 credits available/i)).toBeVisible();
+    await expect(latestAssistant.getByText(/Recent usage: 2 credits/i)).toBeVisible();
     await expect(latestAssistant.getByRole("button", { name: "Go to Settings" })).toHaveCount(1);
     await expect(latestAssistant.getByRole("button", { name: "Go to Library" })).toHaveCount(1);
     await expect(latestAssistant.locator(".advisor-action-row button")).toHaveCount(2);
