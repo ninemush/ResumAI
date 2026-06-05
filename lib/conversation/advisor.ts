@@ -35,6 +35,7 @@ import {
   formatCapabilitiesForAdvisor,
   inferSuggestedLinksFromMessage,
 } from "@/lib/conversation/app-capabilities";
+import { buildSourceSpecificReply } from "@/lib/conversation/source-specific-reply";
 
 export const conversationAdvisorRequestSchema = z.object({
   message: z.string().trim().min(3).max(4000),
@@ -178,11 +179,24 @@ export async function runConversationAdvisor(
     surface: input.surface,
     workspace,
   });
+  const deterministicSourceReply = buildSourceSpecificReply({
+    message: input.message,
+    workspace,
+  });
   const deterministicResumeReply = buildResumeSectionDiagnosticReply({
     latestResume: resumeError ? null : latestResume,
     message: input.message,
     workspace,
   });
+
+  if (deterministicSourceReply) {
+    return normalizeAdvisorPayload({
+      isOwner,
+      message: input.message,
+      payload: deterministicSourceReply,
+      surface: input.surface,
+    });
+  }
 
   if (deterministicResumeReply) {
     return normalizeAdvisorPayload({
