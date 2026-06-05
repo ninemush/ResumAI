@@ -32,11 +32,13 @@ test.describe("authenticated workspace", () => {
     } else {
       await expect(page.getByRole("button", { name: /Cockpit/i })).toBeVisible();
       await expect(page.getByRole("button", { name: /Profile & Resume/i })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Since your last visit" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "What needs attention now" })).toBeVisible();
     }
     await expect(page.getByText("Career advisor")).toBeVisible();
     await expect(page.getByText("Turn your experience into a sharper career story")).toHaveCount(0);
     await expect(page.getByText("Hydration failed", { exact: false })).toHaveCount(0);
-    expect(consoleErrors.join("\n")).not.toMatch(/Hydration failed|server rendered HTML/i);
+    expect(consoleErrors.join("\n")).not.toMatch(/Hydration failed|server rendered HTML|readReturnBrief/i);
   });
 
   test("keeps source intake centered in Pramania chat with only reliably parseable file types", async ({ page }) => {

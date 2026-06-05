@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { checkRateLimit, getClientRateLimitKey, rateLimitResponse } from "@/lib/security/rate-limit";
 import { redactOperationalText } from "@/lib/security/redaction";
+import { classifyClientRuntimeError } from "@/lib/support/root-cause-groups";
 import { createClient } from "@/lib/supabase/server";
 
 const telemetryEventSchema = z.discriminatedUnion("eventType", [
@@ -60,17 +61,22 @@ export async function POST(request: Request) {
     const payload = telemetryEventSchema.parse(await request.json());
 
     if (payload.eventType === "client_error") {
+      const classification = classifyClientRuntimeError({
+        code: payload.errorCode,
+        message: payload.message,
+      });
       const { error } = await supabase.from("error_events").insert({
         area: redactOperationalText(payload.area, 80),
         error_code: redactOperationalText(payload.errorCode, 120),
         fix_required: true,
         message: redactOperationalText(payload.message, 500),
         metadata: {
+          fingerprint: classification.fingerprint,
           path: payload.path ? redactOperationalText(payload.path, 240) : null,
           requestId,
         },
-        rationale: "Captured from the browser runtime. Owner review is required if this repeats or affects a core workflow.",
-        root_cause_category: "client_runtime",
+        rationale: classification.rationale,
+        root_cause_category: classification.rootCauseCategory,
         severity: payload.severity,
         user_id: user.id,
       });

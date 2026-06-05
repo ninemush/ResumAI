@@ -50,6 +50,23 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const input = supportIssueUpdateSchema.parse(await request.json());
+
+    const requiresVerification = input.status === "resolved" || input.fixStatus === "fixed";
+
+    if (requiresVerification && !input.resolutionVerification?.trim()) {
+      return NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: {
+            code: "support.verification_required",
+            message: "Add what was checked before marking this issue fixed.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
     const patch = toSupportTicketPatch(input);
 
     if (Object.keys(patch).length === 0) {
@@ -68,7 +85,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       .update(patch)
       .eq("id", id)
       .select(
-        "id, status, priority, fix_status, owner_notes, user_visible_resolution, reopen_until, auto_closed_at, updated_at",
+        "id, user_id, linked_error_event_id, root_cause_category, error_code, status, priority, fix_status, owner_notes, user_visible_resolution, resolution_verification, verified_at, reopen_until, auto_closed_at, updated_at",
       )
       .single();
 
@@ -93,6 +110,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       ticket_id: id,
       user_id: user.id,
     });
+
+    if (input.status === "resolved" && input.fixStatus === "fixed") {
+      await markLinkedErrorEventsResolved(supabase, ticket);
+    }
 
     return NextResponse.json({ ok: true, requestId, issue: ticket });
   } catch (error) {
@@ -135,6 +156,9 @@ function toSupportTicketPatch(input: z.infer<typeof supportIssueUpdateSchema>) {
   if (input.l1Disposition !== undefined) patch.l1_disposition = input.l1Disposition;
   if (input.ownerNotes !== undefined) patch.owner_notes = input.ownerNotes;
   if (input.priority !== undefined) patch.priority = input.priority;
+  if (input.resolutionVerification !== undefined) {
+    patch.resolution_verification = input.resolutionVerification;
+  }
   if (input.rootCause !== undefined) patch.root_cause = input.rootCause;
   if (input.rootCauseCategory !== undefined) patch.root_cause_category = input.rootCauseCategory;
   if (input.userVisibleResolution !== undefined) {
@@ -148,6 +172,9 @@ function toSupportTicketPatch(input: z.infer<typeof supportIssueUpdateSchema>) {
       patch.resolved_at = now.toISOString();
       patch.reopen_until = new Date(now.getTime() + REOPEN_WINDOW_DAYS * 86_400_000).toISOString();
       patch.auto_closed_at = null;
+      if (input.resolutionVerification?.trim()) {
+        patch.verified_at = now.toISOString();
+      }
     } else if (input.status === "closed") {
       patch.resolved_at = now.toISOString();
       patch.reopen_until = null;
@@ -163,10 +190,47 @@ function buildAdminAuditMessage(input: z.infer<typeof supportIssueUpdateSchema>)
     input.status ? `status=${input.status}` : null,
     input.fixStatus ? `fix=${input.fixStatus}` : null,
     input.priority ? `priority=${input.priority}` : null,
+    input.resolutionVerification ? `verified=${input.resolutionVerification}` : null,
     input.userVisibleResolution ? `user_visible_resolution=${input.userVisibleResolution}` : null,
     input.ownerNotes ? `owner_notes=${input.ownerNotes}` : null,
     input.closedReason ? `reason=${input.closedReason}` : null,
   ].filter(Boolean);
 
   return parts.length > 0 ? `Owner updated issue: ${parts.join("; ")}` : "Owner updated issue.";
+}
+
+async function markLinkedErrorEventsResolved(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ticket: {
+    error_code: string | null;
+    linked_error_event_id: string | null;
+    root_cause_category: string | null;
+    user_id: string | null;
+  },
+) {
+  const resolvedAt = new Date().toISOString();
+
+  if (ticket.linked_error_event_id) {
+    await supabase
+      .from("error_events")
+      .update({ resolved_at: resolvedAt })
+      .eq("id", ticket.linked_error_event_id);
+  }
+
+  if (!ticket.user_id || !ticket.root_cause_category) {
+    return;
+  }
+
+  let query = supabase
+    .from("error_events")
+    .update({ resolved_at: resolvedAt })
+    .eq("user_id", ticket.user_id)
+    .eq("root_cause_category", ticket.root_cause_category)
+    .is("resolved_at", null);
+
+  if (ticket.error_code) {
+    query = query.eq("error_code", ticket.error_code);
+  }
+
+  await query;
 }

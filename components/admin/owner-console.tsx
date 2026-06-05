@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   BarChart3,
   BriefcaseBusiness,
-  CheckCircle2,
   CircleDollarSign,
   Clock3,
   ExternalLink,
@@ -21,6 +20,12 @@ import { useMemo, useState, useTransition } from "react";
 
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
 import type { ComplianceDashboard } from "@/lib/privacy/compliance-dashboard";
+import {
+  buildRootCauseGroups,
+  buildRootCauseKey,
+  readRootCauseQueueStatus,
+  type RootCauseGroup,
+} from "@/lib/support/root-cause-groups";
 
 type OwnerConsoleProps = {
   metrics: OwnerMetrics;
@@ -78,7 +83,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [selectedRootCause, setSelectedRootCause] = useState<string | null>(null);
   const [issueNotes, setIssueNotes] = useState<Record<string, string>>({});
   const [issueResolutionNotes, setIssueResolutionNotes] = useState<Record<string, string>>({});
+  const [issueVerificationNotes, setIssueVerificationNotes] = useState<Record<string, string>>({});
   const [issueUpdatingId, setIssueUpdatingId] = useState<string | null>(null);
+  const [queueMode, setQueueMode] = useState<"open" | "history" | "all">("open");
   const [promoCodes, setPromoCodes] = useState<PromoCodeRow[]>([]);
   const [grantMessage, setGrantMessage] = useState<string | null>(null);
   const [grantLoading, setGrantLoading] = useState(false);
@@ -107,22 +114,83 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     );
   }, [metrics.usersList, query]);
 
+  const rootCauseGroups = useMemo(() => {
+    return buildRootCauseGroups([
+      ...metrics.errorDetails.map((error) => ({
+        area: error.area,
+        code: error.code,
+        createdAt: error.createdAt,
+        fixRequired: error.fixRequired,
+        id: error.id,
+        rootCause: error.rootCause,
+        rootCauseCategory: error.rootCause,
+        source: "error" as const,
+        status: error.status,
+        summary: error.summary,
+        userEmail: error.userEmail,
+      })),
+      ...metrics.supportTickets.map((ticket) => ({
+        area: ticket.area,
+        code: ticket.errorCode,
+        createdAt: ticket.createdAt,
+        fixRequired: ticket.fixStatus === "needs_code_fix",
+        id: ticket.id,
+        rootCause: ticket.rootCause,
+        rootCauseCategory: ticket.rootCauseCategory,
+        source: "support" as const,
+        status: ticket.status,
+        summary: ticket.subject,
+        userEmail: ticket.userEmail,
+      })),
+    ]);
+  }, [metrics.errorDetails, metrics.supportTickets]);
   const rootCauseCounts = useMemo(() => {
-    return metrics.errorDetails.reduce<Record<string, number>>((counts, error) => {
-      counts[error.rootCause] = (counts[error.rootCause] ?? 0) + 1;
+    return rootCauseGroups.reduce<Record<string, number>>((counts, group) => {
+      counts[group.displayName] = group.activeErrors + group.activeTickets;
       return counts;
     }, {});
-  }, [metrics.errorDetails]);
+  }, [rootCauseGroups]);
+  const selectedRootCauseGroup = rootCauseGroups.find((group) => group.key === selectedRootCause) ?? null;
+  const openRootCauseGroups = rootCauseGroups.filter((group) => readRootCauseQueueStatus(group) === "open");
   const filteredErrors = useMemo(() => {
-    return selectedRootCause
-      ? metrics.errorDetails.filter((error) => error.rootCause === selectedRootCause)
-      : metrics.errorDetails;
-  }, [metrics.errorDetails, selectedRootCause]);
+    return metrics.errorDetails.filter((error) => {
+      const matchesRootCause =
+        !selectedRootCause ||
+        buildRootCauseKey({
+          area: error.area,
+          code: error.code,
+          rootCause: error.rootCause,
+          rootCauseCategory: error.rootCause,
+          summary: error.summary,
+        }) === selectedRootCause;
+      const matchesMode =
+        queueMode === "all" ||
+        (queueMode === "open" && error.status !== "resolved") ||
+        (queueMode === "history" && error.status === "resolved");
+
+      return matchesRootCause && matchesMode;
+    });
+  }, [metrics.errorDetails, queueMode, selectedRootCause]);
   const filteredSupportTickets = useMemo(() => {
-    return selectedRootCause
-      ? metrics.supportTickets.filter((ticket) => ticket.rootCauseCategory === selectedRootCause)
-      : metrics.supportTickets;
-  }, [metrics.supportTickets, selectedRootCause]);
+    return metrics.supportTickets.filter((ticket) => {
+      const matchesRootCause =
+        !selectedRootCause ||
+        buildRootCauseKey({
+          area: ticket.area,
+          code: ticket.errorCode,
+          rootCause: ticket.rootCause,
+          rootCauseCategory: ticket.rootCauseCategory,
+          summary: ticket.subject,
+        }) === selectedRootCause;
+      const isClosed = ["resolved", "closed"].includes(ticket.status);
+      const matchesMode =
+        queueMode === "all" ||
+        (queueMode === "open" && !isClosed) ||
+        (queueMode === "history" && isClosed);
+
+      return matchesRootCause && matchesMode;
+    });
+  }, [metrics.supportTickets, queueMode, selectedRootCause]);
 
   const grantTargetSuggestions = useMemo(() => {
     const normalizedQuery = grantTargetQuery.trim().toLowerCase();
@@ -148,7 +216,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   }, [grantTargetQuery, metrics.usersList, selectedGrantTargets]);
 
   function openRootCause(rootCause: string) {
-    setSelectedRootCause(rootCause);
+    const group = rootCauseGroups.find((item) => item.key === rootCause || item.displayName === rootCause);
+
+    setSelectedRootCause(group?.key ?? rootCause);
     setActiveTab("errors");
   }
 
@@ -226,6 +296,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       closedReason?: string;
       fixStatus?: string;
       ownerNotes?: string;
+      resolutionVerification?: string;
       status?: string;
       userVisibleResolution?: string;
     },
@@ -497,7 +568,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             setActiveTab("errors");
           }}
           value={metrics.systemHealth.fixRequired}
-          detail={`${metrics.errorDetails.length} open issues across app, intake, and jobs`}
+          detail={`${openRootCauseGroups.length} active root-cause groups, ${metrics.errorDetails.length} retained signals`}
           tone={metrics.systemHealth.fixRequired > 0 ? "warning" : "normal"}
         />
         <MetricCard
@@ -588,7 +659,12 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             actionLabel="Drill down"
             onSelect={openRootCause}
             title="Root causes"
-            values={rootCauseCounts}
+            values={Object.fromEntries(
+              rootCauseGroups.map((group) => [
+                group.displayName,
+                group.activeErrors + group.activeTickets || group.resolvedSignals,
+              ]),
+            )}
           />
         </section>
       ) : null}
@@ -657,9 +733,10 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           <SectionHeading
             eyebrow="System health"
             title="Errors and root-cause review"
-            body="Every row should answer whether this is user guidance, third-party limitation, provider instability, or a product bug requiring a fix."
+            body="Open queue shows unresolved root causes. History keeps resolved evidence out of the daily queue while preserving what happened, who was affected, and how it was verified."
           />
-          {Object.keys(rootCauseCounts).length > 0 ? (
+          <QueueModeControl queueMode={queueMode} setQueueMode={setQueueMode} />
+          {rootCauseGroups.length > 0 ? (
             <div className="root-cause-filter" aria-label="Root-cause filters">
               <button
                 className={!selectedRootCause ? "active" : ""}
@@ -668,24 +745,27 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               >
                 All root causes
               </button>
-              {Object.entries(rootCauseCounts).map(([rootCause, count]) => (
+              {rootCauseGroups
+                .filter((group) => queueMode === "all" || readRootCauseQueueStatus(group) === queueMode)
+                .map((group) => (
                 <button
-                  className={selectedRootCause === rootCause ? "active" : ""}
-                  key={rootCause}
-                  onClick={() => setSelectedRootCause(rootCause)}
+                  className={selectedRootCause === group.key ? "active" : ""}
+                  key={group.key}
+                  onClick={() => setSelectedRootCause(group.key)}
                   type="button"
                 >
-                  {formatLabel(rootCause)}
-                  <strong>{count}</strong>
+                  {formatLabel(group.displayName)}
+                  <strong>{group.activeErrors + group.activeTickets || group.resolvedSignals}</strong>
+                  <small>{group.impactedUsers || "Unknown"} affected</small>
                 </button>
-              ))}
+                ))}
             </div>
           ) : null}
-          {selectedRootCause ? (
+          {selectedRootCauseGroup ? (
             <RootCauseDrilldown
+              group={selectedRootCauseGroup}
               errors={filteredErrors}
               onOpenSupport={() => setActiveTab("support")}
-              rootCause={selectedRootCause}
               tickets={filteredSupportTickets}
               updateIssue={updateIssue}
             />
@@ -734,8 +814,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           <SectionHeading
             eyebrow="Support"
             title="Support queue"
-            body="Each issue has a plain-English summary, likely root cause, suggested fix, supporting logs, status, and owner notes. Use this to decide whether to fix, resolve, cancel, or escalate."
+            body="The default queue only shows active work. Resolved and closed tickets move to history with owner notes, user-visible updates, supporting logs, and verification evidence retained."
           />
+          <QueueModeControl queueMode={queueMode} setQueueMode={setQueueMode} />
           {issueUpdateMessage ? <p className="owner-generated-note">{issueUpdateMessage}</p> : null}
           {filteredSupportTickets.length > 0 ? (
             <div className="support-issue-list" aria-label="Support issues">
@@ -787,6 +868,13 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                     <div>
                       <span>Reopen window</span>
                       <p>{formatSupportReopenWindow(ticket)}</p>
+                    </div>
+                    <div>
+                      <span>Resolution verification</span>
+                      <p>
+                        {ticket.resolutionVerification ||
+                          "Not verified yet. Add what was reviewed and tested before marking fixed."}
+                      </p>
                     </div>
                   </div>
 
@@ -885,6 +973,20 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                         value={issueNotes[ticket.id] ?? ticket.ownerNotes}
                       />
                     </label>
+                    <label className="support-issue-notes">
+                      Verification before fixed
+                      <textarea
+                        disabled={issueUpdatingId === ticket.id}
+                        onChange={(event) =>
+                          setIssueVerificationNotes((current) => ({
+                            ...current,
+                            [ticket.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="What logs, workflow, or regression test proved this is fixed?"
+                        value={issueVerificationNotes[ticket.id] ?? ticket.resolutionVerification}
+                      />
+                    </label>
                     <button
                       className="secondary-action"
                       disabled={issueUpdatingId === ticket.id}
@@ -921,10 +1023,15 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       </button>
                       <button
                         className="secondary-action"
-                        disabled={issueUpdatingId === ticket.id}
+                        disabled={issueUpdatingId === ticket.id || !readIssueVerificationNote(issueVerificationNotes, ticket, "")}
                         onClick={() =>
                           updateIssue(ticket.id, {
                             ownerNotes: readIssueNote(issueNotes, ticket, "Marked fixed after owner review."),
+                            resolutionVerification: readIssueVerificationNote(
+                              issueVerificationNotes,
+                              ticket,
+                              "",
+                            ),
                             userVisibleResolution: readIssueResolutionNote(
                               issueResolutionNotes,
                               ticket,
@@ -933,6 +1040,11 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                             status: "resolved",
                             fixStatus: "fixed",
                           })
+                        }
+                        title={
+                          readIssueVerificationNote(issueVerificationNotes, ticket, "")
+                            ? "Mark this issue fixed"
+                            : "Add verification notes before marking fixed"
                         }
                         type="button"
                       >
@@ -965,8 +1077,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             </div>
           ) : (
             <p className="empty-state">
-              {selectedRootCause
-                ? `No support tickets linked to ${formatLabel(selectedRootCause)} in this period. Related app issues are still visible in System health.`
+              {selectedRootCauseGroup
+                ? `No support tickets linked to ${formatLabel(selectedRootCauseGroup.displayName)} in this view. Related app issues are still visible in System health.`
                 : "No support issues in this period. Chat failures and user-reported issues will appear here with supporting logs."}
             </p>
           )}
@@ -1706,14 +1818,14 @@ function MetricBreakdown({
 
 function RootCauseDrilldown({
   errors,
+  group,
   onOpenSupport,
-  rootCause,
   tickets,
   updateIssue,
 }: {
   errors: OwnerMetrics["errorDetails"];
+  group: RootCauseGroup;
   onOpenSupport: () => void;
-  rootCause: string;
   tickets: OwnerMetrics["supportTickets"];
   updateIssue: (
     issueId: string,
@@ -1721,6 +1833,7 @@ function RootCauseDrilldown({
       closedReason?: string;
       fixStatus?: string;
       ownerNotes?: string;
+      resolutionVerification?: string;
       status?: string;
       userVisibleResolution?: string;
     },
@@ -1732,15 +1845,17 @@ function RootCauseDrilldown({
   const openTickets = tickets.filter((ticket) => !["resolved", "closed"].includes(ticket.status));
 
   return (
-    <section className="root-cause-drilldown" aria-label={`${formatLabel(rootCause)} root-cause drilldown`}>
+    <section className="root-cause-drilldown" aria-label={`${formatLabel(group.displayName)} root-cause drilldown`}>
       <div>
         <p className="eyebrow">Root cause drilldown</p>
-        <h3>{formatLabel(rootCause)}</h3>
+        <h3>{formatLabel(group.displayName)}</h3>
         <p>
-          {errors.length.toLocaleString()} signal{errors.length === 1 ? "" : "s"} in this period,
-          {" "}{fixRequired.toLocaleString()} requiring a fix, and{" "}
+          {group.totalSignals.toLocaleString()} retained signal{group.totalSignals === 1 ? "" : "s"},{" "}
+          {group.impactedUsers || "unknown"} affected user{group.impactedUsers === 1 ? "" : "s"},{" "}
+          {fixRequired.toLocaleString()} active fix signal{fixRequired === 1 ? "" : "s"}, and{" "}
           {openTickets.length.toLocaleString()} linked open support ticket
-          {openTickets.length === 1 ? "" : "s"}.
+          {openTickets.length === 1 ? "" : "s"}. First seen {formatDateTime(group.firstSeenAt)};
+          latest {formatAge(group.latestAt)} old.
         </p>
       </div>
       <div className="root-cause-action-grid">
@@ -1756,7 +1871,7 @@ function RootCauseDrilldown({
           <span>Owner action</span>
           <p>
             Open the linked tickets, review supporting logs, apply the product or guidance fix,
-            then mark the ticket fixed with a user-visible note.
+            verify the workflow or regression coverage, then mark fixed with a user-visible note.
           </p>
         </article>
       </div>
@@ -1774,7 +1889,7 @@ function RootCauseDrilldown({
                 fixStatus: "investigating",
                 ownerNotes:
                   ticket.ownerNotes ||
-                  `Owner triage started for ${formatLabel(rootCause)}. Reviewing supporting logs and applying the appropriate product or guidance fix.`,
+                  `Owner triage started for ${formatLabel(group.displayName)}. Reviewing supporting logs and applying the appropriate product or guidance fix.`,
                 userVisibleResolution:
                   ticket.userVisibleResolution ||
                   "I am reviewing the linked details and will update this issue when the fix path is clear.",
@@ -1787,30 +1902,35 @@ function RootCauseDrilldown({
             Start {ticket.id.slice(0, 8).toUpperCase()}
           </button>
         ))}
-        {openTickets.slice(0, 3).map((ticket) => (
-          <button
-            className="secondary-action"
-            key={`${ticket.id}-fixed`}
-            onClick={() =>
-              updateIssue(ticket.id, {
-                fixStatus: "fixed",
-                ownerNotes:
-                  ticket.ownerNotes ||
-                  `Addressed ${formatLabel(rootCause)}. Please retry the workflow and reopen support if it recurs.`,
-                userVisibleResolution:
-                  ticket.userVisibleResolution ||
-                  "This has been addressed. Please retry the workflow and reopen support if it still behaves unexpectedly.",
-                status: "resolved",
-              })
-            }
-            type="button"
-          >
-            <CheckCircle2 size={15} aria-hidden="true" />
-            Mark fixed
-          </button>
-        ))}
       </div>
     </section>
+  );
+}
+
+function QueueModeControl({
+  queueMode,
+  setQueueMode,
+}: {
+  queueMode: "open" | "history" | "all";
+  setQueueMode: (mode: "open" | "history" | "all") => void;
+}) {
+  return (
+    <div className="owner-queue-toggle" aria-label="Queue view">
+      {[
+        ["open", "Open queue"],
+        ["history", "Resolved history"],
+        ["all", "All retained"],
+      ].map(([value, label]) => (
+        <button
+          className={queueMode === value ? "active" : ""}
+          key={value}
+          onClick={() => setQueueMode(value as "open" | "history" | "all")}
+          type="button"
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -1974,6 +2094,17 @@ function readIssueResolutionNote(
 ) {
   const draft = notes[ticket.id]?.trim();
   const existing = ticket.userVisibleResolution?.trim();
+
+  return draft || existing || fallback;
+}
+
+function readIssueVerificationNote(
+  notes: Record<string, string>,
+  ticket: OwnerMetrics["supportTickets"][number],
+  fallback: string,
+) {
+  const draft = notes[ticket.id]?.trim();
+  const existing = ticket.resolutionVerification?.trim();
 
   return draft || existing || fallback;
 }

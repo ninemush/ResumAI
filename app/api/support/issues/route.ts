@@ -172,6 +172,39 @@ export async function POST(request: Request) {
       userMessage: input.userMessage ? redactOperationalText(input.userMessage, 2000) : undefined,
     };
     const analysis = buildSupportIssueAnalysis(safeInput);
+    const existingIssue = await findActiveDuplicateIssue({
+      area: safeInput.area,
+      errorCode: safeInput.errorCode ?? "USER_REPORTED_ISSUE",
+      rootCauseCategory: analysis.rootCauseCategory,
+      supabase,
+      userId: user.id,
+    });
+
+    if (existingIssue) {
+      await appendSupportIssueMessages({
+        errorCode: safeInput.errorCode ?? null,
+        errorMessage: safeInput.errorMessage,
+        requestId,
+        supabase,
+        systemResponse: safeInput.systemResponse,
+        ticketId: existingIssue.id,
+        userId: user.id,
+        userMessage: safeInput.userMessage,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        requestId,
+        issue: {
+          groupedWithExisting: true,
+          id: existingIssue.id,
+          shortId: supportIssueShortId(existingIssue.id),
+          status: existingIssue.status,
+          subject: existingIssue.subject,
+          summary: existingIssue.summary,
+        },
+      });
+    }
 
     const { data: errorEvent } = await supabase
       .from("error_events")
@@ -236,25 +269,16 @@ export async function POST(request: Request) {
       throw new Error("SUPPORT_ISSUE_INSERT_FAILED");
     }
 
-    if (safeInput.userMessage) {
-      await supabase.from("support_ticket_messages").insert({
-        message: safeInput.userMessage,
-        metadata: { requestId },
-        speaker: "user",
-        ticket_id: ticket.id,
-        user_id: user.id,
-      });
-    }
-
-    if (safeInput.systemResponse || safeInput.errorMessage) {
-      await supabase.from("support_ticket_messages").insert({
-        message: safeInput.systemResponse ?? safeInput.errorMessage ?? analysis.summary,
-        metadata: { requestId, errorCode: safeInput.errorCode ?? null },
-        speaker: "system",
-        ticket_id: ticket.id,
-        user_id: user.id,
-      });
-    }
+    await appendSupportIssueMessages({
+      errorCode: safeInput.errorCode ?? null,
+      errorMessage: safeInput.errorMessage,
+      requestId,
+      supabase,
+      systemResponse: safeInput.systemResponse,
+      ticketId: ticket.id,
+      userId: user.id,
+      userMessage: safeInput.userMessage,
+    });
 
     return NextResponse.json({
       ok: true,
@@ -294,6 +318,81 @@ export async function POST(request: Request) {
       },
       { status: 500 },
     );
+  }
+}
+
+async function findActiveDuplicateIssue({
+  area,
+  errorCode,
+  rootCauseCategory,
+  supabase,
+  userId,
+}: {
+  area: string;
+  errorCode: string;
+  rootCauseCategory: string;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+}) {
+  const { data } = await supabase
+    .from("support_tickets")
+    .select("id, status, subject, summary")
+    .eq("user_id", userId)
+    .eq("area", area)
+    .eq("root_cause_category", rootCauseCategory)
+    .eq("error_code", errorCode)
+    .in("status", ["open", "waiting_on_user", "in_progress", "escalated"])
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data as
+    | {
+        id: string;
+        status: string;
+        subject: string;
+        summary: string;
+      }
+    | null;
+}
+
+async function appendSupportIssueMessages({
+  errorCode,
+  errorMessage,
+  requestId,
+  supabase,
+  systemResponse,
+  ticketId,
+  userId,
+  userMessage,
+}: {
+  errorCode: string | null;
+  errorMessage?: string;
+  requestId: string;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  systemResponse?: string;
+  ticketId: string;
+  userId: string;
+  userMessage?: string;
+}) {
+  if (userMessage) {
+    await supabase.from("support_ticket_messages").insert({
+      message: userMessage,
+      metadata: { requestId },
+      speaker: "user",
+      ticket_id: ticketId,
+      user_id: userId,
+    });
+  }
+
+  if (systemResponse || errorMessage) {
+    await supabase.from("support_ticket_messages").insert({
+      message: systemResponse ?? errorMessage ?? "Support issue recurrence captured.",
+      metadata: { requestId, errorCode },
+      speaker: "system",
+      ticket_id: ticketId,
+      user_id: userId,
+    });
   }
 }
 

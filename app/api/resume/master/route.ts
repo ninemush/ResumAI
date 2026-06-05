@@ -207,6 +207,33 @@ function toApiError(error: unknown) {
     };
   }
 
+  if (error instanceof Error && error.message === "PROFILE_NOT_FOUND") {
+    return {
+      category: "not_found",
+      code: "profile.not_found",
+      message: "Build your profile before saving master resume edits.",
+      status: 404,
+    };
+  }
+
+  if (error instanceof Error && error.message === "MASTER_RESUME_READ_FAILED") {
+    return {
+      category: "server",
+      code: "resume.read_failed",
+      message: "Unable to read the latest master resume right now.",
+      status: 500,
+    };
+  }
+
+  if (error instanceof Error && error.message === "MASTER_RESUME_UPDATE_FAILED") {
+    return {
+      category: "server",
+      code: "resume.update_failed",
+      message: "Unable to save the master resume edits right now.",
+      status: 500,
+    };
+  }
+
   return {
     category: "server",
     code: "resume.operation_failed",

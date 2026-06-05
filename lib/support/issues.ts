@@ -39,6 +39,7 @@ export const supportIssueUpdateSchema = z.object({
   l1Disposition: z.string().trim().max(80).optional(),
   ownerNotes: z.string().trim().max(2000).optional(),
   priority: supportIssuePrioritySchema.optional(),
+  resolutionVerification: z.string().trim().max(2000).optional(),
   rootCause: z.string().trim().max(1200).optional(),
   rootCauseCategory: z.string().trim().max(80).optional(),
   status: supportIssueStatusSchema.optional(),

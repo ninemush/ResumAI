@@ -73,6 +73,7 @@ const adminSupportTicketSchema = z.object({
   ownerNotes: z.string().default(""),
   priority: z.string(),
   reopenUntil: isoDateSchema.nullable().optional(),
+  resolutionVerification: z.string().default(""),
   rootCause: z.string().default("Needs owner review."),
   rootCauseCategory: z.string().default("needs_triage"),
   sentiment: z.string(),
@@ -599,6 +600,7 @@ async function readSupportIssues(
         "owner_notes",
         "user_visible_resolution",
         "reopen_until",
+        "resolution_verification",
         "auto_closed_at",
         "closed_reason",
       ].join(", "),
@@ -626,6 +628,7 @@ async function readSupportIssues(
     owner_notes: string | null;
     priority: string;
     reopen_until: string | null;
+    resolution_verification: string | null;
     root_cause: string | null;
     root_cause_category: string | null;
     sentiment: string;
@@ -686,6 +689,7 @@ async function readSupportIssues(
       ownerNotes: ticket.owner_notes ?? "",
       priority: ticket.priority,
       reopenUntil: ticket.reopen_until ?? null,
+      resolutionVerification: ticket.resolution_verification ?? "",
       rootCause: ticket.root_cause ?? "Needs owner review.",
       rootCauseCategory: ticket.root_cause_category ?? "needs_triage",
       sentiment: ticket.sentiment,
