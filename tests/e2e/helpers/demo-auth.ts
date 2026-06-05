@@ -47,6 +47,18 @@ export function hasDemoAuthEnv() {
   );
 }
 
+export function hasTwoUserIsolationEnv() {
+  loadLocalEnv();
+
+  return Boolean(
+    hasDemoAuthEnv() &&
+      process.env.QA_DEMO_USER_A_EMAIL &&
+      process.env.QA_DEMO_USER_A_PASSWORD &&
+      process.env.QA_DEMO_USER_B_EMAIL &&
+      process.env.QA_DEMO_USER_B_PASSWORD,
+  );
+}
+
 export async function authenticateDemoUser({
   context,
   request,
@@ -104,6 +116,47 @@ export async function authenticateDemoUser({
       },
     ],
   );
+}
+
+export async function buildAuthCookieHeader({
+  email,
+  password,
+  request,
+}: {
+  email: string;
+  password: string;
+  request: APIRequestContext;
+}) {
+  loadLocalEnv();
+
+  const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const anonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
+  const tokenResponse = await request.post(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    data: { email, password },
+    headers: {
+      apikey: anonKey,
+      authorization: `Bearer ${anonKey}`,
+    },
+  });
+
+  if (!tokenResponse.ok()) {
+    throw new Error(`Unable to authenticate ${email} for QA: ${tokenResponse.status()}`);
+  }
+
+  const session = await tokenResponse.json();
+  const cookieName = `sb-${projectRef}-auth-token`;
+  const cookieValue = `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`;
+  const chunks = createChunks(cookieName, cookieValue);
+  const mfaCookieValue = signMfaCookie({
+    email,
+    userId: session.user.id,
+  });
+
+  return [
+    ...chunks.map(({ name, value }) => `${name}=${value}`),
+    `pramania_email_mfa=${mfaCookieValue}`,
+  ].join("; ");
 }
 
 function signMfaCookie({ email, userId }: { email: string; userId: string }) {

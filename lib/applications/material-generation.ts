@@ -162,7 +162,7 @@ export async function generateApplicationMaterials(
 
   const { data: facts, error: factsError } = await supabase
     .from("profile_facts")
-    .select("fact_type, fact_value, confidence, user_confirmed")
+    .select("fact_type, fact_value, confidence, evidence_status, user_confirmed")
     .eq("profile_id", context.profile_id)
     .eq("user_id", user.id)
     .order("user_confirmed", { ascending: false })
@@ -521,6 +521,7 @@ function buildMaterialsInput({
   application: ApplicationContext;
   facts: {
     confidence: number | null;
+    evidence_status: "user_confirmed" | "source_supported" | "inferred" | "conflict" | "missing_evidence" | null;
     fact_type: string;
     fact_value: string;
     user_confirmed: boolean;
@@ -550,7 +551,11 @@ Profile draft:
 - Target level: ${profile.target_level ?? "Not provided"}
 
 Profile facts:
-${facts.map((fact) => `- [${fact.fact_type}${fact.user_confirmed ? ", confirmed" : ""}] ${fact.fact_value}`).join("\n")}
+${facts.map((fact) => `- [${fact.fact_type}, ${formatFactEvidenceStatus(fact)}] ${fact.fact_value}`).join("\n")}
+
+Use confirmed and source-supported facts as claims. Treat inferred,
+conflicting, or missing-evidence facts as review notes or confirmation
+questions; do not present them as hard truth in the resume or cover letter.
 
 Profile intelligence:
 - Evidence strength: ${intelligence.evidenceStrength}
@@ -601,6 +606,35 @@ Return:
 - resume.experienceBullets: selected highlights for this application. This is
   a highlight reel, not a replacement for role-by-role work history.
 `.trim();
+}
+
+function formatFactEvidenceStatus(fact: {
+  evidence_status:
+    | "user_confirmed"
+    | "source_supported"
+    | "inferred"
+    | "conflict"
+    | "missing_evidence"
+    | null;
+  user_confirmed: boolean;
+}) {
+  if (fact.user_confirmed || fact.evidence_status === "user_confirmed") {
+    return "confirmed";
+  }
+
+  if (fact.evidence_status === "source_supported") {
+    return "source-supported";
+  }
+
+  if (fact.evidence_status === "conflict") {
+    return "conflict-needs-review";
+  }
+
+  if (fact.evidence_status === "missing_evidence") {
+    return "missing-evidence";
+  }
+
+  return "inferred-needs-confirmation";
 }
 
 function formatIntelligenceDomainReadForPrompt(intelligence: ProfileIntelligence) {

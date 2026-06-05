@@ -33,11 +33,13 @@
       "personas": ["senior_executive_user", "career_switcher", "returning_applicant"],
       "positiveCases": [
         "Confirmed profile facts generate structured resume content.",
+        "Fact evidence status distinguishes confirmed, source-supported, inferred, conflicting, and missing-evidence claims.",
         "PDF and DOCX artifacts are created from the ATS template.",
         "Generated materials are private and ready only after validation."
       ],
       "negativeCases": [
         "Profile readiness failure asks for missing facts.",
+        "Inferred, conflicting, or missing-evidence facts become reviewer notes or confirmation questions, not hard resume claims.",
         "AI schema failure blocks ready state and keeps recoverable content where safe.",
         "PDF validation failure blocks download when text is missing, clipped, or unreadable."
       ],
@@ -80,6 +82,7 @@
       "positiveCases": [
         "User-approved job creates an application record.",
         "Quota is consumed once and recorded in an audit-safe event.",
+        "Credit ledger records include an operation key for retry-safe paid work.",
         "Tailored resume and cover letter artifacts are generated and validated."
       ],
       "negativeCases": [
@@ -149,11 +152,13 @@
       "positiveCases": [
         "User creates a support ticket after L0 guidance.",
         "L1 packet includes support-safe context and next action.",
+        "Owner execution deletes or minimizes eligible privacy-deletion records and records retained evidence.",
         "Sensitive issues escalate to L2 with constraints."
       ],
       "negativeCases": [
         "Raw resume, chat transcript, prompts, and owner notes are excluded unless explicitly safe.",
         "Sensitive identifiers are redacted.",
+        "User A cannot read or mutate User B profile sources, privacy requests, support issues, credits, or generated records.",
         "Privacy, security, billing/refund, and account-access issues require human review."
       ],
       "automationLayers": ["unit", "api", "database_rls", "e2e", "persona_review"],

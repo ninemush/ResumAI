@@ -4,6 +4,7 @@ import { brand } from "@/lib/brand";
 import {
   buildCreditsApiError,
   consumeCredits,
+  getCreditOperationKey,
   requireCredits,
 } from "@/lib/billing/credits";
 import {
@@ -65,6 +66,10 @@ export async function POST(request: Request, context: RouteContext) {
     const result = await extractProfileSourceText(parsed.data);
     await consumeCredits({
       feature: "profileSourceExtract",
+      operationKey: getCreditOperationKey(
+        request,
+        `profileSourceExtract:${params.id}`,
+      ),
       resourceId: params.id,
       resourceType: "profile_source",
     });

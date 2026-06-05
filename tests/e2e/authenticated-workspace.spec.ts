@@ -47,7 +47,9 @@ test.describe("authenticated workspace", () => {
     const conversation = page.locator(".conversation-pane");
     await expect(conversation.getByPlaceholder(/Notes, role, link, or resume/i)).toBeVisible();
 
-    const accept = await conversation.locator('input[type="file"]').getAttribute("accept");
+    const fileInput = conversation.locator('input[type="file"]');
+    const accept = await fileInput.getAttribute("accept");
+    const fileInputId = await fileInput.getAttribute("id");
 
     expect(accept).toContain(".pdf");
     expect(accept).toContain(".docx");
@@ -56,6 +58,14 @@ test.describe("authenticated workspace", () => {
     expect(accept).toContain(".jpg");
     expect(accept).not.toMatch(/(^|,)\.doc(,|$)/);
     expect(accept).not.toMatch(/\.heic|\.heif/);
+    await expect(fileInput).toHaveAttribute(
+      "aria-label",
+      "Attach resume, career source, or profile file",
+    );
+    await expect(conversation.getByRole("button", { name: "Attach file" })).toHaveAttribute(
+      "aria-controls",
+      fileInputId ?? "",
+    );
   });
 
   test("keeps the chat composer controls visible at narrow widths", async ({ page }) => {

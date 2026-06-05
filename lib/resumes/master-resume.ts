@@ -45,6 +45,7 @@ type ConfirmedFact = {
   fact_type: string;
   fact_value: string;
   id: string;
+  evidence_status: "user_confirmed" | "source_supported" | "inferred" | "conflict" | "missing_evidence" | null;
   origin: string | null;
   source_ids: string[] | null;
   user_confirmed: boolean | null;
@@ -85,7 +86,7 @@ type MasterResumeEvidenceBundle = {
     factType: string;
     factValue: string;
     sourceLabels: string[];
-    support: "confirmed" | "source_linked" | "profile_fact";
+    support: "confirmed" | "source_supported" | "needs_confirmation" | "conflict" | "missing_evidence";
   }[];
   sourceTimelines: {
     label: string;
@@ -161,7 +162,7 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
     await Promise.all([
       supabase
         .from("profile_facts")
-        .select("id, fact_type, fact_value, confidence, origin, source_ids, user_confirmed")
+        .select("id, fact_type, fact_value, confidence, evidence_status, origin, source_ids, user_confirmed")
         .eq("profile_id", profile.id)
         .eq("user_id", userId)
         .order("confidence", { ascending: false })
@@ -1072,7 +1073,7 @@ function extractResumeSpecialProjectsFromSources(sourceEvidence: SourceEvidence[
 
 function extractResumeSpecialProjectsFromFacts(confirmedFacts: ConfirmedFact[]) {
   return confirmedFacts
-    .filter((fact) => fact.user_confirmed || (fact.source_ids?.length ?? 0) > 0)
+    .filter((fact) => fact.user_confirmed || fact.evidence_status === "source_supported")
     .filter((fact) =>
       /\b(?:project|initiative|program|publication)\b/i.test(fact.fact_type) ||
       /\b(?:project|initiative|program(?:me)?|implementation|migration|rollout|launch|integration|automation|redesign|deployment|optimization|publication)\b/i.test(
@@ -1379,7 +1380,7 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeArtifac
 
   const { data: confirmedFacts, error: factsError } = await supabase
     .from("profile_facts")
-    .select("id, fact_type, fact_value, confidence, origin, source_ids, user_confirmed")
+    .select("id, fact_type, fact_value, confidence, evidence_status, origin, source_ids, user_confirmed")
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .order("confidence", { ascending: false })
@@ -1489,7 +1490,7 @@ async function readMasterResumeContext(userId: string) {
 
   const { data: confirmedFacts, error: factsError } = await supabase
     .from("profile_facts")
-    .select("id, fact_type, fact_value, confidence, origin, source_ids, user_confirmed")
+    .select("id, fact_type, fact_value, confidence, evidence_status, origin, source_ids, user_confirmed")
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .order("confidence", { ascending: false })
@@ -1746,6 +1747,11 @@ ask about, and what to keep out of final claims. Treat impact themes as strong
 resume direction. Treat high-value gaps as reviewerNotes or keywordGaps, not as
 facts. A gap prompt should become a pointed question, not an invented metric.
 
+Use evidence-status labels strictly. Confirmed and source-supported facts may
+be used as resume claims. Facts marked needs_confirmation, conflict, or
+missing_evidence must not appear as hard claims; convert them into cautious
+reviewerNotes, keywordGaps, or direct confirmation questions.
+
 For senior transformation, GTM, professional services, operations, AI/
 automation, customer success, technology, and advisory profiles, look for and
 surface these evidence types when present:
@@ -1791,7 +1797,7 @@ Profile:
 - Target level: ${profile.target_level ?? "Not provided"}
 
 Profile evidence:
-${confirmedFacts.map((fact) => `- ${fact.fact_type}: ${fact.fact_value}`).join("\n")}
+${confirmedFacts.map((fact) => `- ${fact.fact_type} [${mapFactSupport(fact)}]: ${fact.fact_value}`).join("\n")}
 
 Evidence bundle:
 ${formatMasterResumeEvidenceBundle(evidenceBundle)}
@@ -1864,11 +1870,7 @@ function buildMasterResumeEvidenceBundle({
         factType: fact.fact_type,
         factValue: fact.fact_value,
         sourceLabels,
-        support: fact.user_confirmed
-          ? "confirmed"
-          : sourceLabels.length > 0
-            ? "source_linked"
-            : "profile_fact",
+        support: mapFactSupport(fact),
       };
     }),
     sources: sourceEvidence.map((source) => ({
@@ -1923,6 +1925,28 @@ function formatMasterResumeEvidenceBundle(bundle: MasterResumeEvidenceBundle) {
     "Parsed role timelines:",
     timelineLines.length > 0 ? timelineLines.join("\n") : "- None",
   ].join("\n");
+}
+
+function mapFactSupport(
+  fact: ConfirmedFact,
+): MasterResumeEvidenceBundle["facts"][number]["support"] {
+  if (fact.user_confirmed || fact.evidence_status === "user_confirmed") {
+    return "confirmed";
+  }
+
+  if (fact.evidence_status === "source_supported") {
+    return "source_supported";
+  }
+
+  if (fact.evidence_status === "conflict") {
+    return "conflict";
+  }
+
+  if (fact.evidence_status === "missing_evidence") {
+    return "missing_evidence";
+  }
+
+  return "needs_confirmation";
 }
 
 function formatSourceEvidenceLabel(source: SourceEvidence) {

@@ -91,6 +91,16 @@ const periodOptions = [
   { label: "All time", value: 0 },
 ];
 
+const supportRiskFilters = [
+  "all",
+  "billing_refund",
+  "privacy",
+  "account_access",
+  "inaccurate_ai_output",
+] as const;
+
+type SupportRiskFilter = (typeof supportRiskFilters)[number];
+
 export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const router = useRouter();
   const [metrics, setMetrics] = useState(initialMetrics);
@@ -102,6 +112,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [issueVerificationNotes, setIssueVerificationNotes] = useState<Record<string, string>>({});
   const [issueUpdatingId, setIssueUpdatingId] = useState<string | null>(null);
   const [queueMode, setQueueMode] = useState<"open" | "history" | "all">("open");
+  const [supportRiskFilter, setSupportRiskFilter] = useState<SupportRiskFilter>("all");
   const [promoCodes, setPromoCodes] = useState<PromoCodeRow[]>([]);
   const [tiers, setTiers] = useState<TierConfigRow[]>([]);
   const [grantMessage, setGrantMessage] = useState<string | null>(null);
@@ -209,10 +220,11 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         queueMode === "all" ||
         (queueMode === "open" && !isClosed) ||
         (queueMode === "history" && isClosed);
+      const matchesRisk = ticketMatchesSupportRiskFilter(ticket, supportRiskFilter);
 
-      return matchesRootCause && matchesMode;
+      return matchesRootCause && matchesMode && matchesRisk;
     });
-  }, [metrics.supportTickets, queueMode, selectedRootCause]);
+  }, [metrics.supportTickets, queueMode, selectedRootCause, supportRiskFilter]);
 
   const grantTargetSuggestions = useMemo(() => {
     const normalizedQuery = grantTargetQuery.trim().toLowerCase();
@@ -986,6 +998,19 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             body="The default queue only shows active work. Resolved and closed tickets move to history with owner notes, user-visible updates, supporting logs, and verification evidence retained."
           />
           <QueueModeControl queueMode={queueMode} setQueueMode={setQueueMode} />
+          <div className="record-filter-strip" aria-label="Trust-critical support filters">
+            {supportRiskFilters.map((filter) => (
+              <button
+                aria-pressed={supportRiskFilter === filter}
+                className={`record-filter-chip ${supportRiskFilter === filter ? "active" : ""}`}
+                key={filter}
+                onClick={() => setSupportRiskFilter(filter)}
+                type="button"
+              >
+                <span>{formatSupportRiskFilter(filter)}</span>
+              </button>
+            ))}
+          </div>
           {issueUpdateMessage ? <p className="owner-generated-note">{issueUpdateMessage}</p> : null}
           {filteredSupportTickets.length > 0 ? (
             <div className="support-issue-list" aria-label="Support issues">
@@ -1341,6 +1366,21 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                   <dd><span>{formatMoney(metrics.profitability.revenuePerActiveUserUsd)}</span></dd>
                 </div>
               </dl>
+            </div>
+
+            <div className="owner-detail-panel compact-panel">
+              <SectionHeading
+                eyebrow="Reconciliation"
+                title="Launch finance checklist"
+                body="Use this before treating estimates as financial reporting."
+              />
+              <ul className="owner-checklist">
+                <li>Match RevenueCat purchases and entitlements to credit ledger grants.</li>
+                <li>Match Stripe/payment-provider receipts, refunds, and duplicate webhooks.</li>
+                <li>Compare OpenAI usage against credit-consuming feature events.</li>
+                <li>Compare Vercel and Supabase exports against fixed platform assumptions.</li>
+                <li>Export the selected date range for owner review before launch reporting.</li>
+              </ul>
             </div>
           </div>
 
@@ -2636,6 +2676,49 @@ function formatRequestContext(value: unknown) {
     .filter((part): part is string => Boolean(part?.trim()));
 
   return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function ticketMatchesSupportRiskFilter(
+  ticket: OwnerMetrics["supportTickets"][number],
+  filter: SupportRiskFilter,
+) {
+  if (filter === "all") {
+    return true;
+  }
+
+  const haystack = [
+    ticket.area,
+    ticket.errorCode,
+    ticket.rootCause,
+    ticket.rootCauseCategory,
+    ticket.subject,
+    ticket.summary,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (filter === "billing_refund") {
+    return /\b(billing|refund|receipt|payment|credit|purchase|charge)\b/.test(haystack);
+  }
+
+  if (filter === "privacy") {
+    return /\b(privacy|deletion|delete|export|data rights|retention|minimi[sz]e)\b/.test(haystack);
+  }
+
+  if (filter === "account_access") {
+    return /\b(account|access|login|sign in|password|mfa|email|locked)\b/.test(haystack);
+  }
+
+  return /\b(ai|inaccurate|fabricat|hallucinat|wrong|unsupported|claim|resume output)\b/.test(haystack);
+}
+
+function formatSupportRiskFilter(filter: SupportRiskFilter) {
+  if (filter === "all") return "All";
+  if (filter === "billing_refund") return "Billing/refund";
+  if (filter === "privacy") return "Privacy";
+  if (filter === "account_access") return "Account access";
+  return "Inaccurate AI output";
 }
 
 function formatLabel(value: string) {

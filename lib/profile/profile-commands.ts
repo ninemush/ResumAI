@@ -96,6 +96,7 @@ export async function confirmProfileFact(input: z.input<typeof confirmProfileFac
   const { data: fact, error } = await supabase
     .from("profile_facts")
     .update({
+      evidence_status: "user_confirmed",
       origin: "confirmed",
       user_confirmed: true,
     })
@@ -125,6 +126,7 @@ export async function updateProfileFact(input: z.input<typeof updateProfileFactS
   const { data: fact, error } = await supabase
     .from("profile_facts")
     .update({
+      evidence_status: "user_confirmed",
       fact_value: parsed.value,
       origin: "confirmed",
       user_confirmed: true,

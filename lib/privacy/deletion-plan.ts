@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/privacy/requests";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const deletionPlanSchema = z.object({
@@ -35,6 +36,26 @@ export const deletionPlanSchema = z.object({
 });
 
 export type DeletionPlan = z.infer<typeof deletionPlanSchema>;
+
+const deletionExecutionSchema = z.object({
+  executedAt: z.string(),
+  requestId: z.string(),
+  subjectUserId: z.string(),
+  actions: z.array(
+    z.object({
+      action: z.enum(["deleted", "minimized", "retained_with_reason", "blocked_pending_review"]),
+      count: z.number().int().nonnegative(),
+      detail: z.string(),
+      table: z.string(),
+    }),
+  ),
+  storage: z.object({
+    deletedPathCount: z.number().int().nonnegative(),
+    failedPathCount: z.number().int().nonnegative(),
+  }),
+});
+
+export type DeletionExecution = z.infer<typeof deletionExecutionSchema>;
 
 export async function buildDeletionPlanForRequest(requestId: string): Promise<DeletionPlan> {
   const supabase = await createClient();
@@ -219,7 +240,7 @@ export async function completeDeletionReviewForRequest({
 
   const { data: request, error: readError } = await supabase
     .from("privacy_requests")
-    .select("id, request_type, deletion_plan")
+    .select("id, user_id, request_type, deletion_plan")
     .eq("id", requestId)
     .single();
 
@@ -235,11 +256,19 @@ export async function completeDeletionReviewForRequest({
     throw new Error("DELETION_PLAN_REQUIRED");
   }
 
+  const plan = deletionPlanSchema.parse(request.deletion_plan);
+  const deletionExecution = await executeDeletionPlan({
+    plan,
+    requestId,
+    subjectUserId: request.user_id as string,
+  });
+
   const { data, error } = await supabase
     .from("privacy_requests")
     .update({
       admin_notes:
-        "Deletion/minimization review completed. Retained records should be limited to documented audit-safe evidence.",
+        "Deletion/minimization execution completed. Retained records are limited to documented audit-safe evidence.",
+      deletion_execution: deletionExecution,
       resolution_summary: resolutionSummary,
       resolved_at: new Date().toISOString(),
       status: "completed",
@@ -252,7 +281,199 @@ export async function completeDeletionReviewForRequest({
     throw new Error("DELETION_REVIEW_COMPLETE_FAILED");
   }
 
-  return { id: data.id as string };
+  return { deletionExecution, id: data.id as string };
+}
+
+async function executeDeletionPlan({
+  plan,
+  requestId,
+  subjectUserId,
+}: {
+  plan: DeletionPlan;
+  requestId: string;
+  subjectUserId: string;
+}): Promise<DeletionExecution> {
+  const admin = createAdminClient();
+  const storagePaths = collectExecutionStoragePaths(plan);
+  const storageResult = await deleteStoragePaths(storagePaths);
+  const actions: DeletionExecution["actions"] = [];
+
+  await admin.from("profile_facts").delete().eq("user_id", subjectUserId);
+  actions.push({
+    action: "deleted",
+    count: countPlanItem(plan.delete, "profile_facts"),
+    detail: "Deleted editable extracted profile facts.",
+    table: "profile_facts",
+  });
+
+  await admin.from("profile_sources").delete().eq("user_id", subjectUserId);
+  actions.push({
+    action: "deleted",
+    count: countPlanItem(plan.delete, "profile_sources"),
+    detail: "Deleted uploaded and pasted profile source records.",
+    table: "profile_sources",
+  });
+
+  await admin
+    .from("generated_resumes")
+    .delete()
+    .eq("user_id", subjectUserId)
+    .eq("resume_type", "master");
+  actions.push({
+    action: "deleted",
+    count: countPlanItem(plan.delete, "generated_resumes(master)"),
+    detail: "Deleted user-controlled master resume drafts and exports.",
+    table: "generated_resumes(master)",
+  });
+
+  const { data: draftApplications } = await admin
+    .from("applications")
+    .select("id")
+    .eq("user_id", subjectUserId)
+    .eq("status", "draft");
+  const draftApplicationIds = (draftApplications ?? []).map((row) => row.id as string);
+
+  if (draftApplicationIds.length > 0) {
+    await admin.from("application_status_events").delete().in("application_id", draftApplicationIds);
+    await admin.from("generated_cover_letters").delete().in("application_id", draftApplicationIds);
+    await admin.from("generated_resumes").delete().in("application_id", draftApplicationIds);
+    await admin.from("applications").delete().in("id", draftApplicationIds);
+  }
+
+  actions.push({
+    action: "deleted",
+    count: countPlanItem(plan.delete, "applications(draft)"),
+    detail: "Deleted draft applications after removing dependent draft artifacts and status history.",
+    table: "applications(draft)",
+  });
+
+  await admin
+    .from("applications")
+    .update({
+      company_name: "Deleted per privacy request",
+      job_title: null,
+      job_url: "https://deleted.invalid/privacy-request",
+    })
+    .eq("user_id", subjectUserId)
+    .neq("status", "draft");
+  actions.push({
+    action: "minimized",
+    count: countPlanItem(plan.minimize, "applications(non_draft)"),
+    detail: "Minimized submitted or status-bearing application metadata while preserving quota/status evidence.",
+    table: "applications(non_draft)",
+  });
+
+  await admin
+    .from("generated_resumes")
+    .update({
+      content_json: {},
+      docx_storage_path: null,
+      pdf_storage_path: null,
+      status: "deleted",
+      storage_path: null,
+    })
+    .eq("user_id", subjectUserId)
+    .eq("resume_type", "application");
+  actions.push({
+    action: "minimized",
+    count: countPlanItem(plan.minimize, "generated_resumes(application)"),
+    detail: "Cleared generated application resume content and artifact paths while retaining minimal audit linkage.",
+    table: "generated_resumes(application)",
+  });
+
+  await admin
+    .from("generated_cover_letters")
+    .update({
+      content: "",
+      docx_storage_path: null,
+      pdf_storage_path: null,
+      status: "deleted",
+    })
+    .eq("user_id", subjectUserId);
+  actions.push({
+    action: "minimized",
+    count: countPlanItem(plan.minimize, "generated_cover_letters"),
+    detail: "Cleared generated cover letter content and artifact paths while retaining minimal audit linkage.",
+    table: "generated_cover_letters",
+  });
+
+  for (const retained of plan.retain) {
+    actions.push({
+      action: "retained_with_reason",
+      count: retained.count,
+      detail: retained.reason,
+      table: retained.table,
+    });
+  }
+
+  const execution = deletionExecutionSchema.parse({
+    actions,
+    executedAt: new Date().toISOString(),
+    requestId,
+    storage: storageResult,
+    subjectUserId,
+  });
+
+  await admin.from("audit_events").insert({
+    event_type: "privacy.deletion_execution.completed",
+    metadata: execution,
+    request_id: requestId,
+    resource_id: requestId,
+    resource_type: "privacy_request",
+    user_id: subjectUserId,
+  });
+
+  return execution;
+}
+
+function countPlanItem(
+  items: Array<{ count: number; table: string }>,
+  table: string,
+) {
+  return items.find((item) => item.table === table)?.count ?? 0;
+}
+
+function collectExecutionStoragePaths(plan: DeletionPlan) {
+  const paths = new Set<string>();
+
+  for (const item of plan.delete) {
+    for (const path of item.storagePaths) {
+      paths.add(path);
+    }
+  }
+
+  return Array.from(paths);
+}
+
+async function deleteStoragePaths(paths: string[]) {
+  const admin = createAdminClient();
+  const profileSourcePaths = paths.filter((path) => path.trim().length > 0);
+  let failedPathCount = 0;
+
+  if (profileSourcePaths.length === 0) {
+    return { deletedPathCount: 0, failedPathCount };
+  }
+
+  const profileSourceResult = await admin.storage
+    .from("profile-sources")
+    .remove(profileSourcePaths);
+
+  if (profileSourceResult.error) {
+    failedPathCount += profileSourcePaths.length;
+  }
+
+  const artifactResult = await admin.storage
+    .from("generated-artifacts")
+    .remove(profileSourcePaths);
+
+  if (artifactResult.error) {
+    failedPathCount += profileSourcePaths.length;
+  }
+
+  return {
+    deletedPathCount: failedPathCount > 0 ? 0 : profileSourcePaths.length,
+    failedPathCount,
+  };
 }
 
 async function countRows(table: string, userId: string) {

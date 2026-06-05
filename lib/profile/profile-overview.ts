@@ -12,6 +12,7 @@ type ProfileFact = {
   fact_type: string;
   fact_value: string;
   confidence: number | null;
+  evidence_status: "user_confirmed" | "source_supported" | "inferred" | "conflict" | "missing_evidence";
   source_ids: string[];
   user_confirmed: boolean;
   created_at: string;
@@ -135,7 +136,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     await Promise.all([
       supabase
         .from("profile_facts")
-        .select("id, fact_type, fact_value, confidence, source_ids, user_confirmed, created_at")
+        .select("id, fact_type, fact_value, confidence, evidence_status, source_ids, user_confirmed, created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false }),
       supabase

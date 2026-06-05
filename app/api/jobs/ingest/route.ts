@@ -2,6 +2,7 @@ import { apiError, apiSuccess, createRequestId, readJsonBody } from "@/lib/api/r
 import {
   buildCreditsApiError,
   consumeCredits,
+  getCreditOperationKey,
   requireCredits,
 } from "@/lib/billing/credits";
 import {
@@ -73,6 +74,10 @@ export async function POST(request: Request) {
       await consumeCredits({
         feature: "jobIngest",
         metadata: { job_url: parsed.data.jobUrl },
+        operationKey: getCreditOperationKey(
+          request,
+          `jobIngest:${result.job.id}`,
+        ),
         resourceId: result.job.id,
         resourceType: "job_ingestion",
       });

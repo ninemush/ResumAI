@@ -105,11 +105,13 @@ export async function requireCredits(feature: CreditFeature) {
 export async function consumeCredits({
   feature,
   metadata = {},
+  operationKey,
   resourceId,
   resourceType,
 }: {
   feature: CreditFeature;
   metadata?: Record<string, unknown>;
+  operationKey?: string | null;
   resourceId?: string;
   resourceType: string;
 }) {
@@ -118,6 +120,7 @@ export async function consumeCredits({
     p_amount: CREDIT_COSTS[feature],
     p_event_type: `feature_${feature}`,
     p_metadata: metadata,
+    p_operation_key: operationKey ?? null,
     p_resource_id: resourceId ?? null,
     p_resource_type: resourceType,
   });
@@ -127,6 +130,18 @@ export async function consumeCredits({
   }
 
   return withPurchaseOptions(creditSummarySchema.parse(data));
+}
+
+export function getCreditOperationKey(request: Request, fallback: string) {
+  const headerValue = request.headers.get("Idempotency-Key");
+  const rawKey = headerValue && headerValue.trim().length > 0 ? headerValue : fallback;
+  const normalized = rawKey.trim().replace(/\s+/g, "-").slice(0, 180);
+
+  if (!/^[A-Za-z0-9._:/=-]{8,180}$/.test(normalized)) {
+    return fallback.slice(0, 180);
+  }
+
+  return normalized;
 }
 
 export async function redeemPromoCode(code: string) {

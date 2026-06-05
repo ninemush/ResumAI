@@ -2196,6 +2196,16 @@ input:focus {
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
 }
 
+.owner-checklist {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.84rem;
+  gap: 8px;
+  line-height: 1.42;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .profile-summary-grid div,
 .owner-detail-panel,
 .owner-metric-card,
@@ -4885,6 +4895,19 @@ input:focus {
   padding: clamp(20px, 2.4vw, 30px);
 }
 
+.jobs-panel {
+  gap: 12px;
+  padding: clamp(16px, 1.8vw, 22px);
+}
+
+.jobs-panel .section-heading {
+  gap: 6px;
+}
+
+.jobs-panel .section-heading p:not(.eyebrow) {
+  max-width: min(100%, 760px);
+}
+
 .applications-panel .section-heading {
   gap: 8px;
   max-width: 100%;
@@ -6007,6 +6030,11 @@ input:focus {
   gap: 12px;
 }
 
+.jobs-panel .job-add-panel {
+  gap: 10px;
+  padding: 12px;
+}
+
 .job-url-form {
   align-items: center;
   display: grid;
@@ -6072,6 +6100,10 @@ input:focus {
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.jobs-panel .job-text-fallback {
+  gap: 8px;
 }
 
 .job-text-fallback label {
