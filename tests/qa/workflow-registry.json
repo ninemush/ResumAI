@@ -1,0 +1,169 @@
+{
+  "$schema": "./workflow-registry.schema.json",
+  "qualityBar": "public_launch",
+  "lastReviewed": "2026-06-05",
+  "workflows": [
+    {
+      "id": "profile-build",
+      "journey": "First-time profile build",
+      "personas": ["first_time_anxious_job_seeker", "career_switcher", "low_data_user"],
+      "positiveCases": [
+        "User provides natural-language notes and profile facts are created.",
+        "User uploads a supported file and extracted facts are visible for confirmation.",
+        "User adds a public profile link and receives role-family and seniority recommendations."
+      ],
+      "negativeCases": [
+        "Unsupported file type is rejected with plain recovery copy.",
+        "OCR or parsing failure preserves saved source metadata and offers a next-best action.",
+        "Thin profile does not unlock master resume generation.",
+        "Invalid AI output is rejected by schema validation."
+      ],
+      "automationLayers": ["unit", "api", "e2e", "persona_review"],
+      "owner": "product_engineering",
+      "releaseGate": "pre_release",
+      "regressionRisks": [
+        "Source saved but facts are lost.",
+        "Internal extraction errors leak to the user.",
+        "Role recommendations use unconfirmed or invented facts."
+      ]
+    },
+    {
+      "id": "master-resume",
+      "journey": "Master resume generation",
+      "personas": ["senior_executive_user", "career_switcher", "returning_applicant"],
+      "positiveCases": [
+        "Confirmed profile facts generate structured resume content.",
+        "PDF and DOCX artifacts are created from the ATS template.",
+        "Generated materials are private and ready only after validation."
+      ],
+      "negativeCases": [
+        "Profile readiness failure asks for missing facts.",
+        "AI schema failure blocks ready state and keeps recoverable content where safe.",
+        "PDF validation failure blocks download when text is missing, clipped, or unreadable."
+      ],
+      "automationLayers": ["unit", "api", "e2e", "persona_review"],
+      "owner": "product_engineering",
+      "releaseGate": "pre_release",
+      "regressionRisks": [
+        "Resume invents credentials, dates, companies, or accomplishments.",
+        "Long source files under-weight role history.",
+        "PDF appears downloadable before validation succeeds."
+      ]
+    },
+    {
+      "id": "job-evaluation",
+      "journey": "Job link evaluation",
+      "personas": ["senior_executive_user", "career_switcher", "low_data_user"],
+      "positiveCases": [
+        "Safe job URL is validated and ingested.",
+        "Job requirements are compared with confirmed profile facts.",
+        "Fit review explains match, gaps, risks, and practical recommendation."
+      ],
+      "negativeCases": [
+        "Unsafe URL and SSRF-style input are blocked.",
+        "Unreadable job page asks the user to paste job text.",
+        "Profile-not-ready state routes the user back to profile enrichment."
+      ],
+      "automationLayers": ["unit", "api", "e2e", "persona_review"],
+      "owner": "product_engineering",
+      "releaseGate": "pre_release",
+      "regressionRisks": [
+        "Private or local network URL is fetched.",
+        "Thin job text produces overconfident advice.",
+        "Fit review ignores known profile gaps."
+      ]
+    },
+    {
+      "id": "application-materials",
+      "journey": "Application logging and artifact generation",
+      "personas": ["returning_applicant", "senior_executive_user"],
+      "positiveCases": [
+        "User-approved job creates an application record.",
+        "Quota is consumed once and recorded in an audit-safe event.",
+        "Tailored resume and cover letter artifacts are generated and validated."
+      ],
+      "negativeCases": [
+        "Quota exceeded prevents application material generation.",
+        "Retry does not duplicate quota consumption.",
+        "Invalid AI output or PDF failure leaves a recoverable partial state."
+      ],
+      "automationLayers": ["unit", "api", "database_rls", "e2e"],
+      "owner": "product_engineering",
+      "releaseGate": "pre_release",
+      "regressionRisks": [
+        "Quota event duplicates during retry.",
+        "Artifacts attach to the wrong user or application.",
+        "Application is marked ready after failed PDF validation."
+      ]
+    },
+    {
+      "id": "application-tracking",
+      "journey": "Application status update",
+      "personas": ["returning_applicant"],
+      "positiveCases": [
+        "User updates an application to each allowed status.",
+        "Status change creates or updates the audit trail.",
+        "Application history reflects the latest status."
+      ],
+      "negativeCases": [
+        "Invalid status is rejected.",
+        "User cannot update another user's application.",
+        "Archived application behavior remains intentional and tested."
+      ],
+      "automationLayers": ["api", "database_rls", "e2e"],
+      "owner": "product_engineering",
+      "releaseGate": "every_pr",
+      "regressionRisks": [
+        "Unauthorized status mutation succeeds.",
+        "Status labels diverge between UI and API.",
+        "Audit history is missing or overwritten."
+      ]
+    },
+    {
+      "id": "owner-admin",
+      "journey": "Owner/admin tier configuration and operating console",
+      "personas": ["owner_admin"],
+      "positiveCases": [
+        "Owner views aggregate metrics.",
+        "Owner creates, edits, disables, or re-enables a tier.",
+        "Support-safe drill-downs are justified and audited."
+      ],
+      "negativeCases": [
+        "Non-admin access is denied server-side and database-side.",
+        "Invalid tier limits are rejected.",
+        "Unsafe drill-down does not expose raw resume, cover letter, profile, or chat content."
+      ],
+      "automationLayers": ["api", "database_rls", "e2e", "persona_review"],
+      "owner": "product_engineering",
+      "releaseGate": "pre_release",
+      "regressionRisks": [
+        "Non-admin receives aggregate metrics.",
+        "Tier changes bypass audit records.",
+        "Owner console leaks sensitive user content."
+      ]
+    },
+    {
+      "id": "support-privacy",
+      "journey": "Support and privacy controls",
+      "personas": ["frustrated_support_user", "owner_admin"],
+      "positiveCases": [
+        "User creates a support ticket after L0 guidance.",
+        "L1 packet includes support-safe context and next action.",
+        "Sensitive issues escalate to L2 with constraints."
+      ],
+      "negativeCases": [
+        "Raw resume, chat transcript, prompts, and owner notes are excluded unless explicitly safe.",
+        "Sensitive identifiers are redacted.",
+        "Privacy, security, billing/refund, and account-access issues require human review."
+      ],
+      "automationLayers": ["unit", "api", "database_rls", "e2e", "persona_review"],
+      "owner": "product_engineering",
+      "releaseGate": "every_pr",
+      "regressionRisks": [
+        "Owner-only fields appear in user-visible tickets.",
+        "Sensitive issue remains in autonomous support.",
+        "Raw personal data is stored in support metadata."
+      ]
+    }
+  ]
+}

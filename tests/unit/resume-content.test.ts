@@ -1,0 +1,157 @@
+import { describe, expect, test } from "vitest";
+
+import { normalizeResumeContent } from "@/lib/resumes/resume-content";
+
+describe("resume content normalization", () => {
+  test("removes generated placeholder bullets and testimonials from resume content", () => {
+    const normalized = normalizeResumeContent({
+      certifications: [],
+      contact: {},
+      education: [],
+      experienceBullets: [
+        "Held a leadership role. Add measurable scope and outcomes.",
+        "Scaled regional operations across 4 countries while reducing cycle time by 18%.",
+        "I had the pleasure of working with this excellent professional.",
+      ],
+      experienceSections: [
+        {
+          bullets: [
+            "Managed a 35-person delivery team across enterprise transformation programs.",
+            "Recommendation: one of the best leaders I worked with.",
+          ],
+          company: "Example Group",
+          dates: "2021 - Present",
+          location: "Dubai",
+          roleTitle: "Director of Operations",
+        },
+      ],
+      headline: "  Director of Operations  ",
+      keywordGaps: [],
+      reviewerNotes: [],
+      skills: [" Operations ", "Portfolio Governance"],
+      summary: "  Operations leader with enterprise transformation scope.  ",
+    });
+
+    expect(normalized.experienceBullets).toEqual([
+      "Scaled regional operations across 4 countries while reducing cycle time by 18%.",
+    ]);
+    expect(normalized.experienceSections[0]?.bullets).toEqual([
+      "Managed a 35-person delivery team across enterprise transformation programs.",
+    ]);
+    expect(normalized.headline).toBe("Director of Operations");
+    expect(normalized.skills).toEqual(["Operations", "Portfolio Governance"]);
+  });
+
+  test("deduplicates experience sections that describe the same role", () => {
+    const normalized = normalizeResumeContent({
+      certifications: [],
+      contact: {},
+      education: [],
+      experienceBullets: [],
+      experienceSections: [
+        {
+          bullets: ["Led operating model redesign across shared services."],
+          company: "Example Group",
+          dates: "2020 - 2023",
+          location: "Dubai",
+          roleTitle: "Head of Operations",
+        },
+        {
+          bullets: ["Reduced reporting cycle time by 20%."],
+          company: "Example Group",
+          dates: "2020 - 2023",
+          location: "Dubai",
+          roleTitle: "Head of Operations",
+        },
+      ],
+      headline: "Head of Operations",
+      keywordGaps: [],
+      reviewerNotes: [],
+      skills: ["Operations"],
+      summary: "Operations leader.",
+    });
+
+    expect(normalized.experienceSections).toHaveLength(1);
+    expect(normalized.experienceSections[0]?.bullets).toEqual([
+      "Led operating model redesign across shared services.",
+      "Reduced reporting cycle time by 20%.",
+    ]);
+  });
+
+  test("keeps Special Projects limited to actual project evidence", () => {
+    const normalized = normalizeResumeContent({
+      certifications: [
+        {
+          date: "2024",
+          issuer: "PMI",
+          name: "PMP",
+        },
+      ],
+      contact: {},
+      education: [
+        {
+          credential: "MBA",
+          dates: "2018",
+          institution: "Example University",
+          location: "Dubai",
+        },
+      ],
+      experienceBullets: [
+        "Improved warehouse throughput by 22% across a 40-person operation.",
+      ],
+      experienceSections: [
+        {
+          bullets: ["Led daily operations for inbound, outbound, and inventory teams."],
+          company: "Northstar Logistics",
+          dates: "2021 - Present",
+          location: "Dubai",
+          roleTitle: "Operations Manager",
+        },
+      ],
+      headline: "Operations Manager",
+      keywordGaps: [],
+      languages: [
+        {
+          name: "English",
+          proficiency: "Professional",
+        },
+      ],
+      reviewerNotes: [],
+      skills: ["Operations", "WMS"],
+      specialProjects: [
+        {
+          bullets: ["Recommendation: she is an excellent professional and trusted colleague."],
+          context: "LinkedIn recommendations",
+          dates: null,
+          name: "Recommendations received",
+        },
+        {
+          bullets: ["Improved cycle counts and reduced inventory variance by 18%."],
+          context: "Northstar Logistics",
+          dates: "2023",
+          name: "WMS rollout project",
+        },
+        {
+          bullets: ["Senior operations leader with strong people management experience."],
+          context: null,
+          dates: null,
+          name: "Professional summary",
+        },
+      ],
+      summary: "Operations leader with logistics and warehouse transformation evidence.",
+    });
+
+    expect(normalized.specialProjects).toEqual([
+      {
+        bullets: ["Improved cycle counts and reduced inventory variance by 18%."],
+        context: "Northstar Logistics",
+        dates: "2023",
+        name: "WMS rollout project",
+      },
+    ]);
+    expect(normalized.education).toHaveLength(1);
+    expect(normalized.languages).toHaveLength(1);
+    expect(normalized.certifications).toHaveLength(1);
+    expect(normalized.experienceSections).toHaveLength(1);
+  });
+});

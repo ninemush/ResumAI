@@ -31,6 +31,7 @@ export const updateMaterialReviewSchema = materialReviewSchema.extend({
 export type MaterialReview = {
   application: {
     companyName: string;
+    displayName: string | null;
     id: string;
     jobTitle: string | null;
     jobUrl: string;
@@ -207,10 +208,10 @@ export async function exportMaterialArtifacts(
   }
 
   const resumeContent = parseResumeContent(resume.content_json);
-  const contextLine = `${application.companyName}${application.jobTitle ? ` | ${application.jobTitle}` : ""}`;
+  const contextLine = formatApplicationContextLine(application);
   const [resumePdf, resumeDocx, coverLetterPdf, coverLetterDocx] = await Promise.all([
-    buildAtsResumePdf({ contextLine, resume: resumeContent }),
-    buildAtsResumeDocx({ contextLine, resume: resumeContent }),
+    buildAtsResumePdf({ contextLine, displayName: application.displayName, resume: resumeContent }),
+    buildAtsResumeDocx({ contextLine, displayName: application.displayName, resume: resumeContent }),
     buildCoverLetterPdf({ contextLine, coverLetter: coverLetter.content }),
     buildCoverLetterDocx({ contextLine, coverLetter: coverLetter.content }),
   ]);
@@ -372,7 +373,7 @@ async function readApplication(applicationId: string, userId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("applications")
-    .select("id, company_name, job_title, job_url, status")
+    .select("id, company_name, job_title, job_url, profile_id, status")
     .eq("id", applicationId)
     .eq("user_id", userId)
     .single();
@@ -381,13 +382,59 @@ async function readApplication(applicationId: string, userId: string) {
     throw new Error("APPLICATION_NOT_FOUND");
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", data.profile_id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
   return {
-    companyName: data.company_name,
+    companyName: cleanMaterialLabel(data.company_name) || "Unknown company",
+    displayName: readApplicationProfileName(profile),
     id: data.id,
-    jobTitle: data.job_title,
+    jobTitle: cleanMaterialLabel(data.job_title),
     jobUrl: data.job_url,
     status: data.status,
   };
+}
+
+function formatApplicationContextLine(application: {
+  companyName: string;
+  jobTitle: string | null;
+}) {
+  return [application.companyName, application.jobTitle].filter(Boolean).join(" | ");
+}
+
+function readApplicationProfileName(profile: unknown) {
+  const value = (profile as { display_name?: unknown } | null)?.display_name;
+
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, 120) : null;
+}
+
+function cleanMaterialLabel(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const decoded = value
+    .replace(/&amp;/gi, "&")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+    .replace(/\s+/g, " ")
+    .trim();
+  const withoutLinkedInNoise = decoded
+    .split(/\s+(?:\||-|–|—)\s+/)
+    .map((part) => part.trim())
+    .filter((part) => !/^(?:linkedin|linkedin\.com|jobs|job details|careers?)$/i.test(part))
+    .join(" | ")
+    .trim();
+
+  if (/^(?:linkedin|linkedin\.com)$/i.test(withoutLinkedInNoise)) {
+    return null;
+  }
+
+  return withoutLinkedInNoise.slice(0, 180) || null;
 }
 
 async function readLatestResume(applicationId: string, userId: string) {

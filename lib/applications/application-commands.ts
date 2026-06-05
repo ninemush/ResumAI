@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { cleanJobCompany, cleanJobTitle } from "@/lib/jobs/job-metadata";
 import { recordQuotaEvent } from "@/lib/quota/quota-events";
 import { createClient } from "@/lib/supabase/server";
 
@@ -154,8 +155,8 @@ export async function createApplicationFromJob(
     .insert({
       user_id: user.id,
       profile_id: profile.id,
-      company_name: normalizeRequiredText(job.company) ?? inferCompanyName(jobUrl),
-      job_title: normalizeOptionalText(job.title),
+      company_name: normalizeRequiredText(cleanJobCompany(job.company)) ?? inferCompanyName(jobUrl),
+      job_title: normalizeOptionalText(cleanJobTitle(job.title)),
       job_url: jobUrl,
       job_ingestion_id: job.id,
       status: parsed.status,
@@ -377,7 +378,7 @@ function inferCompanyName(jobUrl: string) {
 }
 
 function normalizeOptionalText(value: string | null) {
-  const normalized = value?.trim();
+  const normalized = value?.replace(/\s+/g, " ").trim();
   return normalized ? normalized.slice(0, 240) : null;
 }
 

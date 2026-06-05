@@ -1019,13 +1019,29 @@ function extractResumeSpecialProjectsFromSources(sourceEvidence: SourceEvidence[
     )
     .slice(0, MAX_RESUME_SPECIAL_PROJECT_ITEMS)
     .map(parseSpecialProjectLine)
-    .filter((item) => item.name.length > 0);
+    .filter((item) => item.name.length > 0)
+    .filter((item) =>
+      normalizeResumeContent({
+        certifications: [],
+        contact: {},
+        education: [],
+        experienceBullets: [],
+        experienceSections: [],
+        headline: "Project evidence",
+        keywordGaps: [],
+        languages: [],
+        reviewerNotes: [],
+        skills: ["Project"],
+        specialProjects: [item],
+        summary: "Project evidence.",
+      }).specialProjects.length > 0,
+    );
 }
 
 function extractResumeSpecialProjectsFromFacts(confirmedFacts: ConfirmedFact[]) {
   return confirmedFacts
     .filter((fact) =>
-      /\b(?:project|initiative|program|portfolio|accolade|achievement|award|publication)\b/i.test(
+      /\b(?:project|initiative|program|portfolio|publication)\b/i.test(
         fact.fact_type,
       ),
     )
@@ -1039,6 +1055,22 @@ function extractResumeSpecialProjectsFromFacts(confirmedFacts: ConfirmedFact[]) 
     )
     .map(parseSpecialProjectLine)
     .filter((item) => item.name.length > 0)
+    .filter((item) =>
+      normalizeResumeContent({
+        certifications: [],
+        contact: {},
+        education: [],
+        experienceBullets: [],
+        experienceSections: [],
+        headline: "Project evidence",
+        keywordGaps: [],
+        languages: [],
+        reviewerNotes: [],
+        skills: ["Project"],
+        specialProjects: [item],
+        summary: "Project evidence.",
+      }).specialProjects.length > 0,
+    )
     .slice(0, MAX_RESUME_SPECIAL_PROJECT_ITEMS);
 }
 

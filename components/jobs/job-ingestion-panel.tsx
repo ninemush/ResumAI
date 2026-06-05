@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import { brand } from "@/lib/brand";
-import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
 
 type JobIngestionPanelProps = {
   overview: JobOverview;
@@ -231,9 +230,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
           </label>
           <button disabled={isIngestingJob || !jobUrl.trim()} type="submit">
             <Send size={15} aria-hidden="true" />
-            {isIngestingJob
-              ? "Reading..."
-              : `Review fit - ${formatCreditCost(CREDIT_COSTS.jobIngest)}`}
+            {isIngestingJob ? "Reading..." : "Review fit"}
           </button>
         </form>
         <div className="job-text-fallback">

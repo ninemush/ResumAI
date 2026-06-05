@@ -19,7 +19,6 @@ import {
 import { useRouter } from "next/navigation";
 
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
-import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
 import type { ResumeContent } from "@/lib/resumes/resume-content";
 
 type ApplicationPanelProps = {
@@ -31,6 +30,7 @@ type ApplicationPanelProps = {
 type MaterialReview = {
   application: {
     companyName: string;
+    displayName: string | null;
     id: string;
     jobTitle: string | null;
     jobUrl: string;
@@ -565,7 +565,7 @@ export function ApplicationPanel({
                   <WandSparkles size={14} aria-hidden="true" />
                   {generatingApplicationId === application.id
                     ? "Creating"
-                    : `Create packet - ${formatCreditCost(CREDIT_COSTS.applicationMaterialsGenerate)}`}
+                    : "Create packet"}
                 </button>
               )}
               <button
@@ -760,7 +760,7 @@ export function ApplicationPanel({
                   ? "Preparing..."
                   : activeReview.exportReadiness.status === "exported"
                     ? "Files prepared"
-                    : `Prepare downloads - ${formatCreditCost(CREDIT_COSTS.applicationMaterialsExport)}`}
+                    : "Prepare downloads"}
               </button>
             </div>
           </div>
@@ -939,7 +939,7 @@ function readApplicationNextAction(
   }
 
   if (!application.latestResumeHasPdf || !application.latestCoverLetterHasPdf) {
-    return `Export files - ${formatCreditCost(CREDIT_COSTS.applicationMaterialsExport)}`;
+    return "Export files";
   }
 
   if (application.status === "draft") {
@@ -1111,18 +1111,7 @@ function PacketPreview({
   coverLetter: string;
   resume: ResumeContent;
 }) {
-  const experienceSections =
-    resume.experienceSections.length > 0
-      ? resume.experienceSections
-      : [
-          {
-            bullets: resume.experienceBullets,
-            company: null,
-            dates: null,
-            location: null,
-            roleTitle: "Selected experience",
-          },
-        ];
+  const experienceSections = resume.experienceSections;
   const coverLetterParagraphs = coverLetter
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
@@ -1132,33 +1121,117 @@ function PacketPreview({
     <div className="packet-preview-grid">
       <article className="packet-preview-document" aria-label="Resume preview">
         <div className="packet-preview-kicker">Resume preview</div>
-        <h3>{resume.headline}</h3>
+        <header className="packet-preview-resume-header">
+          <h3>{application.displayName ?? resume.headline}</h3>
+          {application.displayName ? <p>{resume.headline}</p> : null}
+          {formatResumeContactLine(resume) ? (
+            <small>{formatResumeContactLine(resume)}</small>
+          ) : null}
+        </header>
         <p>{resume.summary}</p>
         {resume.skills.length > 0 ? (
           <div className="packet-preview-skills" aria-label="Resume skills">
-            {resume.skills.slice(0, 12).map((skill) => (
+            {resume.skills.map((skill) => (
               <span key={skill}>{skill}</span>
             ))}
           </div>
         ) : null}
-        <div className="packet-preview-section">
-          <h4>Experience</h4>
-          {experienceSections.slice(0, 4).map((section) => (
-            <section key={`${section.roleTitle}-${section.company ?? ""}`}>
-              <div>
-                <strong>{section.roleTitle}</strong>
-                {[section.company, section.location, section.dates].filter(Boolean).length > 0 ? (
-                  <small>{[section.company, section.location, section.dates].filter(Boolean).join(" · ")}</small>
-                ) : null}
-              </div>
-              <ul>
-                {section.bullets.slice(0, 4).map((bullet) => (
-                  <li key={bullet}>{bullet}</li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
+        {resume.experienceBullets.length > 0 ? (
+          <div className="packet-preview-section">
+            <h4>Selected highlights</h4>
+            <ul>
+              {resume.experienceBullets.map((bullet) => (
+                <li key={bullet}>{bullet}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {experienceSections.length > 0 ? (
+          <div className="packet-preview-section">
+            <h4>Professional experience</h4>
+            {experienceSections.map((section) => (
+              <section key={`${section.roleTitle}-${section.company ?? ""}-${section.dates ?? ""}`}>
+                <div>
+                  <strong>{section.roleTitle}</strong>
+                  {[section.company, section.location, section.dates].filter(Boolean).length > 0 ? (
+                    <small>{[section.company, section.location, section.dates].filter(Boolean).join(" · ")}</small>
+                  ) : null}
+                </div>
+                <ul>
+                  {section.bullets.map((bullet) => (
+                    <li key={bullet}>{bullet}</li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        ) : null}
+        {resume.specialProjects.length > 0 ? (
+          <div className="packet-preview-section">
+            <h4>Special projects</h4>
+            {resume.specialProjects.map((project) => (
+              <section key={`${project.name}-${project.context ?? ""}-${project.dates ?? ""}`}>
+                <div>
+                  <strong>{project.name}</strong>
+                  {[project.context, project.dates].filter(Boolean).length > 0 ? (
+                    <small>{[project.context, project.dates].filter(Boolean).join(" · ")}</small>
+                  ) : null}
+                </div>
+                <ul>
+                  {project.bullets.map((bullet) => (
+                    <li key={bullet}>{bullet}</li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        ) : null}
+        {resume.languages.length > 0 ? (
+          <div className="packet-preview-section">
+            <h4>Languages</h4>
+            <ul>
+              {resume.languages.map((language) => (
+                <li key={`${language.name}-${language.proficiency ?? ""}`}>
+                  {[language.name, language.proficiency].filter(Boolean).join(" · ")}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {resume.education.length > 0 ? (
+          <div className="packet-preview-section">
+            <h4>Education</h4>
+            <ul>
+              {resume.education.map((item) => (
+                <li key={`${item.institution}-${item.credential ?? ""}`}>
+                  {[item.credential, item.institution, item.location, item.dates].filter(Boolean).join(" · ")}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {resume.certifications.length > 0 ? (
+          <div className="packet-preview-section">
+            <h4>Certifications</h4>
+            <ul>
+              {resume.certifications.map((item) => (
+                <li key={`${item.name}-${item.issuer ?? ""}`}>
+                  {[item.name, item.issuer, item.date].filter(Boolean).join(" · ")}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {resume.keywordGaps.length > 0 || resume.reviewerNotes.length > 0 ? (
+          <div className="packet-preview-section packet-preview-review">
+            <h4>Review before export</h4>
+            <ul>
+              {[...resume.keywordGaps, ...resume.reviewerNotes].map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </article>
       <article className="packet-preview-document" aria-label="Cover letter preview">
         <div className="packet-preview-kicker">Cover letter preview</div>
@@ -1174,6 +1247,18 @@ function PacketPreview({
       </article>
     </div>
   );
+}
+
+function formatResumeContactLine(resume: ResumeContent) {
+  return [
+    resume.contact.email,
+    resume.contact.phone,
+    resume.contact.linkedin,
+    resume.contact.website,
+    resume.contact.location,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function formatShortDate(value: string) {

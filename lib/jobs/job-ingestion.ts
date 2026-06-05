@@ -4,6 +4,7 @@ import * as cheerio from "cheerio";
 import { z } from "zod";
 
 import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
+import { cleanJobCompany, cleanJobTitle } from "@/lib/jobs/job-metadata";
 import { safeFetchExternalHtml } from "@/lib/security/safe-fetch";
 import { assertExternalHttpUrl, isHttpUrl } from "@/lib/security/url-safety";
 import { createClient } from "@/lib/supabase/server";
@@ -266,9 +267,9 @@ function extractJobPageText(html: string) {
     .slice(0, MAX_JOB_TEXT_CHARS);
 
   return {
-    company: company || null,
+    company: cleanJobCompany(company),
     text,
-    title: title ? title.slice(0, 240) : null,
+    title: cleanJobTitle(title),
   };
 }
 

@@ -169,6 +169,7 @@ export type UserSupportTicketRow = {
   created_at: string;
   fix_status?: string | null;
   id: string;
+  owner_notes?: string | null;
   priority: string;
   reopen_until?: string | null;
   root_cause?: string | null;

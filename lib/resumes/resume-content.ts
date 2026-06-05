@@ -167,6 +167,7 @@ export function normalizeResumeContent(value: z.input<typeof resumeContentSchema
       .filter(
         (item) =>
           item.name &&
+          looksLikeSupportedSpecialProject(item) &&
           !looksLikeRecommendationOrTestimonial(
             [item.name, item.context, item.dates, ...item.bullets].filter(Boolean).join(" "),
           ),
@@ -563,13 +564,57 @@ function looksLikeRecommendationExperienceSection(
   }
 
   if (
-    looksLikePersonName(roleAndCompany) ||
-    looksLikePersonName(section.company ?? "")
+    section.bullets.length === 0 &&
+    !section.dates &&
+    (looksLikePersonName(roleAndCompany) ||
+      looksLikePersonName(section.company ?? ""))
   ) {
     return true;
   }
 
   return false;
+}
+
+function looksLikeSupportedSpecialProject(
+  project: Pick<ResumeContent["specialProjects"][number], "bullets" | "context" | "dates" | "name">,
+) {
+  const combined = [project.name, project.context, project.dates, ...project.bullets]
+    .filter(Boolean)
+    .join(" ");
+  const normalizedName = normalizeComparableText(project.name);
+
+  if (
+    /^(?:summary|professional summary|selected highlights?|experience|professional experience|work history|recommendations?|testimonials?|references?|skills?|education|certifications?|languages?|role fit|seniority recommendation|reviewer notes?|keyword gaps?)$/i.test(
+      project.name.trim(),
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    /\b(?:summary|recommendation|testimonial|reference|endorsement|seniority|role fit|fit score|reviewer note|keyword gap|left out|unsupported)\b/i.test(
+      combined,
+    )
+  ) {
+    return false;
+  }
+
+  if (looksLikePersonName(project.name)) {
+    return false;
+  }
+
+  const hasProjectSignal =
+    /\b(?:project|initiative|program(?:me)?|portfolio|transformation|implementation|migration|rollout|launch|integration|platform|system|automation|redesign|build|deployment|upgrade|optimization|campaign|client|advisory|research|publication|award)\b/i.test(
+      combined,
+    );
+  const hasProvenance = Boolean(project.context || project.dates || project.bullets.length > 1);
+  const hasActionBullet = project.bullets.some((bullet) =>
+    /\b(?:built|created|launched|led|delivered|implemented|migrated|integrated|designed|redesigned|automated|optimized|published|awarded|won|shipped|deployed|transformed|coordinated|managed)\b/i.test(
+      bullet,
+    ),
+  );
+
+  return hasProjectSignal || (hasProvenance && hasActionBullet && normalizedName.length > 4);
 }
 
 function looksLikeRecommendationOrTestimonial(value: string) {

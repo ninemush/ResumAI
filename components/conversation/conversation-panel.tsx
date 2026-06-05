@@ -184,6 +184,8 @@ const acceptedFileTypes = new Map<
   ["image/jpeg", "image"],
   ["image/png", "image"],
   ["image/webp", "image"],
+  ["image/heic", "image"],
+  ["image/heif", "image"],
 ]);
 
 const ADD_CREDITS_ACTION: AdvisorSuggestedAction = {
@@ -1201,7 +1203,7 @@ export function ConversationPanel({
     const sourceType = inferFileSourceType(file);
 
     if (!sourceType) {
-      return `${file.name} is not a supported profile source yet. Drop a PDF, DOCX, TXT file, JPG/PNG/WebP image, LinkedIn CSV/ZIP export, or paste the text/link directly into ${brand.name}.`;
+      return `${file.name} is not a supported profile source yet. Drop a PDF, DOCX, TXT file, JPG/PNG/WebP/HEIC image, LinkedIn CSV/ZIP export, or paste the text/link directly into ${brand.name}.`;
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
@@ -3615,7 +3617,7 @@ function inferFileSourceType(file: File) {
   if (extension === "docx") return "docx";
   if (extension === "txt") return "txt";
   if (extension === "zip" || extension === "csv") return "linkedin";
-  if (["jpg", "jpeg", "png", "webp"].includes(extension ?? "")) {
+  if (["heic", "heif", "jpg", "jpeg", "png", "webp"].includes(extension ?? "")) {
     return "image";
   }
 

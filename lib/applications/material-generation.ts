@@ -713,7 +713,9 @@ function normalizeGeneratedApplicationResume(resume: ResumeContent, masterResume
         ? resume.experienceSections
         : (masterResume?.experienceSections ?? []),
     specialProjects:
-      resume.specialProjects.length > 0 ? resume.specialProjects : (masterResume?.specialProjects ?? []),
+      normalizeResumeContent(resume).specialProjects.length > 0
+        ? resume.specialProjects
+        : (masterResume?.specialProjects ?? []),
     languages: resume.languages.length > 0 ? resume.languages : (masterResume?.languages ?? []),
     education: resume.education.length > 0 ? resume.education : (masterResume?.education ?? []),
     certifications:

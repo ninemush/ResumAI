@@ -2,6 +2,16 @@
 
 This log records product-quality issues found during user-style validation. Fixes should be systemic unless a localized defect is clearly isolated.
 
+## 2026-06-05
+
+### Fixed: public pages had serious color-contrast accessibility failures
+
+- Area: public auth, legal, privacy, and credits pages.
+- Finding: the new axe accessibility smoke found serious WCAG AA color-contrast failures on muted body text, segmented controls, badges, and list text.
+- Impact: public-launch accessibility gate is not ready to pass, and lower-contrast text may be difficult for users with low vision or poor display conditions.
+- Fix: revised the affected design tokens and public-page text/accent colors so muted text and badges meet at least 4.5:1 contrast where required.
+- Verification: `npm run test:e2e:accessibility` passes for public pages. The signed-in workspace accessibility smoke remains skipped until QA demo credentials are configured.
+
 ## 2026-05-28
 
 ### Fixed: terms checkbox could fail silently

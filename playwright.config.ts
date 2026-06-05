@@ -14,17 +14,27 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "chrome-desktop",
+      name: "chromium-desktop",
       use: {
         ...devices["Desktop Chrome"],
-        channel: "chrome",
       },
     },
     {
-      name: "chrome-mobile",
+      name: "firefox-desktop",
+      use: {
+        ...devices["Desktop Firefox"],
+      },
+    },
+    {
+      name: "webkit-desktop",
+      use: {
+        ...devices["Desktop Safari"],
+      },
+    },
+    {
+      name: "chromium-mobile",
       use: {
         ...devices["Pixel 7"],
-        channel: "chrome",
       },
     },
   ],
