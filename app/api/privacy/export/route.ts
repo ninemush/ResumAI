@@ -9,7 +9,7 @@ import {
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "privacy_export"),
     limit: 4,
     windowMs: 60_000,

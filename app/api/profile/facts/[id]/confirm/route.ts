@@ -17,7 +17,7 @@ type RouteContext = {
 
 export async function POST(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "profile_fact_confirm"),
     limit: 120,
     windowMs: 60_000,
@@ -73,7 +73,7 @@ export async function POST(request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "profile_fact_update"),
     limit: 120,
     windowMs: 60_000,
@@ -151,7 +151,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "profile_fact_delete"),
     limit: 60,
     windowMs: 60_000,

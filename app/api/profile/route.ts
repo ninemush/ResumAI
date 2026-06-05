@@ -9,7 +9,7 @@ import {
 
 export async function PATCH(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "profile_update"),
     limit: 120,
     windowMs: 60_000,

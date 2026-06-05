@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   const email = parsed.data.email.trim().toLowerCase();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "password_sign_in", email),
     limit: 8,
     windowMs: 15 * 60_000,

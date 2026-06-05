@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { createClient } from "@/lib/supabase/server";
+
 type RateLimitOptions = {
   key: string;
   limit: number;
@@ -15,8 +17,36 @@ type RateLimitResult = {
 
 const buckets = new Map<string, { count: number; resetAt: number }>();
 const MAX_BUCKETS = 5000;
+const DURABLE_RATE_LIMIT_FAILURE_RETRY_SECONDS = 60;
 
-export function checkRateLimit({ key, limit, windowMs }: RateLimitOptions): RateLimitResult {
+export async function checkRateLimit(options: RateLimitOptions): Promise<RateLimitResult> {
+  if (shouldUseDurableRateLimit()) {
+    try {
+      return await checkDurableRateLimit(options);
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: "security.rate_limit.durable_failed",
+          scope: options.key.split(":")[0] ?? "unknown",
+          error: error instanceof Error ? error.message : "Unknown durable rate-limit failure.",
+        }),
+      );
+
+      if (process.env.NODE_ENV === "production") {
+        return {
+          allowed: false,
+          remaining: 0,
+          resetAt: Date.now() + DURABLE_RATE_LIMIT_FAILURE_RETRY_SECONDS * 1000,
+          retryAfterSeconds: DURABLE_RATE_LIMIT_FAILURE_RETRY_SECONDS,
+        };
+      }
+    }
+  }
+
+  return checkInMemoryRateLimit(options);
+}
+
+function checkInMemoryRateLimit({ key, limit, windowMs }: RateLimitOptions): RateLimitResult {
   const now = Date.now();
   const existing = buckets.get(key);
 
@@ -49,6 +79,68 @@ export function checkRateLimit({ key, limit, windowMs }: RateLimitOptions): Rate
     resetAt: existing.resetAt,
     retryAfterSeconds: 0,
   };
+}
+
+async function checkDurableRateLimit({
+  key,
+  limit,
+  windowMs,
+}: RateLimitOptions): Promise<RateLimitResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("check_rate_limit", {
+    p_bucket_key: key,
+    p_limit: limit,
+    p_window_ms: windowMs,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const result = Array.isArray(data) ? data[0] : data;
+
+  if (!isDurableRateLimitResult(result)) {
+    throw new Error("Rate-limit RPC returned an invalid response.");
+  }
+
+  return {
+    allowed: result.allowed,
+    remaining: result.remaining,
+    resetAt: new Date(result.reset_at).getTime(),
+    retryAfterSeconds: result.retry_after_seconds,
+  };
+}
+
+function isDurableRateLimitResult(value: unknown): value is {
+  allowed: boolean;
+  remaining: number;
+  reset_at: string;
+  retry_after_seconds: number;
+} {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const result = value as Record<string, unknown>;
+
+  return (
+    typeof result.allowed === "boolean" &&
+    typeof result.remaining === "number" &&
+    typeof result.reset_at === "string" &&
+    typeof result.retry_after_seconds === "number"
+  );
+}
+
+function shouldUseDurableRateLimit() {
+  if (process.env.RATE_LIMIT_BACKEND === "memory") {
+    return false;
+  }
+
+  if (process.env.RATE_LIMIT_BACKEND === "supabase") {
+    return true;
+  }
+
+  return process.env.NODE_ENV === "production";
 }
 
 export function getClientRateLimitKey(request: Request, scope: string, subject?: string) {

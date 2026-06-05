@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "auth_email_code_resend"),
     limit: 5,
     windowMs: 60_000,

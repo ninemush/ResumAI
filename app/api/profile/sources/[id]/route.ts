@@ -32,7 +32,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     );
   }
 
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "profile_source_delete"),
     limit: 12,
     windowMs: 60_000,

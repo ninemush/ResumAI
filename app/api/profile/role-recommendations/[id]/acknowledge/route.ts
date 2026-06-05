@@ -18,7 +18,7 @@ type RouteContext = {
 
 export async function POST(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "role_recommendation_acknowledge"),
     limit: 120,
     windowMs: 60_000,

@@ -15,7 +15,7 @@ const verifySchema = z.object({
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "auth_email_code_verify"),
     limit: 20,
     windowMs: 60_000,

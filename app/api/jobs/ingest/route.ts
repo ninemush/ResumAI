@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "job_ingest"),
     limit: 12,
     windowMs: 60_000,

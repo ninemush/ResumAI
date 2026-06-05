@@ -14,7 +14,7 @@ import {
 
 export async function GET(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "admin_incidents_read"),
     limit: 80,
     windowMs: 60_000,
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "admin_incident_create"),
     limit: 20,
     windowMs: 60_000,

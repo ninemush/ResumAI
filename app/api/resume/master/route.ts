@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "master_resume_generate"),
     limit: 8,
     windowMs: 60_000,
@@ -107,7 +107,7 @@ async function readOptionalJson(request: Request) {
 
 export async function PATCH(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "master_resume_update"),
     limit: 60,
     windowMs: 60_000,

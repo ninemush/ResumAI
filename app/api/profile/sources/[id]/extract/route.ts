@@ -43,7 +43,7 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "profile_source_extract"),
     limit: 10,
     windowMs: 60_000,

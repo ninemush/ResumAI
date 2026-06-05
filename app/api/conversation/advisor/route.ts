@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "conversation_advisor"),
     limit: 30,
     windowMs: 60_000,

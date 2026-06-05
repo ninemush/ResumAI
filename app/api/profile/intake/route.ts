@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "profile_intake"),
     limit: 20,
     windowMs: 60_000,

@@ -13,7 +13,7 @@ import {
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "admin-credit-grant"),
     limit: 30,
     windowMs: 60_000,

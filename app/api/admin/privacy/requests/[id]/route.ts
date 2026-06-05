@@ -20,7 +20,7 @@ const adminPrivacyPatchSchema = adminPrivacyRequestUpdateSchema.extend({
 
 export async function PATCH(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "admin_privacy_request_update"),
     limit: 40,
     windowMs: 60_000,

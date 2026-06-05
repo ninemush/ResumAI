@@ -30,7 +30,7 @@ const telemetryEventSchema = z.discriminatedUnion("eventType", [
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "telemetry_event"),
     limit: 240,
     windowMs: 60_000,

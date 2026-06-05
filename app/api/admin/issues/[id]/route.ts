@@ -15,7 +15,7 @@ type RouteContext = {
 
 export async function PATCH(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "admin_issue_update"),
     limit: 60,
     windowMs: 60_000,

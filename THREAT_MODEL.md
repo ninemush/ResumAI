@@ -99,6 +99,19 @@ Controls:
 - Redaction rules.
 - Request ids instead of sensitive payloads.
 
+### API Abuse And Burst Traffic
+
+Risk: attackers or malfunctioning clients overwhelm expensive routes, authentication endpoints, or user-data APIs.
+
+Controls:
+
+- Shared route-handler rate-limit helper.
+- Supabase-backed durable buckets in production.
+- Hashed rate-limit bucket storage to avoid retaining raw emails or IP-derived keys.
+- Atomic database updates for distributed serverless deployments.
+- Fail-closed production behavior when the durable limiter is unavailable.
+- Local in-memory buckets retained for development fallback.
+
 ### Secret Exposure
 
 Risk: service role keys, AI keys, or integration tokens reach browser code or Git.
@@ -115,7 +128,5 @@ Controls:
 - OCR provider choice.
 - PDF generation provider/library.
 - Error tracking provider.
-- Rate limiting implementation.
 - Integration strategy for LinkedIn/job sites.
 - Data retention durations.
-

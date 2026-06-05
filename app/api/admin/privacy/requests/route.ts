@@ -9,7 +9,7 @@ import {
 
 export async function GET(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "admin_privacy_requests_read"),
     limit: 80,
     windowMs: 60_000,

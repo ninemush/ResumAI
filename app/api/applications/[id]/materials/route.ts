@@ -75,7 +75,7 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "application_materials_generate"),
     limit: 8,
     windowMs: 60_000,
@@ -157,7 +157,7 @@ async function requireSignedInUser() {
 
 export async function PATCH(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "application_materials_update"),
     limit: 60,
     windowMs: 60_000,

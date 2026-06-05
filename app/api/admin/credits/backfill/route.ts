@@ -15,7 +15,7 @@ const backfillRequestSchema = z.object({
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "admin_credit_backfill"),
     limit: 10,
     windowMs: 60_000,

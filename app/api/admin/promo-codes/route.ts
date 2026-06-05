@@ -39,7 +39,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "admin_promo_create"),
     limit: 30,
     windowMs: 60_000,

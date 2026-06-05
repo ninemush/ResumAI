@@ -14,7 +14,7 @@ const redeemPromoSchema = z.object({
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "billing_promo_redeem"),
     limit: 20,
     windowMs: 60_000,
