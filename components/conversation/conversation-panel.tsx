@@ -1691,7 +1691,7 @@ export function ConversationPanel({
               handleFiles(files);
             }
           }}
-          placeholder="Share rough notes, role, link, certificate photo, or resume..."
+          placeholder="Notes, role, link, or resume..."
           rows={1}
           suppressHydrationWarning
           value={message}

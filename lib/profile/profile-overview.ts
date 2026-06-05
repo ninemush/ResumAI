@@ -12,6 +12,7 @@ type ProfileFact = {
   fact_type: string;
   fact_value: string;
   confidence: number | null;
+  source_ids: string[];
   user_confirmed: boolean;
   created_at: string;
 };
@@ -26,9 +27,13 @@ type ProfileSource = {
   detectedRoleCount: number;
   detectedRoleTitles: string[];
   extractedTextPreview: string | null;
+  linkedFactCount: number;
+  linkedFactTypes: string[];
   readableCharacterCount: number;
   previewUrl: string | null;
   original_filename: string | null;
+  readinessLabel: string;
+  valueBadges: string[];
   extraction_status: string;
   failure_reason: string | null;
   created_at: string;
@@ -130,7 +135,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
     await Promise.all([
       supabase
         .from("profile_facts")
-        .select("id, fact_type, fact_value, confidence, user_confirmed, created_at")
+        .select("id, fact_type, fact_value, confidence, source_ids, user_confirmed, created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false }),
       supabase
@@ -172,7 +177,7 @@ export async function getProfileOverview(userId: string): Promise<ProfileOvervie
   );
   const confirmedFactCount = profileFacts.filter((fact) => fact.user_confirmed).length;
   const photoUrl = await createProfilePhotoUrl(supabase, profile.photo_storage_path);
-  const recentSourcesWithPreviews = await addSourcePreviewUrls(supabase, recentSources ?? []);
+  const recentSourcesWithPreviews = await addSourcePreviewUrls(supabase, recentSources ?? [], profileFacts);
   const hasHeadline = Boolean(profile.headline);
   const hasSummary = Boolean(profile.summary);
   const hasTargetDirection = Boolean(profile.target_direction);
@@ -233,15 +238,23 @@ async function addSourcePreviewUrls(
     | "detectedRoleTitles"
     | "downloadUrl"
     | "extractedTextPreview"
+    | "linkedFactCount"
+    | "linkedFactTypes"
     | "previewUrl"
     | "readableCharacterCount"
+    | "readinessLabel"
+    | "valueBadges"
   > & {
     extracted_text?: string | null;
   })[],
+  facts: ProfileFact[],
 ) {
   return Promise.all(
     sources.map(async ({ extracted_text: extractedText, ...source }) => {
       const detectedExperience = summarizeDetectedExperience(extractedText);
+      const linkedFacts = facts.filter((fact) => fact.source_ids.includes(source.id));
+      const linkedFactTypes = Array.from(new Set(linkedFacts.map((fact) => titleize(fact.fact_type)))).sort();
+      const readableCharacterCount = extractedText?.replace(/\s+/g, " ").trim().length ?? 0;
 
       return {
         ...source,
@@ -250,10 +263,23 @@ async function addSourcePreviewUrls(
         detectedRoleTitles: detectedExperience.roleTitles,
         downloadUrl: source.storage_path ? `/api/profile/sources/${source.id}/download` : null,
         extractedTextPreview: formatSourceTextPreview(extractedText),
-        readableCharacterCount: extractedText?.replace(/\s+/g, " ").trim().length ?? 0,
+        linkedFactCount: linkedFacts.length,
+        linkedFactTypes,
+        readableCharacterCount,
         previewUrl: ["docx", "image", "pdf", "txt", "linkedin"].includes(source.source_type)
           ? await createProfileSourceUrl(supabase, source.storage_path)
           : null,
+        readinessLabel: formatSourceReadinessLabel({
+          extractionStatus: source.extraction_status,
+          linkedFactCount: linkedFacts.length,
+          readableCharacterCount,
+        }),
+        valueBadges: buildSourceValueBadges({
+          detectedRoleCount: detectedExperience.roleCount,
+          factTypes: linkedFactTypes,
+          readableCharacterCount,
+          sourceType: source.source_type,
+        }),
       };
     }),
   );
@@ -267,6 +293,51 @@ function summarizeDetectedExperience(value: string | null | undefined) {
     roleCount: sections.length,
     roleTitles: uniqueNonEmpty(sections.map((section) => section.roleTitle)).slice(0, 4),
   };
+}
+
+function formatSourceReadinessLabel({
+  extractionStatus,
+  linkedFactCount,
+  readableCharacterCount,
+}: {
+  extractionStatus: string;
+  linkedFactCount: number;
+  readableCharacterCount: number;
+}) {
+  if (extractionStatus === "failed") return "Needs a clearer copy";
+  if (extractionStatus === "processing" || extractionStatus === "pending") return "Reading";
+  if (linkedFactCount > 0) return "Linked to profile";
+  if (readableCharacterCount > 0) return "Readable evidence";
+  return "Saved";
+}
+
+function buildSourceValueBadges({
+  detectedRoleCount,
+  factTypes,
+  readableCharacterCount,
+  sourceType,
+}: {
+  detectedRoleCount: number;
+  factTypes: string[];
+  readableCharacterCount: number;
+  sourceType: string;
+}) {
+  const badges = new Set<string>();
+
+  if (readableCharacterCount > 0) badges.add("Readable text");
+  if (factTypes.length > 0) badges.add("Profile facts");
+  if (detectedRoleCount > 0 || factTypes.some((type) => /experience|project/i.test(type))) {
+    badges.add("Resume evidence");
+    badges.add("Job-fit signal");
+  }
+  if (/credential|education|certification|accolade/i.test(factTypes.join(" "))) {
+    badges.add("Credentials");
+  }
+  if (sourceType === "linkedin" || sourceType === "portfolio") {
+    badges.add("Public profile");
+  }
+
+  return Array.from(badges).slice(0, 5);
 }
 
 function uniqueNonEmpty(values: Array<string | null | undefined>) {

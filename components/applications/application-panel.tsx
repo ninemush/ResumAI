@@ -108,6 +108,7 @@ export function ApplicationPanel({
   const [resumeDraft, setResumeDraft] = useState<ResumeContent | null>(null);
   const [exportingApplicationId, setExportingApplicationId] = useState<string | null>(null);
   const [editingPlanApplicationId, setEditingPlanApplicationId] = useState<string | null>(null);
+  const [expandedApplicationId, setExpandedApplicationId] = useState<string | null>(null);
   const [generatingApplicationId, setGeneratingApplicationId] = useState<string | null>(null);
   const [loadingReviewApplicationId, setLoadingReviewApplicationId] = useState<string | null>(null);
   const [pendingApplicationId, setPendingApplicationId] = useState<string | null>(null);
@@ -454,21 +455,15 @@ export function ApplicationPanel({
         {applicationsInArchiveView.length > 0 && visibleApplications.length === 0 ? (
           <p className="empty-state">No applications in this stage yet.</p>
         ) : null}
-        {visibleApplications.length > 0 ? (
-          <div className="record-table-header application-record-header" aria-hidden="true">
-            <span>Role</span>
-            <span>Materials</span>
-            <span>Stage</span>
-            <span>Actions</span>
-          </div>
-        ) : null}
         {visibleApplications.map((application) => (
           <div className="application-record-shell" key={application.id}>
-            <article className="record-row application-record compact-application-row">
+            <article className="record-row application-record compact-application-row decision-card">
               <button
                 className="record-main-button application-title-cell"
-                onClick={() => loadReview(application.id)}
-                title="Open tailored materials and application details"
+                onClick={() =>
+                  setExpandedApplicationId(expandedApplicationId === application.id ? null : application.id)
+                }
+                title="Open application details"
                 type="button"
               >
                 <span className="record-title">{cleanDisplayText(application.jobTitle ?? "Application")}</span>
@@ -531,15 +526,6 @@ export function ApplicationPanel({
             </div>
 
             <div className="record-actions">
-              <a
-                className="secondary-action compact-action"
-                href={application.jobUrl}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <ExternalLink size={14} aria-hidden="true" />
-                Job
-              </a>
               {hasApplicationPacket(application) ? (
                 <button
                   className="secondary-action compact-action compact-action-primary"
@@ -568,39 +554,61 @@ export function ApplicationPanel({
                     : "Create packet"}
                 </button>
               )}
-              <button
-                className="secondary-action compact-action"
-                disabled={pendingApplicationId === application.id || Boolean(application.archivedAt)}
-                onClick={() => openPlanEditor(application)}
-                title={
-                  application.archivedAt
-                    ? "Restore this application before editing its follow-up plan"
-                    : "Plan the next follow-up"
-                }
-                type="button"
-              >
-                <CalendarClock size={14} aria-hidden="true" />
-                Plan
-              </button>
-              <button
-                className="secondary-action compact-action icon-only-action"
-                disabled={pendingApplicationId === application.id}
-                onClick={() => updateArchiveState(application.id, !application.archivedAt)}
-                title={
-                  application.archivedAt
-                    ? "Move this application back to current roles"
-                    : "Archive this application"
-                }
-                type="button"
-              >
-                {application.archivedAt ? (
-                  <RefreshCcw size={14} aria-hidden="true" />
-                ) : (
-                  <Archive size={14} aria-hidden="true" />
-                )}
-                <span>{application.archivedAt ? "Restore" : "Archive"}</span>
-              </button>
             </div>
+              {expandedApplicationId === application.id ? (
+                <div className="record-detail-panel application-detail-actions">
+                  <div className="application-detail-summary">
+                    <strong>{readApplicationNextAction(application)}</strong>
+                    <span>
+                      {formatFollowUpBadge(application) ??
+                        (application.followUpAt ? `Follow up ${formatShortDate(application.followUpAt)}` : "No follow-up date set")}
+                    </span>
+                  </div>
+                  <div className="record-action-strip">
+                    <a
+                      className="secondary-action compact-action"
+                      href={application.jobUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <ExternalLink size={14} aria-hidden="true" />
+                      Job post
+                    </a>
+                    <button
+                      className="secondary-action compact-action"
+                      disabled={pendingApplicationId === application.id || Boolean(application.archivedAt)}
+                      onClick={() => openPlanEditor(application)}
+                      title={
+                        application.archivedAt
+                          ? "Restore this application before editing its follow-up plan"
+                          : "Plan the next follow-up"
+                      }
+                      type="button"
+                    >
+                      <CalendarClock size={14} aria-hidden="true" />
+                      Plan follow-up
+                    </button>
+                    <button
+                      className="secondary-action compact-action"
+                      disabled={pendingApplicationId === application.id}
+                      onClick={() => updateArchiveState(application.id, !application.archivedAt)}
+                      title={
+                        application.archivedAt
+                          ? "Move this application back to current roles"
+                          : "Archive this application"
+                      }
+                      type="button"
+                    >
+                      {application.archivedAt ? (
+                        <RefreshCcw size={14} aria-hidden="true" />
+                      ) : (
+                        <Archive size={14} aria-hidden="true" />
+                      )}
+                      {application.archivedAt ? "Restore" : "Archive"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </article>
             {editingPlanApplicationId === application.id ? (
               <form

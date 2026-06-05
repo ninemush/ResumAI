@@ -6,6 +6,7 @@ import {
   BriefcaseBusiness,
   CircleDollarSign,
   Clock3,
+  Activity,
   ExternalLink,
   FileText,
   HeartHandshake,
@@ -19,6 +20,7 @@ import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState, useTransition } from "react";
 
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
+import type { PlatformStatusOverview } from "@/lib/admin/platform-status";
 import { brand } from "@/lib/brand";
 import type { ComplianceDashboard } from "@/lib/privacy/compliance-dashboard";
 import {
@@ -115,6 +117,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [compliance, setCompliance] = useState<ComplianceDashboard | null>(null);
   const [complianceMessage, setComplianceMessage] = useState<string | null>(null);
   const [complianceLoading, setComplianceLoading] = useState(false);
+  const [platformStatus, setPlatformStatus] = useState<PlatformStatusOverview | null>(null);
+  const [platformStatusMessage, setPlatformStatusMessage] = useState<string | null>(null);
+  const [platformStatusLoading, setPlatformStatusLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const filteredUsers = useMemo(() => {
@@ -304,6 +309,28 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       setCompliance(payload.compliance);
     } finally {
       setComplianceLoading(false);
+    }
+  }
+
+  async function loadPlatformStatus() {
+    setPlatformStatusLoading(true);
+    setPlatformStatusMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/platform-status", { cache: "no-store" });
+      const payload = (await response.json()) as {
+        error?: { message?: string };
+        status?: PlatformStatusOverview;
+      };
+
+      if (!response.ok || !payload.status) {
+        setPlatformStatusMessage(payload.error?.message ?? "Platform status could not be loaded.");
+        return;
+      }
+
+      setPlatformStatus(payload.status);
+    } finally {
+      setPlatformStatusLoading(false);
     }
   }
 
@@ -725,6 +752,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       <nav className="owner-tab-list" aria-label="Owner console sections">
         {[
           ["overview", "Overview"],
+          ["platform", "Platform Status"],
           ["users", "Users"],
           ["errors", "Errors"],
           ["support", "Support", metrics.support.ticketsOpen],
@@ -747,6 +775,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               }
               if (key === "compliance" && !compliance && !complianceLoading) {
                 void loadCompliance();
+              }
+              if (key === "platform" && !platformStatus && !platformStatusLoading) {
+                void loadPlatformStatus();
               }
             }}
             type="button"
@@ -779,6 +810,31 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               ]),
             )}
           />
+        </section>
+      ) : null}
+
+      {activeTab === "platform" ? (
+        <section className="owner-detail-panel owner-wide-panel" aria-label="Platform status">
+          <SectionHeading
+            eyebrow="Platform status"
+            title="Dependency health"
+            body="Owner-only view of service availability, recent failures, and artifact readiness. Diagnostics are aggregate and do not expose secrets."
+          />
+          <div className="owner-action-strip">
+            <button
+              className="owner-operating-action"
+              disabled={platformStatusLoading}
+              onClick={loadPlatformStatus}
+              type="button"
+            >
+              <span>Status</span>
+              <strong>{platformStatus ? formatLabel(platformStatus.overallStatus) : "Not loaded"}</strong>
+              <p>{platformStatus ? `Generated ${formatDateTime(platformStatus.generatedAt)}.` : "Load the latest platform status."}</p>
+              <small>{platformStatusLoading ? "Refreshing" : "Refresh status"}</small>
+            </button>
+          </div>
+          {platformStatusMessage ? <p className="system-note error">{platformStatusMessage}</p> : null}
+          {platformStatus ? <PlatformStatusPanel status={platformStatus} /> : null}
         </section>
       ) : null}
 
@@ -2021,6 +2077,35 @@ function TrendPanel({ title, values }: { title: string; values: OwnerMetrics["tr
         <span><BriefcaseBusiness size={14} /> Applications</span>
         <span><AlertTriangle size={14} /> Errors</span>
       </div>
+    </div>
+  );
+}
+
+function PlatformStatusPanel({ status }: { status: PlatformStatusOverview }) {
+  return (
+    <div className="platform-status-grid">
+      <article className={`platform-status-summary ${status.overallStatus}`}>
+        <Activity size={18} aria-hidden="true" />
+        <span>Overall</span>
+        <strong>{formatLabel(status.overallStatus)}</strong>
+        <p>
+          {status.recentSignals.activeErrors24h} active errors, {status.recentSignals.sourceFailures24h} source failures,
+          and {status.recentSignals.jobFailures24h} job failures in the last 24 hours.
+        </p>
+      </article>
+      {status.checks.map((check) => (
+        <article className={`platform-status-check ${check.state}`} key={check.label}>
+          <div>
+            <span>{check.label}</span>
+            <strong>{formatLabel(check.state)}</strong>
+          </div>
+          <p>{check.details}</p>
+          <small>
+            Last success {check.lastSuccessAt ? formatDateTime(check.lastSuccessAt) : "not recorded"} · Last failure{" "}
+            {check.lastFailureAt ? formatDateTime(check.lastFailureAt) : "not recorded"}
+          </small>
+        </article>
+      ))}
     </div>
   );
 }

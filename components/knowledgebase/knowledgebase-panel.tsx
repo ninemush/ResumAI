@@ -150,8 +150,8 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
 
       <section className="sources-panel" aria-label="Profile sources">
         <div className="section-heading">
-          <p className="eyebrow">Uploaded timeline</p>
-          <h2>Timeline</h2>
+          <p className="eyebrow">Evidence ledger</p>
+          <h2>Uploaded evidence</h2>
         </div>
         {overview.recentSources.length > 0 ? (
           <div className="record-filter-strip" aria-label="Source filters">
@@ -180,8 +180,25 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
                   <SourcePreviewThumb source={source} onOpen={() => setActiveSource(source)} />
                   <div>
                     <h3>{source.original_filename ?? formatSourceUrl(source.source_url)}</h3>
-                    <p>{formatSourceType(source.source_type)}</p>
+                    <p>{formatSourceType(source.source_type)} · {source.readinessLabel}</p>
                     <p className="source-timestamp">{formatSourceTimestamp(source.created_at)}</p>
+                    <div className="source-contribution-row" aria-label="Source contribution">
+                      <span>{source.readableCharacterCount.toLocaleString()} readable chars</span>
+                      <span>{source.detectedRoleCount} detected role{source.detectedRoleCount === 1 ? "" : "s"}</span>
+                      <span>{source.linkedFactCount} linked fact{source.linkedFactCount === 1 ? "" : "s"}</span>
+                    </div>
+                    {source.valueBadges.length > 0 ? (
+                      <div className="source-value-badges" aria-label="Source value">
+                        {source.valueBadges.map((badge) => (
+                          <span key={badge}>{badge}</span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {source.linkedFactTypes.length > 0 ? (
+                      <p className="source-linked-facts">
+                        Contributed {source.linkedFactTypes.join(", ").toLowerCase()} evidence.
+                      </p>
+                    ) : null}
                     <div className="source-capability-row" aria-label="Source capabilities">
                       {buildSourceCapabilities(source).map((capability) => (
                         <span className={capability.tone} key={capability.label}>

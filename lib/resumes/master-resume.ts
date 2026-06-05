@@ -21,10 +21,10 @@ import {
   dedupeResumeExperienceSections,
   dedupeResumeSpecialProjects,
   normalizeResumeContent,
-  parseResumeContent,
   resumeContentSchema,
   type ResumeContent,
 } from "@/lib/resumes/resume-content";
+import { sanitizeResumeContent } from "@/lib/resumes/resume-quality";
 import { extractExperienceSectionsFromText } from "@/lib/resumes/source-experience";
 import { createClient } from "@/lib/supabase/server";
 
@@ -44,6 +44,10 @@ type ConfirmedFact = {
   confidence: number | null;
   fact_type: string;
   fact_value: string;
+  id: string;
+  origin: string | null;
+  source_ids: string[] | null;
+  user_confirmed: boolean | null;
 };
 
 type ProfileRecord = {
@@ -67,10 +71,38 @@ type ResumeRow = {
 };
 
 type SourceEvidence = {
+  id: string;
+  created_at?: string | null;
   extracted_text: string | null;
   original_filename: string | null;
   source_type: string;
   source_url: string | null;
+};
+
+type MasterResumeEvidenceBundle = {
+  facts: {
+    confidence: number | null;
+    factType: string;
+    factValue: string;
+    sourceLabels: string[];
+    support: "confirmed" | "source_linked" | "profile_fact";
+  }[];
+  sourceTimelines: {
+    label: string;
+    roles: {
+      bullets: string[];
+      company: string | null;
+      dates: string | null;
+      location: string | null;
+      roleTitle: string;
+    }[];
+  }[];
+  sources: {
+    label: string;
+    linkedFactTypes: string[];
+    readableCharacters: number;
+    sourceType: string;
+  }[];
 };
 
 export type MasterResumeOverview = {
@@ -129,7 +161,7 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
     await Promise.all([
       supabase
         .from("profile_facts")
-        .select("fact_type, fact_value, confidence")
+        .select("id, fact_type, fact_value, confidence, origin, source_ids, user_confirmed")
         .eq("profile_id", profile.id)
         .eq("user_id", userId)
         .order("confidence", { ascending: false })
@@ -146,7 +178,7 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
         .maybeSingle(),
       supabase
         .from("profile_sources")
-        .select("source_type, source_url, original_filename, extracted_text")
+        .select("id, source_type, source_url, original_filename, extracted_text, created_at")
         .eq("profile_id", profile.id)
         .eq("user_id", userId)
         .not("extracted_text", "is", null)
@@ -577,7 +609,7 @@ If the source is a LinkedIn profile PDF or archive, use its role history as the 
 }
 
 function parseMasterResumeModelOutput(outputText: string) {
-  return normalizeResumeContent(resumeContentSchema.parse(JSON.parse(stripJsonFence(outputText))));
+  return sanitizeResumeContent(resumeContentSchema.parse(JSON.parse(stripJsonFence(outputText)))).content;
 }
 
 function enrichMasterResumeWithSourceEvidence(
@@ -1040,13 +1072,20 @@ function extractResumeSpecialProjectsFromSources(sourceEvidence: SourceEvidence[
 
 function extractResumeSpecialProjectsFromFacts(confirmedFacts: ConfirmedFact[]) {
   return confirmedFacts
+    .filter((fact) => fact.user_confirmed || (fact.source_ids?.length ?? 0) > 0)
     .filter((fact) =>
-      /\b(?:project|initiative|program|portfolio|publication)\b/i.test(
-        fact.fact_type,
+      /\b(?:project|initiative|program|publication)\b/i.test(fact.fact_type) ||
+      /\b(?:project|initiative|program(?:me)?|implementation|migration|rollout|launch|integration|automation|redesign|deployment|optimization|publication)\b/i.test(
+        fact.fact_value,
       ),
     )
     .map((fact) => fact.fact_value.replace(/\s+/g, " ").trim())
     .filter((value) => value.length >= 12)
+    .filter((value) =>
+      /\b(?:built|created|launched|led|delivered|implemented|migrated|integrated|designed|redesigned|automated|optimized|improved|reduced|increased|published|awarded|won|shipped|deployed|transformed|coordinated|managed)\b/i.test(
+        value,
+      ),
+    )
     .filter(
       (value) =>
         !/\b(recommendation|recommended|worked with|pleasure|reported to|managed directly|colleague)\b/i.test(
@@ -1196,7 +1235,7 @@ export async function updateMasterResume(
   input: z.input<typeof updateMasterResumeSchema>,
 ): Promise<MasterResumeOverview> {
   const parsed = updateMasterResumeSchema.parse(input);
-  const normalizedResume = normalizeResumeContent(parsed.resume);
+  const { content: normalizedResume } = sanitizeResumeContent(parsed.resume);
   const { supabase, userId } = await getAuthenticatedContext();
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -1324,7 +1363,7 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeArtifac
 
   const { data: sourceEvidence, error: sourceError } = await supabase
     .from("profile_sources")
-    .select("source_type, source_url, original_filename, extracted_text")
+    .select("id, source_type, source_url, original_filename, extracted_text, created_at")
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .not("extracted_text", "is", null)
@@ -1340,7 +1379,7 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeArtifac
 
   const { data: confirmedFacts, error: factsError } = await supabase
     .from("profile_facts")
-    .select("fact_type, fact_value, confidence")
+    .select("id, fact_type, fact_value, confidence, origin, source_ids, user_confirmed")
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .order("confidence", { ascending: false })
@@ -1350,7 +1389,7 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeArtifac
     throw new Error("PROFILE_FACTS_READ_FAILED");
   }
 
-  const resume = parseResumeContent(latestResume.content_json);
+  const { content: resume } = sanitizeResumeContent(latestResume.content_json);
   const normalizedResume = normalizeResumeForSavedRead({
     confirmedFacts: confirmedFacts ?? [],
     resume,
@@ -1450,14 +1489,14 @@ async function readMasterResumeContext(userId: string) {
 
   const { data: confirmedFacts, error: factsError } = await supabase
     .from("profile_facts")
-    .select("fact_type, fact_value, confidence")
+    .select("id, fact_type, fact_value, confidence, origin, source_ids, user_confirmed")
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .order("confidence", { ascending: false })
     .limit(80);
   const { data: sourceEvidence, error: sourceError } = await supabase
     .from("profile_sources")
-    .select("source_type, source_url, original_filename, extracted_text")
+    .select("id, source_type, source_url, original_filename, extracted_text, created_at")
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .not("extracted_text", "is", null)
@@ -1524,7 +1563,7 @@ async function buildOverview({
         ? {
           content: normalizeResumeForSavedRead({
             confirmedFacts,
-            resume: parseResumeContent(latestResume.content_json),
+            resume: sanitizeResumeContent(latestResume.content_json).content,
             sourceEvidence,
             promptVersion: latestResume.prompt_version,
           }),
@@ -1552,7 +1591,7 @@ function normalizeResumeForSavedRead({
   resume: ResumeContent;
   sourceEvidence: SourceEvidence[];
 }) {
-  const normalizedResume = normalizeResumeContent(resume);
+  const { content: normalizedResume } = sanitizeResumeContent(resume);
 
   if (promptVersion === MASTER_RESUME_PROMPT_VERSION || sourceEvidence.length === 0) {
     return enrichMasterResumeWithConfirmedFacts(normalizedResume, confirmedFacts);
@@ -1738,6 +1777,11 @@ function buildMasterResumeInput({
   profile: ProfileRecord;
   sourceEvidence: SourceEvidence[];
 }) {
+  const evidenceBundle = buildMasterResumeEvidenceBundle({
+    confirmedFacts,
+    sourceEvidence,
+  });
+
   return `
 Profile:
 - Name: ${profile.display_name ?? "Not provided"}
@@ -1749,6 +1793,9 @@ Profile:
 Profile evidence:
 ${confirmedFacts.map((fact) => `- ${fact.fact_type}: ${fact.fact_value}`).join("\n")}
 
+Evidence bundle:
+${formatMasterResumeEvidenceBundle(evidenceBundle)}
+
 Readable source excerpts:
 ${formatSourceEvidenceForPrompt(sourceEvidence)}
 
@@ -1756,6 +1803,11 @@ Treat readable source excerpts as user-provided evidence. If extracted profile
 facts are thin but source excerpts contain structured LinkedIn/resume history,
 use the source excerpts to build role-based experience sections. Keep claims
 grounded in the excerpt text.
+
+Only use Special Projects when the evidence bundle or readable excerpts show a
+standalone initiative with action, context or source support, and non-testimonial
+language. Do not use broad labels, praise, recommendations, or unsupported
+portfolio/program wording as projects.
 
 Profile intelligence:
 - Evidence strength: ${intelligence.evidenceStrength}
@@ -1779,6 +1831,102 @@ ${instruction ?? "No extra instruction."}
 
 Return structured JSON only.
 `.trim();
+}
+
+function buildMasterResumeEvidenceBundle({
+  confirmedFacts,
+  sourceEvidence,
+}: {
+  confirmedFacts: ConfirmedFact[];
+  sourceEvidence: SourceEvidence[];
+}): MasterResumeEvidenceBundle {
+  const sourceById = new Map(sourceEvidence.map((source) => [source.id, source]));
+  const factTypesBySourceId = new Map<string, Set<string>>();
+
+  for (const fact of confirmedFacts) {
+    for (const sourceId of fact.source_ids ?? []) {
+      const types = factTypesBySourceId.get(sourceId) ?? new Set<string>();
+      types.add(fact.fact_type);
+      factTypesBySourceId.set(sourceId, types);
+    }
+  }
+
+  return {
+    facts: confirmedFacts.slice(0, 80).map((fact) => {
+      const sourceLabels = (fact.source_ids ?? [])
+        .map((sourceId) => sourceById.get(sourceId))
+        .filter((source): source is SourceEvidence => Boolean(source))
+        .map(formatSourceEvidenceLabel)
+        .slice(0, 4);
+
+      return {
+        confidence: fact.confidence,
+        factType: fact.fact_type,
+        factValue: fact.fact_value,
+        sourceLabels,
+        support: fact.user_confirmed
+          ? "confirmed"
+          : sourceLabels.length > 0
+            ? "source_linked"
+            : "profile_fact",
+      };
+    }),
+    sources: sourceEvidence.map((source) => ({
+      label: formatSourceEvidenceLabel(source),
+      linkedFactTypes: Array.from(factTypesBySourceId.get(source.id) ?? []).sort(),
+      readableCharacters: source.extracted_text?.replace(/\s+/g, " ").trim().length ?? 0,
+      sourceType: source.source_type,
+    })),
+    sourceTimelines: sourceEvidence
+      .map((source) => ({
+        label: formatSourceEvidenceLabel(source),
+        roles: extractExperienceSectionsFromText(stripRecommendationSourceSections(source.extracted_text ?? ""))
+          .slice(0, 8)
+          .map((section) => ({
+            bullets: section.bullets.slice(0, 4),
+            company: section.company,
+            dates: section.dates,
+            location: section.location,
+            roleTitle: section.roleTitle,
+          })),
+      }))
+      .filter((source) => source.roles.length > 0),
+  };
+}
+
+function formatMasterResumeEvidenceBundle(bundle: MasterResumeEvidenceBundle) {
+  const factLines = bundle.facts
+    .slice(0, 24)
+    .map((fact) => {
+      const sourceNote =
+        fact.sourceLabels.length > 0 ? `; sources: ${fact.sourceLabels.join(", ")}` : "";
+      return `- ${fact.factType} [${fact.support}${sourceNote}]: ${fact.factValue}`;
+    });
+  const sourceLines = bundle.sources.map(
+    (source) =>
+      `- ${source.label}: ${source.sourceType}, ${source.readableCharacters} readable chars, linked fact types ${source.linkedFactTypes.join(", ") || "none"}`,
+  );
+  const timelineLines = bundle.sourceTimelines.flatMap((source) => [
+    `- ${source.label}`,
+    ...source.roles.map((role) => {
+      const meta = [role.roleTitle, role.company, role.dates, role.location].filter(Boolean).join(" | ");
+      const bullets = role.bullets.length > 0 ? `; bullets: ${role.bullets.join(" / ")}` : "";
+      return `  - ${meta}${bullets}`;
+    }),
+  ]);
+
+  return [
+    "Facts with support:",
+    factLines.length > 0 ? factLines.join("\n") : "- None",
+    "Sources:",
+    sourceLines.length > 0 ? sourceLines.join("\n") : "- None",
+    "Parsed role timelines:",
+    timelineLines.length > 0 ? timelineLines.join("\n") : "- None",
+  ].join("\n");
+}
+
+function formatSourceEvidenceLabel(source: SourceEvidence) {
+  return source.original_filename ?? source.source_url ?? source.source_type;
 }
 
 function formatIntelligenceDomainReadForPrompt(intelligence: ProfileIntelligence) {

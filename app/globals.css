@@ -2318,6 +2318,72 @@ input:focus {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.platform-status-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.platform-status-summary,
+.platform-status-check {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.platform-status-summary {
+  grid-row: span 2;
+}
+
+.platform-status-summary svg {
+  color: var(--sage-strong);
+}
+
+.platform-status-summary span,
+.platform-status-check span {
+  color: var(--pr-antique-gold);
+  font-family: var(--font-pr-mono), monospace;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.platform-status-summary strong,
+.platform-status-check strong {
+  color: var(--foreground);
+  font-size: 1.05rem;
+}
+
+.platform-status-summary p,
+.platform-status-check p,
+.platform-status-check small {
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.platform-status-check div {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.platform-status-summary.degraded,
+.platform-status-check.degraded {
+  border-color: rgba(185, 155, 103, 0.46);
+}
+
+.platform-status-summary.down,
+.platform-status-check.down {
+  border-color: rgba(159, 63, 54, 0.36);
+}
+
 .compact-panel {
   align-content: start;
 }
@@ -2660,7 +2726,7 @@ input:focus {
 }
 
 .owner-credit-card-header svg {
-  color: var(--pr-navy);
+  color: var(--foreground);
   flex: 0 0 auto;
   margin-top: 2px;
 }
@@ -2788,7 +2854,7 @@ input:focus {
 }
 
 .owner-tier-active-toggle input {
-  accent-color: var(--pr-navy);
+  accent-color: var(--foreground);
   min-height: auto;
   width: auto;
 }
@@ -2939,9 +3005,10 @@ input:focus {
 }
 
 .owner-action-button.primary {
-  background: var(--pr-navy);
-  border: 1px solid var(--pr-navy);
-  color: #fff;
+  background: var(--foreground);
+  border: 1px solid var(--foreground);
+  color: var(--pr-soft-ivory);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.16);
 }
 
 .owner-action-button.secondary {
@@ -2957,6 +3024,13 @@ input:focus {
 .owner-action-button.primary:not(:disabled):hover {
   background: #1b2b42;
   border-color: #1b2b42;
+  color: #fff;
+}
+
+.owner-action-button.primary:focus-visible {
+  box-shadow: 0 0 0 3px rgba(185, 155, 103, 0.34);
+  outline: 2px solid var(--pr-antique-gold);
+  outline-offset: 2px;
 }
 
 .owner-action-button.secondary:not(:disabled):hover {
@@ -5311,12 +5385,33 @@ input:focus {
   min-width: 0;
 }
 
+.decision-card {
+  align-items: stretch;
+  border-radius: var(--pr-radius-sm);
+  grid-template-columns: minmax(0, 1fr) minmax(104px, auto) minmax(126px, auto) minmax(132px, auto);
+  padding: 16px;
+}
+
+.decision-card .record-actions {
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.decision-card .compact-action-primary {
+  background: rgba(18, 30, 45, 0.96);
+  border-color: rgba(18, 30, 45, 0.96);
+  color: #fff;
+}
+
+.decision-card .compact-action-primary:hover {
+  background: #1b2b42;
+}
+
 .application-record .record-actions {
   align-items: stretch;
-  display: grid;
+  display: flex;
   gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
-  justify-content: stretch;
+  justify-content: flex-end;
 }
 
 .application-record .record-actions .compact-action {
@@ -5479,22 +5574,43 @@ input:focus {
 
 .record-action-strip {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
 }
 
 .job-record {
   grid-template-columns:
-    minmax(0, 1fr) minmax(82px, auto) minmax(78px, auto)
-    auto;
+    minmax(0, 1fr) minmax(104px, auto) minmax(126px, auto)
+    minmax(132px, auto);
 }
 
 .application-record {
   grid-template-columns:
-    minmax(220px, 1.25fr) minmax(180px, 0.9fr) minmax(132px, 0.5fr)
-    minmax(190px, 0.8fr);
+    minmax(220px, 1.2fr) minmax(180px, 0.9fr) minmax(136px, auto)
+    minmax(132px, auto);
   max-width: 100%;
   min-width: 0;
+}
+
+.application-detail-actions {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.application-detail-summary {
+  display: grid;
+  gap: 4px;
+}
+
+.application-detail-summary strong {
+  color: var(--foreground);
+  font-size: 0.86rem;
+}
+
+.application-detail-summary span {
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .application-record > .record-subnote {
@@ -6676,6 +6792,37 @@ input:focus {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+.source-contribution-row,
+.source-value-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.source-contribution-row span,
+.source-value-badges span {
+  border: 1px solid rgba(185, 155, 103, 0.24);
+  border-radius: 999px;
+  color: var(--pr-antique-gold);
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1;
+  padding: 6px 8px;
+}
+
+.source-contribution-row span {
+  background: rgba(255, 255, 255, 0.64);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.source-linked-facts {
+  color: var(--sage-strong) !important;
+  font-size: 0.78rem !important;
+  font-weight: 850;
 }
 
 .source-capability-row span {
@@ -7906,6 +8053,7 @@ input:focus {
   border-radius: var(--pr-radius-pill);
   display: grid;
   gap: 6px;
+  grid-template-areas: "attach voice message send";
   grid-template-columns: 36px 36px minmax(0, 1fr) 44px;
   min-height: 58px;
   min-width: 0;
@@ -7973,6 +8121,7 @@ input:focus {
   resize: none;
   width: 100%;
   word-break: break-word;
+  grid-area: message;
 }
 
 .chat-input textarea:focus {
@@ -7992,6 +8141,7 @@ input:focus {
 .chat-input .attach-button {
   background: transparent;
   color: var(--muted);
+  grid-area: attach;
   height: 36px;
   min-width: 36px;
 }
@@ -7999,8 +8149,13 @@ input:focus {
 .chat-input .voice-button {
   background: transparent;
   color: var(--muted);
+  grid-area: voice;
   height: 36px;
   min-width: 36px;
+}
+
+.chat-input button[type="submit"] {
+  grid-area: send;
 }
 
 .chat-input .attach-button:hover,
@@ -8623,6 +8778,7 @@ input:focus {
   .settings-cost-row,
   .sources-helper-panel,
   .owner-metric-grid,
+  .platform-status-grid,
   .fit-review-grid,
   .profile-editor-grid,
   .application-plan-editor,

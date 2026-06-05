@@ -154,4 +154,78 @@ describe("resume content normalization", () => {
     expect(normalized.certifications).toHaveLength(1);
     expect(normalized.experienceSections).toHaveLength(1);
   });
+
+  test("removes special project bullets that duplicate the project title", () => {
+    const normalized = normalizeResumeContent({
+      certifications: [],
+      contact: {},
+      education: [],
+      experienceBullets: [],
+      experienceSections: [
+        {
+          bullets: ["Led the operating model workstream for a regional rollout."],
+          company: "Example Group",
+          dates: "2021 - Present",
+          location: "Dubai",
+          roleTitle: "Operations Lead",
+        },
+      ],
+      headline: "Operations Lead",
+      keywordGaps: [],
+      reviewerNotes: [],
+      skills: ["Operations"],
+      specialProjects: [
+        {
+          bullets: [
+            "WMS rollout project",
+            "Led the WMS rollout across warehouse teams and coordinated adoption.",
+          ],
+          context: "Example Group",
+          dates: "2023",
+          name: "WMS rollout project",
+        },
+      ],
+      summary: "Operations leader.",
+    });
+
+    expect(normalized.specialProjects).toEqual([
+      {
+        bullets: ["Led the WMS rollout across warehouse teams and coordinated adoption."],
+        context: "Example Group",
+        dates: "2023",
+        name: "WMS rollout project",
+      },
+    ]);
+  });
+
+  test("rejects broad project-like labels without action and provenance", () => {
+    const normalized = normalizeResumeContent({
+      certifications: [],
+      contact: {},
+      education: [],
+      experienceBullets: ["Managed operations planning across regional teams."],
+      experienceSections: [],
+      headline: "Operations Manager",
+      keywordGaps: [],
+      reviewerNotes: [],
+      skills: ["Operations"],
+      specialProjects: [
+        {
+          bullets: ["Portfolio of operational excellence and leadership achievements."],
+          context: null,
+          dates: null,
+          name: "Leadership portfolio",
+        },
+        {
+          bullets: ["Implemented scheduling automation and improved weekly planning handoffs."],
+          context: null,
+          dates: null,
+          name: "Scheduling automation project",
+        },
+      ],
+      summary: "Operations manager.",
+    });
+
+    expect(normalized.specialProjects).toEqual([]);
+  });
 });

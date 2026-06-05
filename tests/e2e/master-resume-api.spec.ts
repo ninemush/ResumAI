@@ -29,6 +29,24 @@ test("normalizes invalid master resume edit errors", async ({ request }) => {
   expectApiErrorEnvelope(payload, "request.invalid_json");
 });
 
+test("requires owner access before reading platform status", async ({ request }) => {
+  const response = await request.get("/api/admin/platform-status");
+  const payload = await response.json();
+
+  expect(response.status()).toBe(403);
+  expectApiErrorEnvelope(payload, "admin.required");
+});
+
+test("requires owner access before repairing master resumes", async ({ request }) => {
+  const response = await request.post("/api/admin/resume-repair", {
+    data: { dryRun: true },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(403);
+  expectApiErrorEnvelope(payload, "admin.required");
+});
+
 function expectApiErrorEnvelope(payload: {
   error?: {
     code?: string;

@@ -313,16 +313,8 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         {jobsInArchiveView.length > 0 && visibleJobs.length === 0 ? (
           <p className="empty-state">No roles match this filter yet.</p>
         ) : null}
-        {visibleJobs.length > 0 ? (
-          <div className="record-table-header job-record-header" aria-hidden="true">
-            <span>Role</span>
-            <span>Decision</span>
-            <span>Fit</span>
-            <span>Next action</span>
-          </div>
-        ) : null}
         {visibleJobs.map((job) => (
-          <article className="record-row job-record" key={job.id}>
+          <article className="record-row job-record decision-card" key={job.id}>
             <button
               className="record-main-button"
               onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
@@ -354,39 +346,9 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
             </div>
 
             <div className="record-actions">
-              <button
-                className="secondary-action compact-action"
-                onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
-                type="button"
-              >
-                {expandedJobId === job.id ? "Hide" : "Details"}
-              </button>
-              <a
-                className="secondary-action compact-action"
-                href={job.resolved_url ?? job.job_url}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <ExternalLink size={14} aria-hidden="true" />
-                Open
-              </a>
-              <button
-                className="secondary-action compact-action"
-                disabled={pendingJobId === job.id}
-                onClick={() => updateArchiveState(job.id, !job.archived_at)}
-                title={job.archived_at ? "Move this role back to the active queue" : "Archive this role"}
-                type="button"
-              >
-                {job.archived_at ? (
-                  <RefreshCcw size={14} aria-hidden="true" />
-                ) : (
-                  <Archive size={14} aria-hidden="true" />
-                )}
-                {job.archived_at ? "Restore" : "Archive"}
-              </button>
-              {!job.archived_at && job.ingestion_status === "succeeded" ? (
+              {!job.archived_at && job.ingestion_status === "succeeded" && job.review_status === "accepted" ? (
                 <button
-                  className="secondary-action compact-action"
+                  className="secondary-action compact-action compact-action-primary"
                   disabled={pendingJobId === job.id}
                   onClick={() => logApplication(job.id)}
                   title="Create a draft application record before generating role-specific materials"
@@ -397,7 +359,15 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                     ? "Preparing"
                     : "Save to pursue"}
                 </button>
-              ) : null}
+              ) : (
+                <button
+                  className="secondary-action compact-action compact-action-primary"
+                  onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
+                  type="button"
+                >
+                  {job.review_status === "needs_review" ? "Review" : expandedJobId === job.id ? "Hide" : "Details"}
+                </button>
+              )}
             </div>
 
             {expandedJobId === job.id ? (
@@ -423,6 +393,15 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                   />
                 </div>
                 <div className="record-action-strip">
+                  <a
+                    className="secondary-action compact-action"
+                    href={job.resolved_url ?? job.job_url}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <ExternalLink size={14} aria-hidden="true" />
+                    Open post
+                  </a>
                   {job.archived_at ? (
                     <button
                       className="secondary-action compact-action"
@@ -453,6 +432,16 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                         type="button"
                       >
                         Accept
+                      </button>
+                      <button
+                        className="secondary-action compact-action"
+                        disabled={pendingJobId === job.id}
+                        onClick={() => updateArchiveState(job.id, true)}
+                        title="Archive this role"
+                        type="button"
+                      >
+                        <Archive size={14} aria-hidden="true" />
+                        Archive
                       </button>
                     </>
                   )}

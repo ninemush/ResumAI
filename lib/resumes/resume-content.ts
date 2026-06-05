@@ -151,18 +151,20 @@ export function normalizeResumeContent(value: z.input<typeof resumeContentSchema
   const specialProjects = dedupeResumeSpecialProjects(
     parsed.specialProjects
       .map((item) => ({
+        name: stripResumeUiLabels(cleanResumeText(item.name, 160)),
+        context: cleanNullableText(item.context ?? null, 160),
+        dates: cleanResumeDateRange(item.dates),
         bullets: item.bullets
           .map((bullet) => cleanResumeText(bullet, 320))
           .filter(
             (bullet) =>
               bullet &&
+              !looksLikeDuplicateProjectTitle(item.name, bullet) &&
               !looksLikeGeneratedPlaceholderBullet(bullet) &&
-              !looksLikeRecommendationOrTestimonial(bullet),
+              !looksLikeRecommendationOrTestimonial(bullet) &&
+              !looksLikeVaguePraiseOrUnsupportedClaim(bullet),
           )
           .slice(0, 5),
-        context: cleanNullableText(item.context ?? null, 160),
-        dates: cleanResumeDateRange(item.dates),
-        name: stripResumeUiLabels(cleanResumeText(item.name, 160)),
       }))
       .filter(
         (item) =>
@@ -604,22 +606,43 @@ function looksLikeSupportedSpecialProject(
   }
 
   const hasProjectSignal =
-    /\b(?:project|initiative|program(?:me)?|portfolio|transformation|implementation|migration|rollout|launch|integration|platform|system|automation|redesign|build|deployment|upgrade|optimization|campaign|client|advisory|research|publication|award)\b/i.test(
+    /\b(?:project|initiative|program(?:me)?|transformation|implementation|migration|rollout|launch|integration|platform|system|automation|redesign|build|deployment|upgrade|optimization|campaign|client|advisory|research|publication|award)\b/i.test(
       combined,
     );
   const hasProvenance = Boolean(project.context || project.dates || project.bullets.length > 1);
   const hasActionBullet = project.bullets.some((bullet) =>
-    /\b(?:built|created|launched|led|delivered|implemented|migrated|integrated|designed|redesigned|automated|optimized|published|awarded|won|shipped|deployed|transformed|coordinated|managed)\b/i.test(
+    /\b(?:built|created|launched|led|delivered|implemented|migrated|integrated|designed|redesigned|automated|optimized|improved|reduced|increased|published|awarded|won|shipped|deployed|transformed|coordinated|managed)\b/i.test(
       bullet,
     ),
   );
 
-  return hasProjectSignal || (hasProvenance && hasActionBullet && normalizedName.length > 4);
+  return hasProjectSignal && hasProvenance && hasActionBullet && normalizedName.length > 4;
 }
 
 function looksLikeRecommendationOrTestimonial(value: string) {
   return /\b(recommendation|recommendations received|recommendations given|received from|testimonial|endorsement|endorsements received|endorsements given|reference|worked with|worked directly with|had the pleasure|same team|reported to|colleague|managed me|direct report|recommend(?:ed|s)?\b|he is an?|she is an?|pleasure to share|excellent professional|best of the new generation|top skills)\b/i.test(
     value,
+  );
+}
+
+function looksLikeVaguePraiseOrUnsupportedClaim(value: string) {
+  return /\b(?:proven track record|highly motivated|dynamic professional|visionary leader|exceptional professional|excellent professional|best of the new generation|top performer|world[-\s]?class|thought leader|passionate professional|strong communicator|natural leader)\b/i.test(
+    value,
+  );
+}
+
+function looksLikeDuplicateProjectTitle(name: string, bullet: string) {
+  const normalizedName = normalizeComparableText(name);
+  const normalizedBullet = normalizeComparableText(bullet);
+
+  if (!normalizedName || !normalizedBullet) {
+    return false;
+  }
+
+  return (
+    normalizedName === normalizedBullet ||
+    normalizedBullet === `${normalizedName} project` ||
+    normalizedBullet.startsWith(`${normalizedName} `) && normalizedBullet.length <= normalizedName.length + 24
   );
 }
 
