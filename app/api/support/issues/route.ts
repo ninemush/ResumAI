@@ -46,7 +46,10 @@ export async function GET() {
           "root_cause_category",
           "suggested_fix",
           "fix_status",
-          "owner_notes",
+          "user_visible_resolution",
+          "reopen_until",
+          "auto_closed_at",
+          "closed_reason",
         ].join(", "),
       )
       .eq("user_id", user.id)
@@ -66,8 +69,10 @@ export async function GET() {
           created_at: string;
           fix_status: string;
           id: string;
-          owner_notes: string | null;
+          auto_closed_at: string | null;
+          closed_reason: string | null;
           priority: string;
+          reopen_until: string | null;
           root_cause: string | null;
           root_cause_category: string | null;
           status: string;
@@ -75,23 +80,28 @@ export async function GET() {
           suggested_fix: string | null;
           summary: string;
           updated_at: string;
+          user_visible_resolution: string | null;
         };
+        const visibleStatus = readVisibleSupportStatus(ticket.status, ticket.reopen_until);
 
         return {
           area: ticket.area,
+          auto_closed_at: ticket.auto_closed_at,
+          closed_reason: ticket.closed_reason,
           created_at: ticket.created_at,
           fix_status: ticket.fix_status,
           id: ticket.id,
-          owner_notes: ticket.owner_notes,
           priority: ticket.priority,
+          reopen_until: ticket.reopen_until,
           root_cause: ticket.root_cause,
           root_cause_category: ticket.root_cause_category,
           shortId: supportIssueShortId(ticket.id),
-          status: ticket.status,
+          status: visibleStatus,
           subject: ticket.subject,
           suggested_fix: ticket.suggested_fix,
           summary: ticket.summary,
           updated_at: ticket.updated_at,
+          user_visible_resolution: ticket.user_visible_resolution,
         };
       }),
     });
@@ -285,6 +295,14 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+function readVisibleSupportStatus(status: string, reopenUntil: string | null) {
+  if (status !== "resolved" || !reopenUntil) {
+    return status;
+  }
+
+  return new Date(reopenUntil).getTime() < Date.now() ? "closed" : status;
 }
 
 function inferSentiment(text: string) {

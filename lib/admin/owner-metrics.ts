@@ -60,6 +60,7 @@ const adminErrorDetailSchema = z.object({
 });
 const adminSupportTicketSchema = z.object({
   area: z.string().default("general"),
+  autoClosedAt: isoDateSchema.nullable().optional(),
   closedReason: z.string().nullable().optional(),
   createdAt: isoDateSchema,
   errorCode: z.string().nullable().optional(),
@@ -71,6 +72,7 @@ const adminSupportTicketSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).default({}),
   ownerNotes: z.string().default(""),
   priority: z.string(),
+  reopenUntil: isoDateSchema.nullable().optional(),
   rootCause: z.string().default("Needs owner review."),
   rootCauseCategory: z.string().default("needs_triage"),
   sentiment: z.string(),
@@ -95,6 +97,7 @@ const adminSupportTicketSchema = z.object({
     .default([]),
   updatedAt: isoDateSchema,
   userEmail: z.string().nullable(),
+  userVisibleResolution: z.string().default(""),
 });
 const profitabilitySchema = z.object({
   aiVariableCostUsd: z.number(),
@@ -556,6 +559,19 @@ async function readSupportIssues(
   startedAt: string,
   usersList: OwnerMetrics["usersList"],
 ): Promise<OwnerMetrics["supportTickets"]> {
+  const now = new Date().toISOString();
+
+  await supabase
+    .from("support_tickets")
+    .update({
+      auto_closed_at: now,
+      closed_reason: "reopen_window_expired",
+      status: "closed",
+    })
+    .eq("status", "resolved")
+    .lt("reopen_until", now)
+    .is("auto_closed_at", null);
+
   const { data: tickets, error } = await supabase
     .from("support_tickets")
     .select(
@@ -581,6 +597,9 @@ async function readSupportIssues(
         "suggested_fix",
         "fix_status",
         "owner_notes",
+        "user_visible_resolution",
+        "reopen_until",
+        "auto_closed_at",
         "closed_reason",
       ].join(", "),
     )
@@ -594,6 +613,7 @@ async function readSupportIssues(
 
   type SupportTicketRow = {
     area: string | null;
+    auto_closed_at: string | null;
     closed_reason: string | null;
     created_at: string;
     error_code: string | null;
@@ -605,6 +625,7 @@ async function readSupportIssues(
     metadata: Record<string, unknown> | null;
     owner_notes: string | null;
     priority: string;
+    reopen_until: string | null;
     root_cause: string | null;
     root_cause_category: string | null;
     sentiment: string;
@@ -615,6 +636,7 @@ async function readSupportIssues(
     summary: string;
     updated_at: string;
     user_id: string | null;
+    user_visible_resolution: string | null;
   };
   const ticketRows = tickets as unknown as SupportTicketRow[];
   const userIds = Array.from(
@@ -651,6 +673,7 @@ async function readSupportIssues(
 
     return {
       area: ticket.area ?? "general",
+      autoClosedAt: ticket.auto_closed_at ?? null,
       closedReason: ticket.closed_reason ?? null,
       createdAt: ticket.created_at,
       errorCode: ticket.error_code ?? null,
@@ -662,6 +685,7 @@ async function readSupportIssues(
       metadata: ticket.metadata ?? {},
       ownerNotes: ticket.owner_notes ?? "",
       priority: ticket.priority,
+      reopenUntil: ticket.reopen_until ?? null,
       rootCause: ticket.root_cause ?? "Needs owner review.",
       rootCauseCategory: ticket.root_cause_category ?? "needs_triage",
       sentiment: ticket.sentiment,
@@ -673,6 +697,7 @@ async function readSupportIssues(
       supportingLogs,
       updatedAt: ticket.updated_at,
       userEmail: ticket.user_id ? emailByUserId.get(ticket.user_id) ?? null : null,
+      userVisibleResolution: ticket.user_visible_resolution ?? "",
     };
   });
 }

@@ -13,6 +13,8 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+const REOPEN_WINDOW_DAYS = 10;
+
 export async function PATCH(request: Request, context: RouteContext) {
   const requestId = crypto.randomUUID();
   const rateLimit = await checkRateLimit({
@@ -65,7 +67,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       .from("support_tickets")
       .update(patch)
       .eq("id", id)
-      .select("id, status, priority, fix_status, owner_notes, updated_at")
+      .select(
+        "id, status, priority, fix_status, owner_notes, user_visible_resolution, reopen_until, auto_closed_at, updated_at",
+      )
       .single();
 
     if (error || !ticket) {
@@ -133,10 +137,20 @@ function toSupportTicketPatch(input: z.infer<typeof supportIssueUpdateSchema>) {
   if (input.priority !== undefined) patch.priority = input.priority;
   if (input.rootCause !== undefined) patch.root_cause = input.rootCause;
   if (input.rootCauseCategory !== undefined) patch.root_cause_category = input.rootCauseCategory;
+  if (input.userVisibleResolution !== undefined) {
+    patch.user_visible_resolution = input.userVisibleResolution;
+  }
   if (input.status !== undefined) {
     patch.status = input.status;
-    if (["resolved", "closed"].includes(input.status)) {
-      patch.resolved_at = new Date().toISOString();
+    const now = new Date();
+
+    if (input.status === "resolved") {
+      patch.resolved_at = now.toISOString();
+      patch.reopen_until = new Date(now.getTime() + REOPEN_WINDOW_DAYS * 86_400_000).toISOString();
+      patch.auto_closed_at = null;
+    } else if (input.status === "closed") {
+      patch.resolved_at = now.toISOString();
+      patch.reopen_until = null;
     }
   }
   if (input.suggestedFix !== undefined) patch.suggested_fix = input.suggestedFix;
@@ -149,7 +163,8 @@ function buildAdminAuditMessage(input: z.infer<typeof supportIssueUpdateSchema>)
     input.status ? `status=${input.status}` : null,
     input.fixStatus ? `fix=${input.fixStatus}` : null,
     input.priority ? `priority=${input.priority}` : null,
-    input.ownerNotes ? `notes=${input.ownerNotes}` : null,
+    input.userVisibleResolution ? `user_visible_resolution=${input.userVisibleResolution}` : null,
+    input.ownerNotes ? `owner_notes=${input.ownerNotes}` : null,
     input.closedReason ? `reason=${input.closedReason}` : null,
   ].filter(Boolean);
 

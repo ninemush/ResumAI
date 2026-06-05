@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { attachDeletionPlanToRequest } from "@/lib/privacy/deletion-plan";
+import {
+  attachDeletionPlanToRequest,
+  completeDeletionReviewForRequest,
+} from "@/lib/privacy/deletion-plan";
 import { updateAdminPrivacyRequest } from "@/lib/privacy/requests";
 import { adminPrivacyRequestUpdateSchema } from "@/lib/privacy/schemas";
 import {
@@ -15,7 +18,7 @@ type RouteContext = {
 };
 
 const adminPrivacyPatchSchema = adminPrivacyRequestUpdateSchema.extend({
-  action: z.enum(["update", "build_deletion_plan"]).default("update"),
+  action: z.enum(["update", "build_deletion_plan", "complete_deletion_review"]).default("update"),
 });
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -44,6 +47,36 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({
         ok: true,
         deletionPlan,
+        requestId,
+      });
+    }
+
+    if (input.action === "complete_deletion_review") {
+      const resolutionSummary = input.resolutionSummary?.trim();
+
+      if (!resolutionSummary) {
+        return NextResponse.json(
+          {
+            ok: false,
+            requestId,
+            error: {
+              category: "validation",
+              code: "privacy.resolution_summary_required",
+              message: "Add a resolution summary before completing deletion review.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+
+      const completed = await completeDeletionReviewForRequest({
+        requestId: id,
+        resolutionSummary,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        completed,
         requestId,
       });
     }

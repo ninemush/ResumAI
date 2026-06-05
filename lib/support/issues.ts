@@ -43,6 +43,7 @@ export const supportIssueUpdateSchema = z.object({
   rootCauseCategory: z.string().trim().max(80).optional(),
   status: supportIssueStatusSchema.optional(),
   suggestedFix: z.string().trim().max(1200).optional(),
+  userVisibleResolution: z.string().trim().max(2000).optional(),
 });
 
 export type SupportIssueCreateInput = z.infer<typeof supportIssueCreateSchema>;

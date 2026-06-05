@@ -1133,9 +1133,46 @@ input:focus {
   padding: 16px;
 }
 
+.terms-version-card {
+  background: rgba(255, 250, 243, 0.74);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-md);
+  color: var(--sage-strong);
+  display: grid;
+  font-size: 0.84rem;
+  font-weight: 850;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
 .terms-gate-action {
   justify-self: start;
   min-width: 240px;
+}
+
+.terms-gate-secondary-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.terms-gate-secondary-actions a,
+.terms-gate-secondary-actions button {
+  background: transparent;
+  border: 0;
+  color: var(--sage-strong);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 850;
+  padding: 0;
+  text-decoration: none;
+}
+
+.terms-gate-secondary-actions a:hover,
+.terms-gate-secondary-actions button:hover {
+  text-decoration: underline;
 }
 
 .auth-section {
@@ -3133,9 +3170,7 @@ input:focus {
   align-items: end;
   display: grid;
   gap: 12px;
-  grid-template-columns:
-    minmax(140px, 0.8fr) minmax(180px, 1fr) minmax(240px, 1.8fr)
-    auto;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(180px, 1fr) repeat(2, minmax(220px, 1.2fr)) auto;
 }
 
 .support-issue-actions label {
@@ -4837,6 +4872,23 @@ input:focus {
   max-width: 560px;
 }
 
+.support-resolution-note {
+  align-items: flex-start;
+  background: rgba(74, 115, 91, 0.1);
+  border: 1px solid rgba(74, 115, 91, 0.2);
+  border-radius: var(--pr-radius-sm);
+  color: var(--sage-strong) !important;
+  display: flex;
+  gap: 8px;
+  font-weight: 800;
+  padding: 10px 12px;
+}
+
+.support-resolution-note svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
 .source-attention-panel {
   background: rgba(255, 255, 255, 0.64);
   border: 1px solid rgba(166, 70, 59, 0.28);
@@ -4967,7 +5019,7 @@ input:focus {
 .support-user-issue dl {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 4px 0 0;
 }
 
@@ -7743,17 +7795,33 @@ input:focus {
 }
 
 .chat-input.expanded {
-  align-items: end;
+  align-items: center;
   border-radius: 26px;
+  grid-template-areas:
+    "message message message message"
+    "attach voice spacer send";
   grid-template-rows: auto auto;
+  min-height: 150px;
   padding: 8px;
 }
 
 .chat-input.expanded textarea {
-  grid-column: 1 / -1;
-  grid-row: 1;
+  grid-area: message;
   min-height: 54px;
   padding: 8px 12px 4px;
+}
+
+.chat-input.expanded .attach-button {
+  grid-area: attach;
+}
+
+.chat-input.expanded .voice-button {
+  grid-area: voice;
+}
+
+.chat-input.expanded button[type="submit"] {
+  grid-area: send;
+  justify-self: end;
 }
 
 .chat-input:focus-within {
@@ -8180,6 +8248,43 @@ input:focus {
     color: var(--ink);
   }
 
+  .mobile-more-drawer {
+    background: rgba(251, 249, 244, 0.98);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    box-shadow: 0 18px 44px rgba(18, 31, 49, 0.14);
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+    position: fixed;
+    right: 12px;
+    width: min(230px, calc(100vw - 24px));
+    z-index: 70;
+  }
+
+  .mobile-more-drawer button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 14px;
+    color: var(--muted);
+    display: flex;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 850;
+    gap: 10px;
+    min-height: 42px;
+    padding: 0 12px;
+    text-align: left;
+  }
+
+  .mobile-more-drawer button.active,
+  .mobile-more-drawer button:hover {
+    background: var(--surface-strong);
+    color: var(--ink);
+  }
+
   .workspace-main,
   .profile-pane,
   .conversation-pane {
@@ -8326,12 +8431,30 @@ input:focus {
 
   .chat-input.expanded {
     border-radius: 28px;
+    grid-template-areas:
+      "message message message message"
+      "attach voice spacer send";
+    grid-template-columns: 36px 36px minmax(0, 1fr) 42px;
     grid-template-rows: auto auto;
+    min-height: 154px;
+    row-gap: 4px;
   }
 
   .chat-input.expanded textarea {
-    grid-column: 1 / -1;
+    grid-area: message;
     padding: 8px 12px 6px;
+  }
+
+  .chat-input.expanded .attach-button {
+    grid-area: attach;
+  }
+
+  .chat-input.expanded .voice-button {
+    grid-area: voice;
+  }
+
+  .chat-input.expanded button[type="submit"] {
+    grid-area: send;
   }
 
   .chat-input textarea {

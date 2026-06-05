@@ -207,6 +207,54 @@ export async function attachDeletionPlanToRequest(requestId: string) {
   return plan;
 }
 
+export async function completeDeletionReviewForRequest({
+  requestId,
+  resolutionSummary,
+}: {
+  requestId: string;
+  resolutionSummary: string;
+}) {
+  const supabase = await createClient();
+  await requireAdmin(supabase);
+
+  const { data: request, error: readError } = await supabase
+    .from("privacy_requests")
+    .select("id, request_type, deletion_plan")
+    .eq("id", requestId)
+    .single();
+
+  if (readError || !request) {
+    throw new Error("PRIVACY_REQUEST_NOT_FOUND");
+  }
+
+  if (request.request_type !== "deletion") {
+    throw new Error("PRIVACY_REQUEST_NOT_DELETION");
+  }
+
+  if (!request.deletion_plan) {
+    throw new Error("DELETION_PLAN_REQUIRED");
+  }
+
+  const { data, error } = await supabase
+    .from("privacy_requests")
+    .update({
+      admin_notes:
+        "Deletion/minimization review completed. Retained records should be limited to documented audit-safe evidence.",
+      resolution_summary: resolutionSummary,
+      resolved_at: new Date().toISOString(),
+      status: "completed",
+    })
+    .eq("id", requestId)
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    throw new Error("DELETION_REVIEW_COMPLETE_FAILED");
+  }
+
+  return { id: data.id as string };
+}
+
 async function countRows(table: string, userId: string) {
   const supabase = await createClient();
   const { count, error } = await supabase

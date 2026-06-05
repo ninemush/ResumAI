@@ -77,6 +77,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedRootCause, setSelectedRootCause] = useState<string | null>(null);
   const [issueNotes, setIssueNotes] = useState<Record<string, string>>({});
+  const [issueResolutionNotes, setIssueResolutionNotes] = useState<Record<string, string>>({});
   const [issueUpdatingId, setIssueUpdatingId] = useState<string | null>(null);
   const [promoCodes, setPromoCodes] = useState<PromoCodeRow[]>([]);
   const [grantMessage, setGrantMessage] = useState<string | null>(null);
@@ -226,6 +227,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       fixStatus?: string;
       ownerNotes?: string;
       status?: string;
+      userVisibleResolution?: string;
     },
   ) {
     setIssueUpdatingId(issueId);
@@ -776,11 +778,15 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       <p>{formatTicketDiagnosticContext(ticket.metadata)}</p>
                     </div>
                     <div>
-                      <span>User-visible update</span>
+                      <span>User-visible resolution</span>
                       <p>
-                        {ticket.ownerNotes ||
+                        {ticket.userVisibleResolution ||
                           "No user-visible update yet. Add a concise note before resolving, cancelling, or asking for more information."}
                       </p>
+                    </div>
+                    <div>
+                      <span>Reopen window</span>
+                      <p>{formatSupportReopenWindow(ticket)}</p>
                     </div>
                   </div>
 
@@ -852,7 +858,21 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       </select>
                     </label>
                     <label className="support-issue-notes">
-                      User-visible update / owner notes
+                      User-visible update
+                      <textarea
+                        disabled={issueUpdatingId === ticket.id}
+                        onChange={(event) =>
+                          setIssueResolutionNotes((current) => ({
+                            ...current,
+                            [ticket.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="What the user should see about the outcome or next step."
+                        value={issueResolutionNotes[ticket.id] ?? ticket.userVisibleResolution}
+                      />
+                    </label>
+                    <label className="support-issue-notes">
+                      Owner notes
                       <textarea
                         disabled={issueUpdatingId === ticket.id}
                         onChange={(event) =>
@@ -871,6 +891,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       onClick={() =>
                         updateIssue(ticket.id, {
                           ownerNotes: issueNotes[ticket.id] ?? ticket.ownerNotes,
+                          userVisibleResolution:
+                            issueResolutionNotes[ticket.id] ?? ticket.userVisibleResolution,
                         })
                       }
                       type="button"
@@ -883,8 +905,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                         disabled={issueUpdatingId === ticket.id}
                         onClick={() =>
                           updateIssue(ticket.id, {
-                            ownerNotes: readIssueNote(
-                              issueNotes,
+                            ownerNotes: readIssueNote(issueNotes, ticket, "Asked user for additional context."),
+                            userVisibleResolution: readIssueResolutionNote(
+                              issueResolutionNotes,
                               ticket,
                               "I need a little more information to finish this cleanly. Please reply in Support with the exact step, file, or page where this happened.",
                             ),
@@ -901,8 +924,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                         disabled={issueUpdatingId === ticket.id}
                         onClick={() =>
                           updateIssue(ticket.id, {
-                            ownerNotes: readIssueNote(
-                              issueNotes,
+                            ownerNotes: readIssueNote(issueNotes, ticket, "Marked fixed after owner review."),
+                            userVisibleResolution: readIssueResolutionNote(
+                              issueResolutionNotes,
                               ticket,
                               "This has been addressed. Please retry the workflow and reopen the issue if it still behaves unexpectedly.",
                             ),
@@ -920,8 +944,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                         onClick={() =>
                           updateIssue(ticket.id, {
                             closedReason: "not_planned",
-                            ownerNotes: readIssueNote(
-                              issueNotes,
+                            ownerNotes: readIssueNote(issueNotes, ticket, "Closed after owner review. No product change planned."),
+                            userVisibleResolution: readIssueResolutionNote(
+                              issueResolutionNotes,
                               ticket,
                               "Closed after review. No product change is planned right now, but the issue remains retained for audit and trend review.",
                             ),
@@ -1697,6 +1722,7 @@ function RootCauseDrilldown({
       fixStatus?: string;
       ownerNotes?: string;
       status?: string;
+      userVisibleResolution?: string;
     },
   ) => Promise<void>;
 }) {
@@ -1749,6 +1775,9 @@ function RootCauseDrilldown({
                 ownerNotes:
                   ticket.ownerNotes ||
                   `Owner triage started for ${formatLabel(rootCause)}. Reviewing supporting logs and applying the appropriate product or guidance fix.`,
+                userVisibleResolution:
+                  ticket.userVisibleResolution ||
+                  "I am reviewing the linked details and will update this issue when the fix path is clear.",
                 status: "in_progress",
               })
             }
@@ -1768,6 +1797,9 @@ function RootCauseDrilldown({
                 ownerNotes:
                   ticket.ownerNotes ||
                   `Addressed ${formatLabel(rootCause)}. Please retry the workflow and reopen support if it recurs.`,
+                userVisibleResolution:
+                  ticket.userVisibleResolution ||
+                  "This has been addressed. Please retry the workflow and reopen support if it still behaves unexpectedly.",
                 status: "resolved",
               })
             }
@@ -1933,6 +1965,31 @@ function readIssueNote(
   const existing = ticket.ownerNotes?.trim();
 
   return draft || existing || fallback;
+}
+
+function readIssueResolutionNote(
+  notes: Record<string, string>,
+  ticket: OwnerMetrics["supportTickets"][number],
+  fallback: string,
+) {
+  const draft = notes[ticket.id]?.trim();
+  const existing = ticket.userVisibleResolution?.trim();
+
+  return draft || existing || fallback;
+}
+
+function formatSupportReopenWindow(ticket: OwnerMetrics["supportTickets"][number]) {
+  if (ticket.status === "closed") {
+    return ticket.autoClosedAt
+      ? `Closed automatically on ${formatDateTime(ticket.autoClosedAt)}.`
+      : "Closed.";
+  }
+
+  if (ticket.status === "resolved" && ticket.reopenUntil) {
+    return `Can be reopened until ${formatDateTime(ticket.reopenUntil)}.`;
+  }
+
+  return "Starts when the issue is resolved.";
 }
 
 function Pill({ children, tone }: { children: ReactNode; tone: "danger" | "neutral" }) {

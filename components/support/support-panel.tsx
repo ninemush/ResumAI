@@ -6,11 +6,13 @@ import { useEffect, useState } from "react";
 
 type SupportIssue = {
   area: string;
+  auto_closed_at: string | null;
+  closed_reason: string | null;
   created_at: string;
   fix_status: string;
   id: string;
-  owner_notes: string | null;
   priority: string;
+  reopen_until: string | null;
   root_cause: string | null;
   root_cause_category: string | null;
   shortId: string;
@@ -19,6 +21,7 @@ type SupportIssue = {
   suggested_fix: string | null;
   summary: string;
   updated_at: string;
+  user_visible_resolution: string | null;
 };
 
 export function SupportPanel() {
@@ -280,11 +283,15 @@ export function SupportPanel() {
                     <dt>Last update</dt>
                     <dd>{formatDate(issue.updated_at)}</dd>
                   </div>
+                  <div>
+                    <dt>Reopen window</dt>
+                    <dd>{formatReopenWindow(issue)}</dd>
+                  </div>
                 </dl>
-                {issue.owner_notes ? (
-                  <p className="support-owner-note">
+                {issue.user_visible_resolution ? (
+                  <p className="support-resolution-note">
                     <AlertCircle size={14} aria-hidden="true" />
-                    {issue.owner_notes}
+                    {issue.user_visible_resolution}
                   </p>
                 ) : null}
               </article>
@@ -305,4 +312,16 @@ function formatDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatReopenWindow(issue: SupportIssue) {
+  if (issue.status === "closed") {
+    return issue.auto_closed_at ? `Closed ${formatDate(issue.auto_closed_at)}` : "Closed";
+  }
+
+  if (issue.status === "resolved" && issue.reopen_until) {
+    return `Until ${formatDate(issue.reopen_until)}`;
+  }
+
+  return "After resolution";
 }
