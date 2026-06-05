@@ -30,9 +30,18 @@ export function loadLocalEnv() {
 export function hasDemoAuthEnv() {
   loadLocalEnv();
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const hasPlaceholderSupabase =
+    !supabaseUrl ||
+    supabaseUrl === "http://127.0.0.1:54321" ||
+    supabaseUrl === "http://localhost:54321" ||
+    anonKey === "local-placeholder-anon-key";
+
   return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
+    !hasPlaceholderSupabase &&
+      supabaseUrl &&
+      anonKey &&
       process.env.QA_DEMO_EMAIL &&
       process.env.QA_DEMO_PASSWORD,
   );

@@ -606,7 +606,7 @@ function looksLikeSupportedSpecialProject(
   }
 
   const hasProjectSignal =
-    /\b(?:project|initiative|program(?:me)?|transformation|implementation|migration|rollout|launch|integration|platform|system|automation|redesign|build|deployment|upgrade|optimization|campaign|client|advisory|research|publication|award)\b/i.test(
+    /\b(?:project|initiative|program(?:me)?|transformation|implementation|migration|rollout|launch|integration|platform|system|automation|redesign|build|deployment|upgrade|optimization|campaign|client|advisory|research|publication|award|operating model|governance model|service delivery model)\b/i.test(
       combined,
     );
   const hasProvenance = Boolean(project.context || project.dates || project.bullets.length > 1);
