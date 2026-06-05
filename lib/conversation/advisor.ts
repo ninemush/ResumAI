@@ -35,7 +35,18 @@ import {
   formatCapabilitiesForAdvisor,
   inferSuggestedLinksFromMessage,
 } from "@/lib/conversation/app-capabilities";
-import { buildSourceSpecificReply } from "@/lib/conversation/source-specific-reply";
+import {
+  buildResumeDiagnosticEvidencePack,
+  buildSourceEvidencePack,
+} from "@/lib/conversation/advisor-evidence";
+import { runAdvisorScopeClassifier } from "@/lib/conversation/advisor-scope";
+import {
+  buildAdvisorScopeRedirect,
+  advisorScopeDecisionValues,
+  shouldRunFullAdvisor,
+  type AdvisorScopeDecision,
+} from "@/lib/conversation/advisor-scope-core";
+import { guardAdvisorMessage } from "@/lib/conversation/advisor-message-guard";
 
 export const conversationAdvisorRequestSchema = z.object({
   message: z.string().trim().min(3).max(4000),
@@ -43,10 +54,20 @@ export const conversationAdvisorRequestSchema = z.object({
 });
 
 const advisorResponseSchema = z.object({
+  scopeDecision: z.enum(advisorScopeDecisionValues),
+  evidenceUsed: z.array(z.string().max(180)).max(8).default([]),
+  confidence: z.enum(["low", "medium", "high"]),
+  unsupportedClaims: z.array(z.string().max(220)).max(6).default([]),
   assistantMessage: z.string().min(1).max(1500),
   suggestedActions: z.array(advisorSuggestedActionSchema).max(4).default([]),
   suggestedLinks: z.array(advisorSuggestedLinkSchema).max(4).default([]),
 });
+
+type AdvisorPublicPayload = {
+  assistantMessage: string;
+  suggestedActions: z.infer<typeof advisorSuggestedActionSchema>[];
+  suggestedLinks: z.infer<typeof advisorSuggestedLinkSchema>[];
+};
 
 type ConversationFact = {
   confidence: number | null;
@@ -169,6 +190,22 @@ export async function runConversationAdvisor(
     userId: user.id,
   });
   const model = getProfileIntakeModel();
+  const scopeDecision = await runAdvisorScopeClassifier({
+    message: input.message,
+    model,
+    surface: input.surface,
+    userId: user.id,
+  });
+
+  if (!shouldRunFullAdvisor(scopeDecision)) {
+    return normalizeAdvisorPayload({
+      isOwner,
+      message: input.message,
+      payload: buildAdvisorScopeRedirect(scopeDecision),
+      surface: input.surface,
+    });
+  }
+
   const instructions = buildAdvisorInstructions();
   const inputPayload = buildAdvisorInput({
     facts: factsError ? [] : ((facts ?? []) as ConversationFact[]),
@@ -176,36 +213,10 @@ export async function runConversationAdvisor(
     message: input.message,
     profile,
     recentConversation: conversationError ? [] : (conversation ?? []).reverse(),
+    scopeDecision,
     surface: input.surface,
     workspace,
   });
-  const deterministicSourceReply = buildSourceSpecificReply({
-    message: input.message,
-    workspace,
-  });
-  const deterministicResumeReply = buildResumeSectionDiagnosticReply({
-    latestResume: resumeError ? null : latestResume,
-    message: input.message,
-    workspace,
-  });
-
-  if (deterministicSourceReply) {
-    return normalizeAdvisorPayload({
-      isOwner,
-      message: input.message,
-      payload: deterministicSourceReply,
-      surface: input.surface,
-    });
-  }
-
-  if (deterministicResumeReply) {
-    return normalizeAdvisorPayload({
-      isOwner,
-      message: input.message,
-      payload: deterministicResumeReply,
-      surface: input.surface,
-    });
-  }
 
   try {
     const response = await createOpenAIResponse({
@@ -228,11 +239,33 @@ export async function runConversationAdvisor(
             type: "object",
             additionalProperties: false,
             required: [
+              "scopeDecision",
+              "evidenceUsed",
+              "confidence",
+              "unsupportedClaims",
               "assistantMessage",
               "suggestedActions",
               "suggestedLinks",
             ],
             properties: {
+              scopeDecision: {
+                type: "string",
+                enum: [...advisorScopeDecisionValues],
+              },
+              evidenceUsed: {
+                type: "array",
+                maxItems: 8,
+                items: { type: "string" },
+              },
+              confidence: {
+                type: "string",
+                enum: ["low", "medium", "high"],
+              },
+              unsupportedClaims: {
+                type: "array",
+                maxItems: 6,
+                items: { type: "string" },
+              },
               assistantMessage: { type: "string" },
               suggestedActions: {
                 type: "array",
@@ -452,9 +485,19 @@ You are answering inside ${brand.name}'s live conversation panel. This is not a
 generic chatbot reply. Use the saved profile context, recent conversation, and
 current app surface to answer as a senior talent advisor.
 
+The user's message has already passed an app-purpose classifier. Stay inside
+career, work, resumes, jobs, applications, uploaded source evidence, app
+support, and professional communication. Do not continue as a general-purpose
+chatbot.
+
 Do not expose internal processing language, database terms, schema names,
 operational counts, or pipeline mechanics. Speak naturally and explain the
 practical career value, not the implementation details.
+
+Answer only from the workspace evidence supplied below. If the evidence is
+missing, unreadable, or not strong enough, say that plainly and name the next
+useful in-app action. Do not invent education, languages, certifications,
+projects, metrics, employment dates, companies, actions, or outcomes.
 
 If the user asks for guidance, give pointed, domain-aware hypotheses and a
 small next step. If the profile is thin, say what evidence would unlock better
@@ -488,10 +531,14 @@ directly, apologize briefly if the product fell short, and use the saved context
 to give a better answer.
 
 If the user asks what you learned from an uploaded resume, LinkedIn export, PDF,
-or source, summarize the concrete career evidence visible in saved context first.
-Then explain what should change in the master profile or resume. Do not respond
-as though the source cannot be used unless the context truly has no readable
-source excerpt.
+or source, use the Source evidence pack first. Then explain what should change
+in the master profile or resume. Do not respond as though the source cannot be
+used unless the evidence pack says the source is missing, unreadable, or empty.
+
+If the user asks about missing resume sections, use the Resume diagnostic
+evidence pack and the source evidence pack together. Translate the diagnosis
+into simple product language. Avoid raw counts unless the user explicitly asks
+for admin/status details.
 
 Do not claim that you have rebuilt, regenerated, saved, exported, logged,
 retried, or updated anything unless the current request is being handled by an
@@ -516,6 +563,14 @@ ${formatCapabilitiesForAdvisor()}
 When returning suggested actions, use them only for navigation, review, support,
 upload, generate, export, redeem, or owner triage suggestions. They are not proof
 that work has already happened.
+
+Return these internal fields honestly:
+- scopeDecision: repeat the classifier decision supplied in the input.
+- evidenceUsed: short labels for the exact profile, resume, source, job,
+  application, owner, or credit evidence you relied on.
+- confidence: high only when the supplied evidence directly supports the answer.
+- unsupportedClaims: any claims the user asked about that are not supported by
+  the supplied evidence.
 `.trim();
 }
 
@@ -525,6 +580,7 @@ function buildAdvisorInput({
   message,
   profile,
   recentConversation,
+  scopeDecision,
   surface,
   workspace,
 }: {
@@ -533,6 +589,7 @@ function buildAdvisorInput({
   message: string;
   profile: AdvisorProfile | null;
   recentConversation: Array<{ message_text: string; speaker: string }>;
+  scopeDecision: AdvisorScopeDecision;
   surface: string;
   workspace: AdvisorWorkspaceContext;
 }) {
@@ -542,9 +599,25 @@ function buildAdvisorInput({
         profile,
       })
     : null;
+  const readableSourceCount = workspace.sources.recent.filter(
+    (source) => source.extraction_status === "succeeded" && source.extracted_text?.trim(),
+  ).length;
+  const sourceEvidencePack = buildSourceEvidencePack({
+    message,
+    sources: workspace.sources.recent,
+  });
+  const resumeDiagnosticEvidencePack = buildResumeDiagnosticEvidencePack({
+    latestResume,
+    message,
+    readableSourceCount,
+  });
 
   return `
 Current app surface: ${surface}
+
+Scope decision:
+- Decision: ${scopeDecision.decision}
+- Reason: ${scopeDecision.reason}
 
 User message:
 ${message}
@@ -584,6 +657,12 @@ ${formatLatestResumeForAdvisor(latestResume)}
 
 Useful career material:
 ${formatReadableSourcesForAdvisor(workspace.sources.recent)}
+
+Source evidence pack:
+${sourceEvidencePack}
+
+Resume diagnostic evidence pack:
+${resumeDiagnosticEvidencePack}
 
 Workspace:
 ${formatWorkspaceForAdvisor(workspace)}
@@ -647,7 +726,7 @@ function normalizeAdvisorPayload({
 }: {
   isOwner: boolean;
   message: string;
-  payload: z.infer<typeof advisorResponseSchema>;
+  payload: AdvisorPublicPayload;
   surface: z.infer<typeof advisorSurfaceSchema>;
 }) {
   const suggestedLinks =
@@ -659,97 +738,6 @@ function normalizeAdvisorPayload({
     assistantMessage: normalizeAdvisorMessage(payload.assistantMessage),
     suggestedActions: payload.suggestedActions,
     suggestedLinks,
-  };
-}
-
-function buildResumeSectionDiagnosticReply({
-  latestResume,
-  message,
-  workspace,
-}: {
-  latestResume: unknown;
-  message: string;
-  workspace: AdvisorWorkspaceContext;
-}): z.infer<typeof advisorResponseSchema> | null {
-  const normalized = message.toLowerCase().replace(/\s+/g, " ");
-  const asksAboutResumeSections =
-    /\b(resume|cv|rebuilt|rebuild|generated|draft|export|pdf|docx)\b/.test(normalized) &&
-    /\b(section|sections|education|special projects?|projects?|languages?|certifications?|missing|not see|don't see|dont see|omitted|why|issue)\b/.test(
-      normalized,
-    );
-  const challengesCapability =
-    /\b(why|what.*issue|not able|can't|cannot|couldn't|couldnt|make sure|ensure)\b/.test(
-      normalized,
-    ) && /\b(resume|sections?|education|projects?|languages?)\b/.test(normalized);
-
-  if (!asksAboutResumeSections && !challengesCapability) {
-    return null;
-  }
-
-  const snapshot = readResumeSectionSnapshot(latestResume);
-  const readySources = workspace.sources.recent.filter(
-    (source) => source.extraction_status === "succeeded",
-  );
-
-  if (!snapshot.exists) {
-    return {
-      assistantMessage:
-        "You are right to ask for a real diagnosis. I do not see a saved master resume draft yet, so I cannot compare generated sections against the resume body. The useful next step is to open Profile & Resume and generate the master resume from the saved sources, then I can inspect the saved draft instead of asking you to paste headings.",
-      suggestedActions: [],
-      suggestedLinks: [
-        {
-          label: "Open Profile & Resume",
-          reason: "Generate or inspect the saved master resume draft.",
-          view: "resume",
-        },
-      ],
-    };
-  }
-
-  const missingOptional = [
-    snapshot.specialProjects === 0 ? "Special Projects" : null,
-    snapshot.languages === 0 ? "Languages" : null,
-    snapshot.education === 0 ? "Education" : null,
-    snapshot.certifications === 0 ? "Certifications" : null,
-  ].filter((item): item is string => Boolean(item));
-  const presentOptional = [
-    snapshot.specialProjects > 0 ? `Special Projects (${snapshot.specialProjects})` : null,
-    snapshot.languages > 0 ? `Languages (${snapshot.languages})` : null,
-    snapshot.education > 0 ? `Education (${snapshot.education})` : null,
-    snapshot.certifications > 0 ? `Certifications (${snapshot.certifications})` : null,
-  ].filter((item): item is string => Boolean(item));
-  const chronology = snapshot.experienceSections > 0
-    ? `Professional Experience (${snapshot.experienceSections} role section${snapshot.experienceSections === 1 ? "" : "s"})`
-    : "no role-by-role Professional Experience";
-  const sourceContext = readySources.length > 0
-    ? `${readySources.length} readable source${readySources.length === 1 ? "" : "s"} in Library`
-    : "no readable source text in Library";
-  const diagnosis =
-    missingOptional.length > 0
-      ? `The saved draft is missing ${formatListForSentence(missingOptional, "optional sections")}. That can happen when the source extraction did not expose those facts, or when the previous resume assembly path did not backfill optional source sections into the saved draft/export.`
-      : `The saved draft already contains ${formatListForSentence(presentOptional, "the optional sections")}. If you cannot see them in the file, the issue is likely preview/export rendering rather than missing resume content.`;
-
-  return {
-    assistantMessage: `You are right: I should not ask you to paste headings first. I can inspect the saved master resume snapshot.
-
-What I see: ${chronology}; ${presentOptional.length > 0 ? `optional sections present: ${presentOptional.join(", ")}` : "no optional sections currently saved"}; ${sourceContext}.
-
-Issue: ${diagnosis}
-
-Best next move: open Profile & Resume and rebuild/export once after the latest normalization fix. If the saved draft still shows zero for a section that exists in a readable Library source, that is a source-to-resume mapping bug, not a user-data problem.`,
-    suggestedActions: [],
-    suggestedLinks: [
-      {
-        label: "Open Profile & Resume",
-        reason: "Review the saved section counts and rebuild/export the master resume.",
-        view: "resume",
-      },
-      {
-        label: "Open Library",
-        reason: "Confirm the underlying source was read successfully.",
-        view: "library",
-      },
-    ],
   };
 }
 
@@ -1209,42 +1197,6 @@ function formatLatestResumeForAdvisor(latestResume: unknown) {
   ].join("\n");
 }
 
-function readResumeSectionSnapshot(latestResume: unknown) {
-  if (
-    !latestResume ||
-    typeof latestResume !== "object" ||
-    !("content_json" in latestResume)
-  ) {
-    return {
-      certifications: 0,
-      education: 0,
-      exists: false,
-      experienceSections: 0,
-      languages: 0,
-      specialProjects: 0,
-    };
-  }
-
-  const content = (latestResume as { content_json?: unknown }).content_json;
-  const readCount = (key: string) => {
-    if (!content || typeof content !== "object") {
-      return 0;
-    }
-
-    const value = (content as Record<string, unknown>)[key];
-    return Array.isArray(value) ? value.length : 0;
-  };
-
-  return {
-    certifications: readCount("certifications"),
-    education: readCount("education"),
-    exists: true,
-    experienceSections: readCount("experienceSections"),
-    languages: readCount("languages"),
-    specialProjects: readCount("specialProjects"),
-  };
-}
-
 function buildContextAwareAdvisorFallback({
   facts,
   latestResume,
@@ -1686,7 +1638,7 @@ function formatListForSentence(items: string[], fallback: string) {
 function normalizeAdvisorMessage(message: string) {
   const sectionLabels =
     "What I see|What I learned|What is missing|What to fix first|Best lanes|Strongest lanes|Role lanes|Best next move|Next step|Next question|Why it matters|Recommendation|My recommendation|Conservative|Balanced|Executive\\/board-ready|Board-ready|Headline improvement|Summary clarity|Impact evidence|Proof of impact|Leadership depth|Experience structure|Role fit|Resume impact|Resume fix|Metrics to quantify|Metric to quantify|Missing metrics|Useful evidence|What I would do next";
-  const normalized = message
+  const normalized = guardAdvisorMessage(message)
     .replace(/\r\n/g, "\n")
     .replace(/\*\*([^*\n:]{2,80}):\*\*:/g, "**$1:**")
     .replace(/\*\*([^*\n:]{2,80}):\*\*/g, "**$1:**")
