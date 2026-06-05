@@ -8055,6 +8055,7 @@ input:focus {
   gap: 6px;
   grid-template-areas: "attach voice message send";
   grid-template-columns: 36px 36px minmax(0, 1fr) 44px;
+  grid-template-rows: 44px;
   min-height: 58px;
   min-width: 0;
   overflow: hidden;
@@ -8068,17 +8069,18 @@ input:focus {
 }
 
 .chat-input.expanded {
-  align-items: end;
+  align-items: center;
   border-radius: 26px;
   grid-template-areas:
     "message message message message"
     "attach voice spacer send";
-  grid-template-rows: minmax(54px, auto) 44px;
-  min-height: 0;
+  grid-template-rows: auto 44px;
+  min-height: 198px;
   padding: 8px;
 }
 
 .chat-input.expanded textarea {
+  align-self: start;
   grid-area: message;
   max-height: 132px;
   min-height: 54px;
@@ -8107,35 +8109,50 @@ input:focus {
 }
 
 .chat-input textarea {
+  appearance: none;
   background: transparent;
   border: 0;
   box-sizing: border-box;
   font-size: 0.95rem;
+  grid-area: message;
   line-height: 1.35;
   max-height: 132px;
   min-height: 28px;
   min-width: 0;
+  outline: 0;
   overflow-y: auto;
   overflow-wrap: anywhere;
   padding: 4px 8px;
   resize: none;
+  scrollbar-width: thin;
   width: 100%;
   word-break: break-word;
-  grid-area: message;
+}
+
+.chat-input:not(.expanded) textarea {
+  align-self: center;
+  height: 38px !important;
+  max-height: 38px;
+  overflow-y: hidden !important;
 }
 
 .chat-input textarea:focus {
-  outline: none;
   box-shadow: none;
+  outline: 0;
 }
 
 .chat-input button {
+  align-items: center;
   background: var(--sage-strong);
   border-radius: var(--pr-radius-pill);
   color: var(--pr-soft-ivory);
+  display: inline-flex;
   height: 44px;
+  justify-content: center;
   min-width: 44px;
   padding: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .chat-input .attach-button {
@@ -8711,6 +8728,7 @@ input:focus {
     background: rgba(251, 249, 244, 0.98);
     box-shadow: 0 -10px 24px rgba(14, 25, 43, 0.04);
     grid-template-columns: 36px 36px minmax(0, 1fr) 42px;
+    grid-template-rows: 42px;
   }
 
   .chat-input.expanded {
@@ -8719,8 +8737,8 @@ input:focus {
       "message message message message"
       "attach voice spacer send";
     grid-template-columns: 36px 36px minmax(0, 1fr) 42px;
-    grid-template-rows: minmax(54px, auto) 42px;
-    min-height: 0;
+    grid-template-rows: auto 42px;
+    min-height: 170px;
     row-gap: 4px;
   }
 
@@ -8746,6 +8764,11 @@ input:focus {
     font-size: 0.9rem;
     max-height: 108px;
     min-height: 38px;
+  }
+
+  .chat-input:not(.expanded) textarea {
+    height: 36px !important;
+    max-height: 36px;
   }
 
   .credits-table,

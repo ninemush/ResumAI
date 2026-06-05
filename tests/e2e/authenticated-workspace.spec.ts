@@ -45,7 +45,7 @@ test.describe("authenticated workspace", () => {
     await page.goto("/");
 
     const conversation = page.locator(".conversation-pane");
-    await expect(conversation.getByPlaceholder(/Share rough notes, role, link, certificate photo, or resume/i)).toBeVisible();
+    await expect(conversation.getByPlaceholder(/Notes, role, link, or resume/i)).toBeVisible();
 
     const accept = await conversation.locator('input[type="file"]').getAttribute("accept");
 
@@ -56,6 +56,23 @@ test.describe("authenticated workspace", () => {
     expect(accept).toContain(".jpg");
     expect(accept).not.toMatch(/(^|,)\.doc(,|$)/);
     expect(accept).not.toMatch(/\.heic|\.heif/);
+  });
+
+  test("keeps the chat composer controls visible at narrow widths", async ({ page }) => {
+    for (const width of [340, 400, 500]) {
+      await page.setViewportSize({ width, height: 720 });
+      await page.goto("/");
+
+      const input = page.getByPlaceholder(/Notes, role, link, or resume/i);
+      await expect(input).toBeVisible();
+      await input.fill("nfkdsnfskd");
+      await assertComposerGeometry(page, `compact ${width}px`, false);
+
+      await input.fill(
+        "snfkj nskfnsknfsknfksdnfks nfkdsnfkdsnfksnfkdsnfkds nfdksnfkdsnfdsknd and another specific sentence to expand the composer",
+      );
+      await assertComposerGeometry(page, `expanded ${width}px`, true);
+    }
   });
 
   test("keeps record-heavy workspace pages in focus on mobile", async ({ page, isMobile }) => {
@@ -178,7 +195,7 @@ test.describe("authenticated workspace", () => {
 
     await page.goto("/");
 
-    const input = page.getByPlaceholder(/Share rough notes, role, link, certificate photo, or resume/i);
+    const input = page.getByPlaceholder(/Notes, role, link, or resume/i);
     await input.fill("What credits do I have?");
     await page.getByRole("button", { name: /Send message/i }).click();
 
@@ -361,6 +378,81 @@ test.describe("authenticated workspace", () => {
     await expect(page.getByRole("heading", { name: /Master profile and resume/i })).toBeVisible();
   });
 });
+
+async function assertComposerGeometry(page: Page, label: string, expectedExpanded: boolean) {
+  const metrics = await page.locator(".chat-input").evaluate((form) => {
+    function rectFor(selector: string) {
+      const element = form.querySelector(selector);
+      if (!element) {
+        return null;
+      }
+
+      const rect = element.getBoundingClientRect();
+      const styles = window.getComputedStyle(element);
+
+      return {
+        bottom: rect.bottom,
+        display: styles.display,
+        height: rect.height,
+        left: rect.left,
+        opacity: Number(styles.opacity || "1"),
+        outlineStyle: styles.outlineStyle,
+        right: rect.right,
+        top: rect.top,
+        visibility: styles.visibility,
+        width: rect.width,
+      };
+    }
+
+    const formRect = form.getBoundingClientRect();
+
+    return {
+      attach: rectFor(".attach-button"),
+      expanded: form.classList.contains("expanded"),
+      form: {
+        bottom: formRect.bottom,
+        height: formRect.height,
+        left: formRect.left,
+        right: formRect.right,
+        top: formRect.top,
+        width: formRect.width,
+      },
+      mic: rectFor(".voice-button"),
+      send: rectFor('button[type="submit"]'),
+      textarea: rectFor("textarea"),
+    };
+  });
+
+  expect(metrics.expanded, `${label}: expanded state`).toBe(expectedExpanded);
+  expect(metrics.form.height, `${label}: composer height`).toBeGreaterThanOrEqual(52);
+
+  for (const [name, rect] of Object.entries({
+    attach: metrics.attach,
+    mic: metrics.mic,
+    send: metrics.send,
+    textarea: metrics.textarea,
+  })) {
+    expect(rect, `${label}: ${name} exists`).not.toBeNull();
+    expect(rect?.display, `${label}: ${name} display`).not.toBe("none");
+    expect(rect?.visibility, `${label}: ${name} visibility`).not.toBe("hidden");
+    expect(rect?.opacity, `${label}: ${name} opacity`).toBeGreaterThan(0);
+    expect(rect?.width ?? 0, `${label}: ${name} width`).toBeGreaterThan(20);
+    expect(rect?.height ?? 0, `${label}: ${name} height`).toBeGreaterThan(20);
+    expect(rect?.left ?? 0, `${label}: ${name} left inside composer`).toBeGreaterThanOrEqual(metrics.form.left - 1);
+    expect(rect?.right ?? 0, `${label}: ${name} right inside composer`).toBeLessThanOrEqual(metrics.form.right + 1);
+    expect(rect?.top ?? 0, `${label}: ${name} top inside composer`).toBeGreaterThanOrEqual(metrics.form.top - 1);
+    expect(rect?.bottom ?? 0, `${label}: ${name} bottom inside composer`).toBeLessThanOrEqual(metrics.form.bottom + 1);
+  }
+
+  expect(metrics.textarea?.outlineStyle, `${label}: textarea outline`).toBe("none");
+  if (!expectedExpanded) {
+    expect(metrics.textarea?.left ?? 0, `${label}: textarea after mic`).toBeGreaterThan(metrics.mic?.right ?? 0);
+    expect(metrics.send?.left ?? 0, `${label}: send after textarea`).toBeGreaterThan(metrics.textarea?.left ?? 0);
+  } else {
+    expect(metrics.attach?.top ?? 0, `${label}: controls below textarea`).toBeGreaterThan(metrics.textarea?.top ?? 0);
+    expect(metrics.send?.left ?? 0, `${label}: send remains right aligned`).toBeGreaterThan(metrics.mic?.right ?? 0);
+  }
+}
 
 async function expectCompactRecordIfPresent(page: Page, heading: string, rowSelector: string) {
   if ((await page.locator(rowSelector).count()) === 0) {

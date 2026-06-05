@@ -77,7 +77,7 @@ test.describe("emulated user journey QA", () => {
     }
     await expect(page.getByText("Career advisor")).toBeVisible();
 
-    const input = page.getByPlaceholder(/Share rough notes, role, link, certificate photo, or resume/i);
+    const input = page.getByPlaceholder(/Notes, role, link, or resume/i);
     await input.fill(
       "Based on what you already know about me, what are the strongest role lanes and what should my resume improve first?",
     );

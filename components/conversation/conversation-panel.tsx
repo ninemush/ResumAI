@@ -216,7 +216,7 @@ function resizeChatInput(input: HTMLTextAreaElement) {
   const maxHeight =
     typeof window === "undefined"
       ? 132
-      : Math.min(window.innerHeight * 0.28, window.innerWidth < 760 ? 128 : 168);
+      : Math.min(window.innerHeight * 0.28, window.innerWidth < 760 ? 108 : 132);
 
   input.style.height = "auto";
   input.style.height = `${Math.min(input.scrollHeight, maxHeight)}px`;
