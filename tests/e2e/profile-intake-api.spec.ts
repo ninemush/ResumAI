@@ -194,6 +194,19 @@ test("requires owner access before updating support issues", async ({ request })
   expect(payload.error.code).toBe("auth.required");
 });
 
+test("requires owner access before running support autopilot", async ({ request }) => {
+  const response = await request.post("/api/admin/support/autopilot", {
+    data: {
+      dryRun: true,
+      limit: 5,
+    },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
+});
+
 test("requires authentication before reading credit summary", async ({ request }) => {
   const response = await request.get("/api/billing/credits");
   const payload = await response.json();

@@ -123,6 +123,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [tierLoading, setTierLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [issueUpdateMessage, setIssueUpdateMessage] = useState<string | null>(null);
+  const [autopilotLoading, setAutopilotLoading] = useState(false);
   const [grantTargetQuery, setGrantTargetQuery] = useState("");
   const [selectedGrantTargets, setSelectedGrantTargets] = useState<CreditGrantTarget[]>([]);
   const [compliance, setCompliance] = useState<ComplianceDashboard | null>(null);
@@ -379,6 +380,50 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       setIssueUpdateMessage("Support issue updated.");
     } finally {
       setIssueUpdatingId(null);
+    }
+  }
+
+  async function runSupportAutopilot() {
+    setAutopilotLoading(true);
+    setIssueUpdateMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/support/autopilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: 120, mode: "backlog" }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        error?: { message?: string };
+        result?: {
+          errorsQueued: number;
+          errorsResolved: number;
+          reviewed: number;
+          ticketsEscalated: number;
+          ticketsQueued: number;
+          ticketsResolved: number;
+          ticketsWaitingOnUser: number;
+        };
+      } | null;
+
+      if (!response.ok || !payload?.result) {
+        setIssueUpdateMessage(
+          payload?.error?.message ?? "Support autopilot could not review the queue.",
+        );
+        return;
+      }
+
+      await loadPeriod(periodDays);
+      setIssueUpdateMessage(
+        [
+          `L1 reviewed ${payload.result.reviewed.toLocaleString()} item${payload.result.reviewed === 1 ? "" : "s"}.`,
+          `${payload.result.ticketsResolved.toLocaleString()} ticket${payload.result.ticketsResolved === 1 ? "" : "s"} resolved.`,
+          `${payload.result.ticketsEscalated.toLocaleString()} escalated.`,
+          `${payload.result.errorsResolved.toLocaleString()} error${payload.result.errorsResolved === 1 ? "" : "s"} cleared.`,
+        ].join(" "),
+      );
+    } finally {
+      setAutopilotLoading(false);
     }
   }
 
@@ -997,6 +1042,17 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             title="Support queue"
             body="The default queue only shows active work. Resolved and closed tickets move to history with owner notes, user-visible updates, supporting logs, and verification evidence retained."
           />
+          <div className="owner-action-row" aria-label="Support automation controls">
+            <button
+              className="secondary-action compact-action"
+              disabled={autopilotLoading}
+              onClick={runSupportAutopilot}
+              type="button"
+            >
+              <RefreshCcw aria-hidden="true" size={16} />
+              <span>{autopilotLoading ? "Reviewing..." : "Run L1 review"}</span>
+            </button>
+          </div>
           <QueueModeControl queueMode={queueMode} setQueueMode={setQueueMode} />
           <div className="record-filter-strip" aria-label="Trust-critical support filters">
             {supportRiskFilters.map((filter) => (

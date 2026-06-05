@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
 
+import {
+  decideErrorEventAutopilot,
+  decideSupportTicketAutopilot,
+  type SupportAutopilotTicketSnapshot,
+} from "@/lib/support/autopilot-policy";
 import { buildSupportIssueAnalysis, toUserSupportIssue } from "@/lib/support/issues";
 import { buildL1SupportPacket, sanitizeSupportIssueInput } from "@/lib/support/privacy";
 
@@ -98,4 +103,87 @@ describe("support privacy", () => {
     expect(packet.logsInspected).toEqual(["No workspace logs or raw context. User did not opt in."]);
     expect(packet.sensitiveConstraints).toContain("Do not expose owner notes to the user.");
   });
+
+  test("support autopilot resolves routine backlog with verification", () => {
+    const decision = decideSupportTicketAutopilot(buildTicketSnapshot(), { mode: "backlog" });
+
+    expect(decision.action).toBe("resolve_known_fix");
+    expect(decision.patch).toMatchObject({
+      closedReason: "autopilot_known_fix",
+      fixStatus: "fixed",
+      l1Disposition: "autopilot_resolved_known_fix",
+      status: "resolved",
+    });
+    expect(decision.patch?.resolutionVerification).toContain("production verification");
+  });
+
+  test("support autopilot escalates trust-sensitive tickets instead of closing", () => {
+    const decision = decideSupportTicketAutopilot(
+      buildTicketSnapshot({
+        area: "privacy",
+        priority: "urgent",
+        rootCauseCategory: "trust_request",
+        subject: "Delete my account",
+      }),
+      { mode: "backlog" },
+    );
+
+    expect(decision.action).toBe("escalate_to_l2");
+    expect(decision.patch).toMatchObject({
+      escalatedToL2: true,
+      fixStatus: "investigating",
+      l1Disposition: "autopilot_escalated_to_l2",
+      priority: "urgent",
+      status: "escalated",
+    });
+  });
+
+  test("support autopilot can clear known client-error backlog", () => {
+    const now = new Date("2026-06-06T00:00:00.000Z");
+    const decision = decideErrorEventAutopilot(
+      {
+        area: "client",
+        code: "ChunkLoadError",
+        id: "error_1",
+        message: "Loading chunk failed",
+        rootCauseCategory: "client_asset_loading",
+        severity: "medium",
+      },
+      { mode: "backlog", now },
+    );
+
+    expect(decision).toEqual({
+      action: "resolve_known_fix",
+      auditMessage: "L1 autopilot marked this routine client error resolved after production verification.",
+      patch: {
+        fixRequired: false,
+        resolvedAt: "2026-06-06T00:00:00.000Z",
+      },
+    });
+  });
 });
+
+function buildTicketSnapshot(
+  overrides: Partial<SupportAutopilotTicketSnapshot> = {},
+): SupportAutopilotTicketSnapshot {
+  return {
+    area: "master_resume",
+    errorCode: "USER_REPORTED_ISSUE",
+    escalatedToL2: false,
+    escalationReason: null,
+    fixStatus: "needs_code_fix",
+    id: "ticket_1",
+    l1Disposition: "intake_packet_prepared",
+    ownerNotes: "",
+    priority: "high",
+    resolutionVerification: "",
+    rootCause: "A master resume action failed.",
+    rootCauseCategory: "resume_generation",
+    status: "open",
+    subject: "Master resume action failed",
+    suggestedFix: "Review the latest generated resume.",
+    summary: "The user tried to update the master resume.",
+    userVisibleResolution: "",
+    ...overrides,
+  };
+}

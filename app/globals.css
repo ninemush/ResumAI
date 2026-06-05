@@ -2659,6 +2659,14 @@ input:focus {
   gap: 6px;
 }
 
+.owner-action-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
 .owner-page-usage-list {
   display: grid;
   gap: 10px;
