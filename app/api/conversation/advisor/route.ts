@@ -4,6 +4,7 @@ import {
   conversationAdvisorRequestSchema,
   runConversationAdvisor,
 } from "@/lib/conversation/advisor";
+import { brand } from "@/lib/brand";
 import {
   checkRateLimit,
   getClientRateLimitKey,
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
 
   if (!rateLimit.allowed) {
     return rateLimitResponse({
-      message: "Pramania is receiving messages too quickly. Pause for a moment and send the next note.",
+      message: `${brand.name} is receiving messages too quickly. Pause for a moment and send the next note.`,
       requestId,
       result: rateLimit,
     });
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof Error && error.message === "AUTH_REQUIRED") {
       return NextResponse.json(
-        { error: { message: "Please sign in before asking Pramania to review your profile." } },
+        { error: { message: `Please sign in before asking ${brand.name} to review your profile.` } },
         { status: 401 },
       );
     }

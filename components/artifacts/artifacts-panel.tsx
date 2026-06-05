@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Download, ExternalLink, FileText, Layers3, X } from "lucide-react";
 
+import { brand } from "@/lib/brand";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 
 type ArtifactsPanelProps = {
@@ -35,7 +36,7 @@ export function ArtifactsPanel({ embedded = false, overview }: ArtifactsPanelPro
           <p className="eyebrow">Library</p>
           <h1 id="artifacts-title">Generated materials</h1>
           <p>
-            A chronological cabinet for resumes and cover letters Pramania created,
+            A chronological cabinet for resumes and cover letters {brand.name} created,
             including the role context and export files when available.
           </p>
         </div>

@@ -34,6 +34,7 @@ import { SupportPanel } from "@/components/support/support-panel";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
+import { brand } from "@/lib/brand";
 import type { CreditSummary } from "@/lib/billing/credits";
 import type { WorkspaceSession } from "@/lib/commands/session";
 import type { ConversationMessage } from "@/lib/conversation/conversation-messages";
@@ -421,7 +422,7 @@ function CreditStatusBanner({
         </strong>
         <p>
           {isExhausted
-            ? "Your saved profile, resumes, jobs, applications, Library, Settings, and Support remain available. Add credits when you want Pramania to read new sources, analyze jobs, generate materials, or export files."
+            ? `Your saved profile, resumes, jobs, applications, Library, Settings, and Support remain available. Add credits when you want ${brand.name} to read new sources, analyze jobs, generate materials, or export files.`
             : `You have ${creditSummary.balance} credits left. Larger actions such as source reading, job analysis, generation, and export may need a top-up soon.`}
         </p>
       </div>

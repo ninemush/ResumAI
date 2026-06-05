@@ -1,11 +1,13 @@
-import { NextResponse } from "next/server";
-
+import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
   consumeCredits,
   requireCredits,
 } from "@/lib/billing/credits";
-import { exportMasterResumeArtifacts } from "@/lib/resumes/master-resume";
+import {
+  exportMasterResumeArtifacts,
+  getReusableMasterResumeExport,
+} from "@/lib/resumes/master-resume";
 import {
   checkRateLimit,
   getClientRateLimitKey,
@@ -13,7 +15,7 @@ import {
 } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
-  const requestId = crypto.randomUUID();
+  const requestId = createRequestId();
   const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "master_resume_export"),
     limit: 8,
@@ -29,43 +31,40 @@ export async function POST(request: Request) {
   }
 
   try {
-    await requireCredits("masterResumeExport");
-    const overview = await exportMasterResumeArtifacts();
-    await consumeCredits({
-      feature: "masterResumeExport",
-      resourceId: overview.latestResume?.id,
-      resourceType: "master_resume_export",
-    });
+    const reusableOverview = await getReusableMasterResumeExport();
 
-    return NextResponse.json({
-      ok: true,
+    if (reusableOverview) {
+      return apiSuccess({
+        requestId,
+        overview: reusableOverview,
+        reused: true,
+      });
+    }
+
+    await requireCredits("masterResumeExport");
+    const result = await exportMasterResumeArtifacts();
+
+    if (result.didExport) {
+      await consumeCredits({
+        feature: "masterResumeExport",
+        resourceId: result.overview.latestResume?.id,
+        resourceType: "master_resume_export",
+      });
+    }
+
+    return apiSuccess({
       requestId,
-      overview,
+      overview: result.overview,
+      reused: !result.didExport,
     });
   } catch (error) {
     if (isBillingError(error)) {
-      const apiError = buildCreditsApiError(error);
+      const billingError = buildCreditsApiError(error);
 
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: apiError,
-        },
-        { status: apiError.status },
-      );
+      return apiError(requestId, billingError);
     }
 
-    const { category, code, message, status } = toApiError(error);
-
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: { category, code, message },
-      },
-      { status },
-    );
+    return apiError(requestId, toApiError(error));
   }
 }
 

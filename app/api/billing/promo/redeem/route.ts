@@ -7,6 +7,7 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { createClient } from "@/lib/supabase/server";
 
 const redeemPromoSchema = z.object({
   code: z.string().trim().min(1).max(80),
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireSignedInUser();
     const summary = await redeemPromoCode(parsed.data.code);
 
     return NextResponse.json({
@@ -82,5 +84,16 @@ export async function POST(request: Request) {
       },
       { status: apiError.status },
     );
+  }
+}
+
+async function requireSignedInUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
   }
 }

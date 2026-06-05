@@ -6,7 +6,7 @@ import type { Page, TestInfo } from "@playwright/test";
 import { authenticateDemoUser, hasDemoAuthEnv } from "./helpers/demo-auth";
 
 const workspaceViews = [
-  { marker: /Profile cockpit/i, nav: /^Cockpit$/i, shot: "01-cockpit" },
+  { marker: /Profile home/i, nav: /^Home$/i, shot: "01-home" },
   { marker: /Master profile and resume/i, nav: /Profile & Resume/i, shot: "02-profile-resume" },
   { marker: /Role decisions/i, nav: /^Jobs$/i, shot: "03-jobs" },
   { marker: /Roles you’re pursuing/i, nav: /^Applications$/i, shot: "04-applications" },
@@ -47,7 +47,7 @@ test.describe("emulated user journey QA", () => {
     await expect(page.getByText("Hydration failed", { exact: false })).toHaveCount(0);
 
     await screenshot(page, testInfo, "00-returning-user-start");
-    await auditSurface(page, "Returning cockpit", findings);
+    await auditSurface(page, "Returning home", findings);
 
     if (isMobileProject) {
       await expect(page.locator(".mobile-workspace-nav")).toBeVisible();
@@ -73,7 +73,7 @@ test.describe("emulated user journey QA", () => {
       await page.locator(".mobile-workspace-nav").getByRole("button", { name: /^Chat$/i }).click();
       await expect(page.locator(".workspace-main")).toBeHidden();
     } else {
-      await page.locator(".side-nav").getByRole("button", { name: /^Cockpit$/i }).click();
+      await page.locator(".side-nav").getByRole("button", { name: /^Home$/i }).click();
     }
     await expect(page.getByText("Career advisor")).toBeVisible();
 

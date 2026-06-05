@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { ArtifactsPanel } from "@/components/artifacts/artifacts-panel";
 import { KnowledgebasePanel } from "@/components/knowledgebase/knowledgebase-panel";
+import { brand } from "@/lib/brand";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
@@ -30,7 +31,7 @@ export function LibraryPanel({
           <p className="eyebrow">Library</p>
           <h1 id="library-title">Files and generated materials</h1>
           <p>
-            One place for what you gave Pramania and what Pramania created for you.
+            One place for what you gave {brand.name} and what {brand.name} created for you.
           </p>
         </div>
         <div className="library-tab-strip" role="tablist" aria-label="Library sections">

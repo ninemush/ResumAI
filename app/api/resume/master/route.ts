@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-
+import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
   consumeCredits,
@@ -16,25 +15,20 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  const requestId = crypto.randomUUID();
-  const body = await readOptionalJson(request);
+  const requestId = createRequestId();
+  const body = await readOptionalJsonBody(request);
   const parsed = generateMasterResumeSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "validation",
-          code: "resume.invalid_instruction",
-          message: "Use a short resume instruction before regenerating.",
-        },
-      },
-      { status: 400 },
-    );
+    return apiError(requestId, {
+      category: "validation",
+      code: "resume.invalid_instruction",
+      message: "Use a short resume instruction before regenerating.",
+      status: 400,
+    });
   }
 
   const rateLimit = await checkRateLimit({
@@ -52,6 +46,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireSignedInUser();
     await requireCredits("masterResumeGenerate");
     const result = await generateMasterResume(parsed.data);
     await consumeCredits({
@@ -61,52 +56,23 @@ export async function POST(request: Request) {
       resourceType: "master_resume",
     });
 
-    return NextResponse.json({
-      ok: true,
+    return apiSuccess({
       requestId,
       ...result,
     });
   } catch (error) {
     if (isBillingError(error)) {
-      const apiError = buildCreditsApiError(error);
+      const billingError = buildCreditsApiError(error);
 
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: apiError,
-        },
-        { status: apiError.status },
-      );
+      return apiError(requestId, billingError);
     }
 
-    const { category, code, message, status } = toApiError(error);
-
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: { category, code, message },
-      },
-      { status },
-    );
-  }
-}
-
-async function readOptionalJson(request: Request) {
-  if (!request.headers.get("content-type")?.includes("application/json")) {
-    return {};
-  }
-
-  try {
-    return await request.json();
-  } catch {
-    return {};
+    return apiError(requestId, toApiError(error));
   }
 }
 
 export async function PATCH(request: Request) {
-  const requestId = crypto.randomUUID();
+  const requestId = createRequestId();
   const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "master_resume_update"),
     limit: 60,
@@ -123,58 +89,47 @@ export async function PATCH(request: Request) {
   let body: unknown;
 
   try {
-    body = await request.json();
+    body = await readJsonBody(request);
   } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "validation",
-          code: "request.invalid_json",
-          message: "Invalid JSON body.",
-        },
-      },
-      { status: 400 },
-    );
+    return apiError(requestId, {
+      category: "validation",
+      code: "request.invalid_json",
+      message: "Invalid JSON body.",
+      status: 400,
+    });
   }
 
   const parsed = updateMasterResumeSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "validation",
-          code: "resume.invalid_input",
-          message: "Use valid resume sections before saving.",
-        },
-      },
-      { status: 400 },
-    );
+    return apiError(requestId, {
+      category: "validation",
+      code: "resume.invalid_input",
+      message: "Use valid resume sections before saving.",
+      status: 400,
+    });
   }
 
   try {
     const overview = await updateMasterResume(parsed.data);
 
-    return NextResponse.json({
-      ok: true,
+    return apiSuccess({
       requestId,
       overview,
     });
   } catch (error) {
-    const { category, code, message, status } = toApiError(error);
+    return apiError(requestId, toApiError(error));
+  }
+}
 
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: { category, code, message },
-      },
-      { status },
-    );
+async function requireSignedInUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
   }
 }
 

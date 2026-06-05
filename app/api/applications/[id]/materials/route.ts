@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
-
+import { apiError, apiSuccess, createRequestId, readJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
   consumeCredits,
   requireCredits,
 } from "@/lib/billing/credits";
 import {
+  getReusableApplicationMaterials,
   generateApplicationMaterials,
   generateApplicationMaterialsSchema,
 } from "@/lib/applications/material-generation";
@@ -28,51 +28,35 @@ type RouteContext = {
 };
 
 export async function GET(_request: Request, context: RouteContext) {
-  const requestId = crypto.randomUUID();
+  const requestId = createRequestId();
   const params = await context.params;
 
   try {
     const review = await getMaterialReview({ applicationId: params.id });
 
-    return NextResponse.json({
-      ok: true,
+    return apiSuccess({
       requestId,
       review,
     });
   } catch (error) {
-    const { category, code, message, status } = toApiError(error);
-
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: { category, code, message },
-      },
-      { status },
-    );
+    return apiError(requestId, toApiError(error));
   }
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const requestId = crypto.randomUUID();
+  const requestId = createRequestId();
   const params = await context.params;
   const parsed = generateApplicationMaterialsSchema.safeParse({
     applicationId: params.id,
   });
 
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "validation",
-          code: "application.invalid_id",
-          message: "Choose a valid application.",
-        },
-      },
-      { status: 400 },
-    );
+    return apiError(requestId, {
+      category: "validation",
+      code: "application.invalid_id",
+      message: "Choose a valid application.",
+      status: 400,
+    });
   }
 
   const rateLimit = await checkRateLimit({
@@ -92,51 +76,44 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     await requireSignedInUser();
+    const reusableMaterials = await getReusableApplicationMaterials(parsed.data);
+
+    if (reusableMaterials) {
+      return apiSuccess({
+        requestId,
+        ...reusableMaterials,
+        reused: true,
+      });
+    }
+
     await requireCredits("applicationMaterialsGenerate");
     const result = await generateApplicationMaterials(parsed.data);
-    await consumeCredits({
-      feature: "applicationMaterialsGenerate",
-      metadata: {
-        cover_letter_id: result.coverLetterId,
-        resume_id: result.resumeId,
-      },
-      resourceId: params.id,
-      resourceType: "application_materials",
-    });
 
-    return NextResponse.json({
-      ok: true,
+    if (result.didGenerate) {
+      await consumeCredits({
+        feature: "applicationMaterialsGenerate",
+        metadata: {
+          cover_letter_id: result.coverLetterId,
+          resume_id: result.resumeId,
+        },
+        resourceId: params.id,
+        resourceType: "application_materials",
+      });
+    }
+
+    return apiSuccess({
       requestId,
       ...result,
+      reused: !result.didGenerate,
     });
   } catch (error) {
     if (isBillingError(error)) {
-      const apiError = buildCreditsApiError(error);
+      const billingError = buildCreditsApiError(error);
 
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: apiError,
-        },
-        { status: apiError.status },
-      );
+      return apiError(requestId, billingError);
     }
 
-    const { category, code, message, status } = toApiError(error);
-
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category,
-          code,
-          message,
-        },
-      },
-      { status },
-    );
+    return apiError(requestId, toApiError(error));
   }
 }
 
@@ -156,7 +133,7 @@ async function requireSignedInUser() {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const requestId = crypto.randomUUID();
+  const requestId = createRequestId();
   const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "application_materials_update"),
     limit: 60,
@@ -175,20 +152,14 @@ export async function PATCH(request: Request, context: RouteContext) {
   let body: unknown;
 
   try {
-    body = await request.json();
+    body = await readJsonBody(request);
   } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "validation",
-          code: "request.invalid_json",
-          message: "Invalid JSON body.",
-        },
-      },
-      { status: 400 },
-    );
+    return apiError(requestId, {
+      category: "validation",
+      code: "request.invalid_json",
+      message: "Invalid JSON body.",
+      status: 400,
+    });
   }
 
   const parsed = updateMaterialReviewSchema.safeParse({
@@ -197,40 +168,24 @@ export async function PATCH(request: Request, context: RouteContext) {
   });
 
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "validation",
-          code: "application.invalid_material_update",
-          message:
-            "Use valid resume sections or cover-letter text before saving.",
-        },
-      },
-      { status: 400 },
-    );
+    return apiError(requestId, {
+      category: "validation",
+      code: "application.invalid_material_update",
+      message:
+        "Use valid resume sections or cover-letter text before saving.",
+      status: 400,
+    });
   }
 
   try {
     const review = await updateMaterialReview(parsed.data);
 
-    return NextResponse.json({
-      ok: true,
+    return apiSuccess({
       requestId,
       review,
     });
   } catch (error) {
-    const { category, code, message, status } = toApiError(error);
-
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: { category, code, message },
-      },
-      { status },
-    );
+    return apiError(requestId, toApiError(error));
   }
 }
 

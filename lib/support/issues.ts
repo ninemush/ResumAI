@@ -26,6 +26,7 @@ export const supportIssueCreateSchema = z.object({
   errorMessage: z.string().trim().max(500).optional(),
   metadata: z.record(z.string(), z.unknown()).default({}),
   source: z.string().trim().min(1).max(80).default("user_report"),
+  supportContextConsent: z.boolean().default(false),
   systemResponse: z.string().trim().max(2000).optional(),
   title: z.string().trim().min(1).max(180).optional(),
   userMessage: z.string().trim().max(2000).optional(),
@@ -80,7 +81,7 @@ export function buildSupportIssueAnalysis(input: SupportIssueCreateInput): Issue
         "A master resume action failed or produced an output that did not match the expected role-by-role resume structure. The owner should review the resume generation, source reading, and saved resume content for this user.",
       rootCauseCategory: "resume_generation",
       summary:
-        "The user tried to fix or update the master resume, but Pramania could not complete the action and gave a dead-end response.",
+        "The user tried to fix or update the master resume, but the app could not complete the action and gave a dead-end response.",
       suggestedFix:
         "Review the latest generated_resumes row, source reading records, and conversation around the failure. Re-run master resume generation after confirming the role chronology parser is excluding recommendations and preserving company/title/date/location fields.",
       title: input.title ?? "Master resume action failed",
@@ -159,4 +160,72 @@ export function buildSupportIssueAnalysis(input: SupportIssueCreateInput): Issue
 
 export function supportIssueShortId(id: string) {
   return `PR-${id.slice(0, 8).toUpperCase()}`;
+}
+
+export type UserSupportTicketRow = {
+  area: string;
+  auto_closed_at?: string | null;
+  closed_reason?: string | null;
+  created_at: string;
+  fix_status?: string | null;
+  id: string;
+  priority: string;
+  reopen_until?: string | null;
+  root_cause?: string | null;
+  root_cause_category?: string | null;
+  status: string;
+  subject: string;
+  suggested_fix?: string | null;
+  summary: string;
+  updated_at: string;
+  user_visible_resolution?: string | null;
+};
+
+export function toUserSupportIssue(ticket: UserSupportTicketRow) {
+  const visibleStatus = readVisibleSupportStatus(ticket.status, ticket.reopen_until ?? null);
+
+  return {
+    area: ticket.area,
+    auto_closed_at: ticket.auto_closed_at ?? null,
+    closed_reason: ticket.closed_reason ?? null,
+    created_at: ticket.created_at,
+    id: ticket.id,
+    priority: ticket.priority,
+    reopen_until: ticket.reopen_until ?? null,
+    shortId: supportIssueShortId(ticket.id),
+    status: visibleStatus,
+    statusDetail: getUserSupportStatusDetail(visibleStatus),
+    subject: ticket.subject,
+    summary: ticket.summary,
+    updated_at: ticket.updated_at,
+    user_visible_resolution: ticket.user_visible_resolution ?? null,
+  };
+}
+
+function readVisibleSupportStatus(status: string, reopenUntil: string | null) {
+  if (status !== "resolved" || !reopenUntil) {
+    return status;
+  }
+
+  return new Date(reopenUntil).getTime() < Date.now() ? "closed" : status;
+}
+
+function getUserSupportStatusDetail(status: string) {
+  if (status === "resolved" || status === "closed") {
+    return "Support marked this issue complete.";
+  }
+
+  if (status === "escalated") {
+    return "Human support is reviewing the escalation packet.";
+  }
+
+  if (status === "waiting_on_user") {
+    return "Support needs one more detail from you.";
+  }
+
+  if (status === "in_progress") {
+    return "Support is actively reviewing this issue.";
+  }
+
+  return "Support has the issue and will review the safe details.";
 }

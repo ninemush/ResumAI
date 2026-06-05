@@ -1,28 +1,49 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { AlertCircle, CheckCircle2, HelpCircle, MessageSquareText, RefreshCw, Send } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileQuestion, HelpCircle, MessageSquareText, RefreshCw, Send } from "lucide-react";
 import { useEffect, useState } from "react";
+
+import { brand } from "@/lib/brand";
 
 type SupportIssue = {
   area: string;
   auto_closed_at: string | null;
   closed_reason: string | null;
   created_at: string;
-  fix_status: string;
   id: string;
   priority: string;
   reopen_until: string | null;
-  root_cause: string | null;
-  root_cause_category: string | null;
   shortId: string;
   status: string;
+  statusDetail: string;
   subject: string;
-  suggested_fix: string | null;
   summary: string;
   updated_at: string;
   user_visible_resolution: string | null;
 };
+
+const L0_HELP_ITEMS = [
+  {
+    body: "Refresh once, retry the action, then include the affected screen and the last safe error code if it still fails.",
+    title: "Product or resume issue",
+  },
+  {
+    body: "Check credits and history first. Share only the charge, invoice, or credit reference, not card details.",
+    title: "Billing or refund",
+  },
+  {
+    body: "Use the privacy category for export, deletion, or correction requests. Keep identifiers out of the message.",
+    title: "Privacy request",
+  },
+  {
+    body: "For account access or suspected security issues, avoid pasting passwords, tokens, backup codes, or session details.",
+    title: "Security or account",
+  },
+];
+
+const SENSITIVE_DETAIL_PATTERN =
+  /\b(ssn|social security|passport|password|token|secret|dob|date of birth|mrn|medical record|card number)\b/i;
 
 export function SupportPanel() {
   const [issues, setIssues] = useState<SupportIssue[]>([]);
@@ -32,7 +53,7 @@ export function SupportPanel() {
   const [severity, setSeverity] = useState("normal");
   const [subject, setSubject] = useState("");
   const [details, setDetails] = useState("");
-  const [includeContext, setIncludeContext] = useState(true);
+  const [includeContext, setIncludeContext] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   async function loadIssues() {
@@ -71,6 +92,11 @@ export function SupportPanel() {
       return;
     }
 
+    if (SENSITIVE_DETAIL_PATTERN.test(trimmedDetails)) {
+      setMessage("Remove secrets, identifiers, or payment details before creating the issue.");
+      return;
+    }
+
     setIsSubmitting(true);
     setMessage(null);
 
@@ -87,6 +113,7 @@ export function SupportPanel() {
             sourceSurface: "support_form",
           },
           source: "support_form",
+          supportContextConsent: includeContext,
           title: trimmedSubject,
           userMessage: trimmedDetails,
         }),
@@ -104,7 +131,7 @@ export function SupportPanel() {
       setDetails("");
       setCategory("product");
       setSeverity("normal");
-      setIncludeContext(true);
+      setIncludeContext(false);
       setMessage(
         `Created issue ${payload.issue?.shortId ?? ""}. Human review is expected within the response window shown here.`,
       );
@@ -133,8 +160,8 @@ export function SupportPanel() {
             <strong>Start in chat</strong>
             <p>
               Describe the problem naturally. If it looks like product friction
-              rather than career guidance, Pramania will create a support issue
-              and keep the conversation context attached.
+              rather than career guidance, {brand.name} can create a support
+              issue from support-safe details.
             </p>
           </div>
         </article>
@@ -143,8 +170,8 @@ export function SupportPanel() {
           <div>
             <strong>What gets captured</strong>
             <p>
-              The issue includes the affected area, likely root cause, priority,
-              user-visible summary, and supporting logs for owner review.
+              The issue includes the affected area, priority, user-visible
+              summary, and a redacted L1 packet. Workspace context is optional.
             </p>
           </div>
         </article>
@@ -159,6 +186,30 @@ export function SupportPanel() {
             </p>
           </div>
         </article>
+      </section>
+
+      <section className="support-user-list" aria-label="Self-serve help">
+        <div className="section-heading inline-section-heading">
+          <div>
+            <p className="eyebrow">Try first</p>
+            <h2>Quick help before support</h2>
+          </div>
+          <span className="support-response-pill">L0 help</span>
+        </div>
+        <div className="support-user-issue-list">
+          {L0_HELP_ITEMS.map((item) => (
+            <article className="support-user-issue" key={item.title}>
+              <div>
+                <span className="support-user-id">
+                  <FileQuestion size={13} aria-hidden="true" />
+                  Guide
+                </span>
+              </div>
+              <h3>{item.title}</h3>
+              <p>{item.body}</p>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="support-request-panel" aria-label="Create support issue">
@@ -216,9 +267,9 @@ export function SupportPanel() {
               type="checkbox"
             />
             <span>
-              Include support-safe workspace context such as recent errors,
-              affected area, and issue history. Do not include sensitive
-              personal records in the message.
+              Include support-safe workspace context such as recent error codes,
+              affected screen, and issue history. Leave this off for privacy,
+              security, refund, or account-access requests unless support asks.
             </span>
           </label>
           <div className="support-request-footer">
@@ -254,7 +305,7 @@ export function SupportPanel() {
             <div>
               <strong>No issues logged yet</strong>
               <p>
-                If something breaks, ask Pramania for help in the chat. The
+                If something breaks, ask {brand.name} for help in the chat. The
                 issue will appear here after it is logged.
               </p>
             </div>
@@ -276,8 +327,8 @@ export function SupportPanel() {
                     <dd>{formatArea(issue.area)}</dd>
                   </div>
                   <div>
-                    <dt>Likely cause</dt>
-                    <dd>{issue.root_cause_category ?? "Being reviewed"}</dd>
+                    <dt>Support step</dt>
+                    <dd>{issue.statusDetail}</dd>
                   </div>
                   <div>
                     <dt>Last update</dt>

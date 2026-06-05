@@ -12,13 +12,15 @@ export default function DataRetentionPage() {
         </Link>
         <p className="eyebrow">Privacy controls</p>
         <h1 id="retention-title">Data Retention Policy</h1>
-        <p className="legal-meta">Draft operational policy. Final retention periods require legal review.</p>
+        <p className="legal-meta">
+          Operational draft for launch readiness. Exact periods and legal exceptions still require owner and legal approval.
+        </p>
 
         <p>
           {brand.name} keeps data only as needed to provide the workspace,
-          generate user-requested materials, maintain security, resolve
-          disputes, and preserve minimum audit-safe records for credits, quota,
-          accounting, and abuse prevention.
+          generate user-requested materials, maintain security, resolve support
+          or billing disputes, and preserve minimum audit-safe records for
+          credits, quota, accounting, and abuse prevention.
         </p>
 
         {retentionPolicyConfig.map((item) => (
@@ -31,9 +33,12 @@ export default function DataRetentionPage() {
 
         <h2>Deletion And Minimization</h2>
         <p>
-          Deletion requests start as privacy requests. Some records may be
-          deleted, while application, credit, quota, security, and audit records
-          may be minimized or retained where needed for operational review.
+          Deletion requests start as privacy requests in the app. Editable
+          profile data, uploaded sources, and non-submitted drafts are candidates
+          for deletion when no dependency exists. Application, credit, quota,
+          security, payment-entitlement, and audit records may instead be
+          minimized or retained where needed for support, accounting, fraud,
+          dispute, or legal review.
         </p>
       </section>
     </main>

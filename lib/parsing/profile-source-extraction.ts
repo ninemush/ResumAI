@@ -7,6 +7,7 @@ import { extractText } from "unpdf";
 import { z } from "zod";
 
 import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
+import { brand } from "@/lib/brand";
 import { extractProfileFactsFromText, type ProfileIntakeResult } from "@/lib/profile/profile-intake";
 import { safeFetchExternalHtml } from "@/lib/security/safe-fetch";
 import { assertExternalHttpUrl } from "@/lib/security/url-safety";
@@ -723,7 +724,7 @@ async function extractLinkedInPublicProfileWithSearch(sourceUrl: string) {
       const response = await createOpenAIResponse({
         model: getProfileIntakeModel(),
         instructions: [
-          "You are Pramania's public-profile extraction service.",
+          `You are ${brand.name}'s public-profile extraction service.`,
           "Use web search to read only career information that is publicly visible for the exact LinkedIn profile URL provided by the user.",
           "Do not use private, logged-in, guessed, inferred, or unrelated information. Do not scrape around access controls.",
           "If the profile is private, not indexed, blocked, unrelated, or does not expose enough public career detail, return exactly PUBLIC_PROFILE_NOT_READABLE.",

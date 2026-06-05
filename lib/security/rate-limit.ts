@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { isIP } from "node:net";
+
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
@@ -136,11 +139,47 @@ function shouldUseDurableRateLimit() {
 }
 
 export function getClientRateLimitKey(request: Request, scope: string, subject?: string) {
-  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const forwardedHost = request.headers.get("x-forwarded-host") ?? "unknown-host";
-  const ip = forwardedFor || request.headers.get("x-real-ip") || "unknown-ip";
+  const ip = getClientIp(request);
+  const normalizedScope = normalizeRateLimitKeyPart(scope, "unknown_scope");
+  const normalizedSubject = subject?.trim().toLowerCase();
 
-  return `${scope}:${subject?.trim().toLowerCase() || ip}:${forwardedHost}`;
+  if (normalizedSubject) {
+    return `${normalizedScope}:subject:${hashRateLimitPart(normalizedSubject)}`;
+  }
+
+  return `${normalizedScope}:ip:${hashRateLimitPart(ip)}`;
+}
+
+function getClientIp(request: Request) {
+  const forwardedFor = request.headers
+    .get("x-forwarded-for")
+    ?.split(",")
+    .map((value) => normalizeIpHeaderValue(value))
+    .find(Boolean);
+  const realIp = normalizeIpHeaderValue(request.headers.get("x-real-ip"));
+
+  return forwardedFor || realIp || "unknown-ip";
+}
+
+function normalizeIpHeaderValue(value: string | null | undefined) {
+  const normalized = value?.trim().replace(/^\[/, "").replace(/\]$/, "") ?? "";
+
+  return isIP(normalized) ? normalized : "";
+}
+
+function normalizeRateLimitKeyPart(value: string, fallback: string) {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
+
+  return normalized || fallback;
+}
+
+function hashRateLimitPart(value: string) {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 export function rateLimitResponse({

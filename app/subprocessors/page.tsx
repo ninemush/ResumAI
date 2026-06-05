@@ -12,12 +12,15 @@ export default function SubprocessorsPage() {
         </Link>
         <p className="eyebrow">Privacy controls</p>
         <h1 id="subprocessors-title">Subprocessor List</h1>
-        <p className="legal-meta">Draft list. Region, DPA, and transfer-basis details must be finalized before launch.</p>
+        <p className="legal-meta">
+          Operational draft. Region, DPA, and transfer-basis details must be finalized before public launch.
+        </p>
 
         <p>
           {brand.name} uses service providers to host the app, store data,
-          process AI-assisted requests, and manage purchase entitlements. The
-          list below is an operational tracking list, not a certification claim.
+          process AI-assisted requests, and manage approved live purchase
+          entitlements. The list below is an operational tracking list, not a
+          certification claim or completed legal review.
         </p>
 
         {subprocessorConfig.map((processor) => (

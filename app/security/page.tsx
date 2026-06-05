@@ -12,20 +12,23 @@ export default function SecurityPage() {
         </Link>
         <p className="eyebrow">Security overview</p>
         <h1 id="security-title">Security Overview</h1>
-        <p className="legal-meta">Operational overview. No audit or certification claim is made.</p>
+        <p className="legal-meta">
+          Operational overview for launch readiness. No audit, certification, or legal compliance claim is made.
+        </p>
 
         <p>
           {brand.name} is designed around authenticated access, Supabase Row
-          Level Security, private storage buckets, server-side validation, rate
-          limits on mutations, and avoidance of sensitive profile or resume text
-          in telemetry.
+          Level Security, private storage buckets, server-side validation,
+          production rate limits, SSRF-safe public-link ingestion, and avoidance
+          of sensitive profile or resume text in telemetry.
         </p>
 
         <h2>Current Controls</h2>
         <p>
           User workspace records are scoped by authenticated user id. Admin-only
           records are protected by database policies. Uploaded files and
-          generated artifacts use private storage paths.
+          generated artifacts use private storage paths. Owner/admin tier
+          changes and credit actions are expected to leave audit evidence.
         </p>
 
         <h2>Incident Response</h2>

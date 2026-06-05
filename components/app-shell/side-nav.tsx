@@ -31,7 +31,7 @@ export type AppView =
   | "owner";
 
 const primaryItems = [
-  { label: "Cockpit", icon: UserRound, view: "profile" },
+  { label: "Home", icon: UserRound, view: "profile" },
   { label: "Profile & Resume", icon: FileText, view: "resume" },
   { label: "Jobs", icon: BriefcaseBusiness, view: "jobs" },
   { label: "Applications", icon: ClipboardList, view: "applications" },

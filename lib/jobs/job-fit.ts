@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { brand } from "@/lib/brand";
 import { parseResumeContent, type ResumeContent } from "@/lib/resumes/resume-content";
 import { createClient } from "@/lib/supabase/server";
 
@@ -183,7 +184,7 @@ export function analyzeJobFit({
   const jobSignalGroups = readSignalGroups(jobText);
 
   if (candidateKeywords.length === 0) {
-    return buildEmptyFit("Add profile context before Pramania can give a fair fit read.");
+    return buildEmptyFit(`Add profile context before ${brand.name} can give a fair fit read.`);
   }
 
   const normalizedCandidateTerms = candidateKeywords.map(normalizeKeyword);

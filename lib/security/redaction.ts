@@ -48,5 +48,5 @@ function redactUnknown(value: unknown, depth: number): unknown {
 }
 
 function isSensitiveKey(key: string) {
-  return /\b(token|secret|password|authorization|api[_-]?key|session|cookie)\b/i.test(key);
+  return /(token|secret|password|authorization|api[_-]?key|session|cookie)/i.test(key);
 }

@@ -2745,6 +2745,49 @@ input:focus {
   grid-column: span 9;
 }
 
+.owner-tier-table {
+  margin-top: 18px;
+}
+
+.owner-tier-table .owner-table-row {
+  grid-template-columns:
+    minmax(180px, 0.75fr)
+    minmax(150px, 0.65fr)
+    minmax(180px, 0.75fr)
+    minmax(360px, 1.8fr);
+}
+
+.owner-tier-form.compact {
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.owner-tier-form.compact .owner-field-small,
+.owner-tier-form.compact .owner-field-medium,
+.owner-tier-form.compact .owner-credit-description {
+  grid-column: auto;
+}
+
+.owner-tier-form.compact .owner-credit-description,
+.owner-tier-form.compact .owner-credit-guardrail,
+.owner-tier-form.compact .owner-form-actions {
+  grid-column: 1 / -1;
+}
+
+.owner-tier-active-toggle {
+  align-items: center;
+  align-self: end;
+  display: flex !important;
+  gap: 10px !important;
+  min-height: 46px;
+}
+
+.owner-tier-active-toggle input {
+  accent-color: var(--pr-navy);
+  min-height: auto;
+  width: auto;
+}
+
 .owner-user-picker {
   display: grid;
   gap: 8px;
@@ -3014,6 +3057,12 @@ input:focus {
 
 .profitability-table .owner-table-row {
   grid-template-columns: 1.25fr 0.8fr 0.9fr 0.9fr 1fr;
+}
+
+@media (max-width: 1120px) {
+  .owner-tier-table .owner-table-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .support-issue-list {

@@ -10,7 +10,7 @@ export const brand = {
   appIconLightPath: "/brand/pramania-app-icon-light.png",
   bloomMarkPath: "/brand/pramania-bloom-mark-transparent.png",
   horizontalLogoPath: "/brand/pramania-horizontal-lockup-transparent.png",
-  logoAlt: "Pramania primary logo",
+  logoAlt: `${configuredName || "Pramania"} primary logo`,
   logoPath: "/brand/pramania-primary-logo-transparent.png",
   stackedLogoPath: "/brand/pramania-stacked-lockup-transparent.png",
   wordmarkPath: "/brand/pramania-wordmark-only-transparent.png",

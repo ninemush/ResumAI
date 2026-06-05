@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server";
-
+import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
   consumeCredits,
   requireCredits,
 } from "@/lib/billing/credits";
-import { exportMaterialArtifacts, materialReviewSchema } from "@/lib/applications/material-review";
+import {
+  exportMaterialArtifacts,
+  getReusableMaterialExport,
+  materialReviewSchema,
+} from "@/lib/applications/material-review";
 import {
   checkRateLimit,
   getClientRateLimitKey,
@@ -20,23 +23,17 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const requestId = crypto.randomUUID();
+  const requestId = createRequestId();
   const params = await context.params;
   const parsed = materialReviewSchema.safeParse({ applicationId: params.id });
 
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "validation",
-          code: "application.invalid_id",
-          message: "Choose a valid application.",
-        },
-      },
-      { status: 400 },
-    );
+    return apiError(requestId, {
+      category: "validation",
+      code: "application.invalid_id",
+      message: "Choose a valid application.",
+      status: 400,
+    });
   }
 
   const rateLimit = await checkRateLimit({
@@ -55,43 +52,40 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     await requireSignedInUser();
-    await requireCredits("applicationMaterialsExport");
-    const review = await exportMaterialArtifacts(parsed.data);
-    await consumeCredits({
-      feature: "applicationMaterialsExport",
-      resourceId: params.id,
-      resourceType: "application_materials_export",
-    });
+    const reusableReview = await getReusableMaterialExport(parsed.data);
 
-    return NextResponse.json({
-      ok: true,
+    if (reusableReview) {
+      return apiSuccess({
+        requestId,
+        review: reusableReview,
+        reused: true,
+      });
+    }
+
+    await requireCredits("applicationMaterialsExport");
+    const result = await exportMaterialArtifacts(parsed.data);
+
+    if (result.didExport) {
+      await consumeCredits({
+        feature: "applicationMaterialsExport",
+        resourceId: params.id,
+        resourceType: "application_materials_export",
+      });
+    }
+
+    return apiSuccess({
       requestId,
-      review,
+      review: result.review,
+      reused: !result.didExport,
     });
   } catch (error) {
     if (isBillingError(error)) {
-      const apiError = buildCreditsApiError(error);
+      const billingError = buildCreditsApiError(error);
 
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: apiError,
-        },
-        { status: apiError.status },
-      );
+      return apiError(requestId, billingError);
     }
 
-    const { category, code, message, status } = toApiError(error);
-
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: { category, code, message },
-      },
-      { status },
-    );
+    return apiError(requestId, toApiError(error));
   }
 }
 

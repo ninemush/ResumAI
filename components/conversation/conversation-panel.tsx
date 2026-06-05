@@ -1201,7 +1201,7 @@ export function ConversationPanel({
     const sourceType = inferFileSourceType(file);
 
     if (!sourceType) {
-      return `${file.name} is not a supported profile source yet. Drop a PDF, DOCX, TXT file, JPG/PNG/WebP image, LinkedIn CSV/ZIP export, or paste the text/link directly into Pramania.`;
+      return `${file.name} is not a supported profile source yet. Drop a PDF, DOCX, TXT file, JPG/PNG/WebP image, LinkedIn CSV/ZIP export, or paste the text/link directly into ${brand.name}.`;
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
@@ -1741,7 +1741,7 @@ function ConversationCreditNotice({
       <strong>Credits are paused, not your progress.</strong>
       <p>
         You can still review everything in your workspace. Add credits when you
-        want Pramania to read sources, analyze jobs, generate materials, or
+        want {brand.name} to read sources, analyze jobs, generate materials, or
         export files.
       </p>
       <div className="conversation-credit-actions">
@@ -1913,7 +1913,7 @@ function getProcessingMessage(
         "Checking the source history and latest resume before I respond. The answer should be grounded, not generic.",
         "I’m looking for the missed context first, then I’ll give you the practical answer.",
         "Recovering the thread from your saved profile and source evidence.",
-        "Checking what Pramania already knows and where the earlier answer fell short.",
+        `Checking what ${brand.name} already knows and where the earlier answer fell short.`,
       ]
     : null;
 
@@ -2067,7 +2067,7 @@ function formatActiveViewForMessage(activeView: AppView) {
     knowledgebase: "library",
     library: "library",
     owner: "owner console",
-    profile: "profile cockpit",
+    profile: "profile home",
     resume: "profile and resume studio",
     settings: "settings area",
     support: "support area",
@@ -2724,7 +2724,7 @@ function processSourceExplanationQuestion(text: string) {
     return buildLinkedInExplanation();
   }
 
-  return "I could not read that profile link because the page did not return enough career content to Pramania's server. Some sites render content only in a browser, block automated server requests, require sign-in, or hide profile sections from public HTML. The reliable V1 path is to paste the profile text, upload a PDF/DOCX export, or drop a screenshot so I can extract it and show you the evidence before trusting it.";
+  return `I could not read that profile link because the page did not return enough career content to ${brand.name}'s server. Some sites render content only in a browser, block automated server requests, require sign-in, or hide profile sections from public HTML. The reliable V1 path is to paste the profile text, upload a PDF/DOCX export, or drop a screenshot so I can extract it and show you the evidence before trusting it.`;
 }
 
 function buildLinkedInBlockedMessage(reason: string) {
@@ -2993,7 +2993,7 @@ function formatJobIntakeReply(
     | undefined,
 ) {
   if (!job) {
-    return "I saved that job post. We can review fit once Pramania has enough job detail.";
+    return `I saved that job post. We can review fit once ${brand.name} has enough job detail.`;
   }
 
   const roleLabel =
@@ -3636,7 +3636,7 @@ function getUnsupportedFileReason(file: File) {
     mimeType === "image/heic" ||
     mimeType === "image/heif"
   ) {
-    return `${file.name} is a HEIC/HEIF image. Convert it to JPG, PNG, or WebP and drop it here so Pramania can read it cleanly.`;
+    return `${file.name} is a HEIC/HEIF image. Convert it to JPG, PNG, or WebP and drop it here so ${brand.name} can read it cleanly.`;
   }
 
   return null;

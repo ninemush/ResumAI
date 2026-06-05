@@ -30,7 +30,7 @@ test.describe("authenticated workspace", () => {
       await expect(page.getByRole("button", { name: /^Settings$/i })).toBeVisible();
       await expect(page.getByRole("button", { name: /^Support$/i })).toBeVisible();
     } else {
-      await expect(page.getByRole("button", { name: /Cockpit/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Home$/i })).toBeVisible();
       await expect(page.getByRole("button", { name: /Profile & Resume/i })).toBeVisible();
       await expect(page.getByRole("region", { name: "Since your last visit" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "What needs attention now" })).toBeVisible();
@@ -69,13 +69,13 @@ test.describe("authenticated workspace", () => {
     await expect(page.locator(".mobile-workspace-nav")).toBeVisible();
   });
 
-  test("keeps profile mode chat-first on mobile without cockpit overlap", async ({ page, isMobile }) => {
+  test("keeps profile mode chat-first on mobile without profile overview overlap", async ({ page, isMobile }) => {
     test.skip(!isMobile, "Mobile chat-first layout is a mobile-specific regression check.");
 
     await page.goto("/");
 
     await expect(page.getByText("Career advisor")).toBeVisible();
-    await expect(page.getByText("Profile cockpit")).toBeHidden();
+    await expect(page.getByText("Profile home")).toBeHidden();
 
     const shellClassName = await page.locator(".workspace-shell").evaluate((element) => element.className);
     const layoutState = await page.evaluate(() => {
@@ -357,7 +357,7 @@ test.describe("authenticated workspace", () => {
       await dialog.dismiss();
     });
 
-    await page.locator(".side-nav").getByRole("button", { name: /^Cockpit$/i }).click();
+    await page.locator(".side-nav").getByRole("button", { name: /^Home$/i }).click();
     await expect(page.getByRole("heading", { name: /Master profile and resume/i })).toBeVisible();
   });
 });

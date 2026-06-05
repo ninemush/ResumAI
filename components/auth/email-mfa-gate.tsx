@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { ArrowRight, Loader2, MailCheck } from "lucide-react";
 
+import { brand } from "@/lib/brand";
+
 type EmailMfaGateProps = {
   email: string;
 };
@@ -70,7 +72,7 @@ export function EmailMfaGate({ email }: EmailMfaGateProps) {
           </span>
           <h1>Check your email</h1>
           <p>
-            Pramania sent a 6-digit code to {email}. This keeps your career
+            {brand.name} sent a 6-digit code to {email}. This keeps your career
             workspace protected. If the address looks wrong, sign out and use
             the correct account.
           </p>

@@ -493,7 +493,7 @@ status, write user-visible notes, mark fixed, ask for more information, or close
 Do not pretend to deploy code or apply a product fix unless an actual command has
 run.
 
-Pramania can guide users to these exact app areas and actions. Use suggestedLinks
+${brand.name} can guide users to these exact app areas and actions. Use suggestedLinks
 or suggestedActions when it would reduce effort or clarify where the user should
 go next. Do not describe navigation vaguely if a precise app surface exists.
 Capabilities:
@@ -883,7 +883,7 @@ function formatWorkspaceForAdvisor(workspace: AdvisorWorkspaceContext) {
       ]
     : ["Jobs: no job records were available for this reply."];
   const sourceLines = [
-    "Career material Pramania can use:",
+    `Career material ${brand.name} can use:`,
     ...workspace.sources.recent
       .slice(0, 8)
       .map(
@@ -1432,7 +1432,7 @@ function buildTrackingAdvisorFallback(workspace: AdvisorWorkspaceContext) {
     workspace.jobs?.recentJobs.filter((job) => !job.archived_at) ?? [];
 
   if (applications.length === 0 && jobs.length === 0) {
-    return "You are not actively tracking any jobs or applications yet. The next useful move is to paste a job link into Pramania; I will read it, compare it against your profile, and ask before logging it as an application.";
+    return `You are not actively tracking any jobs or applications yet. The next useful move is to paste a job link into ${brand.name}; I will read it, compare it against your profile, and ask before logging it as an application.`;
   }
 
   const applicationLines = applications
@@ -1454,7 +1454,7 @@ Applications: ${applicationLines.length > 0 ? applicationLines.join("; ") : "non
 
 Jobs under review: ${jobLines.length > 0 ? jobLines.join("; ") : "none waiting for review"}.
 
-The practical next step is to move any real submitted application out of Draft/Review and keep the status current, because that is how Pramania can help with follow-ups and outcome tracking.`;
+The practical next step is to move any real submitted application out of Draft/Review and keep the status current, because that is how ${brand.name} can help with follow-ups and outcome tracking.`;
 }
 
 function buildNextMoveAdvisorFallback({

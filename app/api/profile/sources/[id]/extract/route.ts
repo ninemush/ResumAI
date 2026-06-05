@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { brand } from "@/lib/brand";
 import {
   buildCreditsApiError,
   consumeCredits,
@@ -14,6 +15,7 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = {
   params: Promise<{
@@ -58,6 +60,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
+    await requireSignedInUser();
     await requireCredits("profileSourceExtract");
     const result = await extractProfileSourceText(parsed.data);
     await consumeCredits({
@@ -99,6 +102,17 @@ export async function POST(request: Request, context: RouteContext) {
       },
       { status },
     );
+  }
+}
+
+async function requireSignedInUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
   }
 }
 
@@ -239,7 +253,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "source.doc_unsupported",
-        message: "Older .doc files are not reliable for profile intake. Save or export the file as PDF or DOCX and drop it into Pramania.",
+        message: `Older .doc files are not reliable for profile intake. Save or export the file as PDF or DOCX and drop it into ${brand.name}.`,
         status: 422,
       };
     }

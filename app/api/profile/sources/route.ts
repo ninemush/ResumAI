@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { brand } from "@/lib/brand";
 import {
   getRecentProfileSources,
   ingestProfileSource,
@@ -168,7 +169,7 @@ function toApiError(error: unknown) {
     if (error.message === "DOC_UNSUPPORTED") {
       return {
         code: "source.doc_unsupported",
-        message: "Older .doc files are not reliable for profile intake. Save or export the file as PDF or DOCX and drop it into Pramania.",
+        message: `Older .doc files are not reliable for profile intake. Save or export the file as PDF or DOCX and drop it into ${brand.name}.`,
         status: 422,
       };
     }

@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { PROFILE_INTAKE_INSTRUCTIONS, PROFILE_INTAKE_PROMPT_VERSION } from "@/lib/ai/prompts/profile-intake";
 import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
+import { brand } from "@/lib/brand";
 import { buildProfileIntelligence } from "@/lib/profile/profile-intelligence";
 import { checkProfileIntakeScope } from "@/lib/profile/profile-intake-scope";
 import { createClient } from "@/lib/supabase/server";
@@ -917,7 +918,7 @@ function buildDeterministicProfileIntakeResult({
         roleTitles: deriveRoleTitles(normalizedText),
         seniorityLevel: targetLevel,
         rationale:
-          "The source contains enough career evidence to support an initial positioning read, but Pramania should still verify the highest-value metrics and role focus with the user before locking the master resume.",
+          `The source contains enough career evidence to support an initial positioning read, but ${brand.name} should still verify the highest-value metrics and role focus with the user before locking the master resume.`,
         assumptions: [
           "The LinkedIn PDF reflects the user's current preferred positioning.",
           "Imported source text may omit context that would make the resume stronger.",

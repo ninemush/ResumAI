@@ -129,7 +129,7 @@ export function MasterResumePanel({
       }),
     );
     setMessage(
-      "I moved that refinement into Pramania chat. Add the missing detail there, and Pramania will use it against that exact gap.",
+      `I moved that refinement into ${brand.name} chat. Add the missing detail there, and ${brand.name} will use it against that exact gap.`,
     );
   }
 
@@ -789,8 +789,8 @@ export function MasterResumePanel({
               ) : (
                 <p className="resume-empty-note">
                   {profileOverview.recentSources.some((source) => source.extraction_status === "succeeded")
-                    ? "Pramania has saved source evidence, but this draft does not yet contain a role-by-role timeline. Rebuild the resume, then check the source receipt in Library if chronology is still missing."
-                    : "No role-by-role work history yet. Drop a resume, LinkedIn PDF, or rough work-history note into Pramania, then regenerate this master resume."}
+                    ? `${brand.name} has saved source evidence, but this draft does not yet contain a role-by-role timeline. Rebuild the resume, then check the source receipt in Library if chronology is still missing.`
+                    : `No role-by-role work history yet. Drop a resume, LinkedIn PDF, or rough work-history note into ${brand.name}, then regenerate this master resume.`}
                 </p>
               )}
             </section>
@@ -1227,7 +1227,7 @@ export function MasterResumePanel({
             <div>
               <h2>No master resume yet</h2>
               <p>
-                Add career context first, then generate a draft here. Pramania will keep
+                Add career context first, then generate a draft here. {brand.name} will keep
                 unsupported claims out and call out evidence gaps before you tailor for jobs.
               </p>
             </div>
@@ -1313,7 +1313,7 @@ export function MasterResumePanel({
         <article>
           <span>Format</span>
           <strong>Standard ATS layout</strong>
-          <p>Pramania keeps the structure consistent and changes the content for your goals.</p>
+          <p>{brand.name} keeps the structure consistent and changes the content for your goals.</p>
         </article>
         <article>
           <span>PDF</span>
@@ -1418,7 +1418,7 @@ function buildResumeSourceProof({
           ? `Detected ${detectedRoleCount} role timeline item${detectedRoleCount === 1 ? "" : "s"}${detectedCompanyNames.length > 0 ? ` across ${formatResumeProofList(detectedCompanyNames)}` : ""}.`
           : "No obvious role timeline was detected in the latest ready sources yet.",
       ].join(" ")
-    : "No read source has landed yet. Uploads and notes will appear in Library when Pramania can use them.";
+    : `No read source has landed yet. Uploads and notes will appear in Library when ${brand.name} can use them.`;
 
   return {
     chronologyDetail: hasChronology
@@ -1426,7 +1426,7 @@ function buildResumeSourceProof({
       : detectedRoleCount > 0
         ? "Ready sources contain role timeline evidence, but this draft does not show it yet. Rebuild the resume; if it still misses chronology, review the source receipt in Library."
         : hasReadySources
-          ? "Saved sources exist, but Pramania has not detected a clear role-by-role timeline in them yet. Add a resume, LinkedIn export, or rough work-history note with company, title, and dates."
+          ? `Saved sources exist, but ${brand.name} has not detected a clear role-by-role timeline in them yet. Add a resume, LinkedIn export, or rough work-history note with company, title, and dates.`
         : "Add a resume, LinkedIn export, portfolio evidence, or rough work-history note to build chronology.",
     chronologyStatus: hasChronology ? "Role timeline present" : "Needs role timeline",
     sourceDetail,
@@ -1511,7 +1511,7 @@ function ResumeReviewSection({
         <span className="resume-review-count">{reviewItems.length} open</span>
       </div>
       <p className="resume-review-helper">
-        Pick one prompt at a time. Pramania will load the exact refinement into chat so your answer can be
+        Pick one prompt at a time. {brand.name} will load the exact refinement into chat so your answer can be
         attached to the right part of the resume.
       </p>
       <div className="resume-review-list" role="list">

@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AppView } from "@/components/app-shell/side-nav";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
+import { brand } from "@/lib/brand";
 import {
   CREDIT_USAGE_GUIDE,
   formatCreditCost,
@@ -304,7 +305,7 @@ export function SettingsPanel({
           <UserRound size={18} aria-hidden="true" />
           <div>
             <span>Account</span>
-            <strong>{session.user.fullName ?? email ?? "Pramania user"}</strong>
+            <strong>{session.user.fullName ?? email ?? `${brand.name} user`}</strong>
             {email ? <p>{email}</p> : null}
             <p className="settings-card-note">
               Profile naming stays separate from your sign-in email, so resume
@@ -666,7 +667,7 @@ export function SettingsPanel({
             <p>
               {session.legal?.termsAcceptedAt
                 ? `Accepted ${formatDate(session.legal.termsAcceptedAt)}.`
-                : "Please accept the current Terms and Conditions to continue using Pramania."}
+                : `Please accept the current Terms and Conditions to continue using ${brand.name}.`}
             </p>
             <div className="settings-link-row">
               <a
@@ -695,7 +696,7 @@ export function SettingsPanel({
             <span>Support</span>
             <strong>Issue history available</strong>
             <p>
-              Use Pramania chat for help. Product issues are logged with context
+              Use {brand.name} chat for help. Product issues are logged with context
               and visible in the Support area.
             </p>
             <div className="settings-link-row">

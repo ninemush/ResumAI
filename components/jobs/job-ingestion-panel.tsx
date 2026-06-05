@@ -16,6 +16,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { JobOverview } from "@/lib/jobs/job-overview";
+import { brand } from "@/lib/brand";
 import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
 
 type JobIngestionPanelProps = {
@@ -110,7 +111,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         },
       }),
     );
-    setMessage("I moved the pasted job text into chat so Pramania can review it with your profile context.");
+    setMessage(`I moved the pasted job text into chat so ${brand.name} can review it with your profile context.`);
   }
 
   async function logApplication(jobId: string) {
@@ -211,7 +212,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         <p className="eyebrow">Jobs</p>
         <h2>Role decisions</h2>
         <p>
-          A focused queue of roles Pramania has read. Open a row to see fit,
+          A focused queue of roles {brand.name} has read. Open a row to see fit,
           tradeoffs, and whether it is worth turning into tailored materials.
         </p>
       </div>
@@ -301,7 +302,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
             <Sparkles size={18} aria-hidden="true" />
             <div>
               <strong>No job decisions yet</strong>
-              <p>Paste a public job post into Pramania. It will read the role, compare it with your profile, and help you decide whether to apply.</p>
+              <p>Paste a public job post into {brand.name}. It will read the role, compare it with your profile, and help you decide whether to apply.</p>
             </div>
           </div>
         ) : null}
@@ -339,7 +340,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
               <span className="record-summary">
                 {job.fitSnapshot.score !== null
                   ? job.fitAnalysis.summary
-                  : "Open the role once Pramania has enough job-post detail."}
+                  : `Open the role once ${brand.name} has enough job-post detail.`}
               </span>
             </button>
 
@@ -409,7 +410,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                     icon="match"
                     items={job.fitAnalysis.matchedKeywords}
                     label="Aligned"
-                    placeholder="Pramania has not found clear alignment yet."
+                    placeholder={`${brand.name} has not found clear alignment yet.`}
                   />
                   <FitBucket
                     icon="risk"
@@ -485,7 +486,7 @@ function readJobNextAction(job: JobOverview["recentJobs"][number]) {
   }
 
   if (job.ingestion_status !== "succeeded") {
-    return "Wait for Pramania to finish reading.";
+    return `Wait for ${brand.name} to finish reading.`;
   }
 
   if (job.review_status === "accepted") {

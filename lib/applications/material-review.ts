@@ -59,6 +59,11 @@ export type MaterialReview = {
   } | null;
 };
 
+export type MaterialArtifactExportResult = {
+  didExport: boolean;
+  review: MaterialReview;
+};
+
 export async function getMaterialReview(
   input: z.input<typeof materialReviewSchema>,
 ): Promise<MaterialReview> {
@@ -171,7 +176,17 @@ export async function updateMaterialReview(input: z.input<typeof updateMaterialR
   return getMaterialReview({ applicationId: parsed.applicationId });
 }
 
-export async function exportMaterialArtifacts(input: z.input<typeof materialReviewSchema>) {
+export async function getReusableMaterialExport(
+  input: z.input<typeof materialReviewSchema>,
+): Promise<MaterialReview | null> {
+  const review = await getMaterialReview(input);
+
+  return review.exportReadiness.status === "exported" ? review : null;
+}
+
+export async function exportMaterialArtifacts(
+  input: z.input<typeof materialReviewSchema>,
+): Promise<MaterialArtifactExportResult> {
   const parsed = materialReviewSchema.parse(input);
   const { supabase, userId } = await getAuthenticatedContext();
   const application = await readApplication(parsed.applicationId, userId);
@@ -182,6 +197,13 @@ export async function exportMaterialArtifacts(input: z.input<typeof materialRevi
 
   if (!resume || !coverLetter) {
     throw new Error("MATERIALS_NOT_FOUND");
+  }
+
+  if (isMaterialExportReady({ coverLetter, resume })) {
+    return {
+      didExport: false,
+      review: await getMaterialReview({ applicationId: parsed.applicationId }),
+    };
   }
 
   const resumeContent = parseResumeContent(resume.content_json);
@@ -248,7 +270,10 @@ export async function exportMaterialArtifacts(input: z.input<typeof materialRevi
     throw new Error("ARTIFACT_METADATA_UPDATE_FAILED");
   }
 
-  return getMaterialReview({ applicationId: parsed.applicationId });
+  return {
+    didExport: true,
+    review: await getMaterialReview({ applicationId: parsed.applicationId }),
+  };
 
   async function uploadArtifact(path: string, bytes: Uint8Array, contentType: string) {
     const { error } = await supabase.storage.from(GENERATED_ARTIFACT_BUCKET).upload(path, bytes, {
@@ -260,6 +285,23 @@ export async function exportMaterialArtifacts(input: z.input<typeof materialRevi
       throw new Error("ARTIFACT_UPLOAD_FAILED");
     }
   }
+}
+
+function isMaterialExportReady({
+  coverLetter,
+  resume,
+}: {
+  coverLetter: Awaited<ReturnType<typeof readLatestCoverLetter>>;
+  resume: Awaited<ReturnType<typeof readLatestResume>>;
+}) {
+  return Boolean(
+    resume?.status === "ready" &&
+      coverLetter?.status === "ready" &&
+      resume.pdf_storage_path &&
+      resume.docx_storage_path &&
+      coverLetter.pdf_storage_path &&
+      coverLetter.docx_storage_path,
+  );
 }
 
 function buildExportReadiness({

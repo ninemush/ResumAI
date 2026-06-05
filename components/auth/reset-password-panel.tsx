@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 
+import { brand } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/browser";
 
 export function ResetPasswordPanel() {
@@ -28,7 +29,7 @@ export function ResetPasswordPanel() {
       return;
     }
 
-    setStatus("Password updated. You can return to Pramania and sign in.");
+    setStatus(`Password updated. You can return to ${brand.name} and sign in.`);
   }
 
   return (

@@ -20,7 +20,7 @@ import { brand } from "@/lib/brand";
 
 export const metadata = {
   description:
-    "Learn how Pramania credits are used for reading career sources, job analysis, resume drafts, job-specific materials, and downloadable files.",
+    `Learn how ${brand.name} credits are used for reading career sources, job analysis, resume drafts, job-specific materials, and downloadable files.`,
   title: `How Credits Work | ${brand.name}`,
 };
 
@@ -39,7 +39,7 @@ export default function CreditsPage() {
         <section className="credits-help-hero">
           <div>
             <p className="eyebrow">Credits</p>
-            <h1 id="credits-title">How Pramania credits work</h1>
+            <h1 id="credits-title">How {brand.name} credits work</h1>
             <p>
               {brand.name} uses credits only for higher-cost work: reading
               career sources, analyzing jobs, generating materials, preparing

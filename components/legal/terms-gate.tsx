@@ -10,6 +10,7 @@ import {
   TERMS_EFFECTIVE_DATE,
   TERMS_VERSION,
 } from "@/lib/legal/terms";
+import { brand } from "@/lib/brand";
 
 type TermsGateProps = {
   firstName: string | null;
@@ -66,7 +67,7 @@ export function TermsGate({ firstName }: TermsGateProps) {
           {firstName ? `${firstName}, one quick confirmation.` : "One quick confirmation."}
         </h1>
         <p>
-          Pramania helps you draft and reason through career materials, but you
+          {brand.name} helps you draft and reason through career materials, but you
           stay responsible for reviewing, approving, and deciding how to use any
           output.
         </p>

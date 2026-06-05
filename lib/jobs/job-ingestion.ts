@@ -23,6 +23,7 @@ export const jobIngestionRequestSchema = z.object({
 });
 
 export type JobIngestionResult = {
+  didIngest: boolean;
   job: {
     id: string;
     jobUrl: string;
@@ -34,6 +35,26 @@ export type JobIngestionResult = {
     ingestionStatus: "pending" | "processing" | "succeeded" | "failed" | "deleted";
   };
 };
+
+export async function getReusableJobIngestion({
+  jobUrl,
+}: z.infer<typeof jobIngestionRequestSchema>): Promise<JobIngestionResult | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  assertSafeJobUrl(jobUrl);
+
+  return readReusableJobIngestion({
+    jobUrl,
+    userId: user.id,
+  });
+}
 
 export async function ingestJobUrl({
   jobUrl,
@@ -48,6 +69,15 @@ export async function ingestJobUrl({
   }
 
   assertSafeJobUrl(jobUrl);
+
+  const reusableJob = await readReusableJobIngestion({
+    jobUrl,
+    userId: user.id,
+  });
+
+  if (reusableJob) {
+    return reusableJob;
+  }
 
   const { data: startedJob, error: insertError } = await supabase
     .from("job_ingestions")
@@ -100,6 +130,7 @@ export async function ingestJobUrl({
     });
 
     return {
+      didIngest: true,
       job: {
         id: completedJob.id,
         jobUrl: completedJob.job_url,
@@ -123,6 +154,54 @@ export async function ingestJobUrl({
 
     throw error;
   }
+}
+
+async function readReusableJobIngestion({
+  jobUrl,
+  userId,
+}: {
+  jobUrl: string;
+  userId: string;
+}): Promise<JobIngestionResult | null> {
+  const supabase = await createClient();
+  const { data: existingJob, error } = await supabase
+    .from("job_ingestions")
+    .select("id, job_url, resolved_url, title, company, extracted_text, ingestion_status")
+    .eq("user_id", userId)
+    .eq("job_url", jobUrl)
+    .eq("ingestion_status", "succeeded")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error("JOB_READ_FAILED");
+  }
+
+  if (!existingJob?.extracted_text) {
+    return null;
+  }
+
+  const fitContext = await readUserFitContext(userId);
+  const fitAnalysis = analyzeJobFit({
+    jobText: existingJob.extracted_text,
+    masterResume: fitContext.masterResume,
+    profileFacts: fitContext.profileFacts,
+  });
+
+  return {
+    didIngest: false,
+    job: {
+      id: existingJob.id,
+      jobUrl: existingJob.job_url,
+      resolvedUrl: existingJob.resolved_url,
+      title: existingJob.title,
+      company: existingJob.company,
+      extractedTextLength: existingJob.extracted_text.length,
+      fitAnalysis,
+      ingestionStatus: existingJob.ingestion_status,
+    },
+  };
 }
 
 async function fetchJobPage(jobUrl: string) {

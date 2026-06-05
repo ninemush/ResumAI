@@ -38,6 +38,7 @@ const generatedMaterialsSchema = z.object({
 
 export type GenerateApplicationMaterialsResult = {
   coverLetterId: string;
+  didGenerate: boolean;
   model: string;
   promptVersion: string;
   resumeId: string;
@@ -63,6 +64,46 @@ type RawApplicationContext = Omit<ApplicationContext, "job_ingestions"> & {
     | ApplicationContext["job_ingestions"]
     | NonNullable<ApplicationContext["job_ingestions"]>[];
 };
+
+export async function getReusableApplicationMaterials(
+  input: z.input<typeof generateApplicationMaterialsSchema>,
+): Promise<GenerateApplicationMaterialsResult | null> {
+  const parsed = generateApplicationMaterialsSchema.parse(input);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const { data: application, error: applicationError } = await supabase
+    .from("applications")
+    .select("id, company_name, job_title")
+    .eq("id", parsed.applicationId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (applicationError || !application) {
+    throw new Error("APPLICATION_NOT_FOUND");
+  }
+
+  const existingMaterials = await readLatestMaterialPair({
+    applicationId: parsed.applicationId,
+    userId: user.id,
+  });
+
+  if (!existingMaterials) {
+    return null;
+  }
+
+  return buildReusableMaterialsResult({
+    application,
+    coverLetter: existingMaterials.coverLetter,
+    resume: existingMaterials.resume,
+  });
+}
 
 export async function generateApplicationMaterials(
   input: z.input<typeof generateApplicationMaterialsSchema>,
@@ -91,6 +132,18 @@ export async function generateApplicationMaterials(
   }
 
   const context = normalizeApplicationContext(application);
+  const existingMaterials = await readLatestMaterialPair({
+    applicationId: context.id,
+    userId: user.id,
+  });
+
+  if (existingMaterials) {
+    return buildReusableMaterialsResult({
+      application: context,
+      coverLetter: existingMaterials.coverLetter,
+      resume: existingMaterials.resume,
+    });
+  }
 
   if (!context.job_ingestions?.extracted_text) {
     throw new Error("JOB_TEXT_REQUIRED");
@@ -375,10 +428,85 @@ export async function generateApplicationMaterials(
 
   return {
     coverLetterId: coverLetter.id,
+    didGenerate: true,
     model,
     promptVersion: APPLICATION_MATERIALS_PROMPT_VERSION,
     resumeId: resume.id,
     summary: `Created a role-specific resume packet for ${context.job_title ?? "the role"} at ${context.company_name}.`,
+  };
+}
+
+async function readLatestMaterialPair({
+  applicationId,
+  userId,
+}: {
+  applicationId: string;
+  userId: string;
+}) {
+  const supabase = await createClient();
+  const [{ data: resume, error: resumeError }, { data: coverLetter, error: coverLetterError }] =
+    await Promise.all([
+      supabase
+        .from("generated_resumes")
+        .select("id, model, prompt_version")
+        .eq("application_id", applicationId)
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("generated_cover_letters")
+        .select("id, model, prompt_version")
+        .eq("application_id", applicationId)
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+  if (resumeError) {
+    throw new Error("RESUME_READ_FAILED");
+  }
+
+  if (coverLetterError) {
+    throw new Error("COVER_LETTER_READ_FAILED");
+  }
+
+  if (!resume || !coverLetter) {
+    return null;
+  }
+
+  return {
+    coverLetter,
+    resume,
+  };
+}
+
+function buildReusableMaterialsResult({
+  application,
+  coverLetter,
+  resume,
+}: {
+  application: Pick<ApplicationContext, "company_name" | "job_title">;
+  coverLetter: {
+    id: string;
+    model: string | null;
+    prompt_version: string | null;
+  };
+  resume: {
+    id: string;
+    model: string | null;
+    prompt_version: string | null;
+  };
+}): GenerateApplicationMaterialsResult {
+  return {
+    coverLetterId: coverLetter.id,
+    didGenerate: false,
+    model: resume.model ?? coverLetter.model ?? getMaterialsModel(),
+    promptVersion:
+      resume.prompt_version ?? coverLetter.prompt_version ?? APPLICATION_MATERIALS_PROMPT_VERSION,
+    resumeId: resume.id,
+    summary: `Kept the existing role-specific resume packet for ${application.job_title ?? "the role"} at ${application.company_name}.`,
   };
 }
 

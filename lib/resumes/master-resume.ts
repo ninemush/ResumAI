@@ -96,6 +96,11 @@ export type GenerateMasterResumeResult = {
   summary: string;
 };
 
+export type MasterResumeArtifactExportResult = {
+  didExport: boolean;
+  overview: MasterResumeOverview;
+};
+
 export async function getMasterResumeOverview(userId: string): Promise<MasterResumeOverview> {
   const supabase = await createClient();
   const { data: profile, error: profileError } = await supabase
@@ -689,7 +694,7 @@ function readOptionalResumeReviewNotes(
   }
 
   return [
-    `Optional resume sections still missing: ${formatHumanList(missing)}. Add them if they strengthen the story; Pramania will keep them off the resume until you provide them.`,
+    `Optional resume sections still missing: ${formatHumanList(missing)}. Add them if they strengthen the story; ${brand.name} will keep them off the resume until you provide them.`,
   ];
 }
 
@@ -1209,11 +1214,11 @@ export async function updateMasterResume(
   return getMasterResumeOverview(userId);
 }
 
-export async function exportMasterResumeArtifacts(): Promise<MasterResumeOverview> {
+export async function getReusableMasterResumeExport(): Promise<MasterResumeOverview | null> {
   const { supabase, userId } = await getAuthenticatedContext();
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, display_name, target_direction, target_level")
+    .select("id")
     .eq("user_id", userId)
     .single();
 
@@ -1223,7 +1228,7 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
 
   const { data: latestResume, error: resumeReadError } = await supabase
     .from("generated_resumes")
-    .select("id, content_json, prompt_version")
+    .select("docx_storage_path, pdf_storage_path, status")
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .eq("resume_type", "master")
@@ -1238,6 +1243,51 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
 
   if (!latestResume) {
     throw new Error("MASTER_RESUME_NOT_FOUND");
+  }
+
+  if (!isResumeExportReady(latestResume)) {
+    return null;
+  }
+
+  return getMasterResumeOverview(userId);
+}
+
+export async function exportMasterResumeArtifacts(): Promise<MasterResumeArtifactExportResult> {
+  const { supabase, userId } = await getAuthenticatedContext();
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, display_name, target_direction, target_level")
+    .eq("user_id", userId)
+    .single();
+
+  if (profileError || !profile) {
+    throw new Error("PROFILE_NOT_FOUND");
+  }
+
+  const { data: latestResume, error: resumeReadError } = await supabase
+    .from("generated_resumes")
+    .select("id, content_json, docx_storage_path, pdf_storage_path, prompt_version, status")
+    .eq("profile_id", profile.id)
+    .eq("user_id", userId)
+    .eq("resume_type", "master")
+    .is("application_id", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (resumeReadError) {
+    throw new Error("MASTER_RESUME_READ_FAILED");
+  }
+
+  if (!latestResume) {
+    throw new Error("MASTER_RESUME_NOT_FOUND");
+  }
+
+  if (isResumeExportReady(latestResume)) {
+    return {
+      didExport: false,
+      overview: await getMasterResumeOverview(userId),
+    };
   }
 
   const { data: sourceEvidence, error: sourceError } = await supabase
@@ -1324,7 +1374,18 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeOvervie
     throw new Error("ARTIFACT_METADATA_UPDATE_FAILED");
   }
 
-  return getMasterResumeOverview(userId);
+  return {
+    didExport: true,
+    overview: await getMasterResumeOverview(userId),
+  };
+}
+
+function isResumeExportReady(resume: {
+  docx_storage_path: string | null;
+  pdf_storage_path: string | null;
+  status: string;
+}) {
+  return resume.status === "ready" && Boolean(resume.docx_storage_path && resume.pdf_storage_path);
 }
 
 async function getAuthenticatedContext() {

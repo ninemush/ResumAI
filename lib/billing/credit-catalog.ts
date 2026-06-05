@@ -1,3 +1,5 @@
+import { brand } from "@/lib/brand";
+
 export const CREDIT_COSTS = {
   applicationMaterialsExport: 1,
   applicationMaterialsGenerate: 4,
@@ -39,7 +41,7 @@ export const CREDIT_USAGE_GUIDE = [
       "Resume PDFs, DOCX files, text files, images, LinkedIn exports, and profile notes.",
     feature: "profileSourceExtract",
     name: "Read a career source",
-    value: "Turns raw material into career context Pramania can use.",
+    value: `Turns raw material into career context ${brand.name} can use.`,
   },
   {
     cost: CREDIT_COSTS.masterResumeGenerate,
@@ -56,7 +58,7 @@ export const CREDIT_USAGE_GUIDE = [
     feature: "masterResumeExport",
     name: "Export master resume files",
     value:
-      "Packages the approved master resume into files you can review and use outside Pramania.",
+      `Packages the approved master resume into files you can review and use outside ${brand.name}.`,
   },
   {
     cost: CREDIT_COSTS.jobIngest,
@@ -92,7 +94,7 @@ export const CREDIT_USAGE_GUIDE = [
 }>;
 
 export const CREDIT_FREE_ACTIONS = [
-  "Ask Pramania to explain your saved profile, jobs, applications, or credit balance.",
+  `Ask ${brand.name} to explain your saved profile, jobs, applications, or credit balance.`,
   "Browse your workspace, Library, Jobs, Applications, Settings, and previous files.",
   "Edit your profile or resume manually.",
   "Change an application stage, archive or restore records, and update follow-up status.",

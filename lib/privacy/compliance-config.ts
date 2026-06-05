@@ -22,7 +22,7 @@ export const publicPolicyPaths = {
 
 export const subprocessorConfig: SubprocessorConfig[] = [
   {
-    crossBorderTransferBasis: "Placeholder pending legal review.",
+    crossBorderTransferBasis: "Pending legal review of provider terms and transfer posture before public launch.",
     dataCategories: ["account metadata", "profile and resume data", "application data", "storage objects"],
     dpaStatus: "draft",
     hostingRegion: "Supabase project region must be confirmed before launch.",
@@ -31,7 +31,7 @@ export const subprocessorConfig: SubprocessorConfig[] = [
     status: "configured",
   },
   {
-    crossBorderTransferBasis: "Placeholder pending legal review.",
+    crossBorderTransferBasis: "Pending legal review of provider terms and transfer posture before public launch.",
     dataCategories: ["account metadata", "application telemetry", "server logs"],
     dpaStatus: "draft",
     hostingRegion: "Vercel deployment region must be confirmed before launch.",
@@ -40,7 +40,7 @@ export const subprocessorConfig: SubprocessorConfig[] = [
     status: "configured",
   },
   {
-    crossBorderTransferBasis: "Placeholder pending legal review.",
+    crossBorderTransferBasis: "Pending legal review of provider terms and transfer posture before public launch.",
     dataCategories: ["profile text", "job text", "generated resume and cover letter content"],
     dpaStatus: "draft",
     hostingRegion: "AI processing region and retention posture must be confirmed before launch.",
@@ -49,25 +49,25 @@ export const subprocessorConfig: SubprocessorConfig[] = [
     status: "configured",
   },
   {
-    crossBorderTransferBasis: "Placeholder pending legal review.",
+    crossBorderTransferBasis: "Live payment entitlement processing is approved for launch policy; transfer basis remains pending legal/provider review.",
     dataCategories: ["account identifier", "purchase and credit entitlement metadata"],
-    dpaStatus: "missing",
+    dpaStatus: "draft",
     hostingRegion: "Payment entitlement region must be confirmed before launch.",
     name: "RevenueCat",
     processingPurpose: "Credit purchase entitlement processing and webhook-based ledger grants.",
-    status: "draft",
+    status: "configured",
   },
 ];
 
 export const retentionPolicyConfig = [
   {
     dataCategory: "Editable profile drafts, profile facts, and uploaded sources",
-    retentionRule: "User-controlled while account is active; deletion requests receive review for deletion or minimization.",
+    retentionRule: "User-controlled while account is active; deletion requests are reviewed for deletion or minimization where no quota, dispute, or security dependency exists.",
     status: "draft" as ComplianceItemStatus,
   },
   {
     dataCategory: "Generated master resumes and non-submitted drafts",
-    retentionRule: "Deletable when no quota, dispute, or audit dependency requires retention.",
+    retentionRule: "Deletable when no quota, dispute, account-support, or audit dependency requires retention.",
     status: "draft" as ComplianceItemStatus,
   },
   {
@@ -91,6 +91,7 @@ export const complianceHardeningChecklist = [
   { item: "Breach response owner and escalation rota assigned", status: "draft" as ComplianceItemStatus },
   { item: "Durable distributed rate limiting selected for production", status: "draft" as ComplianceItemStatus },
   { item: "Admin access review cadence scheduled", status: "draft" as ComplianceItemStatus },
+  { item: "Payment entitlement reconciliation and refund support procedure approved", status: "draft" as ComplianceItemStatus },
 ];
 
 export const aiUseNotices = [

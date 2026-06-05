@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server";
-
+import { apiError, apiSuccess, createRequestId, readJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
   consumeCredits,
   requireCredits,
 } from "@/lib/billing/credits";
-import { ingestJobUrl, jobIngestionRequestSchema } from "@/lib/jobs/job-ingestion";
+import {
+  getReusableJobIngestion,
+  ingestJobUrl,
+  jobIngestionRequestSchema,
+} from "@/lib/jobs/job-ingestion";
 import {
   checkRateLimit,
   getClientRateLimitKey,
@@ -13,41 +16,29 @@ import {
 } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
-  const requestId = crypto.randomUUID();
+  const requestId = createRequestId();
   let body: unknown;
 
   try {
-    body = await request.json();
+    body = await readJsonBody(request);
   } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "validation",
-          code: "request.invalid_json",
-          message: "Invalid JSON body.",
-        },
-      },
-      { status: 400 },
-    );
+    return apiError(requestId, {
+      category: "validation",
+      code: "request.invalid_json",
+      message: "Invalid JSON body.",
+      status: 400,
+    });
   }
 
   const parsed = jobIngestionRequestSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "validation",
-          code: "job.invalid_url",
-          message: "Enter a valid http or https job posting URL.",
-        },
-      },
-      { status: 400 },
-    );
+    return apiError(requestId, {
+      category: "validation",
+      code: "job.invalid_url",
+      message: "Enter a valid http or https job posting URL.",
+      status: 400,
+    });
   }
 
   const rateLimit = await checkRateLimit({
@@ -65,48 +56,41 @@ export async function POST(request: Request) {
   }
 
   try {
+    const reusableJob = await getReusableJobIngestion(parsed.data);
+
+    if (reusableJob) {
+      return apiSuccess({
+        requestId,
+        ...reusableJob,
+        reused: true,
+      });
+    }
+
     await requireCredits("jobIngest");
     const result = await ingestJobUrl(parsed.data);
-    await consumeCredits({
-      feature: "jobIngest",
-      metadata: { job_url: parsed.data.jobUrl },
-      resourceId: result.job.id,
-      resourceType: "job_ingestion",
-    });
 
-    return NextResponse.json({
-      ok: true,
+    if (result.didIngest) {
+      await consumeCredits({
+        feature: "jobIngest",
+        metadata: { job_url: parsed.data.jobUrl },
+        resourceId: result.job.id,
+        resourceType: "job_ingestion",
+      });
+    }
+
+    return apiSuccess({
       requestId,
       ...result,
+      reused: !result.didIngest,
     });
   } catch (error) {
     if (isBillingError(error)) {
-      const apiError = buildCreditsApiError(error);
+      const billingError = buildCreditsApiError(error);
 
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: apiError,
-        },
-        { status: apiError.status },
-      );
+      return apiError(requestId, billingError);
     }
 
-    const { category, code, message, status } = toApiError(error);
-
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category,
-          code,
-          message,
-        },
-      },
-      { status },
-    );
+    return apiError(requestId, toApiError(error));
   }
 }
 

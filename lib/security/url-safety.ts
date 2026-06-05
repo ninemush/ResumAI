@@ -10,10 +10,12 @@ type UrlSafetyOptions = {
 const blockedHostnames = new Set(["localhost", "localhost.localdomain"]);
 const blockedHostnameSuffixes = [
   ".localhost",
+  ".localdomain",
   ".local",
   ".internal",
   ".lan",
   ".home",
+  ".arpa",
   ".test",
   ".invalid",
   ".example",
@@ -30,6 +32,11 @@ export function isHttpUrl(value: string) {
 export function assertExternalHttpUrl(value: string, options: UrlSafetyOptions = {}) {
   const url = parseExternalHttpUrl(value, options);
   assertPublicHostname(url.hostname, options);
+
+  if (isIP(normalizeHostname(url.hostname))) {
+    assertPublicIpAddress(url.hostname, options);
+  }
+
   return url;
 }
 
@@ -152,7 +159,7 @@ function isBlockedIpv6(value: string) {
 }
 
 function normalizeHostname(value: string) {
-  return value.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  return value.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "").replace(/\.+$/, "");
 }
 
 function throwBlocked(options: UrlSafetyOptions): never {

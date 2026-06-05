@@ -19,6 +19,7 @@ import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState, useTransition } from "react";
 
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
+import { brand } from "@/lib/brand";
 import type { ComplianceDashboard } from "@/lib/privacy/compliance-dashboard";
 import {
   buildRootCauseGroups,
@@ -59,6 +60,19 @@ type CreditGrantTarget = {
   userId: string;
 };
 
+type TierConfigRow = {
+  applicationLimit: number;
+  createdAt: string;
+  description: string;
+  generationLimit: number;
+  id: string;
+  isActive: boolean;
+  key: string;
+  name: string;
+  periodDays: number;
+  updatedAt: string;
+};
+
 type OperatingAction = {
   body: string;
   label: string;
@@ -87,10 +101,13 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [issueUpdatingId, setIssueUpdatingId] = useState<string | null>(null);
   const [queueMode, setQueueMode] = useState<"open" | "history" | "all">("open");
   const [promoCodes, setPromoCodes] = useState<PromoCodeRow[]>([]);
+  const [tiers, setTiers] = useState<TierConfigRow[]>([]);
   const [grantMessage, setGrantMessage] = useState<string | null>(null);
   const [grantLoading, setGrantLoading] = useState(false);
   const [promoMessage, setPromoMessage] = useState<string | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
+  const [tierMessage, setTierMessage] = useState<string | null>(null);
+  const [tierLoading, setTierLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [issueUpdateMessage, setIssueUpdateMessage] = useState<string | null>(null);
   const [grantTargetQuery, setGrantTargetQuery] = useState("");
@@ -347,6 +364,98 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       setPromoCodes(payload.promoCodes);
     } finally {
       setPromoLoading(false);
+    }
+  }
+
+  async function loadTiers({ preserveMessage = false }: { preserveMessage?: boolean } = {}) {
+    setTierLoading(true);
+    if (!preserveMessage) {
+      setTierMessage(null);
+    }
+
+    try {
+      const response = await fetch("/api/admin/tiers", { cache: "no-store" });
+      const payload = (await response.json()) as {
+        error?: { message?: string };
+        tiers?: TierConfigRow[];
+      };
+
+      if (!response.ok || !payload.tiers) {
+        setTierMessage(payload.error?.message ?? "Tier configuration could not be loaded.");
+        return;
+      }
+
+      setTiers(payload.tiers);
+    } finally {
+      setTierLoading(false);
+    }
+  }
+
+  async function saveTierConfig(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const id = formData.get("id")?.toString() ?? "";
+    const name = formData.get("name")?.toString().trim() ?? "";
+    const key = formData.get("key")?.toString().trim() ?? "";
+    const description = formData.get("description")?.toString().trim() ?? "";
+    const applicationLimit = Number(formData.get("applicationLimit") ?? 0);
+    const generationLimit = Number(formData.get("generationLimit") ?? 0);
+    const tierPeriodDays = Number(formData.get("periodDays") ?? 30);
+    const isActive = formData.get("isActive") === "on";
+
+    if (description.length < 12) {
+      setTierMessage("Add a clear owner note in the description before saving a tier.");
+      return;
+    }
+
+    if (
+      id &&
+      !window.confirm(
+        `Save changes to ${name || key}? Active assignments may rely on this tier, so confirm the limits are intentional.`,
+      )
+    ) {
+      return;
+    }
+
+    setTierLoading(true);
+    setTierMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/tiers", {
+        body: JSON.stringify({
+          applicationLimit,
+          description,
+          generationLimit,
+          id: id || undefined,
+          isActive,
+          key,
+          name,
+          periodDays: tierPeriodDays,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const payload = (await response.json()) as {
+        error?: { message?: string };
+        tier?: TierConfigRow;
+      };
+
+      if (!response.ok || !payload.tier) {
+        setTierMessage(payload.error?.message ?? "Tier configuration could not be saved.");
+        return;
+      }
+
+      if (!id) {
+        form.reset();
+      }
+
+      await loadTiers({ preserveMessage: true });
+      await loadPeriod(periodDays);
+      setTierMessage(`${payload.tier.name} tier saved. Audit evidence was written.`);
+      router.refresh();
+    } finally {
+      setTierLoading(false);
     }
   }
 
@@ -622,6 +731,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           ["outcomes", "Outcomes"],
           ["profitability", "Profitability"],
           ["compliance", "Compliance", compliance?.privacyRequests.open ?? undefined],
+          ["tiers", "Tiers"],
           ["promos", "Promo codes"],
         ].map(([key, label, count]) => (
           <button
@@ -631,6 +741,9 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               setActiveTab(String(key));
               if (key === "promos" && promoCodes.length === 0) {
                 void loadPromoCodes();
+              }
+              if (key === "tiers" && tiers.length === 0) {
+                void loadTiers();
               }
               if (key === "compliance" && !compliance && !complianceLoading) {
                 void loadCompliance();
@@ -1095,7 +1208,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             <SectionHeading
               eyebrow="Response time"
               title="Time to first response"
-              body="A lagging indicator of whether Pramania is helping users target roles that create market response."
+              body={`A lagging indicator of whether ${brand.name} is helping users target roles that create market response.`}
             />
             <strong className="owner-large-number">
               {metrics.outcomes.averageHoursToFirstResponse.toLocaleString()}h
@@ -1402,6 +1515,80 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         </section>
       ) : null}
 
+      {activeTab === "tiers" ? (
+        <section className="owner-detail-panel owner-wide-panel" aria-label="Tier configuration">
+          <SectionHeading
+            eyebrow="Tiers"
+            title="Tier and limit configuration"
+            body="Create or update application and generation limits without a code change. Changes are owner/admin actions and should match the approved launch policy."
+          />
+          <p className="owner-generated-note">
+            Payment gateway removal is dismissed/backlog as a policy change because live payments were explicitly approved. This panel manages tier limits; it does not disable RevenueCat, Stripe-style reconciliation, or credit purchases.
+          </p>
+          {tierMessage ? <p className="owner-generated-note">{tierMessage}</p> : null}
+          <div className="owner-credit-actions">
+            <article className="owner-credit-card">
+              <div className="owner-credit-card-header">
+                <CircleDollarSign aria-hidden="true" size={22} />
+                <div>
+                  <h3>Create a tier</h3>
+                  <p>Use lower-case keys such as launch_starter or beta-pro. Limits apply per period.</p>
+                </div>
+              </div>
+              <TierForm
+                disabled={tierLoading}
+                onSubmit={saveTierConfig}
+                submitLabel="Create tier"
+              />
+            </article>
+          </div>
+          <div className="owner-table owner-tier-table" role="table" aria-label="Tier list">
+            <div className="owner-table-row owner-table-head" role="row">
+              <span>Tier</span>
+              <span>Limits</span>
+              <span>Status</span>
+              <span>Update</span>
+            </div>
+            {tiers.length > 0 ? (
+              tiers.map((tier) => (
+                <div className="owner-table-row owner-tier-row" key={tier.id} role="row">
+                  <span>
+                    <strong>{tier.name}</strong>
+                    <small>{tier.key} · updated {formatDate(tier.updatedAt)}</small>
+                  </span>
+                  <span>
+                    <strong>{tier.applicationLimit} applications</strong>
+                    <small>{tier.generationLimit} generations · {tier.periodDays}d period</small>
+                  </span>
+                  <span>
+                    <strong>{tier.isActive ? "Active" : "Inactive"}</strong>
+                    <small>{tier.description || "No description"}</small>
+                  </span>
+                  <span>
+                    <TierForm
+                      disabled={tierLoading}
+                      onSubmit={saveTierConfig}
+                      submitLabel="Save tier"
+                      tier={tier}
+                    />
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="empty-state">
+                {tierLoading ? "Loading tiers..." : "No tiers loaded yet. Refresh to read tier configuration."}
+              </p>
+            )}
+          </div>
+          <div className="owner-form-actions">
+            <button className="owner-action-button secondary" disabled={tierLoading} onClick={() => loadTiers()} type="button">
+              <RefreshCcw aria-hidden="true" size={16} />
+              Refresh tiers
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       {activeTab === "promos" ? (
         <section className="owner-detail-panel owner-wide-panel" aria-label="Promo codes">
           <SectionHeading
@@ -1602,6 +1789,100 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         Generated {formatDateTime(metrics.generatedAt)} for {formatOwnerPeriod(metrics.period.days, periodDays)}.
       </p>
     </main>
+  );
+}
+
+function TierForm({
+  disabled,
+  onSubmit,
+  submitLabel,
+  tier,
+}: {
+  disabled: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  submitLabel: string;
+  tier?: TierConfigRow;
+}) {
+  return (
+    <form className={tier ? "owner-credit-form owner-tier-form compact" : "owner-credit-form owner-tier-form"} onSubmit={onSubmit}>
+      {tier ? <input name="id" type="hidden" value={tier.id} /> : null}
+      <label className={tier ? "owner-field-medium" : "owner-field-small"}>
+        <span>Key</span>
+        <input
+          defaultValue={tier?.key ?? ""}
+          name="key"
+          placeholder="launch_starter"
+          required
+        />
+      </label>
+      <label className={tier ? "owner-field-medium" : "owner-field-small"}>
+        <span>Name</span>
+        <input
+          defaultValue={tier?.name ?? ""}
+          name="name"
+          placeholder="Launch Starter"
+          required
+        />
+      </label>
+      <label className="owner-field-small">
+        <span>Applications</span>
+        <input
+          defaultValue={tier?.applicationLimit ?? 5}
+          min="0"
+          max="10000"
+          name="applicationLimit"
+          required
+          type="number"
+        />
+      </label>
+      <label className="owner-field-small">
+        <span>Generations</span>
+        <input
+          defaultValue={tier?.generationLimit ?? 25}
+          min="0"
+          max="10000"
+          name="generationLimit"
+          required
+          type="number"
+        />
+      </label>
+      <label className="owner-field-small">
+        <span>Period days</span>
+        <input
+          defaultValue={tier?.periodDays ?? 30}
+          min="1"
+          max="366"
+          name="periodDays"
+          required
+          type="number"
+        />
+      </label>
+      <label className="owner-tier-active-toggle">
+        <input
+          defaultChecked={tier?.isActive ?? true}
+          name="isActive"
+          type="checkbox"
+        />
+        <span>Active</span>
+      </label>
+      <label className="owner-credit-description">
+        <span>Description / owner note</span>
+        <input
+          defaultValue={tier?.description ?? ""}
+          name="description"
+          placeholder="What this tier is for and who approved it"
+          required
+        />
+      </label>
+      <p className="owner-credit-guardrail">
+        Saving writes an audit event. Disable a tier instead of deleting it when active users or quota history may rely on it.
+      </p>
+      <div className="owner-form-actions">
+        <button className="owner-action-button primary" disabled={disabled} type="submit">
+          {submitLabel}
+        </button>
+      </div>
+    </form>
   );
 }
 

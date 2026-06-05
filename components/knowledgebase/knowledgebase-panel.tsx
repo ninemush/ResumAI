@@ -56,7 +56,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
       const savedFactCount = payload.intake?.savedFactCount ?? 0;
       setMessage(
         savedFactCount > 0
-          ? "File read. Pramania updated your career profile from it."
+          ? `File read. ${brand.name} updated your career profile from it.`
           : "Source read. I did not see anything new enough to change your profile this time.",
       );
       router.refresh();
@@ -111,7 +111,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
 
       {message ? <p className="system-note success">{message}</p> : null}
 
-      <section className="sources-helper-panel" aria-label="How Pramania uses sources">
+      <section className="sources-helper-panel" aria-label={`How ${brand.name} uses sources`}>
         <div>
           <strong>Your career record</strong>
           <p>
@@ -123,7 +123,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
         <div>
           <strong>Why it matters</strong>
           <p>
-            Pramania uses these sources to keep advice, resumes, and job-fit
+            {brand.name} uses these sources to keep advice, resumes, and job-fit
             reviews grounded in what you actually shared.
           </p>
         </div>
@@ -222,7 +222,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
                           <strong>Reliable LinkedIn import</strong>
                           <p>
                             On desktop LinkedIn, open your profile, choose Resources or
-                            More, select Save to PDF, then drag the PDF into Pramania.
+                            More, select Save to PDF, then drag the PDF into {brand.name}.
                             For a fuller import, use Settings & Privacy {" -> "}Data privacy
                             {" -> "}Get a copy of your data and upload the archive files.
                           </p>
@@ -286,7 +286,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
         ) : (
           <p className="empty-state">
             Drop a resume, LinkedIn export, screenshot, portfolio link, or career note
-            into Pramania. Rough notes and certificate photos are welcome. The source
+            into {brand.name}. Rough notes and certificate photos are welcome. The source
             record will appear here.
           </p>
         )}
@@ -301,7 +301,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
           {brand.name} uses these sources to build your profile, draft your master
           resume, assess role fit, and create application materials. You should not
           have to manage individual parsed details here. Update your profile
-          directly in Profile & Resume, or ask Pramania to refine it in chat.
+          directly in Profile & Resume, or ask {brand.name} to refine it in chat.
         </p>
       </section>
 
@@ -526,7 +526,7 @@ function formatFailureReason(reason: string) {
     LINKEDIN_ARCHIVE_TEXT_EMPTY: "I could not find enough profile rows in that LinkedIn export.",
     LINKEDIN_ARCHIVE_UNSUPPORTED_FILE: "LinkedIn archive import supports ZIP and CSV files.",
     LINKEDIN_PUBLIC_PROFILE_BLOCKED:
-      "LinkedIn did not return enough public profile content to Pramania.",
+      `LinkedIn did not return enough public profile content to ${brand.name}.`,
     PDF_AI_EXTRACT_FAILED: "I could not read enough useful text from this PDF.",
     PDF_AI_INCOMPLETE_RESPONSE: "The PDF read did not return enough useful text.",
     PDF_AI_PROVIDER_AUTH_FAILED: "PDF reading needs an owner-side configuration check.",
@@ -581,7 +581,7 @@ function formatSourceProofNote(source: ProfileOverview["recentSources"][number])
 
     if (source.detectedRoleCount > 0) {
       return [
-        `Proof receipt: Pramania detected ${source.detectedRoleCount} role timeline item${source.detectedRoleCount === 1 ? "" : "s"}`,
+        `Proof receipt: ${brand.name} detected ${source.detectedRoleCount} role timeline item${source.detectedRoleCount === 1 ? "" : "s"}`,
         companySummary ? `across ${companySummary}` : null,
         roleSummary ? `including ${roleSummary}` : null,
         "and can use this for profile, resume, and job-fit work.",
@@ -591,8 +591,8 @@ function formatSourceProofNote(source: ProfileOverview["recentSources"][number])
     }
 
     return readableCount > 0
-      ? `Proof receipt: Pramania read this source and has ${readableCount.toLocaleString()} readable characters available for profile, resume, and job-fit work.`
-      : "Proof receipt: Pramania read this source and marked it profile-ready.";
+      ? `Proof receipt: ${brand.name} read this source and has ${readableCount.toLocaleString()} readable characters available for profile, resume, and job-fit work.`
+      : `Proof receipt: ${brand.name} read this source and marked it profile-ready.`;
   }
 
   if (isSourceBlocked(source)) {
@@ -600,7 +600,7 @@ function formatSourceProofNote(source: ProfileOverview["recentSources"][number])
   }
 
   if (source.extraction_status === "processing") {
-    return "Proof receipt: this source is still being read, so Pramania should not claim it changed your profile yet.";
+    return `Proof receipt: this source is still being read, so ${brand.name} should not claim it changed your profile yet.`;
   }
 
   if (source.extraction_status === "pending") {

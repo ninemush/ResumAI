@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { brand } from "@/lib/brand";
+
 export const advisorViewSchema = z.enum([
   "applications",
   "jobs",
@@ -62,7 +64,7 @@ export const APP_CAPABILITIES: AppCapability[] = [
     description: "Review and edit the user's career profile, target direction, role lanes, photo, and master resume.",
     examples: ["profile", "direction", "target role", "career advice", "what do you know about me"],
     id: "profile_review",
-    userValue: "See what Pramania currently believes about your positioning and adjust it.",
+    userValue: `See what ${brand.name} currently believes about your positioning and adjust it.`,
     view: "profile",
   },
   {
@@ -80,7 +82,7 @@ export const APP_CAPABILITIES: AppCapability[] = [
     description: "Review uploaded files, source text, screenshots, generated resumes, cover letters, and exports.",
     examples: ["uploaded file", "source", "artifact", "generated doc", "download my upload"],
     id: "library",
-    userValue: "Audit what Pramania used and download previous uploads or generated documents.",
+    userValue: `Audit what ${brand.name} used and download previous uploads or generated documents.`,
     view: "library",
   },
   {
@@ -137,7 +139,7 @@ export const APP_CAPABILITIES: AppCapability[] = [
     description: "Owner-only operating metrics, support triage, error root causes, user activity, credits, and profitability.",
     examples: ["owner", "admin", "profitability", "root cause", "users", "console"],
     id: "owner_console",
-    userValue: "Operate Pramania with evidence, not guesses.",
+    userValue: `Operate ${brand.name} with evidence, not guesses.`,
     view: "owner",
   },
 ];

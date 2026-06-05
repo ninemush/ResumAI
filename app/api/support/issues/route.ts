@@ -5,9 +5,15 @@ import {
   buildSupportIssueAnalysis,
   supportIssueCreateSchema,
   supportIssueShortId,
+  toUserSupportIssue,
+  type UserSupportTicketRow,
 } from "@/lib/support/issues";
+import {
+  buildL1SupportPacket,
+  getEscalationReason,
+  sanitizeSupportIssueInput,
+} from "@/lib/support/privacy";
 import { checkRateLimit, getClientRateLimitKey, rateLimitResponse } from "@/lib/security/rate-limit";
-import { redactOperationalMetadata, redactOperationalText } from "@/lib/security/redaction";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -63,47 +69,9 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       requestId,
-      issues: (issues ?? []).map((issue) => {
-        const ticket = issue as unknown as {
-          area: string;
-          created_at: string;
-          fix_status: string;
-          id: string;
-          auto_closed_at: string | null;
-          closed_reason: string | null;
-          priority: string;
-          reopen_until: string | null;
-          root_cause: string | null;
-          root_cause_category: string | null;
-          status: string;
-          subject: string;
-          suggested_fix: string | null;
-          summary: string;
-          updated_at: string;
-          user_visible_resolution: string | null;
-        };
-        const visibleStatus = readVisibleSupportStatus(ticket.status, ticket.reopen_until);
-
-        return {
-          area: ticket.area,
-          auto_closed_at: ticket.auto_closed_at,
-          closed_reason: ticket.closed_reason,
-          created_at: ticket.created_at,
-          fix_status: ticket.fix_status,
-          id: ticket.id,
-          priority: ticket.priority,
-          reopen_until: ticket.reopen_until,
-          root_cause: ticket.root_cause,
-          root_cause_category: ticket.root_cause_category,
-          shortId: supportIssueShortId(ticket.id),
-          status: visibleStatus,
-          subject: ticket.subject,
-          suggested_fix: ticket.suggested_fix,
-          summary: ticket.summary,
-          updated_at: ticket.updated_at,
-          user_visible_resolution: ticket.user_visible_resolution,
-        };
-      }),
+      issues: ((issues ?? []) as unknown as UserSupportTicketRow[]).map((issue) =>
+        toUserSupportIssue(issue),
+      ),
     });
   } catch (error) {
     console.warn(
@@ -158,20 +126,14 @@ export async function POST(request: Request) {
     }
 
     const input = supportIssueCreateSchema.parse(await request.json());
-    const safeInput = {
-      ...input,
-      area: redactOperationalText(input.area, 80),
-      errorCode: input.errorCode ? redactOperationalText(input.errorCode, 120) : undefined,
-      errorMessage: input.errorMessage ? redactOperationalText(input.errorMessage, 500) : undefined,
-      metadata: redactOperationalMetadata(input.metadata),
-      source: redactOperationalText(input.source, 80),
-      systemResponse: input.systemResponse
-        ? redactOperationalText(input.systemResponse, 2000)
-        : undefined,
-      title: input.title ? redactOperationalText(input.title, 180) : undefined,
-      userMessage: input.userMessage ? redactOperationalText(input.userMessage, 2000) : undefined,
-    };
+    const safeInput = sanitizeSupportIssueInput(input);
     const analysis = buildSupportIssueAnalysis(safeInput);
+    const l1SupportPacket = buildL1SupportPacket({
+      analysis,
+      input: safeInput,
+      requestId,
+    });
+    const escalationReason = getEscalationReason(safeInput, analysis);
     const existingIssue = await findActiveDuplicateIssue({
       area: safeInput.area,
       errorCode: safeInput.errorCode ?? "USER_REPORTED_ISSUE",
@@ -239,24 +201,30 @@ export async function POST(request: Request) {
       .insert({
         area: safeInput.area,
         error_code: safeInput.errorCode ?? "USER_REPORTED_ISSUE",
+        escalated_to_l2: l1SupportPacket.escalationRequired,
+        escalation_reason: escalationReason,
         fix_status: analysis.fixStatus,
         linked_error_event_id: errorEvent?.id ?? null,
-        l1_disposition: "not_started",
+        l1_disposition: l1SupportPacket.escalationRequired
+          ? "l2_packet_prepared"
+          : "intake_packet_prepared",
         metadata: {
           ...safeInput.metadata,
           errorCode: safeInput.errorCode ?? null,
           errorMessage: safeInput.errorMessage ?? null,
+          l1SupportPacket,
           requestId,
           source: safeInput.source,
+          supportContextIncluded: safeInput.supportContextConsent,
           systemResponse: safeInput.systemResponse ?? null,
-          userMessage: safeInput.userMessage ?? null,
+          userMessagePreview: safeInput.userMessage ? safeInput.userMessage.slice(0, 240) : null,
         },
         priority: analysis.priority,
         root_cause: analysis.rootCause,
         root_cause_category: analysis.rootCauseCategory,
         sentiment: inferSentiment(safeInput.userMessage ?? safeInput.systemResponse ?? ""),
         source: safeInput.source,
-        status: "open",
+        status: l1SupportPacket.escalationRequired ? "escalated" : "open",
         subject: analysis.title,
         suggested_fix: analysis.suggestedFix,
         summary: analysis.summary,
@@ -394,14 +362,6 @@ async function appendSupportIssueMessages({
       user_id: userId,
     });
   }
-}
-
-function readVisibleSupportStatus(status: string, reopenUntil: string | null) {
-  if (status !== "resolved" || !reopenUntil) {
-    return status;
-  }
-
-  return new Date(reopenUntil).getTime() < Date.now() ? "closed" : status;
 }
 
 function inferSentiment(text: string) {

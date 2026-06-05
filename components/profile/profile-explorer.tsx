@@ -207,7 +207,7 @@ export function ProfileExplorer({
       }
 
       setMessage(
-        "Target direction saved. Pramania will use it for your profile read, master resume focus, job-fit reviews, and application materials.",
+        `Target direction saved. ${brand.name} will use it for your profile read, master resume focus, job-fit reviews, and application materials.`,
       );
       router.refresh();
     } finally {
@@ -219,7 +219,7 @@ export function ProfileExplorer({
     <main className="profile-pane" aria-labelledby="profile-title">
       <div className="profile-heading">
         <div className="pane-heading">
-          <p className="eyebrow">Profile cockpit</p>
+          <p className="eyebrow">Profile home</p>
           <h1 id="profile-title">{profileName}</h1>
           <p>{headline}</p>
         </div>
@@ -371,7 +371,7 @@ export function ProfileExplorer({
         </div>
       </section>
 
-      <section className="cockpit-panel" aria-label="Career cockpit">
+      <section className="cockpit-panel" aria-label="Career overview">
         <CockpitMetric
           detail="Review the master resume and profile direction"
           label="Resume"
@@ -476,7 +476,7 @@ export function ProfileExplorer({
             </div>
           ) : (
             <p className="stage-empty-note">
-              When you choose to pursue a role, Pramania will track it from
+              When you choose to pursue a role, {brand.name} will track it from
               review through interviews and outcomes here.
             </p>
           )}
@@ -517,7 +517,7 @@ export function ProfileExplorer({
       >
         <div className="section-heading">
           <p className="eyebrow">Career read</p>
-          <h2>Strengths Pramania can use</h2>
+          <h2>Strengths {brand.name} can use</h2>
         </div>
         <div className="profile-signal-grid">
           <article>
@@ -650,7 +650,7 @@ export function ProfileExplorer({
           <h2>Target market and format</h2>
           <p>
             If you are targeting a specific country or region, add the details
-            Pramania should respect before resume generation.
+            {brand.name} should respect before resume generation.
           </p>
         </div>
         <div className="profile-market-prompt-grid">
