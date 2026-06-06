@@ -45,7 +45,7 @@ test.describe("authenticated workspace", () => {
     await page.goto("/");
 
     const conversation = page.locator(".conversation-pane");
-    await expect(conversation.getByPlaceholder(/Notes, role, link, or resume/i)).toBeVisible();
+    await expect(conversation.getByPlaceholder(/Role, link, notes, or resume/i)).toBeVisible();
 
     const fileInput = conversation.locator('input[type="file"]');
     const accept = await fileInput.getAttribute("accept");

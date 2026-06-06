@@ -214,10 +214,12 @@ function getApiError(payload: unknown) {
 }
 
 function resizeChatInput(input: HTMLTextAreaElement) {
-  const maxHeight =
-    typeof window === "undefined"
-      ? 132
-      : Math.min(window.innerHeight * 0.28, window.innerWidth < 760 ? 108 : 132);
+  const styles =
+    typeof window === "undefined" ? null : window.getComputedStyle(input);
+  const lineHeight = styles ? Number.parseFloat(styles.lineHeight) : 20;
+  const paddingTop = styles ? Number.parseFloat(styles.paddingTop) : 8;
+  const paddingBottom = styles ? Number.parseFloat(styles.paddingBottom) : 8;
+  const maxHeight = Math.ceil(lineHeight * 3 + paddingTop + paddingBottom);
 
   input.style.height = "auto";
   input.style.height = `${Math.min(input.scrollHeight, maxHeight)}px`;
@@ -1711,7 +1713,7 @@ export function ConversationPanel({
               handleFiles(files);
             }
           }}
-          placeholder="Notes, role, link, or resume..."
+          placeholder="Role, link, notes, or resume"
           rows={1}
           suppressHydrationWarning
           value={message}

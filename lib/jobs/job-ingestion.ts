@@ -1,10 +1,12 @@
 import "server-only";
 
 import * as cheerio from "cheerio";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
+import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
 import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
-import { cleanJobCompany, cleanJobTitle } from "@/lib/jobs/job-metadata";
+import { cleanJobCompany, cleanJobTitle, readJobMetadataFromTitle } from "@/lib/jobs/job-metadata";
 import { safeFetchExternalHtml } from "@/lib/security/safe-fetch";
 import { assertExternalHttpUrl, isHttpUrl } from "@/lib/security/url-safety";
 import { createClient } from "@/lib/supabase/server";
@@ -12,6 +14,17 @@ import { createClient } from "@/lib/supabase/server";
 const MAX_JOB_HTML_BYTES = 1_500_000;
 const MAX_JOB_TEXT_CHARS = 20_000;
 const FETCH_TIMEOUT_MS = 8000;
+const JOB_METADATA_PROMPT_VERSION = "job_metadata_v1";
+
+const aiJobMetadataSchema = z.object({
+  acceptingApplications: z.boolean().nullable(),
+  company: z.string().trim().max(140).nullable(),
+  confidence: z.enum(["low", "medium", "high"]),
+  employmentType: z.string().trim().max(80).nullable(),
+  location: z.string().trim().max(160).nullable(),
+  title: z.string().trim().max(180).nullable(),
+  workplaceType: z.string().trim().max(80).nullable(),
+});
 
 export const jobIngestionRequestSchema = z.object({
   jobUrl: z
@@ -104,13 +117,20 @@ export async function ingestJobUrl({
       throw new Error("JOB_TEXT_TOO_SHORT");
     }
 
+    const metadata = await readBestJobMetadata({
+      parsed,
+      resolvedUrl: fetched.resolvedUrl,
+      userId: user.id,
+    });
+    const extractedText = prependJobMetadata(parsed.text, metadata);
+
     const { data: completedJob, error: updateError } = await supabase
       .from("job_ingestions")
       .update({
         resolved_url: fetched.resolvedUrl,
-        title: parsed.title,
-        company: parsed.company,
-        extracted_text: parsed.text,
+        title: metadata.title,
+        company: metadata.company,
+        extracted_text: extractedText,
         ingestion_status: "succeeded",
         failure_reason: null,
       })
@@ -251,15 +271,16 @@ function extractJobPageText(html: string) {
 
   $("script, style, noscript, svg, iframe, nav, footer").remove();
 
-  const title =
+  const rawTitle =
     $("meta[property='og:title']").attr("content")?.trim() ||
     $("h1").first().text().trim() ||
     $("title").first().text().trim() ||
     null;
-  const company =
+  const rawCompany =
     $("meta[property='og:site_name']").attr("content")?.trim() ||
     $("[data-company]").first().text().trim() ||
     null;
+  const titleMetadata = readJobMetadataFromTitle(rawTitle);
   const text = $("body")
     .text()
     .replace(/\s+/g, " ")
@@ -267,10 +288,136 @@ function extractJobPageText(html: string) {
     .slice(0, MAX_JOB_TEXT_CHARS);
 
   return {
-    company: cleanJobCompany(company),
+    company: cleanJobCompany(rawCompany) ?? titleMetadata.company,
+    rawCompany,
+    rawTitle,
     text,
-    title: cleanJobTitle(title),
+    title: cleanJobTitle(rawTitle) ?? titleMetadata.title,
   };
+}
+
+async function readBestJobMetadata({
+  parsed,
+  resolvedUrl,
+  userId,
+}: {
+  parsed: ReturnType<typeof extractJobPageText>;
+  resolvedUrl: string;
+  userId: string;
+}) {
+  const aiMetadata = await extractJobMetadataWithAi({
+    parsed,
+    resolvedUrl,
+    userId,
+  });
+
+  return {
+    acceptingApplications: aiMetadata?.acceptingApplications ?? null,
+    company: cleanJobCompany(aiMetadata?.company) ?? parsed.company,
+    employmentType: cleanJobCompany(aiMetadata?.employmentType) ?? null,
+    location: cleanJobCompany(aiMetadata?.location) ?? null,
+    title: cleanJobTitle(aiMetadata?.title) ?? parsed.title,
+    workplaceType: cleanJobCompany(aiMetadata?.workplaceType) ?? null,
+  };
+}
+
+async function extractJobMetadataWithAi({
+  parsed,
+  resolvedUrl,
+  userId,
+}: {
+  parsed: ReturnType<typeof extractJobPageText>;
+  resolvedUrl: string;
+  userId: string;
+}) {
+  try {
+    const response = await createOpenAIResponse({
+      model: getProfileIntakeModel(),
+      instructions: [
+        "Extract structured job-post metadata from public job-page text.",
+        "Use the visible job role, not SEO titles such as 'Company hiring Role'.",
+        "If the page says the posting is closed or no longer accepting applications, set acceptingApplications to false.",
+        "Return null for fields that are not supported by the text. Do not infer unavailable facts.",
+      ].join("\n"),
+      input: [
+        `URL: ${resolvedUrl}`,
+        `Raw title: ${parsed.rawTitle ?? "unknown"}`,
+        `Raw company: ${parsed.rawCompany ?? "unknown"}`,
+        `Visible text:\n${parsed.text.slice(0, 12_000)}`,
+      ].join("\n\n"),
+      max_output_tokens: 500,
+      metadata: {
+        feature: "job_ingestion_metadata",
+        prompt_version: JOB_METADATA_PROMPT_VERSION,
+      },
+      safety_identifier: hashUserId(userId),
+      store: false,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "job_post_metadata",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: [
+              "acceptingApplications",
+              "company",
+              "confidence",
+              "employmentType",
+              "location",
+              "title",
+              "workplaceType",
+            ],
+            properties: {
+              acceptingApplications: { anyOf: [{ type: "boolean" }, { type: "null" }] },
+              company: { anyOf: [{ type: "string" }, { type: "null" }] },
+              confidence: { type: "string", enum: ["low", "medium", "high"] },
+              employmentType: { anyOf: [{ type: "string" }, { type: "null" }] },
+              location: { anyOf: [{ type: "string" }, { type: "null" }] },
+              title: { anyOf: [{ type: "string" }, { type: "null" }] },
+              workplaceType: { anyOf: [{ type: "string" }, { type: "null" }] },
+            },
+          },
+        },
+      },
+    });
+
+    return aiJobMetadataSchema.parse(JSON.parse(response.output_text));
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "job_metadata_ai_fallback",
+        code: error instanceof Error ? error.message : "UNKNOWN_JOB_METADATA_AI_ERROR",
+      }),
+    );
+
+    return null;
+  }
+}
+
+function prependJobMetadata(text: string, metadata: {
+  acceptingApplications: boolean | null;
+  company: string | null;
+  employmentType: string | null;
+  location: string | null;
+  title: string | null;
+  workplaceType: string | null;
+}) {
+  const metadataLines = [
+    metadata.title ? `Role title: ${metadata.title}` : null,
+    metadata.company ? `Company: ${metadata.company}` : null,
+    metadata.location ? `Location: ${metadata.location}` : null,
+    metadata.workplaceType ? `Workplace type: ${metadata.workplaceType}` : null,
+    metadata.employmentType ? `Employment type: ${metadata.employmentType}` : null,
+    metadata.acceptingApplications === false ? "Posting status: No longer accepting applications" : null,
+  ].filter(Boolean);
+
+  if (metadataLines.length === 0) {
+    return text;
+  }
+
+  return [`Structured job metadata:`, ...metadataLines, "", text].join("\n").slice(0, MAX_JOB_TEXT_CHARS);
 }
 
 function assertSafeJobUrl(value: string) {
@@ -278,4 +425,8 @@ function assertSafeJobUrl(value: string) {
     blockedErrorCode: "JOB_URL_BLOCKED",
     unsupportedProtocolErrorCode: "JOB_URL_BLOCKED",
   });
+}
+
+function hashUserId(userId: string) {
+  return createHash("sha256").update(userId).digest("hex").slice(0, 64);
 }

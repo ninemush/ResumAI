@@ -5337,9 +5337,7 @@ input:focus {
 }
 
 .application-record-header {
-  grid-template-columns:
-    minmax(220px, 1.25fr) minmax(180px, 0.9fr) minmax(132px, 0.5fr)
-    minmax(190px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .artifact-record-header {
@@ -5371,6 +5369,10 @@ input:focus {
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.application-title-cell .record-title {
+  -webkit-line-clamp: 3;
 }
 
 .record-meta,
@@ -5419,7 +5421,9 @@ input:focus {
 .decision-card {
   align-items: stretch;
   border-radius: var(--pr-radius-sm);
-  grid-template-columns: minmax(0, 1fr) minmax(104px, auto) minmax(126px, auto) minmax(132px, auto);
+  grid-template-columns:
+    minmax(0, 1.15fr) minmax(0, 0.85fr) minmax(132px, 0.42fr)
+    minmax(128px, 0.42fr);
   padding: 16px;
 }
 
@@ -5443,11 +5447,15 @@ input:focus {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .application-record .record-actions .compact-action {
+  line-height: 1.2;
   min-height: 38px;
+  min-width: 0;
   padding-inline: 11px;
+  white-space: normal;
 }
 
 .application-record .record-actions .compact-action-primary {
@@ -5617,11 +5625,22 @@ input:focus {
 }
 
 .application-record {
-  grid-template-columns:
-    minmax(220px, 1.2fr) minmax(180px, 0.9fr) minmax(136px, auto)
-    minmax(132px, auto);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   max-width: 100%;
   min-width: 0;
+}
+
+.application-record-header span:nth-child(3),
+.application-record-header span:nth-child(4) {
+  display: none;
+}
+
+.application-stage-cell {
+  grid-column: 1;
+}
+
+.application-record .record-actions {
+  grid-column: 2;
 }
 
 .application-detail-actions {
@@ -5720,8 +5739,9 @@ input:focus {
 .compact-status-select {
   max-width: 180px;
   min-height: 40px;
-  min-width: 150px;
+  min-width: 0;
   padding-inline: 13px;
+  width: 100%;
 }
 
 .record-filter-strip,
@@ -8095,7 +8115,7 @@ input:focus {
   gap: 6px;
   grid-template-areas: "attach voice message send";
   grid-template-columns: 36px 36px minmax(0, 1fr) 44px;
-  grid-template-rows: 44px;
+  grid-template-rows: minmax(44px, auto);
   min-height: 58px;
   min-width: 0;
   overflow: hidden;
@@ -8115,14 +8135,14 @@ input:focus {
     "message message message message"
     "attach voice spacer send";
   grid-template-rows: auto 44px;
-  min-height: 198px;
+  min-height: 118px;
   padding: 8px;
 }
 
 .chat-input.expanded textarea {
   align-self: start;
   grid-area: message;
-  max-height: 132px;
+  max-height: 78px;
   min-height: 54px;
   padding: 8px 12px 4px;
 }
@@ -8156,7 +8176,7 @@ input:focus {
   font-size: 0.95rem;
   grid-area: message;
   line-height: 1.35;
-  max-height: 132px;
+  max-height: 78px;
   min-height: 28px;
   min-width: 0;
   outline: 0;
@@ -8171,9 +8191,8 @@ input:focus {
 
 .chat-input:not(.expanded) textarea {
   align-self: center;
-  height: 38px !important;
-  max-height: 38px;
-  overflow-y: hidden !important;
+  max-height: 78px;
+  min-height: 38px;
 }
 
 .chat-input textarea:focus {
@@ -8768,7 +8787,7 @@ input:focus {
     background: rgba(251, 249, 244, 0.98);
     box-shadow: 0 -10px 24px rgba(14, 25, 43, 0.04);
     grid-template-columns: 36px 36px minmax(0, 1fr) 42px;
-    grid-template-rows: 42px;
+    grid-template-rows: minmax(42px, auto);
   }
 
   .chat-input.expanded {
@@ -8778,13 +8797,13 @@ input:focus {
       "attach voice spacer send";
     grid-template-columns: 36px 36px minmax(0, 1fr) 42px;
     grid-template-rows: auto 42px;
-    min-height: 170px;
+    min-height: 112px;
     row-gap: 4px;
   }
 
   .chat-input.expanded textarea {
     grid-area: message;
-    max-height: 108px;
+    max-height: 74px;
     padding: 8px 12px 6px;
   }
 
@@ -8802,13 +8821,13 @@ input:focus {
 
   .chat-input textarea {
     font-size: 0.9rem;
-    max-height: 108px;
+    max-height: 74px;
     min-height: 38px;
   }
 
   .chat-input:not(.expanded) textarea {
-    height: 36px !important;
-    max-height: 36px;
+    max-height: 74px;
+    min-height: 36px;
   }
 
   .credits-table,
