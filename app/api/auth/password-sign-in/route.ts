@@ -103,7 +103,7 @@ export async function POST(request: Request) {
 
   const userId = signInResult.data.user.id;
 
-  if (process.env.AUTH_REQUIRE_EMAIL_CODE === "false") {
+  if (!shouldRequireEmailCode()) {
     await setEmailMfaVerifiedCookie({ email, userId });
 
     return NextResponse.json({ ok: true, requiresEmailCode: false });
@@ -117,16 +117,22 @@ export async function POST(request: Request) {
   });
 
   if (otpError) {
+    console.warn(
+      JSON.stringify({
+        event: "auth.email_code_send_failed",
+        message: otpError.message,
+        status: "status" in otpError ? otpError.status : null,
+      }),
+    );
     await supabase.auth.signOut();
+
+    const emailError = mapEmailDeliveryError(otpError.message);
 
     return NextResponse.json(
       {
-        error: {
-          code: "auth.email_code_failed",
-          message: "We could not send the email code. Please try again.",
-        },
+        error: emailError,
       },
-      { status: 502 },
+      { status: emailError.code === "auth.email_rate_limited" ? 429 : 502 },
     );
   }
 
@@ -137,4 +143,25 @@ export async function POST(request: Request) {
     ok: true,
     requiresEmailCode: true,
   });
+}
+
+function shouldRequireEmailCode() {
+  return process.env.AUTH_REQUIRE_EMAIL_CODE === "true";
+}
+
+function mapEmailDeliveryError(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("rate") || normalized.includes("limit") || normalized.includes("too many")) {
+    return {
+      code: "auth.email_rate_limited",
+      message:
+        "Email delivery is temporarily rate-limited. Wait a few minutes before requesting another code, then try signing in again.",
+    };
+  }
+
+  return {
+    code: "auth.email_code_failed",
+    message: "We could not send the email code. Please try again in a few minutes.",
+  };
 }
