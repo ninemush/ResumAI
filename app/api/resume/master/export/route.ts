@@ -2,6 +2,7 @@ import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
   consumeCredits,
+  getCreditOperationKey,
   requireCredits,
 } from "@/lib/billing/credits";
 import {
@@ -47,6 +48,10 @@ export async function POST(request: Request) {
     if (result.didExport) {
       await consumeCredits({
         feature: "masterResumeExport",
+        operationKey: getCreditOperationKey(
+          request,
+          `masterResumeExport:${result.overview.latestResume?.id ?? "latest"}`,
+        ),
         resourceId: result.overview.latestResume?.id,
         resourceType: "master_resume_export",
       });

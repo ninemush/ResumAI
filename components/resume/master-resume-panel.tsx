@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { brand } from "@/lib/brand";
+import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
 import {
   looksLikeEmploymentTypeLabel,
   normalizeResumeContent,
@@ -168,6 +169,7 @@ export function MasterResumePanel({
 
     try {
       const response = await fetch("/api/resume/master", {
+        headers: createIdempotencyHeaders("masterResumeGenerate:resume-panel"),
         method: "POST",
       });
       const payload = await response.json();
@@ -205,7 +207,10 @@ export function MasterResumePanel({
     try {
       const response = await fetch("/api/resume/master", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...createIdempotencyHeaders("masterResumeGenerate:focused-variant"),
+        },
         body: JSON.stringify({
           instruction: `Create a focused master resume variant for ${focus}. Keep the standard ATS chronology, preserve verified facts, retain contact details and role-by-role work history, and only adjust positioning, selected highlights, skill emphasis, and summary language for this target.`,
         }),
@@ -278,6 +283,7 @@ export function MasterResumePanel({
 
     try {
       const response = await fetch("/api/resume/master/export", {
+        headers: createIdempotencyHeaders("masterResumeExport:resume-panel"),
         method: "POST",
       });
       const payload = await response.json();

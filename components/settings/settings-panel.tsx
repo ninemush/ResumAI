@@ -364,8 +364,8 @@ export function SettingsPanel({
             <p>
               Create routed requests for export, deletion, correction,
               restriction, objection, access, or AI-assisted processing review.
-              Deletion starts with operational review because some records
-              require retention or minimization decisions.
+              Deletion starts as a request. An owner review then deletes or
+              minimizes eligible records and keeps only required audit evidence.
             </p>
           </div>
         </div>
@@ -796,11 +796,11 @@ const privacyRequestConfig: Record<
     title: "Data export request",
   },
   deletion: {
-    helper: "Request account closure and retention review",
+    helper: "Request deletion and minimization review",
     icon: "delete",
-    label: "Delete account",
+    label: "Request account deletion",
     message:
-      "I want to request account deletion. Please review what can be deleted now and what minimum audit evidence must be retained.",
+      "I want to request account deletion and minimization. Please execute deletion for eligible records and retain only the minimum audit evidence required.",
     title: "Account deletion request",
     tone: "danger",
   },

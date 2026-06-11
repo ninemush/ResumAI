@@ -2196,6 +2196,16 @@ input:focus {
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
 }
 
+.owner-checklist {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.84rem;
+  gap: 8px;
+  line-height: 1.42;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .profile-summary-grid div,
 .owner-detail-panel,
 .owner-metric-card,
@@ -2647,6 +2657,14 @@ input:focus {
   align-items: center;
   display: inline-flex;
   gap: 6px;
+}
+
+.owner-action-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-start;
 }
 
 .owner-page-usage-list {
@@ -4885,6 +4903,19 @@ input:focus {
   padding: clamp(20px, 2.4vw, 30px);
 }
 
+.jobs-panel {
+  gap: 12px;
+  padding: clamp(16px, 1.8vw, 22px);
+}
+
+.jobs-panel .section-heading {
+  gap: 6px;
+}
+
+.jobs-panel .section-heading p:not(.eyebrow) {
+  max-width: min(100%, 760px);
+}
+
 .applications-panel .section-heading {
   gap: 8px;
   max-width: 100%;
@@ -5306,9 +5337,7 @@ input:focus {
 }
 
 .application-record-header {
-  grid-template-columns:
-    minmax(220px, 1.25fr) minmax(180px, 0.9fr) minmax(132px, 0.5fr)
-    minmax(190px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .artifact-record-header {
@@ -5340,6 +5369,10 @@ input:focus {
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.application-title-cell .record-title {
+  -webkit-line-clamp: 3;
 }
 
 .record-meta,
@@ -5388,7 +5421,9 @@ input:focus {
 .decision-card {
   align-items: stretch;
   border-radius: var(--pr-radius-sm);
-  grid-template-columns: minmax(0, 1fr) minmax(104px, auto) minmax(126px, auto) minmax(132px, auto);
+  grid-template-columns:
+    minmax(0, 1.15fr) minmax(0, 0.85fr) minmax(132px, 0.42fr)
+    minmax(128px, 0.42fr);
   padding: 16px;
 }
 
@@ -5412,11 +5447,15 @@ input:focus {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .application-record .record-actions .compact-action {
+  line-height: 1.2;
   min-height: 38px;
+  min-width: 0;
   padding-inline: 11px;
+  white-space: normal;
 }
 
 .application-record .record-actions .compact-action-primary {
@@ -5586,11 +5625,22 @@ input:focus {
 }
 
 .application-record {
-  grid-template-columns:
-    minmax(220px, 1.2fr) minmax(180px, 0.9fr) minmax(136px, auto)
-    minmax(132px, auto);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   max-width: 100%;
   min-width: 0;
+}
+
+.application-record-header span:nth-child(3),
+.application-record-header span:nth-child(4) {
+  display: none;
+}
+
+.application-stage-cell {
+  grid-column: 1;
+}
+
+.application-record .record-actions {
+  grid-column: 2;
 }
 
 .application-detail-actions {
@@ -5689,8 +5739,9 @@ input:focus {
 .compact-status-select {
   max-width: 180px;
   min-height: 40px;
-  min-width: 150px;
+  min-width: 0;
   padding-inline: 13px;
+  width: 100%;
 }
 
 .record-filter-strip,
@@ -6007,6 +6058,11 @@ input:focus {
   gap: 12px;
 }
 
+.jobs-panel .job-add-panel {
+  gap: 10px;
+  padding: 12px;
+}
+
 .job-url-form {
   align-items: center;
   display: grid;
@@ -6072,6 +6128,10 @@ input:focus {
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.jobs-panel .job-text-fallback {
+  gap: 8px;
 }
 
 .job-text-fallback label {
@@ -8046,8 +8106,8 @@ input:focus {
   z-index: 2;
 }
 
-.chat-input {
-  align-items: center;
+  .chat-input {
+  align-items: end;
   background: rgba(251, 249, 244, 0.96);
   border: 1px solid var(--line);
   border-radius: var(--pr-radius-pill);
@@ -8055,7 +8115,7 @@ input:focus {
   gap: 6px;
   grid-template-areas: "attach voice message send";
   grid-template-columns: 36px 36px minmax(0, 1fr) 44px;
-  grid-template-rows: 44px;
+  grid-template-rows: minmax(44px, auto);
   min-height: 58px;
   min-width: 0;
   overflow: hidden;
@@ -8069,22 +8129,21 @@ input:focus {
 }
 
 .chat-input.expanded {
-  align-items: center;
+  align-items: end;
   border-radius: 26px;
-  grid-template-areas:
-    "message message message message"
-    "attach voice spacer send";
-  grid-template-rows: auto 44px;
-  min-height: 198px;
-  padding: 8px;
+  grid-template-areas: "attach voice message send";
+  grid-template-columns: 36px 36px minmax(0, 1fr) 44px;
+  grid-template-rows: minmax(44px, auto);
+  min-height: 90px;
+  padding: 5px;
 }
 
 .chat-input.expanded textarea {
-  align-self: start;
+  align-self: end;
   grid-area: message;
-  max-height: 132px;
-  min-height: 54px;
-  padding: 8px 12px 4px;
+  max-height: 78px;
+  min-height: 38px;
+  padding: 4px 8px;
 }
 
 .chat-input.expanded .attach-button {
@@ -8097,7 +8156,6 @@ input:focus {
 
 .chat-input.expanded button[type="submit"] {
   grid-area: send;
-  justify-self: end;
 }
 
 .chat-input:focus-within {
@@ -8116,7 +8174,7 @@ input:focus {
   font-size: 0.95rem;
   grid-area: message;
   line-height: 1.35;
-  max-height: 132px;
+  max-height: 78px;
   min-height: 28px;
   min-width: 0;
   outline: 0;
@@ -8131,9 +8189,8 @@ input:focus {
 
 .chat-input:not(.expanded) textarea {
   align-self: center;
-  height: 38px !important;
-  max-height: 38px;
-  overflow-y: hidden !important;
+  max-height: 78px;
+  min-height: 38px;
 }
 
 .chat-input textarea:focus {
@@ -8143,6 +8200,7 @@ input:focus {
 
 .chat-input button {
   align-items: center;
+  align-self: end;
   background: var(--sage-strong);
   border-radius: var(--pr-radius-pill);
   color: var(--pr-soft-ivory);
@@ -8724,28 +8782,29 @@ input:focus {
     gap: 6px;
   }
 
-  .chat-input {
+.chat-input {
     background: rgba(251, 249, 244, 0.98);
     box-shadow: 0 -10px 24px rgba(14, 25, 43, 0.04);
     grid-template-columns: 36px 36px minmax(0, 1fr) 42px;
-    grid-template-rows: 42px;
+    grid-template-rows: minmax(42px, auto);
   }
 
   .chat-input.expanded {
+    align-items: end;
     border-radius: 28px;
-    grid-template-areas:
-      "message message message message"
-      "attach voice spacer send";
+    grid-template-areas: "attach voice message send";
     grid-template-columns: 36px 36px minmax(0, 1fr) 42px;
-    grid-template-rows: auto 42px;
-    min-height: 170px;
-    row-gap: 4px;
+    grid-template-rows: minmax(42px, auto);
+    min-height: 86px;
+    row-gap: 6px;
   }
 
   .chat-input.expanded textarea {
+    align-self: end;
     grid-area: message;
-    max-height: 108px;
-    padding: 8px 12px 6px;
+    max-height: 74px;
+    min-height: 36px;
+    padding: 4px 8px;
   }
 
   .chat-input.expanded .attach-button {
@@ -8762,13 +8821,13 @@ input:focus {
 
   .chat-input textarea {
     font-size: 0.9rem;
-    max-height: 108px;
+    max-height: 74px;
     min-height: 38px;
   }
 
   .chat-input:not(.expanded) textarea {
-    height: 36px !important;
-    max-height: 36px;
+    max-height: 74px;
+    min-height: 36px;
   }
 
   .credits-table,

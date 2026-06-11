@@ -2,6 +2,7 @@ import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBo
 import {
   buildCreditsApiError,
   consumeCredits,
+  getCreditOperationKey,
   requireCredits,
 } from "@/lib/billing/credits";
 import {
@@ -52,6 +53,10 @@ export async function POST(request: Request) {
     await consumeCredits({
       feature: "masterResumeGenerate",
       metadata: { instruction: parsed.data.instruction ?? null },
+      operationKey: getCreditOperationKey(
+        request,
+        `masterResumeGenerate:${result.resumeId}`,
+      ),
       resourceId: result.resumeId,
       resourceType: "master_resume",
     });

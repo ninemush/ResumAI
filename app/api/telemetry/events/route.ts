@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { checkRateLimit, getClientRateLimitKey, rateLimitResponse } from "@/lib/security/rate-limit";
 import { redactOperationalText } from "@/lib/security/redaction";
+import { decideErrorEventAutopilot } from "@/lib/support/autopilot-policy";
 import { classifyClientRuntimeError } from "@/lib/support/root-cause-groups";
 import { createClient } from "@/lib/supabase/server";
 
@@ -65,12 +66,29 @@ export async function POST(request: Request) {
         code: payload.errorCode,
         message: payload.message,
       });
+      const autopilotDecision = decideErrorEventAutopilot(
+        {
+          area: payload.area,
+          code: payload.errorCode,
+          id: "pending",
+          message: payload.message,
+          rootCauseCategory: classification.rootCauseCategory,
+          severity: payload.severity,
+        },
+        { mode: "intake" },
+      );
       const { error } = await supabase.from("error_events").insert({
         area: redactOperationalText(payload.area, 80),
         error_code: redactOperationalText(payload.errorCode, 120),
         fix_required: true,
         message: redactOperationalText(payload.message, 500),
         metadata: {
+          autopilot: {
+            action: autopilotDecision.action,
+            message: autopilotDecision.auditMessage,
+            reviewedAt: new Date().toISOString(),
+            version: "support_autopilot_v1",
+          },
           fingerprint: classification.fingerprint,
           path: payload.path ? redactOperationalText(payload.path, 240) : null,
           requestId,

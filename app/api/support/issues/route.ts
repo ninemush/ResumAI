@@ -8,12 +8,14 @@ import {
   toUserSupportIssue,
   type UserSupportTicketRow,
 } from "@/lib/support/issues";
+import { reviewSupportTicketWithAutopilot } from "@/lib/support/autopilot";
 import {
   buildL1SupportPacket,
   getEscalationReason,
   sanitizeSupportIssueInput,
 } from "@/lib/support/privacy";
 import { checkRateLimit, getClientRateLimitKey, rateLimitResponse } from "@/lib/security/rate-limit";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -154,6 +156,11 @@ export async function POST(request: Request) {
         userMessage: safeInput.userMessage,
       });
 
+      const autopilotResult = await safelyRunIntakeAutopilot({
+        requestId,
+        ticketId: existingIssue.id,
+      });
+
       return NextResponse.json({
         ok: true,
         requestId,
@@ -161,7 +168,7 @@ export async function POST(request: Request) {
           groupedWithExisting: true,
           id: existingIssue.id,
           shortId: supportIssueShortId(existingIssue.id),
-          status: existingIssue.status,
+          status: autopilotResult?.status ?? existingIssue.status,
           subject: existingIssue.subject,
           summary: existingIssue.summary,
         },
@@ -248,13 +255,18 @@ export async function POST(request: Request) {
       userMessage: safeInput.userMessage,
     });
 
+    const autopilotResult = await safelyRunIntakeAutopilot({
+      requestId,
+      ticketId: ticket.id,
+    });
+
     return NextResponse.json({
       ok: true,
       requestId,
       issue: {
         id: ticket.id,
         shortId: supportIssueShortId(ticket.id),
-        status: ticket.status,
+        status: autopilotResult?.status ?? ticket.status,
         subject: ticket.subject,
         summary: ticket.summary,
       },
@@ -286,6 +298,34 @@ export async function POST(request: Request) {
       },
       { status: 500 },
     );
+  }
+}
+
+async function safelyRunIntakeAutopilot({
+  requestId,
+  ticketId,
+}: {
+  requestId: string;
+  ticketId: string;
+}) {
+  try {
+    return await reviewSupportTicketWithAutopilot({
+      mode: "intake",
+      requestId,
+      supabase: createAdminClient(),
+      ticketId,
+    });
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "support_autopilot_intake_failed",
+        code: error instanceof Error ? error.message : "UNKNOWN_SUPPORT_AUTOPILOT_INTAKE_ERROR",
+        requestId,
+        ticketId,
+      }),
+    );
+
+    return null;
   }
 }
 

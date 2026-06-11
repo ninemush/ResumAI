@@ -19,6 +19,7 @@ import {
 import { useRouter } from "next/navigation";
 
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
 import type { ResumeContent } from "@/lib/resumes/resume-content";
 
 type ApplicationPanelProps = {
@@ -233,6 +234,9 @@ export function ApplicationPanel({
 
     try {
       const response = await fetch(`/api/applications/${applicationId}/materials`, {
+        headers: createIdempotencyHeaders(
+          `applicationMaterialsGenerate:${applicationId}:applications-panel`,
+        ),
         method: "POST",
       });
       const payload = await response.json();
@@ -337,6 +341,9 @@ export function ApplicationPanel({
 
     try {
       const response = await fetch(`/api/applications/${activeReview.application.id}/materials/export`, {
+        headers: createIdempotencyHeaders(
+          `applicationMaterialsExport:${activeReview.application.id}:applications-panel`,
+        ),
         method: "POST",
       });
       const payload = await response.json();

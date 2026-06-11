@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import { brand } from "@/lib/brand";
+import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
 
 type JobIngestionPanelProps = {
   overview: JobOverview;
@@ -64,7 +65,10 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
     try {
       const response = await fetch("/api/jobs/ingest", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...createIdempotencyHeaders("jobIngest:jobs-panel"),
+        },
         body: JSON.stringify({ jobUrl: trimmedUrl }),
       });
       const payload = await response.json();
@@ -240,7 +244,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
             <textarea
               onChange={(event) => setJobText(event.target.value)}
               placeholder="Paste job description text here, then send it to chat for profile-aware review."
-              rows={3}
+              rows={2}
               value={jobText}
             />
           </label>

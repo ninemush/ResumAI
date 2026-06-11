@@ -267,6 +267,14 @@ export async function extractProfileFactsFromText({
       origin,
       source_ids: [sourceId],
       confidence: fact.confidence,
+      evidence_status:
+        origin === "user_provided"
+          ? "user_confirmed"
+          : sourceId
+            ? "source_supported"
+            : fact.confidence < 0.55
+              ? "missing_evidence"
+              : "inferred",
       user_confirmed: origin === "user_provided",
     }));
 

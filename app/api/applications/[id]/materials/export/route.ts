@@ -2,6 +2,7 @@ import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
   consumeCredits,
+  getCreditOperationKey,
   requireCredits,
 } from "@/lib/billing/credits";
 import {
@@ -68,6 +69,10 @@ export async function POST(request: Request, context: RouteContext) {
     if (result.didExport) {
       await consumeCredits({
         feature: "applicationMaterialsExport",
+        operationKey: getCreditOperationKey(
+          request,
+          `applicationMaterialsExport:${params.id}`,
+        ),
         resourceId: params.id,
         resourceType: "application_materials_export",
       });

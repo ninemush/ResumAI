@@ -2,6 +2,7 @@ import { apiError, apiSuccess, createRequestId, readJsonBody } from "@/lib/api/r
 import {
   buildCreditsApiError,
   consumeCredits,
+  getCreditOperationKey,
   requireCredits,
 } from "@/lib/billing/credits";
 import {
@@ -96,6 +97,10 @@ export async function POST(request: Request, context: RouteContext) {
           cover_letter_id: result.coverLetterId,
           resume_id: result.resumeId,
         },
+        operationKey: getCreditOperationKey(
+          request,
+          `applicationMaterialsGenerate:${params.id}`,
+        ),
         resourceId: params.id,
         resourceType: "application_materials",
       });

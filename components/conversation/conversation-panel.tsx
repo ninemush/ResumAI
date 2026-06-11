@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   FileArchive,
   FileText,
@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import type { AppView } from "@/components/app-shell/side-nav";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
 import type { CreditSummary } from "@/lib/billing/credits";
 import type {
   AdvisorSuggestedAction,
@@ -213,10 +214,12 @@ function getApiError(payload: unknown) {
 }
 
 function resizeChatInput(input: HTMLTextAreaElement) {
-  const maxHeight =
-    typeof window === "undefined"
-      ? 132
-      : Math.min(window.innerHeight * 0.28, window.innerWidth < 760 ? 108 : 132);
+  const styles =
+    typeof window === "undefined" ? null : window.getComputedStyle(input);
+  const lineHeight = styles ? Number.parseFloat(styles.lineHeight) : 20;
+  const paddingTop = styles ? Number.parseFloat(styles.paddingTop) : 8;
+  const paddingBottom = styles ? Number.parseFloat(styles.paddingBottom) : 8;
+  const maxHeight = Math.ceil(lineHeight * 3 + paddingTop + paddingBottom);
 
   input.style.height = "auto";
   input.style.height = `${Math.min(input.scrollHeight, maxHeight)}px`;
@@ -272,6 +275,7 @@ export function ConversationPanel({
   userId,
 }: ConversationPanelProps) {
   const router = useRouter();
+  const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
@@ -565,6 +569,7 @@ export function ConversationPanel({
   async function processResumeAction(text: string) {
     if (looksLikeMasterResumeExportRequest(text)) {
       const response = await fetch("/api/resume/master/export", {
+        headers: createIdempotencyHeaders("masterResumeExport:chat"),
         method: "POST",
       });
       const payload = await response.json();
@@ -603,7 +608,10 @@ export function ConversationPanel({
     }
 
     const response = await fetch("/api/resume/master", {
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...createIdempotencyHeaders("masterResumeGenerate:chat"),
+      },
       method: "POST",
       body: JSON.stringify({ instruction: text }),
     });
@@ -701,6 +709,9 @@ export function ConversationPanel({
       const response = await fetch(
         `/api/applications/${application.id}/materials`,
         {
+          headers: createIdempotencyHeaders(
+            `applicationMaterialsGenerate:${application.id}:chat`,
+          ),
           method: "POST",
         },
       );
@@ -819,6 +830,9 @@ export function ConversationPanel({
     const response = await fetch(
       `/api/applications/${applicationId}/materials`,
       {
+        headers: createIdempotencyHeaders(
+          `applicationMaterialsGenerate:${applicationId}:chat-preview`,
+        ),
         method: "POST",
       },
     );
@@ -1016,7 +1030,10 @@ export function ConversationPanel({
     if (looksLikeJobUrl(url, fullMessage)) {
       const response = await fetch("/api/jobs/ingest", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...createIdempotencyHeaders("jobIngest:chat"),
+        },
         body: JSON.stringify({ jobUrl: url }),
       });
       const payload = await response.json();
@@ -1299,6 +1316,7 @@ export function ConversationPanel({
     sourceId: string,
   ): Promise<SourceExtractionResult> {
     const response = await fetch(`/api/profile/sources/${sourceId}/extract`, {
+      headers: createIdempotencyHeaders(`profileSourceExtract:${sourceId}:chat`),
       method: "POST",
     });
     const payload = await response.json();
@@ -1342,7 +1360,10 @@ export function ConversationPanel({
 
     try {
       const response = await fetch("/api/resume/master", {
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...createIdempotencyHeaders("masterResumeGenerate:new-evidence"),
+        },
         method: "POST",
         body: JSON.stringify({
           instruction:
@@ -1655,6 +1676,7 @@ export function ConversationPanel({
       >
         <button
           aria-label="Attach file"
+          aria-controls={fileInputId}
           className="attach-button"
           onClick={() => fileInputRef.current?.click()}
           type="button"
@@ -1691,13 +1713,15 @@ export function ConversationPanel({
               handleFiles(files);
             }
           }}
-          placeholder="Notes, role, link, or resume..."
+          placeholder="Role, link, notes, or resume"
           rows={1}
           suppressHydrationWarning
           value={message}
         />
         <input
+          id={fileInputId}
           ref={fileInputRef}
+          aria-label="Attach resume, career source, or profile file"
           accept=".pdf,.docx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp"
           className="sr-only"
           multiple

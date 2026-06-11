@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { brand } from "@/lib/brand";
+import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
 type KnowledgebasePanelProps = {
@@ -44,6 +45,9 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
 
     try {
       const response = await fetch(`/api/profile/sources/${sourceId}/extract`, {
+        headers: createIdempotencyHeaders(
+          `profileSourceExtract:${sourceId}:library-panel`,
+        ),
         method: "POST",
       });
       const payload = await response.json();
