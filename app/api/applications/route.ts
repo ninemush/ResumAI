@@ -116,6 +116,24 @@ function toApiError(error: unknown) {
       };
     }
 
+    if (error.message === "APPLICATION_SKIP_REQUIRES_OVERRIDE") {
+      return {
+        category: "validation",
+        code: "application.skip_requires_override",
+        message: "This role is marked as a skip. Confirm an override before logging it as an application.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "INVALID_APPLICATION_DECISION") {
+      return {
+        category: "validation",
+        code: "application.invalid_decision",
+        message: "Choose whether to apply, network first, save for later, skip, or add more profile evidence.",
+        status: 400,
+      };
+    }
+
     if (
       error.message === "QUOTA_EVENT_RECORD_FAILED" ||
       error.message === "APPLICATION_QUOTA_LINK_FAILED"

@@ -2,8 +2,6 @@ import "server-only";
 
 import { z } from "zod";
 
-import { cleanJobCompany, cleanJobTitle } from "@/lib/jobs/job-metadata";
-import { recordQuotaEvent } from "@/lib/quota/quota-events";
 import { createClient } from "@/lib/supabase/server";
 
 export const applicationStatusSchema = z.enum([
@@ -18,7 +16,10 @@ export const applicationStatusSchema = z.enum([
 ]);
 
 export const createApplicationFromJobSchema = z.object({
+  decision: z.enum(["apply", "network_first", "skip", "save_for_later", "needs_more_profile"]),
+  decisionReason: z.string().trim().max(500).optional(),
   jobIngestionId: z.string().uuid(),
+  overrideSkip: z.boolean().default(false),
   status: applicationStatusSchema.default("draft"),
 });
 
@@ -87,112 +88,31 @@ export async function createApplicationFromJob(
     throw new Error("AUTH_REQUIRED");
   }
 
-  const { data: job, error: jobError } = await supabase
-    .from("job_ingestions")
-    .select("id, job_url, resolved_url, title, company, ingestion_status")
-    .eq("id", parsed.jobIngestionId)
-    .eq("user_id", user.id)
-    .single();
-
-  if (jobError || !job) {
-    throw new Error("JOB_NOT_FOUND");
-  }
-
-  if (job.ingestion_status !== "succeeded") {
-    throw new Error("JOB_NOT_READY");
-  }
-
-  const { data: existingApplication, error: existingError } = await supabase
-    .from("applications")
-    .select("id, company_name, job_title, job_url, status, archived_at")
-    .eq("user_id", user.id)
-    .eq("job_ingestion_id", job.id)
-    .maybeSingle();
-
-  if (existingError) {
-    throw new Error("APPLICATION_LOOKUP_FAILED");
-  }
-
-  if (existingApplication) {
-    if (existingApplication.archived_at) {
-      const { data: restoredApplication, error: restoreError } = await supabase
-        .from("applications")
-        .update({ archived_at: null })
-        .eq("id", existingApplication.id)
-        .eq("user_id", user.id)
-        .select("id, company_name, job_title, job_url, status, archived_at")
-        .single();
-
-      if (restoreError || !restoredApplication) {
-        throw new Error("APPLICATION_RESTORE_FAILED");
-      }
-
-      return {
-        application: mapApplication(restoredApplication),
-        created: false,
-      };
-    }
-
-    return {
-      application: mapApplication(existingApplication),
-      created: false,
-    };
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .upsert({ user_id: user.id }, { onConflict: "user_id" })
-    .select("id")
-    .single();
-
-  if (profileError || !profile) {
-    throw new Error("PROFILE_UPSERT_FAILED");
-  }
-
-  const jobUrl = job.resolved_url ?? job.job_url;
-  const { data: application, error: applicationError } = await supabase
-    .from("applications")
-    .insert({
-      user_id: user.id,
-      profile_id: profile.id,
-      company_name: normalizeRequiredText(cleanJobCompany(job.company)) ?? inferCompanyName(jobUrl),
-      job_title: normalizeOptionalText(cleanJobTitle(job.title)),
-      job_url: jobUrl,
-      job_ingestion_id: job.id,
-      status: parsed.status,
-    })
-    .select("id, company_name, job_title, job_url, status, archived_at")
-    .single();
-
-  if (applicationError || !application) {
-    throw new Error("APPLICATION_CREATE_FAILED");
-  }
-
-  const quotaEventId = await recordQuotaEvent({
-    eventType: "application_logged",
-    metadata: {
-      company_name: application.company_name,
-      job_ingestion_id: job.id,
-      job_title: application.job_title,
-    },
-    resourceId: application.id,
-    resourceType: "application",
+  const { data: rpcResult, error: rpcError } = await supabase.rpc("create_application_from_job", {
+    p_decision: parsed.decision,
+    p_decision_reason: parsed.decisionReason ?? null,
+    p_job_ingestion_id: parsed.jobIngestionId,
+    p_override_skip: parsed.overrideSkip,
+    p_status: parsed.status,
   });
 
-  const { error: quotaLinkError } = await supabase
-    .from("applications")
-    .update({ quota_event_id: quotaEventId })
-    .eq("id", application.id)
-    .eq("user_id", user.id);
-
-  if (quotaLinkError) {
-    throw new Error("APPLICATION_QUOTA_LINK_FAILED");
+  if (rpcError || !rpcResult) {
+    throw new Error(mapApplicationCreateRpcError(rpcError?.message));
   }
 
+  const application = normalizeApplicationRpcResult(rpcResult);
+
   return {
-    application: mapApplication(application),
-    created: true,
+    application: {
+      id: application.id,
+      companyName: application.companyName,
+      jobTitle: application.jobTitle,
+      jobUrl: application.jobUrl,
+      status: application.status,
+    },
+    created: application.created,
   };
+
 }
 
 export async function updateApplicationArchiveState(
@@ -369,19 +289,28 @@ function mapStatusUpdateError(message: string | undefined) {
   return "APPLICATION_STATUS_EVENT_FAILED";
 }
 
-function inferCompanyName(jobUrl: string) {
-  try {
-    return new URL(jobUrl).hostname.replace(/^www\./, "");
-  } catch {
-    return "Unknown company";
+function mapApplicationCreateRpcError(message: string | undefined) {
+  if (message?.includes("AUTH_REQUIRED")) return "AUTH_REQUIRED";
+  if (message?.includes("JOB_NOT_FOUND")) return "JOB_NOT_FOUND";
+  if (message?.includes("JOB_NOT_READY")) return "JOB_NOT_READY";
+  if (message?.includes("APPLICATION_SKIP_REQUIRES_OVERRIDE")) {
+    return "APPLICATION_SKIP_REQUIRES_OVERRIDE";
   }
+  if (message?.includes("INVALID_APPLICATION_DECISION")) return "INVALID_APPLICATION_DECISION";
+  return "APPLICATION_CREATE_FAILED";
 }
 
-function normalizeOptionalText(value: string | null) {
-  const normalized = value?.replace(/\s+/g, " ").trim();
-  return normalized ? normalized.slice(0, 240) : null;
-}
+function normalizeApplicationRpcResult(value: unknown) {
+  const parsed = z.object({
+    companyName: z.string(),
+    created: z.boolean(),
+    fitDecision: z.string().nullable().optional(),
+    fitDecisionReason: z.string().nullable().optional(),
+    id: z.string().uuid(),
+    jobTitle: z.string().nullable(),
+    jobUrl: z.string(),
+    status: applicationStatusSchema,
+  }).parse(value);
 
-function normalizeRequiredText(value: string | null) {
-  return normalizeOptionalText(value);
+  return parsed;
 }

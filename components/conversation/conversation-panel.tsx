@@ -98,6 +98,22 @@ type SourceCreateResponse = {
   error?: ApiErrorShape;
 };
 
+type SourceUploadIntentResponse = {
+  ok: boolean;
+  intent?: {
+    expiresAt: string;
+    source: {
+      id: string;
+      extractionStatus: string;
+      sourceType: string;
+    };
+    storagePath: string;
+    token: string;
+    uploadUrl: string;
+  };
+  error?: ApiErrorShape;
+};
+
 type RecentProfileSource = ProfileOverview["recentSources"][number];
 
 type SourceListResponse = {
@@ -164,7 +180,6 @@ type SpeechWindow = Window &
     webkitSpeechRecognition?: SpeechRecognitionConstructor;
   };
 
-const PROFILE_SOURCE_BUCKET = "profile-sources";
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 const welcomeMessage = (name: string | null) =>
   `Hi${name ? `, ${name}` : ""}. I'm ${brand.name}. Tell me your target role, drop a resume/link, or start with rough notes like "warehouse supervisor, 8 years, OSHA, 20 people." Certificate photos, portfolio links, and target-market notes like "UAE roles, English/Hindi, visa support" are welcome too.`;
@@ -185,8 +200,6 @@ const acceptedFileTypes = new Map<
   ["image/jpeg", "image"],
   ["image/png", "image"],
   ["image/webp", "image"],
-  ["image/heic", "image"],
-  ["image/heif", "image"],
 ]);
 
 const ADD_CREDITS_ACTION: AdvisorSuggestedAction = {
@@ -272,7 +285,6 @@ export function ConversationPanel({
   onSelectView,
   profileOverview,
   userEmail,
-  userId,
 }: ConversationPanelProps) {
   const router = useRouter();
   const fileInputId = useId();
@@ -800,6 +812,8 @@ export function ConversationPanel({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        decision: "apply",
+        decisionReason: "User asked the advisor to proceed with the ready job.",
         jobIngestionId: readyJobs[0].id,
         status: "draft",
       }),
@@ -981,11 +995,11 @@ export function ConversationPanel({
         : "I do not see a saved profile link yet. Paste the link here and I will save it, then try to read what is publicly available.";
     }
 
-    if (source.extraction_status === "processing") {
+    if (["processing", "extracting", "analyzing"].includes(source.extraction_status)) {
       return `I found ${formatSourceReference(source)} and I’m already reading it. Give me a moment, then refresh or ask me again.`;
     }
 
-    if (source.extraction_status === "succeeded") {
+    if (["succeeded", "extracted", "analyzed"].includes(source.extraction_status)) {
       const profileResponse = await processProfileText(
         `Use the career context already saved from my ${formatSourceTypeForPrompt(source.source_type)} material to identify what is useful for my profile and what is still missing. Keep this grounded in saved profile context.`,
       );
@@ -1013,7 +1027,7 @@ export function ConversationPanel({
     }
 
     if (extraction.savedFactCount > 0) {
-      void refreshMasterResumeFromNewEvidence();
+      promptMasterResumeRefreshFromNewEvidence();
     }
 
     return formatSourceIntakeReply({
@@ -1034,7 +1048,7 @@ export function ConversationPanel({
           "Content-Type": "application/json",
           ...createIdempotencyHeaders("jobIngest:chat"),
         },
-        body: JSON.stringify({ jobUrl: url }),
+        body: JSON.stringify({ jobUrl: url, sourceType: "url_fetch" }),
       });
       const payload = await response.json();
 
@@ -1091,7 +1105,7 @@ export function ConversationPanel({
     }
 
     if (extraction.savedFactCount > 0) {
-      void refreshMasterResumeFromNewEvidence();
+      promptMasterResumeRefreshFromNewEvidence();
     }
 
     return formatSourceIntakeReply({
@@ -1220,41 +1234,40 @@ export function ConversationPanel({
     const sourceType = inferFileSourceType(file);
 
     if (!sourceType) {
-      return `${file.name} is not a supported profile source yet. Drop a PDF, DOCX, TXT file, JPG/PNG/WebP/HEIC image, LinkedIn CSV/ZIP export, or paste the text/link directly into ${brand.name}.`;
+      return `${file.name} is not a supported profile source yet. Drop a PDF, DOCX, TXT file, JPG/PNG/WebP image, LinkedIn CSV/ZIP export, or paste the text/link directly into ${brand.name}.`;
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
       return `${file.name} is larger than the current 25 MB upload limit.`;
     }
 
+    const intent = await createProfileSourceUploadIntent({ file });
+
+    if (!intent.ok || !intent.intent?.source?.id) {
+      const creditReply = getCreditExhaustionReply(intent);
+
+      if (creditReply) {
+        return creditReply;
+      }
+
+      return intent.error?.message ?? `I could not prepare ${file.name} for upload.`;
+    }
+
     const supabase = createClient();
-    const storagePath = `${userId}/${crypto.randomUUID()}/${sanitizeFilename(file.name)}`;
     const { error: uploadError } = await supabase.storage
-      .from(PROFILE_SOURCE_BUCKET)
-      .upload(storagePath, file, {
-        cacheControl: "3600",
+      .from("profile-sources")
+      .uploadToSignedUrl(intent.intent.storagePath, intent.intent.token, file, {
         contentType: file.type || "application/octet-stream",
-        upsert: false,
       });
 
     if (uploadError) {
       return `I could not upload ${file.name}: ${uploadError.message}`;
     }
 
-    const source = await createProfileSource({
-      file,
-      sourceType,
-      storagePath,
-    });
+    const source = await completeProfileSourceUpload(intent.intent.source.id);
 
     if (!source.ok || !source.source?.id) {
-      const creditReply = getCreditExhaustionReply(source);
-
-      if (creditReply) {
-        return creditReply;
-      }
-
-      return source.error?.message ?? `I could not save ${file.name}.`;
+      return source.error?.message ?? `I could not finalize ${file.name}.`;
     }
 
     if (["txt", "pdf", "docx", "image", "linkedin"].includes(sourceType)) {
@@ -1273,7 +1286,7 @@ export function ConversationPanel({
       }
 
       if (extraction.savedFactCount > 0) {
-        void refreshMasterResumeFromNewEvidence();
+        promptMasterResumeRefreshFromNewEvidence();
       }
 
       return formatSourceIntakeReply({
@@ -1289,24 +1302,23 @@ export function ConversationPanel({
     return `${file.name} was saved as a profile source.`;
   }
 
-  async function createProfileSource({
-    file,
-    sourceType,
-    storagePath,
-  }: {
-    file: File;
-    sourceType: string;
-    storagePath: string;
-  }) {
-    const response = await fetch("/api/profile/sources", {
+  async function createProfileSourceUploadIntent({ file }: { file: File }) {
+    const response = await fetch("/api/profile/sources/upload-intent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sourceType,
-        storagePath,
+        fileSize: file.size,
         originalFilename: file.name,
         mimeType: file.type || "application/octet-stream",
       }),
+    });
+
+    return (await response.json()) as SourceUploadIntentResponse;
+  }
+
+  async function completeProfileSourceUpload(sourceId: string) {
+    const response = await fetch(`/api/profile/sources/${sourceId}/complete-upload`, {
+      method: "POST",
     });
 
     return (await response.json()) as SourceCreateResponse;
@@ -1355,76 +1367,11 @@ export function ConversationPanel({
     };
   }
 
-  async function refreshMasterResumeFromNewEvidence() {
-    setStatus("I’m refreshing your master resume with the new career context.");
-
-    try {
-      const response = await fetch("/api/resume/master", {
-        headers: {
-          "Content-Type": "application/json",
-          ...createIdempotencyHeaders("masterResumeGenerate:new-evidence"),
-        },
-        method: "POST",
-        body: JSON.stringify({
-          instruction:
-            "Refresh the master resume after newly ingested profile evidence. Keep it broad, evidence-based, ATS-friendly, and not overfit to one role.",
-        }),
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        if (payload.error?.code === "resume.context_too_thin") {
-          setStatus(null);
-          return;
-        }
-
-        const creditReply = getCreditExhaustionReply(payload);
-
-        if (creditReply) {
-          setStatus(creditReply.text);
-          return;
-        }
-
-        const issueMessage = await logSupportIssue({
-          area: "master_resume",
-          errorCode: payload.error?.code ?? "MASTER_RESUME_REFRESH_FAILED",
-          errorMessage:
-            payload.error?.message ??
-            "Master resume refresh failed after source intake.",
-          source: "background_refresh_failure",
-          systemResponse:
-            "The career context saved, but the master resume refresh did not complete.",
-          title: "Master resume refresh failed",
-          userMessage: processingIntent,
-        });
-        setStatus(
-          issueMessage ??
-            "I updated your career context. The master resume can be refreshed from Profile & Resume.",
-        );
-        return;
-      }
-
-      setStatus(
-        "I refreshed the master resume draft from the new source. Open Profile & Resume to review it.",
-      );
-      router.refresh();
-    } catch {
-      const issueMessage = await logSupportIssue({
-        area: "master_resume",
-        errorCode: "MASTER_RESUME_REFRESH_EXCEPTION",
-        errorMessage:
-          "Master resume refresh threw an exception after career context intake.",
-        source: "background_refresh_failure",
-        systemResponse:
-          "The career context saved, but the master resume refresh did not complete.",
-        title: "Master resume refresh failed",
-        userMessage: processingIntent,
-      });
-      setStatus(
-        issueMessage ??
-          "I updated your career context. The master resume refresh needs another attempt.",
-      );
-    }
+  function promptMasterResumeRefreshFromNewEvidence() {
+    setStatus(
+      "I found useful career evidence. Refresh your master resume from this new evidence from Profile & Resume when you are ready. Cost: 2 credits.",
+    );
+    router.refresh();
   }
 
   async function processSupportIssueAction(text: string) {
@@ -3564,7 +3511,11 @@ function formatApplicationStatus(status: string) {
   return status.replaceAll("_", " ");
 }
 
-function formatJobUrl(jobUrl: string) {
+function formatJobUrl(jobUrl: string | null) {
+  if (!jobUrl) {
+    return "manual job description";
+  }
+
   try {
     return new URL(jobUrl).hostname.replace(/^www\./, "");
   } catch {
@@ -3641,7 +3592,7 @@ function inferFileSourceType(file: File) {
   if (extension === "docx") return "docx";
   if (extension === "txt") return "txt";
   if (extension === "zip" || extension === "csv") return "linkedin";
-  if (["heic", "heif", "jpg", "jpeg", "png", "webp"].includes(extension ?? "")) {
+  if (["jpg", "jpeg", "png", "webp"].includes(extension ?? "")) {
     return "image";
   }
 
@@ -3728,14 +3679,4 @@ function looksLikeJobUrl(url: string, message: string) {
       "requisition",
     ].some((part) => path.includes(part))
   );
-}
-
-function sanitizeFilename(filename: string) {
-  const cleaned = filename
-    .normalize("NFKD")
-    .replace(/[^\w.\-]+/g, "_")
-    .replace(/_+/g, "_")
-    .slice(0, 120);
-
-  return cleaned || "profile-source";
 }

@@ -1,9 +1,11 @@
-import { apiError, apiSuccess, createRequestId, readJsonBody } from "@/lib/api/responses";
+import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
-  consumeCredits,
+  finalizeCreditReservation,
   getCreditOperationKey,
   requireCredits,
+  releaseCreditReservation,
+  reserveCredits,
 } from "@/lib/billing/credits";
 import {
   getReusableApplicationMaterials,
@@ -47,7 +49,9 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function POST(request: Request, context: RouteContext) {
   const requestId = createRequestId();
   const params = await context.params;
+  const body = await readOptionalJsonBody(request);
   const parsed = generateApplicationMaterialsSchema.safeParse({
+    ...(typeof body === "object" && body ? body : {}),
     applicationId: params.id,
   });
 
@@ -77,7 +81,10 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     await requireSignedInUser();
-    const reusableMaterials = await getReusableApplicationMaterials(parsed.data);
+    const reusableMaterials =
+      parsed.data.mode === "reuse"
+        ? await getReusableApplicationMaterials(parsed.data)
+        : null;
 
     if (reusableMaterials) {
       return apiSuccess({
@@ -88,22 +95,45 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     await requireCredits("applicationMaterialsGenerate");
-    const result = await generateApplicationMaterials(parsed.data);
+    const reservation = await reserveCredits({
+      feature: "applicationMaterialsGenerate",
+      metadata: {
+        mode: parsed.data.mode,
+        reason: parsed.data.reason ?? null,
+      },
+      operationKey: getCreditOperationKey(
+        request,
+        parsed.data.idempotencyKey ?? `applicationMaterialsGenerate:${params.id}`,
+      ),
+      resourceId: params.id,
+      resourceType: "application_materials",
+    });
+    let result: Awaited<ReturnType<typeof generateApplicationMaterials>>;
+
+    try {
+      result = await generateApplicationMaterials(parsed.data);
+    } catch (error) {
+      await releaseCreditReservation({
+        reason: error instanceof Error ? error.message : "APPLICATION_MATERIAL_GENERATION_FAILED",
+        reservationId: reservation.reservationId,
+      }).catch(() => undefined);
+      throw error;
+    }
 
     if (result.didGenerate) {
-      await consumeCredits({
-        feature: "applicationMaterialsGenerate",
+      await finalizeCreditReservation({
         metadata: {
           cover_letter_id: result.coverLetterId,
           resume_id: result.resumeId,
         },
-        operationKey: getCreditOperationKey(
-          request,
-          `applicationMaterialsGenerate:${params.id}`,
-        ),
+        reservationId: reservation.reservationId,
         resourceId: params.id,
-        resourceType: "application_materials",
       });
+    } else {
+      await releaseCreditReservation({
+        reason: "APPLICATION_MATERIALS_REUSED",
+        reservationId: reservation.reservationId,
+      }).catch(() => undefined);
     }
 
     return apiSuccess({
@@ -252,6 +282,24 @@ function toApiError(error: unknown) {
         code: "profile.context_too_thin",
         message:
           "I need a little more profile evidence before creating credible application materials.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "APPLICATION_DECISION_SKIP") {
+      return {
+        category: "validation",
+        code: "application.decision_skip",
+        message: "This application is currently marked as a skip. Change the decision before generating materials.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "APPLICATION_DECISION_NEEDS_PROFILE") {
+      return {
+        category: "validation",
+        code: "application.needs_profile",
+        message: "Add more profile evidence before generating credible job-specific materials.",
         status: 422,
       };
     }

@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { logAdminUserAccesses } from "@/lib/admin/access-audit";
 import { CREDIT_PURCHASE_OPTIONS } from "@/lib/billing/credits";
 import { createClient } from "@/lib/supabase/server";
 
@@ -286,8 +287,23 @@ export async function getOwnerMetrics(periodDays = 30): Promise<OwnerMetrics> {
     ),
   );
   const supportTickets = await readSupportIssues(supabase, metrics.period.startedAt, metrics.usersList);
+  const finalMetrics = supportTickets.length > 0 ? { ...metrics, supportTickets } : metrics;
 
-  return supportTickets.length > 0 ? { ...metrics, supportTickets } : metrics;
+  await logAdminUserAccesses({
+    accessReason: "owner_metrics_read",
+    actorUserId: user.id,
+    metadata: {
+      periodDays: normalizedPeriodDays,
+      supportTicketCount: finalMetrics.supportTickets.length,
+      userCount: finalMetrics.usersList.length,
+    },
+    resourceType: "owner_metrics",
+    supabase,
+    targetUserIds: finalMetrics.usersList.map((item) => item.userId),
+    visibilityLevel: "support_metadata",
+  });
+
+  return finalMetrics;
 }
 
 function normalizeOwnerErrorDetails(metrics: OwnerMetrics): OwnerMetrics {

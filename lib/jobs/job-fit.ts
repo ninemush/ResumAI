@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { brand } from "@/lib/brand";
+import type { EvidenceBasedFitAnalysis } from "@/lib/jobs/evidence-based-fit";
 import { parseResumeContent, type ResumeContent } from "@/lib/resumes/resume-content";
 import { createClient } from "@/lib/supabase/server";
 
@@ -19,6 +20,8 @@ export type JobFitAnalysis = {
   score: number | null;
   senioritySignals: string[];
   summary: string;
+  evidenceBased?: EvidenceBasedFitAnalysis;
+  fitBand?: "Strong fit" | "Plausible fit" | "Stretch" | "Poor fit" | "Needs more profile evidence";
 };
 
 type ProfileFact = {

@@ -1,9 +1,11 @@
 import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
-  consumeCredits,
+  finalizeCreditReservation,
   getCreditOperationKey,
   requireCredits,
+  releaseCreditReservation,
+  reserveCredits,
 } from "@/lib/billing/credits";
 import {
   exportMasterResumeArtifacts,
@@ -43,18 +45,38 @@ export async function POST(request: Request) {
     }
 
     await requireCredits("masterResumeExport");
-    const result = await exportMasterResumeArtifacts();
+    const reservation = await reserveCredits({
+      feature: "masterResumeExport",
+      operationKey: getCreditOperationKey(
+        request,
+        "masterResumeExport:latest",
+      ),
+      resourceId: null,
+      resourceType: "master_resume_export",
+    });
+    let result: Awaited<ReturnType<typeof exportMasterResumeArtifacts>>;
+
+    try {
+      result = await exportMasterResumeArtifacts();
+    } catch (error) {
+      await releaseCreditReservation({
+        reason: error instanceof Error ? error.message : "MASTER_RESUME_EXPORT_FAILED",
+        reservationId: reservation.reservationId,
+      }).catch(() => undefined);
+      throw error;
+    }
 
     if (result.didExport) {
-      await consumeCredits({
-        feature: "masterResumeExport",
-        operationKey: getCreditOperationKey(
-          request,
-          `masterResumeExport:${result.overview.latestResume?.id ?? "latest"}`,
-        ),
+      await finalizeCreditReservation({
+        metadata: { resume_id: result.overview.latestResume?.id ?? null },
+        reservationId: reservation.reservationId,
         resourceId: result.overview.latestResume?.id,
-        resourceType: "master_resume_export",
       });
+    } else {
+      await releaseCreditReservation({
+        reason: "MASTER_RESUME_EXPORT_REUSED",
+        reservationId: reservation.reservationId,
+      }).catch(() => undefined);
     }
 
     return apiSuccess({

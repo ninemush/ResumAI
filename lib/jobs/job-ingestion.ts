@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
+import { buildEvidenceBasedFitAnalysis } from "@/lib/jobs/evidence-based-fit";
 import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
 import { cleanJobCompany, cleanJobTitle, readJobMetadataFromTitle } from "@/lib/jobs/job-metadata";
 import { isUnavailableJobPostingRedirect } from "@/lib/jobs/job-url-diagnostics";
@@ -34,7 +35,26 @@ export const jobIngestionRequestSchema = z.object({
     .url()
     .refine((value) => isHttpUrl(value), {
       message: "Only http and https job links are supported.",
-    }),
+    })
+    .optional(),
+  jobText: z.string().trim().min(80).max(MAX_JOB_TEXT_CHARS).optional(),
+  sourceType: z.enum(["url_fetch", "manual_paste", "screenshot", "file"]).default("url_fetch"),
+}).superRefine((value, context) => {
+  if (value.sourceType === "url_fetch" && !value.jobUrl) {
+    context.addIssue({
+      code: "custom",
+      message: "Job URL is required for URL fetch ingestion.",
+      path: ["jobUrl"],
+    });
+  }
+
+  if (value.sourceType !== "url_fetch" && !value.jobText) {
+    context.addIssue({
+      code: "custom",
+      message: "Job description text is required for manual job ingestion.",
+      path: ["jobText"],
+    });
+  }
 });
 
 export type JobIngestionResult = {
@@ -53,6 +73,7 @@ export type JobIngestionResult = {
 
 export async function getReusableJobIngestion({
   jobUrl,
+  sourceType,
 }: z.infer<typeof jobIngestionRequestSchema>): Promise<JobIngestionResult | null> {
   const supabase = await createClient();
   const {
@@ -61,6 +82,10 @@ export async function getReusableJobIngestion({
 
   if (!user) {
     throw new Error("AUTH_REQUIRED");
+  }
+
+  if (sourceType !== "url_fetch" || !jobUrl) {
+    return null;
   }
 
   assertSafeJobUrl(jobUrl);
@@ -72,7 +97,9 @@ export async function getReusableJobIngestion({
 }
 
 export async function ingestJobUrl({
+  jobText,
   jobUrl,
+  sourceType,
 }: z.infer<typeof jobIngestionRequestSchema>): Promise<JobIngestionResult> {
   const supabase = await createClient();
   const {
@@ -83,15 +110,32 @@ export async function ingestJobUrl({
     throw new Error("AUTH_REQUIRED");
   }
 
-  assertSafeJobUrl(jobUrl);
+  if (sourceType === "url_fetch" && jobUrl) {
+    assertSafeJobUrl(jobUrl);
+  }
 
-  const reusableJob = await readReusableJobIngestion({
-    jobUrl,
-    userId: user.id,
-  });
+  const reusableJob =
+    sourceType === "url_fetch" && jobUrl
+      ? await readReusableJobIngestion({
+          jobUrl,
+          userId: user.id,
+        })
+      : null;
 
   if (reusableJob) {
     return reusableJob;
+  }
+
+  if (sourceType !== "url_fetch") {
+    return ingestManualJobText({
+      jobText: jobText ?? "",
+      sourceType,
+      userId: user.id,
+    });
+  }
+
+  if (!jobUrl) {
+    throw new Error("JOB_URL_REQUIRED");
   }
 
   const { data: startedJob, error: insertError } = await supabase
@@ -99,6 +143,7 @@ export async function ingestJobUrl({
     .insert({
       user_id: user.id,
       job_url: jobUrl,
+      source_type: "url_fetch",
       ingestion_status: "processing",
     })
     .select("id")
@@ -150,6 +195,19 @@ export async function ingestJobUrl({
       masterResume: fitContext.masterResume,
       profileFacts: fitContext.profileFacts,
     });
+    const evidenceBased = buildEvidenceBasedFitAnalysis(fitAnalysis);
+    const enrichedFitAnalysis = enrichFitAnalysis(fitAnalysis);
+
+    await supabase
+      .from("job_ingestions")
+      .update({
+        current_fit_analysis: evidenceBased,
+        fit_decision: evidenceBased.recommendation,
+        fit_decision_reason: evidenceBased.nextBestAction,
+        fit_snapshot_at_ingestion: enrichedFitAnalysis,
+      })
+      .eq("id", completedJob.id)
+      .eq("user_id", user.id);
 
     return {
       didIngest: true,
@@ -160,7 +218,7 @@ export async function ingestJobUrl({
         title: completedJob.title,
         company: completedJob.company,
         extractedTextLength: completedJob.extracted_text?.length ?? 0,
-        fitAnalysis,
+        fitAnalysis: enrichedFitAnalysis,
         ingestionStatus: completedJob.ingestion_status,
       },
     };
@@ -220,10 +278,105 @@ async function readReusableJobIngestion({
       title: existingJob.title,
       company: existingJob.company,
       extractedTextLength: existingJob.extracted_text.length,
-      fitAnalysis,
+      fitAnalysis: enrichFitAnalysis(fitAnalysis),
       ingestionStatus: existingJob.ingestion_status,
     },
   };
+}
+
+async function ingestManualJobText({
+  jobText,
+  sourceType,
+  userId,
+}: {
+  jobText: string;
+  sourceType: "manual_paste" | "screenshot" | "file";
+  userId: string;
+}): Promise<JobIngestionResult> {
+  const supabase = await createClient();
+  const normalizedText = normalizeManualJobText(jobText);
+
+  if (normalizedText.length < 80) {
+    throw new Error("JOB_TEXT_TOO_SHORT");
+  }
+
+  const metadata = await readBestJobMetadata({
+    parsed: {
+      company: null,
+      rawCompany: null,
+      rawTitle: null,
+      text: normalizedText,
+      title: null,
+    },
+    resolvedUrl: "manual-paste",
+    userId,
+  });
+  const extractedText = prependJobMetadata(normalizedText, metadata);
+  const fitContext = await readUserFitContext(userId);
+  const fitAnalysis = analyzeJobFit({
+    jobText: extractedText,
+    masterResume: fitContext.masterResume,
+    profileFacts: fitContext.profileFacts,
+  });
+  const evidenceBased = buildEvidenceBasedFitAnalysis(fitAnalysis);
+  const enrichedFitAnalysis = enrichFitAnalysis(fitAnalysis);
+  const { data: completedJob, error: insertError } = await supabase
+    .from("job_ingestions")
+    .insert({
+      company: metadata.company,
+      current_fit_analysis: evidenceBased,
+      extracted_text: extractedText,
+      fit_decision: evidenceBased.recommendation,
+      fit_decision_reason: evidenceBased.nextBestAction,
+      fit_snapshot_at_ingestion: enrichedFitAnalysis,
+      ingestion_status: "succeeded",
+      job_url: null,
+      source_type: sourceType,
+      title: metadata.title,
+      user_id: userId,
+    })
+    .select("id, job_url, resolved_url, title, company, extracted_text, ingestion_status")
+    .single();
+
+  if (insertError || !completedJob) {
+    throw new Error("JOB_INSERT_FAILED");
+  }
+
+  return {
+    didIngest: true,
+    job: {
+      id: completedJob.id,
+      jobUrl: completedJob.job_url ?? "",
+      resolvedUrl: completedJob.resolved_url,
+      title: completedJob.title,
+      company: completedJob.company,
+      extractedTextLength: completedJob.extracted_text?.length ?? 0,
+      fitAnalysis: enrichedFitAnalysis,
+      ingestionStatus: completedJob.ingestion_status,
+    },
+  };
+}
+
+function enrichFitAnalysis(fitAnalysis: JobFitAnalysis): JobFitAnalysis {
+  const evidenceBased = buildEvidenceBasedFitAnalysis(fitAnalysis);
+
+  return {
+    ...fitAnalysis,
+    evidenceBased,
+    fitBand: mapFitBand(evidenceBased.recommendation),
+  };
+}
+
+function mapFitBand(recommendation: ReturnType<typeof buildEvidenceBasedFitAnalysis>["recommendation"]) {
+  if (recommendation === "apply") return "Strong fit";
+  if (recommendation === "network_first") return "Plausible fit";
+  if (recommendation === "stretch") return "Stretch";
+  if (recommendation === "skip") return "Poor fit";
+  return "Needs more profile evidence";
+}
+
+function normalizeManualJobText(text: string) {
+  return text.replace(/\r/g, "\n").replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, MAX_JOB_TEXT_CHARS);
 }
 
 async function fetchJobPage(jobUrl: string) {

@@ -62,6 +62,8 @@ export async function assembleUserDataExport(userId: string, requestId: string) 
     profile,
     profileFacts,
     profileSources,
+    profileSourceAnalyses,
+    careerProfiles,
     roleRecommendations,
     jobIngestions,
     applications,
@@ -69,19 +71,27 @@ export async function assembleUserDataExport(userId: string, requestId: string) 
     generatedResumes,
     generatedCoverLetters,
     creditLedger,
+    creditReservations,
     privacyRequests,
+    adminAccessAuditEvents,
+    sensitiveSupportContexts,
   ] = await Promise.all([
     selectMaybeSingle("profiles", "id, display_name, headline, summary, target_direction, target_level, profile_status, photo_storage_path, terms_accepted_at, terms_version, created_at, updated_at", userId),
-    selectMany("profile_facts", "id, fact_type, fact_value, origin, source_ids, confidence, user_confirmed, created_at, updated_at", userId),
-    selectMany("profile_sources", "id, source_type, source_url, storage_path, original_filename, mime_type, extraction_status, failure_reason, created_at, updated_at", userId),
+    selectMany("profile_facts", "id, fact_type, fact_value, origin, source_ids, confidence, user_confirmed, evidence_strength, source_type, source_label, role_context, employer_context, time_period, seniority_signal, impact_category, metric_type, safe_for_resume, inferred_vs_stated, created_at, updated_at", userId),
+    selectMany("profile_sources", "id, source_type, source_url, storage_path, original_filename, mime_type, extraction_status, failure_reason, processing_started_at, created_at, updated_at", userId),
+    selectMany("profile_source_analyses", "id, profile_id, source_id, schema_version, prompt_version, model, status, content_json, confidence, warnings, failure_reason, created_at, updated_at", userId),
+    selectMany("career_profiles", "id, profile_id, schema_version, version_number, content_json, merge_metadata, status, last_source_analysis_id, is_current, created_at, updated_at", userId),
     selectMany("role_recommendations", "id, role_family, role_titles, seniority_level, rationale, assumptions, open_questions, confidence, user_acknowledged, created_at, updated_at", userId),
-    selectMany("job_ingestions", "id, job_url, resolved_url, title, company, extracted_text, ingestion_status, failure_reason, archived_at, created_at, updated_at", userId),
-    selectMany("applications", "id, company_name, job_title, job_url, job_ingestion_id, status, quota_event_id, archived_at, next_action, follow_up_at, contact_name, contact_channel, priority, notes, created_at, updated_at", userId),
+    selectMany("job_ingestions", "id, job_url, resolved_url, source_type, title, company, extracted_text, ingestion_status, failure_reason, fit_snapshot_at_ingestion, current_fit_analysis, fit_decision, fit_decision_reason, archived_at, created_at, updated_at", userId),
+    selectMany("applications", "id, company_name, job_title, job_url, job_ingestion_id, status, quota_event_id, fit_decision, fit_decision_reason, resume_angle, networking_route, likely_blocker, why_apply, next_best_action, outcome_learning, archived_at, next_action, follow_up_at, contact_name, contact_channel, priority, notes, created_at, updated_at", userId),
     selectMany("application_status_events", "id, application_id, previous_status, new_status, source, metadata, created_at", userId),
-    selectMany("generated_resumes", "id, profile_id, application_id, resume_type, prompt_version, model, content_json, storage_path, pdf_storage_path, docx_storage_path, status, created_at, updated_at", userId),
-    selectMany("generated_cover_letters", "id, application_id, prompt_version, model, content, pdf_storage_path, docx_storage_path, status, created_at, updated_at", userId),
-    selectMany("credit_ledger", "id, event_type, credit_delta, resource_type, resource_id, metadata, created_at", userId),
+    selectMany("generated_resumes", "id, profile_id, application_id, resume_type, prompt_version, model, content_json, storage_path, pdf_storage_path, docx_storage_path, status, version_number, generation_reason, parent_artifact_id, is_current, generation_basis, created_at, updated_at", userId),
+    selectMany("generated_cover_letters", "id, application_id, prompt_version, model, content, pdf_storage_path, docx_storage_path, status, version_number, generation_reason, parent_artifact_id, is_current, generation_basis, created_at, updated_at", userId),
+    selectMany("credit_ledger", "id, event_type, credit_delta, resource_type, resource_id, operation_key, metadata, created_at", userId),
+    selectMany("credit_reservations", "id, feature, amount, resource_type, resource_id, idempotency_key, status, ledger_event_id, metadata, expires_at, created_at, updated_at", userId),
     selectMany("privacy_requests", "id, request_type, status, subject, details, identity_verification_status, due_at, resolved_at, resolution_summary, export_storage_path, created_at, updated_at", userId),
+    selectManyByColumn("admin_access_audit_events", "id, actor_user_id, visibility_level, access_reason, resource_type, resource_id, metadata, created_at", "target_user_id", userId),
+    selectMany("sensitive_support_contexts", "id, support_ticket_id, consent_recorded_at, context_json, created_at, updated_at", userId),
   ]);
 
   return {
@@ -96,15 +106,19 @@ export async function assembleUserDataExport(userId: string, requestId: string) 
       note: "Authentication email and identity provider metadata are managed by Supabase Auth and are not expanded in this v1 export.",
       userId,
     },
+    adminAccessAuditEvents,
     applications,
     applicationStatusEvents,
+    careerProfiles,
     creditLedger,
+    creditReservations,
     generatedCoverLetters,
     generatedResumes,
     jobIngestions,
     privacyRequests,
     profile,
     profileFacts,
+    profileSourceAnalyses,
     profileSources: profileSources.map((source) => ({
       ...source,
       binaryFileIncluded: false,
@@ -113,6 +127,7 @@ export async function assembleUserDataExport(userId: string, requestId: string) 
         : null,
     })),
     roleRecommendations,
+    sensitiveSupportContexts,
     termsAcceptance: readTermsAcceptance(profile),
   };
 }
@@ -145,6 +160,26 @@ async function selectMaybeSingle(table: string, columns: string, userId: string)
   }
 
   return (data ?? null) as unknown as Record<string, unknown> | null;
+}
+
+async function selectManyByColumn(
+  table: string,
+  columns: string,
+  column: string,
+  value: string,
+) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from(table)
+    .select(columns)
+    .eq(column, value)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return [];
+  }
+
+  return (data ?? []) as unknown as Record<string, unknown>[];
 }
 
 function readTermsAcceptance(profile: unknown) {

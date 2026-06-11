@@ -8,7 +8,9 @@ import { z } from "zod";
 
 import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
 import { brand } from "@/lib/brand";
+import { mergeCareerProfile } from "@/lib/profile/career-profile-merge";
 import { extractProfileFactsFromText, type ProfileIntakeResult } from "@/lib/profile/profile-intake";
+import { analyzeProfileSource } from "@/lib/profile/profile-source-analysis";
 import { safeFetchExternalHtml } from "@/lib/security/safe-fetch";
 import { assertExternalHttpUrl } from "@/lib/security/url-safety";
 import { createClient } from "@/lib/supabase/server";
@@ -37,10 +39,28 @@ export const profileSourceExtractionRequestSchema = z.object({
 export type ProfileSourceExtractionResult = {
   source: {
     id: string;
-    extractionStatus: "pending" | "processing" | "succeeded" | "failed" | "deleted";
+    extractionStatus:
+      | "pending"
+      | "processing"
+      | "succeeded"
+      | "failed"
+      | "deleted"
+      | "extracting"
+      | "extracted"
+      | "analyzing"
+      | "analyzed"
+      | "analysis_failed";
     extractedTextLength: number;
   };
   intake: ProfileIntakeResult;
+  careerProfile: {
+    id: string;
+    status: string;
+    versionNumber: number;
+  } | null;
+  sourceAnalysis: {
+    id: string;
+  } | null;
 };
 
 export async function extractProfileSourceText({
@@ -58,7 +78,7 @@ export async function extractProfileSourceText({
   const { data: source, error: sourceError } = await supabase
     .from("profile_sources")
     .select(
-      "id, user_id, profile_id, source_type, source_url, storage_path, original_filename, mime_type, extraction_status",
+      "id, user_id, profile_id, source_type, source_url, storage_path, original_filename, mime_type, extraction_status, processing_started_at",
     )
     .eq("id", sourceId)
     .eq("user_id", user.id)
@@ -95,11 +115,15 @@ export async function extractProfileSourceText({
     throw new Error("LINKEDIN_SOURCE_REQUIRED");
   }
 
-  if (source.extraction_status === "processing") {
+  if (
+    ["processing", "extracting", "analyzing"].includes(source.extraction_status) &&
+    !isStaleProcessingSource(source.processing_started_at)
+  ) {
     throw new Error("SOURCE_ALREADY_PROCESSING");
   }
 
-  await updateSourceStatus(source.id, "processing");
+  let currentStage: "extracting" | "extracted" | "analyzing" = "extracting";
+  await updateSourceStatus(source.id, currentStage);
 
   try {
     const extractedText =
@@ -138,7 +162,7 @@ export async function extractProfileSourceText({
       .from("profile_sources")
       .update({
         extracted_text: normalizedText,
-        extraction_status: "succeeded",
+        extraction_status: "extracted",
         failure_reason: null,
       })
       .eq("id", source.id)
@@ -147,8 +171,11 @@ export async function extractProfileSourceText({
     if (updateError) {
       throw new Error("SOURCE_UPDATE_FAILED");
     }
+    currentStage = "extracted";
 
     let intake: ProfileIntakeResult;
+    let sourceAnalysis: { id: string } | null = null;
+    let careerProfile: { id: string; status: string; versionNumber: number } | null = null;
     const inputLabel = buildInputLabel({
       filename: source.original_filename,
       sourceType: source.source_type,
@@ -175,18 +202,48 @@ export async function extractProfileSourceText({
       });
     }
 
+    currentStage = "analyzing";
+    await updateSourceStatus(source.id, currentStage);
+
+    const analysis = await analyzeProfileSource({
+      label: inputLabel,
+      profileId: source.profile_id,
+      sourceId: source.id,
+      sourceType: source.source_type,
+      text: normalizedText,
+      userId: user.id,
+    });
+    sourceAnalysis = {
+      id: analysis.analysisId,
+    };
+
+    const merged = await mergeCareerProfile({
+      lastSourceAnalysisId: analysis.analysisId,
+      profileId: source.profile_id,
+      userId: user.id,
+    });
+    careerProfile = {
+      id: merged.careerProfileId,
+      status: merged.status,
+      versionNumber: merged.versionNumber,
+    };
+
+    await updateSourceStatus(source.id, "analyzed");
+
     return {
+      careerProfile,
       source: {
         id: source.id,
-        extractionStatus: "succeeded",
+        extractionStatus: "analyzed",
         extractedTextLength: normalizedText.length,
       },
+      sourceAnalysis,
       intake,
     };
   } catch (error) {
     await updateSourceStatus(
       source.id,
-      "failed",
+      currentStage === "analyzing" ? "analysis_failed" : "failed",
       error instanceof Error ? error.message : "UNKNOWN_EXTRACTION_ERROR",
     );
 
@@ -1283,7 +1340,7 @@ function logLinkedInWebSearchAttemptFailure({ attempt, code }: { attempt: number
 
 async function updateSourceStatus(
   sourceId: string,
-  extractionStatus: "processing" | "succeeded" | "failed",
+  extractionStatus: "processing" | "succeeded" | "failed" | "extracting" | "extracted" | "analyzing" | "analyzed" | "analysis_failed",
   failureReason: string | null = null,
 ) {
   const supabase = await createClient();
@@ -1292,10 +1349,27 @@ async function updateSourceStatus(
     .update({
       extraction_status: extractionStatus,
       failure_reason: failureReason,
+      processing_started_at: ["processing", "extracting", "analyzing"].includes(extractionStatus)
+        ? new Date().toISOString()
+        : null,
     })
     .eq("id", sourceId);
 
   if (error) {
     throw new Error("SOURCE_STATUS_UPDATE_FAILED");
   }
+}
+
+function isStaleProcessingSource(startedAt: string | null) {
+  if (!startedAt) {
+    return true;
+  }
+
+  const timestamp = Date.parse(startedAt);
+
+  if (Number.isNaN(timestamp)) {
+    return true;
+  }
+
+  return Date.now() - timestamp > 10 * 60_000;
 }

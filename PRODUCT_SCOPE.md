@@ -112,6 +112,19 @@ Support is included as an operating foundation.
 
 The L1 support agent must be empathetic, expert in the product, able to review support-safe logs and user activity metadata, and able to produce a complete escalation packet when human help is required.
 
+### 7. Credits And Payments
+
+V1 includes one-time credit purchases through the existing RevenueCat/Stripe
+checkout configuration.
+
+The app should:
+
+- Show credit balance, usage, purchase history, and receipt/invoice support state.
+- Grant purchased credits through webhook events exactly once.
+- Ignore unknown product ids without granting credits.
+- Let owner/admin trace payment event references to credit ledger rows.
+- Support refund/support reconciliation without storing payment methods in the app.
+
 ## V1 Layout
 
 Desktop:
@@ -138,6 +151,11 @@ V1 must not include:
 - Native mobile release.
 - Submitting data to employers.
 - Authenticated LinkedIn/job-board/company-career-site integrations without separate approval.
+- Subscriptions.
+- Enterprise invoicing.
+- Marketplace billing.
+- Stored payment method management.
+- Automatic renewals, auto-refills, or recurring charges.
 
 ## Future Expected Capabilities
 

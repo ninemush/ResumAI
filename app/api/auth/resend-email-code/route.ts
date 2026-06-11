@@ -12,8 +12,8 @@ export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   const rateLimit = await checkRateLimit({
     key: getClientRateLimitKey(request, "auth_email_code_resend"),
-    limit: 5,
-    windowMs: 60_000,
+    limit: 3,
+    windowMs: 5 * 60_000,
   });
 
   if (!rateLimit.allowed) {
@@ -46,9 +46,19 @@ export async function POST(request: Request) {
   });
 
   if (error) {
+    console.warn(
+      JSON.stringify({
+        event: "auth.email_code_resend_failed",
+        message: error.message,
+        requestId,
+        status: "status" in error ? error.status : null,
+      }),
+    );
+    const mapped = mapEmailDeliveryError(error.message);
+
     return NextResponse.json(
-      { error: { code: "auth.email_code_failed", message: "We could not resend the code." } },
-      { status: 502 },
+      { error: mapped },
+      { status: mapped.code === "auth.email_rate_limited" ? 429 : 502 },
     );
   }
 
@@ -58,4 +68,20 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ ok: true });
+}
+
+function mapEmailDeliveryError(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("rate") || normalized.includes("limit") || normalized.includes("too many")) {
+    return {
+      code: "auth.email_rate_limited",
+      message: "Email delivery is temporarily rate-limited. Wait a few minutes before requesting another code.",
+    };
+  }
+
+  return {
+    code: "auth.email_code_failed",
+    message: "We could not resend the code.",
+  };
 }

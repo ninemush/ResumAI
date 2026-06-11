@@ -77,6 +77,30 @@ Controls:
   integration, subject to provider terms, legal review, and security design.
 - Link ingestion must apply SSRF controls before launch.
 
+## `POST /api/profile/sources/upload-intent`
+
+Purpose: create a server-owned profile source row and signed private storage
+upload URL before the browser uploads a file.
+
+Controls:
+
+- Auth required.
+- Server chooses the user-scoped storage path.
+- HEIC/HEIF are rejected for V1.
+- Client must call `POST /api/profile/sources/:id/complete-upload` after the
+  storage upload succeeds.
+- Stale pending upload intents are eligible for cleanup.
+
+## `POST /api/profile/sources/:id/complete-upload`
+
+Purpose: verify the private uploaded object exists and mark the source uploaded.
+
+Controls:
+
+- Auth required.
+- User can only complete own source rows.
+- Storage path must stay inside the authenticated user's private folder.
+
 ## `POST /api/profile/sources/:id/extract`
 
 Purpose: extract text from a stored profile source and normalize useful profile
@@ -110,6 +134,8 @@ Controls:
 
 - Auth required.
 - Requires 1 available credit.
+- Credit covers extraction, source analysis, and canonical career profile merge.
+- Credits are reserved before work and finalized only after durable output exists.
 - User can only extract owned source records.
 - Storage path must be scoped to the authenticated user's private folder.
 - Non-TXT/PDF/DOCX sources return a typed unsupported-source response until their
@@ -147,6 +173,32 @@ Controls:
 - AI output schema validation required.
 - Must not invent facts.
 - Stores generated resume artifact metadata.
+- Prefers `career_profiles.content_json` as primary context, with profile facts
+  and raw source text as fallback.
+- Credits are reserved before generation and finalized only after the resume row
+  exists.
+
+## `GET /api/profile/career-profile`
+
+Purpose: return the authenticated user's current canonical career profile.
+
+Controls:
+
+- Auth required.
+- User can only read their own current career profile.
+
+## `POST /api/profile/career-profile/rebuild`
+
+Purpose: rebuild the canonical career profile from existing extracted sources,
+profile fields, and profile facts without destructively mutating original source
+records.
+
+Controls:
+
+- Auth required.
+- Rebuild is scoped to the signed-in user.
+- Rebuild creates versioned `profile_source_analyses` and `career_profiles`
+  records.
 
 ## `POST /api/jobs/ingest`
 
@@ -162,7 +214,17 @@ Request:
 
 ```json
 {
-  "jobUrl": "https://company.com/careers/job"
+  "jobUrl": "https://company.com/careers/job",
+  "sourceType": "url_fetch"
+}
+```
+
+Manual paste request:
+
+```json
+{
+  "jobText": "Full pasted job description...",
+  "sourceType": "manual_paste"
 }
 ```
 
@@ -174,6 +236,9 @@ Controls:
 - SSRF protection for obvious local/private targets.
 - Timeout and content-size limits.
 - Extracted job text stored in `job_ingestions`.
+- URL fetch failures should prompt manual paste instead of browser automation.
+- Fit output is qualitative and evidence-based: strong fit, plausible fit,
+  stretch, poor fit, or needs more profile evidence.
 
 ## `POST /api/jobs/evaluate`
 
@@ -190,6 +255,17 @@ Controls:
 
 Purpose: log an application when the user chooses to proceed.
 
+Request:
+
+```json
+{
+  "jobIngestionId": "uuid",
+  "decision": "apply",
+  "decisionReason": "User accepted this role from fit review.",
+  "status": "draft"
+}
+```
+
 Controls:
 
 - Auth required.
@@ -197,10 +273,23 @@ Controls:
 - Creates quota event.
 - Creates application record.
 - Cannot erase quota evidence.
+- Requires explicit decision: `apply`, `network_first`, `skip`,
+  `save_for_later`, or `needs_more_profile`.
+- `skip` requires explicit override.
 
 ## `POST /api/applications/:id/artifacts`
 
 Purpose: generate job-specific resume and cover letter artifacts.
+
+Request:
+
+```json
+{
+  "mode": "reuse",
+  "reason": "Optional regeneration reason",
+  "idempotencyKey": "optional-client-operation-key"
+}
+```
 
 Controls:
 
@@ -209,6 +298,9 @@ Controls:
 - Application ownership required.
 - AI output schema validation required.
 - Stores PDF and DOCX artifacts in private user-scoped storage.
+- Existing material pair plus `reuse` returns free.
+- `regenerate` creates new artifact versions and costs credits.
+- Credits are reserved before generation and finalized only after durable output exists.
 
 ## `PATCH /api/applications/:id/status`
 
@@ -255,6 +347,20 @@ Controls:
 - Auth required.
 - Server grants the configured signup credit allowance once.
 - Response never exposes another user's ledger.
+- Credit reservations are included in privacy/export/deletion controls.
+
+### Credit Reservation RPCs
+
+Purpose: reserve, finalize, or release credits around expensive operations.
+
+Controls:
+
+- Auth required.
+- Reservation requires an idempotency key.
+- Finalization writes the credit ledger usage row only after durable output
+  exists.
+- Recoverable failures release the reservation.
+- Duplicate finalized idempotency keys do not double-charge.
 
 ### `POST /api/billing/promo/redeem`
 
@@ -300,6 +406,17 @@ Controls:
 - Idempotent on RevenueCat event id.
 - Product-to-credit mapping is configuration (`REVENUECAT_CREDIT_PRODUCT_MAP`),
   not application code.
+- Unknown product ids are ignored without granting credits.
+- Missing production webhook secret fails closed.
+
+### V1 Payment Scope
+
+V1 includes one-time credit pack purchases through configured RevenueCat/Stripe
+checkout links, webhook-based credit grants, purchase history, receipt/invoice
+support state, refund/support reconciliation, and owner payment visibility.
+
+V1 does not include subscriptions, enterprise invoicing, marketplace billing,
+stored payment method management, automatic renewals, or auto-refills.
 
 ## `GET /api/admin/metrics`
 

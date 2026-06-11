@@ -78,6 +78,8 @@ export async function buildDeletionPlanForRequest(requestId: string): Promise<De
   const userId = request.user_id as string;
   const [
     profileSources,
+    profileSourceAnalyses,
+    careerProfiles,
     profileFacts,
     generatedMasterResumes,
     draftApplications,
@@ -85,10 +87,15 @@ export async function buildDeletionPlanForRequest(requestId: string): Promise<De
     generatedApplicationResumes,
     generatedCoverLetters,
     creditLedger,
+    creditReservations,
     quotaEvents,
     auditEvents,
+    adminAccessAuditEvents,
+    sensitiveSupportContexts,
   ] = await Promise.all([
     selectRows("profile_sources", "id, storage_path", userId),
+    countRows("profile_source_analyses", userId),
+    countRows("career_profiles", userId),
     countRows("profile_facts", userId),
     selectRows(
       "generated_resumes",
@@ -106,8 +113,11 @@ export async function buildDeletionPlanForRequest(requestId: string): Promise<De
     ),
     selectRows("generated_cover_letters", "id, pdf_storage_path, docx_storage_path", userId),
     countRows("credit_ledger", userId),
+    countRows("credit_reservations", userId),
     countRows("quota_events", userId),
     countRows("audit_events", userId),
+    countRowsByColumn("admin_access_audit_events", "target_user_id", userId),
+    countRows("sensitive_support_contexts", userId),
   ]);
 
   const sourceStoragePaths = readStoragePaths(profileSources, ["storage_path"]);
@@ -139,6 +149,24 @@ export async function buildDeletionPlanForRequest(requestId: string): Promise<De
         reason: "Profile facts are editable profile data and can normally be deleted with the profile source graph.",
         storagePaths: [],
         table: "profile_facts",
+      },
+      {
+        count: profileSourceAnalyses,
+        reason: "Profile source analyses are derived career data and can normally be deleted with the profile source graph.",
+        storagePaths: [],
+        table: "profile_source_analyses",
+      },
+      {
+        count: careerProfiles,
+        reason: "Canonical career profiles are derived editable profile data and can normally be deleted with the profile graph.",
+        storagePaths: [],
+        table: "career_profiles",
+      },
+      {
+        count: sensitiveSupportContexts,
+        reason: "Sensitive support context requires explicit consent and should be removed unless a support or legal hold applies.",
+        storagePaths: [],
+        table: "sensitive_support_contexts",
       },
       {
         count: generatedMasterResumes.length,
@@ -175,6 +203,20 @@ export async function buildDeletionPlanForRequest(requestId: string): Promise<De
         reason:
           "Generated cover letters may be tied to application records; minimize content and artifacts after review.",
         table: "generated_cover_letters",
+      },
+      {
+        count: creditReservations,
+        fields: ["idempotency_key", "metadata"],
+        reason:
+          "Credit reservations may be needed for billing/support reconciliation; minimize retry keys and metadata after review.",
+        table: "credit_reservations",
+      },
+      {
+        count: adminAccessAuditEvents,
+        fields: ["metadata"],
+        reason:
+          "Admin access audit rows are retained for accountability, but request-specific metadata should be minimized after review.",
+        table: "admin_access_audit_events",
       },
     ],
     requestId,
@@ -397,6 +439,17 @@ async function executeDeletionPlan({
     table: "generated_cover_letters",
   });
 
+  await admin
+    .from("admin_access_audit_events")
+    .update({ metadata: {} })
+    .eq("target_user_id", subjectUserId);
+  actions.push({
+    action: "minimized",
+    count: countPlanItem(plan.minimize, "admin_access_audit_events"),
+    detail: "Cleared admin access audit metadata while preserving accountability records.",
+    table: "admin_access_audit_events",
+  });
+
   for (const retained of plan.retain) {
     actions.push({
       action: "retained_with_reason",
@@ -482,6 +535,20 @@ async function countRows(table: string, userId: string) {
     .from(table)
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId);
+
+  if (error) {
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
+async function countRowsByColumn(table: string, column: string, value: string) {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq(column, value);
 
   if (error) {
     return 0;

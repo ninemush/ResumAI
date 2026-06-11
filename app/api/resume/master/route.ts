@@ -1,9 +1,11 @@
 import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
-  consumeCredits,
+  finalizeCreditReservation,
   getCreditOperationKey,
   requireCredits,
+  releaseCreditReservation,
+  reserveCredits,
 } from "@/lib/billing/credits";
 import {
   generateMasterResume,
@@ -49,16 +51,33 @@ export async function POST(request: Request) {
   try {
     await requireSignedInUser();
     await requireCredits("masterResumeGenerate");
-    const result = await generateMasterResume(parsed.data);
-    await consumeCredits({
+    const operationKey = getCreditOperationKey(
+      request,
+      `masterResumeGenerate:${crypto.randomUUID()}`,
+    );
+    const reservation = await reserveCredits({
       feature: "masterResumeGenerate",
       metadata: { instruction: parsed.data.instruction ?? null },
-      operationKey: getCreditOperationKey(
-        request,
-        `masterResumeGenerate:${result.resumeId}`,
-      ),
-      resourceId: result.resumeId,
+      operationKey,
+      resourceId: null,
       resourceType: "master_resume",
+    });
+    let result: Awaited<ReturnType<typeof generateMasterResume>>;
+
+    try {
+      result = await generateMasterResume(parsed.data);
+    } catch (error) {
+      await releaseCreditReservation({
+        reason: error instanceof Error ? error.message : "MASTER_RESUME_GENERATION_FAILED",
+        reservationId: reservation.reservationId,
+      }).catch(() => undefined);
+      throw error;
+    }
+
+    await finalizeCreditReservation({
+      metadata: { resume_id: result.resumeId },
+      reservationId: reservation.reservationId,
+      resourceId: result.resumeId,
     });
 
     return apiSuccess({

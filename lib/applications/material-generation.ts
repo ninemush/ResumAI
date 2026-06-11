@@ -29,6 +29,9 @@ import { createClient } from "@/lib/supabase/server";
 
 export const generateApplicationMaterialsSchema = z.object({
   applicationId: z.string().uuid(),
+  idempotencyKey: z.string().trim().min(8).max(180).optional(),
+  mode: z.enum(["reuse", "regenerate"]).default("reuse"),
+  reason: z.string().trim().max(500).optional(),
 });
 
 const generatedMaterialsSchema = z.object({
@@ -48,6 +51,8 @@ export type GenerateApplicationMaterialsResult = {
 type ApplicationContext = {
   id: string;
   company_name: string;
+  fit_decision: string | null;
+  fit_decision_reason: string | null;
   job_title: string | null;
   job_url: string;
   profile_id: string;
@@ -121,7 +126,7 @@ export async function generateApplicationMaterials(
   const { data: application, error: applicationError } = await supabase
     .from("applications")
     .select(
-      "id, company_name, job_title, job_url, profile_id, job_ingestions(id, extracted_text, title, company)",
+      "id, company_name, fit_decision, fit_decision_reason, job_title, job_url, profile_id, job_ingestions(id, extracted_text, title, company)",
     )
     .eq("id", parsed.applicationId)
     .eq("user_id", user.id)
@@ -137,13 +142,15 @@ export async function generateApplicationMaterials(
     userId: user.id,
   });
 
-  if (existingMaterials) {
+  if (existingMaterials && parsed.mode !== "regenerate") {
     return buildReusableMaterialsResult({
       application: context,
       coverLetter: existingMaterials.coverLetter,
       resume: existingMaterials.resume,
     });
   }
+
+  assertApplicationMaterialDecisionAllowsGeneration(context);
 
   if (!context.job_ingestions?.extracted_text) {
     throw new Error("JOB_TEXT_REQUIRED");
@@ -374,6 +381,36 @@ export async function generateApplicationMaterials(
 
   const generated = generatedMaterialsSchema.parse(JSON.parse(response.output_text));
   const generatedResume = normalizeGeneratedApplicationResume(generated.resume, masterResume);
+  const nextVersion = existingMaterials
+    ? Math.max(existingMaterials.resume.version_number, existingMaterials.coverLetter.version_number) + 1
+    : 1;
+  const generationBasis = {
+    applicationId: context.id,
+    fitAnalysis,
+    fitDecision: context.fit_decision,
+    generationReason: parsed.reason ?? (parsed.mode === "regenerate" ? "regenerate" : "initial"),
+    generatedAt: new Date().toISOString(),
+    jobIngestionId: context.job_ingestions?.id ?? null,
+    masterResumeIncluded: Boolean(masterResume),
+    model,
+    promptVersion: APPLICATION_MATERIALS_PROMPT_VERSION,
+  };
+
+  if (existingMaterials && parsed.mode === "regenerate") {
+    await Promise.all([
+      supabase
+        .from("generated_resumes")
+        .update({ is_current: false })
+        .eq("id", existingMaterials.resume.id)
+        .eq("user_id", user.id),
+      supabase
+        .from("generated_cover_letters")
+        .update({ is_current: false })
+        .eq("id", existingMaterials.coverLetter.id)
+        .eq("user_id", user.id),
+    ]);
+  }
+
   const [{ data: resume, error: resumeError }, { data: coverLetter, error: coverLetterError }] =
     await Promise.all([
       supabase
@@ -386,7 +423,12 @@ export async function generateApplicationMaterials(
           prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
           model,
           content_json: generatedResume,
+          generation_basis: generationBasis,
+          generation_reason: parsed.reason ?? (parsed.mode === "regenerate" ? "regenerate" : "initial"),
+          is_current: true,
+          parent_artifact_id: existingMaterials?.resume.id ?? null,
           status: "ready",
+          version_number: nextVersion,
         })
         .select("id")
         .single(),
@@ -398,7 +440,12 @@ export async function generateApplicationMaterials(
           prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
           model,
           content: generated.coverLetter,
+          generation_basis: generationBasis,
+          generation_reason: parsed.reason ?? (parsed.mode === "regenerate" ? "regenerate" : "initial"),
+          is_current: true,
+          parent_artifact_id: existingMaterials?.coverLetter.id ?? null,
           status: "ready",
+          version_number: nextVersion,
         })
         .select("id")
         .single(),
@@ -448,17 +495,19 @@ async function readLatestMaterialPair({
     await Promise.all([
       supabase
         .from("generated_resumes")
-        .select("id, model, prompt_version")
+        .select("id, model, prompt_version, version_number")
         .eq("application_id", applicationId)
         .eq("user_id", userId)
+        .eq("is_current", true)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
       supabase
         .from("generated_cover_letters")
-        .select("id, model, prompt_version")
+        .select("id, model, prompt_version, version_number")
         .eq("application_id", applicationId)
         .eq("user_id", userId)
+        .eq("is_current", true)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
@@ -492,11 +541,13 @@ function buildReusableMaterialsResult({
     id: string;
     model: string | null;
     prompt_version: string | null;
+    version_number: number;
   };
   resume: {
     id: string;
     model: string | null;
     prompt_version: string | null;
+    version_number: number;
   };
 }): GenerateApplicationMaterialsResult {
   return {
@@ -508,6 +559,16 @@ function buildReusableMaterialsResult({
     resumeId: resume.id,
     summary: `Kept the existing role-specific resume packet for ${application.job_title ?? "the role"} at ${application.company_name}.`,
   };
+}
+
+function assertApplicationMaterialDecisionAllowsGeneration(application: ApplicationContext) {
+  if (application.fit_decision === "skip") {
+    throw new Error("APPLICATION_DECISION_SKIP");
+  }
+
+  if (application.fit_decision === "needs_more_profile" || application.fit_decision === "needs_profile") {
+    throw new Error("APPLICATION_DECISION_NEEDS_PROFILE");
+  }
 }
 
 function buildMaterialsInput({

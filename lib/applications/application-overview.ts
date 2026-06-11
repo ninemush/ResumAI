@@ -2,9 +2,6 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 
-const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
-const ARTIFACT_SIGNED_URL_TTL_SECONDS = 10 * 60;
-
 export type ApplicationOverview = {
   recentApplications: {
     archivedAt: string | null;
@@ -333,7 +330,7 @@ async function readLatestResumeArtifacts({ applicationIds }: { applicationIds: s
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("generated_resumes")
-    .select("application_id, status, content_json, pdf_storage_path, docx_storage_path, created_at")
+    .select("id, application_id, status, content_json, pdf_storage_path, docx_storage_path, created_at")
     .in("application_id", applicationIds)
     .order("created_at", { ascending: false });
 
@@ -359,11 +356,21 @@ async function readLatestResumeArtifacts({ applicationIds }: { applicationIds: s
     }
 
     artifacts.set(artifact.application_id, {
-      docxUrl: await createSignedArtifactUrl(supabase, artifact.docx_storage_path),
+      docxUrl: buildArtifactDownloadUrl({
+        format: "docx",
+        hasFile: Boolean(artifact.docx_storage_path),
+        id: artifact.id,
+        kind: "resume",
+      }),
       hasDocx: Boolean(artifact.docx_storage_path),
       hasPdf: Boolean(artifact.pdf_storage_path),
       headline: readResumeHeadline(artifact.content_json),
-      pdfUrl: await createSignedArtifactUrl(supabase, artifact.pdf_storage_path),
+      pdfUrl: buildArtifactDownloadUrl({
+        format: "pdf",
+        hasFile: Boolean(artifact.pdf_storage_path),
+        id: artifact.id,
+        kind: "resume",
+      }),
       status: artifact.status,
     });
   }
@@ -375,7 +382,7 @@ async function readLatestCoverLetterArtifacts({ applicationIds }: { applicationI
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("generated_cover_letters")
-    .select("application_id, status, content, pdf_storage_path, docx_storage_path, created_at")
+    .select("id, application_id, status, content, pdf_storage_path, docx_storage_path, created_at")
     .in("application_id", applicationIds)
     .order("created_at", { ascending: false });
 
@@ -401,11 +408,21 @@ async function readLatestCoverLetterArtifacts({ applicationIds }: { applicationI
     }
 
     artifacts.set(artifact.application_id, {
-      docxUrl: await createSignedArtifactUrl(supabase, artifact.docx_storage_path),
+      docxUrl: buildArtifactDownloadUrl({
+        format: "docx",
+        hasFile: Boolean(artifact.docx_storage_path),
+        id: artifact.id,
+        kind: "cover-letter",
+      }),
       excerpt: artifact.content ? `${artifact.content.slice(0, 180)}...` : null,
       hasDocx: Boolean(artifact.docx_storage_path),
       hasPdf: Boolean(artifact.pdf_storage_path),
-      pdfUrl: await createSignedArtifactUrl(supabase, artifact.pdf_storage_path),
+      pdfUrl: buildArtifactDownloadUrl({
+        format: "pdf",
+        hasFile: Boolean(artifact.pdf_storage_path),
+        id: artifact.id,
+        kind: "cover-letter",
+      }),
       status: artifact.status,
     });
   }
@@ -413,23 +430,18 @@ async function readLatestCoverLetterArtifacts({ applicationIds }: { applicationI
   return artifacts;
 }
 
-async function createSignedArtifactUrl(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  path: string | null,
-) {
-  if (!path) {
-    return null;
-  }
-
-  const { data, error } = await supabase.storage
-    .from(GENERATED_ARTIFACT_BUCKET)
-    .createSignedUrl(path, ARTIFACT_SIGNED_URL_TTL_SECONDS);
-
-  if (error || !data?.signedUrl) {
-    return null;
-  }
-
-  return data.signedUrl;
+function buildArtifactDownloadUrl({
+  format,
+  hasFile,
+  id,
+  kind,
+}: {
+  format: "docx" | "pdf";
+  hasFile: boolean;
+  id: string;
+  kind: "cover-letter" | "resume";
+}) {
+  return hasFile ? `/api/artifacts/${kind}/${id}/download?format=${format}` : null;
 }
 
 function readResumeHeadline(contentJson: unknown) {

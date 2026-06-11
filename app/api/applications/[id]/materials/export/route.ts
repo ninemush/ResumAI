@@ -1,9 +1,11 @@
 import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
-  consumeCredits,
+  finalizeCreditReservation,
   getCreditOperationKey,
   requireCredits,
+  releaseCreditReservation,
+  reserveCredits,
 } from "@/lib/billing/credits";
 import {
   exportMaterialArtifacts,
@@ -64,18 +66,38 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     await requireCredits("applicationMaterialsExport");
-    const result = await exportMaterialArtifacts(parsed.data);
+    const reservation = await reserveCredits({
+      feature: "applicationMaterialsExport",
+      operationKey: getCreditOperationKey(
+        request,
+        `applicationMaterialsExport:${params.id}`,
+      ),
+      resourceId: params.id,
+      resourceType: "application_materials_export",
+    });
+    let result: Awaited<ReturnType<typeof exportMaterialArtifacts>>;
+
+    try {
+      result = await exportMaterialArtifacts(parsed.data);
+    } catch (error) {
+      await releaseCreditReservation({
+        reason: error instanceof Error ? error.message : "APPLICATION_MATERIAL_EXPORT_FAILED",
+        reservationId: reservation.reservationId,
+      }).catch(() => undefined);
+      throw error;
+    }
 
     if (result.didExport) {
-      await consumeCredits({
-        feature: "applicationMaterialsExport",
-        operationKey: getCreditOperationKey(
-          request,
-          `applicationMaterialsExport:${params.id}`,
-        ),
+      await finalizeCreditReservation({
+        metadata: { application_id: params.id },
+        reservationId: reservation.reservationId,
         resourceId: params.id,
-        resourceType: "application_materials_export",
       });
+    } else {
+      await releaseCreditReservation({
+        reason: "APPLICATION_MATERIAL_EXPORT_REUSED",
+        reservationId: reservation.reservationId,
+      }).catch(() => undefined);
     }
 
     return apiSuccess({

@@ -69,7 +69,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
           "Content-Type": "application/json",
           ...createIdempotencyHeaders("jobIngest:jobs-panel"),
         },
-        body: JSON.stringify({ jobUrl: trimmedUrl }),
+        body: JSON.stringify({ jobUrl: trimmedUrl, sourceType: "url_fetch" }),
       });
       const payload = await response.json();
 
@@ -90,31 +90,43 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
     }
   }
 
-  function moveJobTextToChat() {
+  async function ingestJobFromText() {
     const text = jobText.trim();
 
     if (!text) {
-      setMessage("Paste the job description text first, then send it to chat for review.");
+      setMessage("Paste the job description text first, then save it for review.");
       return;
     }
 
-    window.dispatchEvent(
-      new CustomEvent("pramania:conversation-draft", {
-        detail: {
-          focus: true,
-          source: "job-description-fallback",
-          text: `Evaluate this pasted job description against my profile. If it is worth pursuing, help me save it as a job decision:\n\n${text}`,
+    setIsIngestingJob(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/jobs/ingest", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...createIdempotencyHeaders("jobIngest:manual-paste"),
         },
-      }),
-    );
-    window.dispatchEvent(
-      new CustomEvent("pramania:focus-chat", {
-        detail: {
-          reason: "job-description-fallback",
-        },
-      }),
-    );
-    setMessage(`I moved the pasted job text into chat so ${brand.name} can review it with your profile context.`);
+        body: JSON.stringify({ jobText: text, sourceType: "manual_paste" }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to save that pasted job description.");
+        return;
+      }
+
+      setJobText("");
+      setMessage(
+        payload.job?.title
+          ? `Added ${payload.job.title} from pasted text for fit review.`
+          : "Added the pasted job description for fit review.",
+      );
+      router.refresh();
+    } finally {
+      setIsIngestingJob(false);
+    }
   }
 
   async function logApplication(jobId: string) {
@@ -125,7 +137,12 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       const response = await fetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobIngestionId: jobId, status: "draft" }),
+        body: JSON.stringify({
+          decision: "apply",
+          decisionReason: "User accepted this role from the job review queue.",
+          jobIngestionId: jobId,
+          status: "draft",
+        }),
       });
       const payload = await response.json();
 
@@ -243,18 +260,18 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
             <span>Unreadable posting or private page</span>
             <textarea
               onChange={(event) => setJobText(event.target.value)}
-              placeholder="Paste job description text here, then send it to chat for profile-aware review."
+              placeholder="Paste job description text here, then save it for profile-aware review."
               rows={2}
               value={jobText}
             />
           </label>
           <button
             className="secondary-action compact-action"
-            disabled={!jobText.trim()}
-            onClick={moveJobTextToChat}
+            disabled={isIngestingJob || !jobText.trim()}
+            onClick={() => void ingestJobFromText()}
             type="button"
           >
-            Send pasted text to chat
+            Analyze pasted text
           </button>
         </div>
       </section>
@@ -344,7 +361,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
 
             <div className="record-status-stack">
               {job.fitSnapshot.score !== null ? (
-                <span className="fit-score-pill">{job.fitSnapshot.score}% match</span>
+                <span className="fit-score-pill">{formatFitBand(job.fitAnalysis.fitBand)}</span>
               ) : null}
               <span className="record-next-action">{readJobNextAction(job)}</span>
             </div>
@@ -397,15 +414,17 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                   />
                 </div>
                 <div className="record-action-strip">
-                  <a
-                    className="secondary-action compact-action"
-                    href={job.resolved_url ?? job.job_url}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <ExternalLink size={14} aria-hidden="true" />
-                    Open post
-                  </a>
+                  {job.resolved_url || job.job_url ? (
+                    <a
+                      className="secondary-action compact-action"
+                      href={job.resolved_url ?? job.job_url ?? "#"}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <ExternalLink size={14} aria-hidden="true" />
+                      Open post
+                    </a>
+                  ) : null}
                   {job.archived_at ? (
                     <button
                       className="secondary-action compact-action"
@@ -543,7 +562,15 @@ function FitBucket({
   );
 }
 
-function formatJobUrl(jobUrl: string) {
+function formatFitBand(fitBand: JobOverview["recentJobs"][number]["fitAnalysis"]["fitBand"]) {
+  return fitBand ?? "Needs more profile evidence";
+}
+
+function formatJobUrl(jobUrl: string | null) {
+  if (!jobUrl) {
+    return "Manual job description";
+  }
+
   try {
     return new URL(jobUrl).hostname.replace(/^www\./, "");
   } catch {

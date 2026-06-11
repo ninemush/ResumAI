@@ -29,6 +29,7 @@ V1 is limited to:
 - Owner/admin operating console for user, activity, feature usage, profile, resume, application, conversion, support, and system-health metrics.
 - Support foundation with self-serve docs, ticket intake, autonomous L1 support boundaries, and human L2 escalation controls.
 - Tier usage audit trail sufficient to justify quota consumption.
+- One-time credit purchases through configured RevenueCat/Stripe checkout links, webhook-based credit grants, purchase history, receipt/invoice support references, refund/support reconciliation, and owner payment visibility.
 - Three-panel app shell: left navigation, center profile explorer/editor, right conversational AI.
 
 V1 must not include:
@@ -38,6 +39,7 @@ V1 must not include:
 - Job scanning.
 - Browser automation.
 - Native mobile release.
+- Subscriptions, automatic renewals, auto-refills, stored payment method management, enterprise invoicing, or marketplace billing.
 - Any workflow that submits data to an employer without explicit human approval.
 
 Future expected integrations may include authenticated LinkedIn import, job-board integrations, and company career-site integrations. V1 architecture must leave room for these integrations, but V1 must not submit applications or scrape authenticated third-party systems without explicit user authorization, legal review, provider terms review, and integration-specific security design.

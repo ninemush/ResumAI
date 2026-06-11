@@ -30,7 +30,6 @@ import { createClient } from "@/lib/supabase/server";
 
 export const MASTER_RESUME_PROMPT_VERSION = "master-resume.v8";
 const GENERATED_ARTIFACT_BUCKET = "generated-artifacts";
-const PDF_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
 export const generateMasterResumeSchema = z.object({
   instruction: z.string().trim().min(3).max(500).optional(),
@@ -1503,6 +1502,16 @@ async function readMasterResumeContext(userId: string) {
     .not("extracted_text", "is", null)
     .order("created_at", { ascending: false })
     .limit(30);
+  const { data: careerProfile, error: careerProfileError } = await supabase
+    .from("career_profiles")
+    .select("id, version_number, content_json, updated_at")
+    .eq("profile_id", profile.id)
+    .eq("user_id", userId)
+    .eq("is_current", true)
+    .neq("status", "deleted")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (factsError) {
     throw new Error("PROFILE_FACTS_READ_FAILED");
@@ -1515,10 +1524,31 @@ async function readMasterResumeContext(userId: string) {
     });
   }
 
+  if (careerProfileError) {
+    console.warn("master_resume.career_profile_read_failed", {
+      profileId: profile.id,
+      userIdHash: hashUserId(userId),
+    });
+  }
+
+  const prioritizedSourceEvidence = sourceError ? [] : prioritizeSourceEvidence(sourceEvidence ?? []);
+  const canonicalSource = careerProfile?.content_json
+    ? [
+        {
+          created_at: careerProfile.updated_at,
+          extracted_text: JSON.stringify(careerProfile.content_json),
+          id: careerProfile.id,
+          original_filename: `Canonical career profile v${careerProfile.version_number}`,
+          source_type: "career_profile",
+          source_url: null,
+        },
+      ]
+    : [];
+
   return {
     confirmedFacts: confirmedFacts ?? [],
     profile,
-    sourceEvidence: sourceError ? [] : prioritizeSourceEvidence(sourceEvidence ?? []),
+    sourceEvidence: [...canonicalSource, ...prioritizedSourceEvidence],
   };
 }
 
@@ -1568,10 +1598,18 @@ async function buildOverview({
             sourceEvidence,
             promptVersion: latestResume.prompt_version,
           }),
-          docxDownloadUrl: await createSignedArtifactUrl(latestResume.docx_storage_path),
+          docxDownloadUrl: buildArtifactDownloadUrl({
+            format: "docx",
+            hasFile: Boolean(latestResume.docx_storage_path),
+            id: latestResume.id,
+          }),
           id: latestResume.id,
           model: latestResume.model,
-          pdfDownloadUrl: await createSignedArtifactUrl(latestResume.pdf_storage_path),
+          pdfDownloadUrl: buildArtifactDownloadUrl({
+            format: "pdf",
+            hasFile: Boolean(latestResume.pdf_storage_path),
+            id: latestResume.id,
+          }),
           promptVersion: latestResume.prompt_version,
           status: latestResume.status,
           updatedAt: latestResume.updated_at,
@@ -2067,21 +2105,16 @@ function stripRecommendationSourceSections(value: string) {
   return decoded.slice(0, recommendationMatch.index).trim();
 }
 
-async function createSignedArtifactUrl(path: string | null) {
-  if (!path) {
-    return null;
-  }
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.storage
-    .from(GENERATED_ARTIFACT_BUCKET)
-    .createSignedUrl(path, PDF_SIGNED_URL_TTL_SECONDS);
-
-  if (error || !data?.signedUrl) {
-    return null;
-  }
-
-  return data.signedUrl;
+function buildArtifactDownloadUrl({
+  format,
+  hasFile,
+  id,
+}: {
+  format: "docx" | "pdf";
+  hasFile: boolean;
+  id: string;
+}) {
+  return hasFile ? `/api/artifacts/resume/${id}/download?format=${format}` : null;
 }
 
 function hashUserId(userId: string) {

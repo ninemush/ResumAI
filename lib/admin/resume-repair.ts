@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { logAdminUserAccesses } from "@/lib/admin/access-audit";
 import { sanitizeResumeContent, type ResumeQualityReport } from "@/lib/resumes/resume-quality";
 import { parseResumeContent, type ResumeContent } from "@/lib/resumes/resume-content";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -74,6 +75,22 @@ export async function repairMasterResumes(
     userId: parsed.userId,
   });
   const rows = await readLatestMasterResumeRows(supabase, targetUserId ? [targetUserId] : null);
+
+  await logAdminUserAccesses({
+    accessReason: parsed.dryRun ? "admin_resume_repair_dry_run" : "admin_resume_repair_apply",
+    actorUserId: user.id,
+    metadata: {
+      dryRun: parsed.dryRun,
+      email: parsed.email ?? null,
+      rowCount: rows.length,
+      targeted: Boolean(targetUserId),
+    },
+    resourceType: "master_resume_repair",
+    supabase,
+    targetUserIds: rows.map((row) => row.user_id),
+    visibilityLevel: "sensitive_source_review",
+  });
+
   const reports = rows.map(buildRepairReport);
   const changedReports = reports.filter((report) => report.changed);
   let auditEventId: string | null = null;

@@ -269,8 +269,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
                       Download
                     </a>
                   ) : null}
-                  {source.extraction_status !== "processing" &&
-                  source.extraction_status !== "deleted" ? (
+                  {!["processing", "extracting", "analyzing", "deleted"].includes(source.extraction_status) ? (
                     <button
                       className="secondary-action compact-action"
                       disabled={pendingId === source.id}
@@ -567,15 +566,15 @@ function formatFailureReason(reason: string) {
 }
 
 function formatSourceGuidance(source: ProfileOverview["recentSources"][number]) {
-  if (source.extraction_status === "succeeded") {
+  if (["succeeded", "extracted", "analyzed"].includes(source.extraction_status)) {
     return "Ready to support your profile, resume, and job-fit reviews.";
   }
 
-  if (source.extraction_status === "processing") {
+  if (["processing", "extracting", "analyzing"].includes(source.extraction_status)) {
     return "I am reading this now. Larger files can take a moment.";
   }
 
-  if (source.extraction_status === "pending") {
+  if (["pending", "saved", "uploaded"].includes(source.extraction_status)) {
     return "Saved and waiting to be read.";
   }
 
@@ -587,7 +586,7 @@ function formatSourceGuidance(source: ProfileOverview["recentSources"][number]) 
     return "Saved as an image. Try again, or paste the key text if the image is hard to read.";
   }
 
-  if (source.extraction_status === "failed") {
+  if (["failed", "analysis_failed"].includes(source.extraction_status)) {
     return "Saved, but I need a clearer copy or another attempt before it can help your profile.";
   }
 
@@ -620,11 +619,11 @@ function formatSourceProofNote(source: ProfileOverview["recentSources"][number])
     return "Proof receipt: the original is saved, but this source has not safely updated your profile yet.";
   }
 
-  if (source.extraction_status === "processing") {
+  if (["processing", "extracting", "analyzing"].includes(source.extraction_status)) {
     return `Proof receipt: this source is still being read, so ${brand.name} should not claim it changed your profile yet.`;
   }
 
-  if (source.extraction_status === "pending") {
+  if (["pending", "saved", "uploaded"].includes(source.extraction_status)) {
     return "Proof receipt: this source is saved and waiting to be read.";
   }
 
@@ -632,10 +631,10 @@ function formatSourceProofNote(source: ProfileOverview["recentSources"][number])
 }
 
 function formatSourceStatusLabel(status: string) {
-  if (["succeeded", "ready"].includes(status)) return "Ready";
-  if (["failed", "error"].includes(status)) return "Needs help";
-  if (status === "processing") return "Reading";
-  if (status === "pending") return "Saved";
+  if (["succeeded", "ready", "extracted", "analyzed"].includes(status)) return "Ready";
+  if (["failed", "error", "analysis_failed"].includes(status)) return "Needs help";
+  if (["processing", "extracting", "analyzing"].includes(status)) return "Reading";
+  if (["pending", "saved", "uploaded"].includes(status)) return "Saved";
   if (status === "deleted") return "Removed";
 
   return status.replace("_", " ");
@@ -745,11 +744,11 @@ function buildSourceHealth(sources: ProfileOverview["recentSources"]) {
 }
 
 function isSourceReady(source: ProfileOverview["recentSources"][number]) {
-  return ["succeeded", "ready"].includes(source.extraction_status);
+  return ["succeeded", "ready", "extracted", "analyzed"].includes(source.extraction_status);
 }
 
 function isSourceBlocked(source: ProfileOverview["recentSources"][number]) {
-  return ["failed", "error"].includes(source.extraction_status);
+  return ["failed", "error", "analysis_failed"].includes(source.extraction_status);
 }
 
 function formatShortList(items: string[]) {

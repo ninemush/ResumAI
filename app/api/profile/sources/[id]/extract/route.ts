@@ -3,9 +3,11 @@ import { NextResponse } from "next/server";
 import { brand } from "@/lib/brand";
 import {
   buildCreditsApiError,
-  consumeCredits,
+  finalizeCreditReservation,
   getCreditOperationKey,
   requireCredits,
+  releaseCreditReservation,
+  reserveCredits,
 } from "@/lib/billing/credits";
 import {
   extractProfileSourceText,
@@ -63,8 +65,7 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     await requireSignedInUser();
     await requireCredits("profileSourceExtract");
-    const result = await extractProfileSourceText(parsed.data);
-    await consumeCredits({
+    const reservation = await reserveCredits({
       feature: "profileSourceExtract",
       operationKey: getCreditOperationKey(
         request,
@@ -72,6 +73,26 @@ export async function POST(request: Request, context: RouteContext) {
       ),
       resourceId: params.id,
       resourceType: "profile_source",
+    });
+    let result: Awaited<ReturnType<typeof extractProfileSourceText>>;
+
+    try {
+      result = await extractProfileSourceText(parsed.data);
+    } catch (error) {
+      await releaseCreditReservation({
+        reason: error instanceof Error ? error.message : "PROFILE_SOURCE_EXTRACTION_FAILED",
+        reservationId: reservation.reservationId,
+      }).catch(() => undefined);
+      throw error;
+    }
+
+    await finalizeCreditReservation({
+      metadata: {
+        career_profile_id: result.careerProfile?.id ?? null,
+        source_analysis_id: result.sourceAnalysis?.id ?? null,
+      },
+      reservationId: reservation.reservationId,
+      resourceId: params.id,
     });
 
     return NextResponse.json({

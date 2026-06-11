@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { logAdminUserAccess } from "@/lib/admin/access-audit";
 import {
   checkRateLimit,
   getClientRateLimitKey,
@@ -103,6 +104,21 @@ export async function PATCH(request: Request, context: RouteContext) {
         { status: 403 },
       );
     }
+
+    await logAdminUserAccess({
+      accessReason: "support_ticket_update",
+      actorUserId: user.id,
+      metadata: {
+        requestId,
+        rootCauseCategory: ticket.root_cause_category,
+        status: ticket.status,
+      },
+      resourceId: ticket.id,
+      resourceType: "support_ticket",
+      supabase,
+      targetUserId: ticket.user_id,
+      visibilityLevel: "user_support_context",
+    });
 
     await supabase.from("support_ticket_messages").insert({
       message: buildAdminAuditMessage(input),

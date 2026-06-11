@@ -18,6 +18,7 @@ V1 may process:
 - Application records and statuses.
 - Generated resumes and cover letters.
 - Tier assignments and quota events.
+- One-time credit purchase event references, credit ledger entries, credit reservations, and receipt/support reconciliation metadata.
 
 ## Purpose
 
@@ -30,13 +31,14 @@ Data is processed only to:
 - Track user-approved applications.
 - Enforce tier limits and quota usage.
 - Provide audit-safe records for quota/accounting disputes.
+- Grant purchased credits, show purchase history, and reconcile payment/refund support issues.
 
 ## Minimization
 
 The app must not collect:
 
 - Government identifiers unless explicitly required later and separately approved.
-- Payment data in V1.
+- Raw card numbers, stored payment methods, or bank details.
 - Employer credentials.
 - Third-party account passwords.
 - Sensitive categories beyond what the user voluntarily includes in career materials.
@@ -88,4 +90,3 @@ Before public launch, document:
 - Subprocessors.
 - Cross-border transfer posture.
 - User deletion/export handling.
-

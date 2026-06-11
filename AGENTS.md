@@ -23,7 +23,12 @@ Before implementation work, preserve the V1 boundary:
 - Owner/admin tier configuration
 - AI-generated resume tailoring
 
-Do not add auto-apply, job scanning, browser automation, native mobile release, authenticated third-party integrations, payments, or extra workflows without explicit approval.
+Payments are explicitly approved for V1 only as one-time credit packs through
+the configured RevenueCat/Stripe checkout and webhook flow. Do not add
+subscriptions, automatic renewals, auto-refills, stored payment method
+management, enterprise invoicing, marketplace billing, auto-apply, job
+scanning, browser automation, native mobile release, authenticated third-party
+integrations, or extra workflows without explicit approval.
 
 Do not expose or commit secrets. `.env.local` must remain untracked.
 

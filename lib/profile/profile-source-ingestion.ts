@@ -40,6 +40,21 @@ export const profileSourceRequestSchema = z
 
 export type ProfileSourceRequest = z.infer<typeof profileSourceRequestSchema>;
 
+const uploadMimeTypes = {
+  "application/pdf": "pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "image/jpeg": "image",
+  "image/png": "image",
+  "image/webp": "image",
+  "text/plain": "txt",
+} as const;
+
+export const profileSourceUploadIntentSchema = z.object({
+  fileSize: z.number().int().min(1).max(25_000_000),
+  mimeType: z.string().trim().min(1).max(180),
+  originalFilename: z.string().trim().min(1).max(255),
+});
+
 export type ProfileSourceIngestionResult = {
   id: string;
   extractionStatus: "pending" | "processing" | "succeeded" | "failed" | "deleted";
@@ -62,6 +77,139 @@ export type RemovedProfileSource = {
   originalFilename: string | null;
   removedStorageObject: boolean;
 };
+
+export async function createProfileSourceUploadIntent(
+  input: z.input<typeof profileSourceUploadIntentSchema>,
+) {
+  const parsed = profileSourceUploadIntentSchema.parse(input);
+  const sourceType = uploadMimeTypes[parsed.mimeType as keyof typeof uploadMimeTypes];
+
+  if (!sourceType || /\.(heic|heif)$/i.test(parsed.originalFilename)) {
+    throw new Error("UNSUPPORTED_UPLOAD_TYPE");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .upsert({ user_id: user.id }, { onConflict: "user_id" })
+    .select("id")
+    .single();
+
+  if (profileError || !profile) {
+    throw new Error("PROFILE_UPSERT_FAILED");
+  }
+
+  const sourceId = crypto.randomUUID();
+  const extension = readSafeFileExtension(parsed.originalFilename, parsed.mimeType);
+  const storagePath = `${user.id}/${sourceId}/${Date.now()}-${slugifyFilename(parsed.originalFilename)}${extension}`;
+  const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
+
+  const { data: source, error: sourceError } = await supabase
+    .from("profile_sources")
+    .insert({
+      id: sourceId,
+      user_id: user.id,
+      profile_id: profile.id,
+      source_type: sourceType,
+      storage_path: storagePath,
+      original_filename: parsed.originalFilename,
+      mime_type: parsed.mimeType,
+      extraction_status: "saved",
+      upload_expires_at: expiresAt,
+    })
+    .select("id, extraction_status, source_type, storage_path")
+    .single();
+
+  if (sourceError || !source) {
+    throw new Error("PROFILE_SOURCE_INSERT_FAILED");
+  }
+
+  const { data: signedUpload, error: uploadError } = await supabase.storage
+    .from("profile-sources")
+    .createSignedUploadUrl(storagePath);
+
+  if (uploadError || !signedUpload) {
+    throw new Error("SOURCE_UPLOAD_URL_FAILED");
+  }
+
+  return {
+    expiresAt,
+    source: {
+      id: source.id,
+      extractionStatus: source.extraction_status,
+      sourceType: source.source_type,
+    },
+    storagePath,
+    token: signedUpload.token,
+    uploadUrl: signedUpload.signedUrl,
+  };
+}
+
+export async function completeProfileSourceUpload({ sourceId }: { sourceId: string }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const { data: source, error: sourceError } = await supabase
+    .from("profile_sources")
+    .select("id, storage_path, extraction_status, source_type")
+    .eq("id", sourceId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (sourceError || !source?.storage_path) {
+    throw new Error("SOURCE_NOT_FOUND");
+  }
+
+  if (!source.storage_path.startsWith(`${user.id}/`)) {
+    throw new Error("INVALID_STORAGE_PATH");
+  }
+
+  const { data: files, error: listError } = await supabase.storage
+    .from("profile-sources")
+    .list(source.storage_path.split("/").slice(0, -1).join("/"), {
+      search: source.storage_path.split("/").at(-1),
+    });
+
+  if (listError || !files || files.length === 0) {
+    throw new Error("SOURCE_UPLOAD_NOT_FOUND");
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from("profile_sources")
+    .update({
+      extraction_status: "uploaded",
+      failure_reason: null,
+      upload_expires_at: null,
+    })
+    .eq("id", source.id)
+    .eq("user_id", user.id)
+    .select("id, extraction_status, source_type")
+    .single();
+
+  if (updateError || !updated) {
+    throw new Error("SOURCE_UPDATE_FAILED");
+  }
+
+  return {
+    id: updated.id,
+    extractionStatus: updated.extraction_status,
+    sourceType: updated.source_type,
+  };
+}
 
 export async function ingestProfileSource(
   input: ProfileSourceRequest,
@@ -269,4 +417,35 @@ function isHttpUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+function readSafeFileExtension(filename: string, mimeType: string) {
+  const ext = filename.match(/\.[A-Za-z0-9]{1,12}$/)?.[0]?.toLowerCase();
+
+  if (ext && ![".heic", ".heif"].includes(ext)) {
+    return ext;
+  }
+
+  const fallbackByMime: Record<string, string> = {
+    "application/pdf": ".pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "text/plain": ".txt",
+  };
+
+  return fallbackByMime[mimeType] ?? "";
+}
+
+function slugifyFilename(filename: string) {
+  const withoutExtension = filename.replace(/\.[A-Za-z0-9]{1,12}$/, "");
+  const normalized = withoutExtension
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+
+  return normalized || "profile-source";
 }

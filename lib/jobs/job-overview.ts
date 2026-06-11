@@ -1,12 +1,13 @@
 import "server-only";
 
+import { buildEvidenceBasedFitAnalysis } from "@/lib/jobs/evidence-based-fit";
 import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
 import { createClient } from "@/lib/supabase/server";
 
 export type JobOverview = {
   recentJobs: {
     id: string;
-    job_url: string;
+    job_url: string | null;
     resolved_url: string | null;
     title: string | null;
     company: string | null;
@@ -40,7 +41,7 @@ type RawJob = {
   failure_reason: string | null;
   id: string;
   ingestion_status: string;
-  job_url: string;
+  job_url: string | null;
   resolved_url: string | null;
   review_status?: string | null;
   title: string | null;
@@ -55,11 +56,11 @@ export async function getJobOverview(userId: string): Promise<JobOverview> {
 
   return {
     recentJobs: jobs.map((job) => {
-      const fitAnalysis = analyzeJobFit({
+      const fitAnalysis = enrichFitAnalysis(analyzeJobFit({
         jobText: job.extracted_text,
         masterResume: fitContext.masterResume,
         profileFacts: fitContext.profileFacts,
-      });
+      }));
 
       return {
         ...job,
@@ -120,4 +121,22 @@ async function readJobs(userId: string): Promise<RawJob[]> {
   }
 
   return (fallback.data ?? []).map((job) => ({ ...job, archived_at: null }));
+}
+
+function enrichFitAnalysis(fitAnalysis: JobFitAnalysis): JobFitAnalysis {
+  const evidenceBased = buildEvidenceBasedFitAnalysis(fitAnalysis);
+
+  return {
+    ...fitAnalysis,
+    evidenceBased,
+    fitBand: mapFitBand(evidenceBased.recommendation),
+  };
+}
+
+function mapFitBand(recommendation: ReturnType<typeof buildEvidenceBasedFitAnalysis>["recommendation"]) {
+  if (recommendation === "apply") return "Strong fit";
+  if (recommendation === "network_first") return "Plausible fit";
+  if (recommendation === "stretch") return "Stretch";
+  if (recommendation === "skip") return "Poor fit";
+  return "Needs more profile evidence";
 }

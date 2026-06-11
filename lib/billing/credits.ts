@@ -13,6 +13,7 @@ import {
   getCreditUsageSummary,
   type CreditFeature,
 } from "@/lib/billing/credit-catalog";
+import { logAdminUserAccess } from "@/lib/admin/access-audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -80,6 +81,24 @@ export class CreditsExhaustedError extends Error {
   }
 }
 
+const creditReservationStatusSchema = z.enum([
+  "reserved",
+  "finalized",
+  "released",
+  "expired",
+]);
+
+const creditReservationResultSchema = z.object({
+  ledgerEventId: z.string().uuid().nullable(),
+  reservationId: z.string().uuid(),
+  status: creditReservationStatusSchema,
+  summary: creditSummarySchema,
+});
+
+export type CreditReservationResult = z.infer<typeof creditReservationResultSchema> & {
+  summary: CreditSummary;
+};
+
 export async function getCreditSummary(): Promise<CreditSummary> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("get_credit_summary");
@@ -130,6 +149,82 @@ export async function consumeCredits({
   }
 
   return withPurchaseOptions(creditSummarySchema.parse(data));
+}
+
+export async function reserveCredits({
+  feature,
+  metadata = {},
+  operationKey,
+  resourceId,
+  resourceType,
+}: {
+  feature: CreditFeature;
+  metadata?: Record<string, unknown>;
+  operationKey: string;
+  resourceId?: string | null;
+  resourceType: string;
+}): Promise<CreditReservationResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("reserve_credits", {
+    p_amount: CREDIT_COSTS[feature],
+    p_feature: feature,
+    p_idempotency_key: operationKey,
+    p_metadata: metadata,
+    p_resource_id: resourceId ?? null,
+    p_resource_type: resourceType,
+  });
+
+  if (error || !data) {
+    throw mapCreditError(error?.message);
+  }
+
+  return normalizeReservationResult(data);
+}
+
+export async function finalizeCreditReservation({
+  metadata = {},
+  reservationId,
+  resourceId,
+}: {
+  metadata?: Record<string, unknown>;
+  reservationId: string;
+  resourceId?: string | null;
+}): Promise<CreditReservationResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("finalize_credit_reservation", {
+    p_metadata: metadata,
+    p_reservation_id: reservationId,
+    p_resource_id: resourceId ?? null,
+  });
+
+  if (error || !data) {
+    throw mapCreditError(error?.message);
+  }
+
+  return normalizeReservationResult(data);
+}
+
+export async function releaseCreditReservation({
+  metadata = {},
+  reason,
+  reservationId,
+}: {
+  metadata?: Record<string, unknown>;
+  reason?: string;
+  reservationId: string;
+}): Promise<CreditReservationResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("release_credit_reservation", {
+    p_metadata: metadata,
+    p_reason: reason ?? null,
+    p_reservation_id: reservationId,
+  });
+
+  if (error || !data) {
+    throw mapCreditError(error?.message);
+  }
+
+  return normalizeReservationResult(data);
 }
 
 export function getCreditOperationKey(request: Request, fallback: string) {
@@ -326,6 +421,21 @@ export async function grantCreditsToUser(
     throw new Error("OWNER_CREDIT_GRANT_FAILED");
   }
 
+  await logAdminUserAccess({
+    accessReason: "owner_credit_grant",
+    actorUserId: adminUser.id,
+    metadata: {
+      creditAmount: parsed.creditAmount,
+      description: parsed.description,
+      targetEmail: targetUser.email ?? parsed.userEmail ?? null,
+    },
+    resourceId: data.id,
+    resourceType: "credit_ledger",
+    supabase: adminClient,
+    targetUserId: targetUser.id,
+    visibilityLevel: "owner_override",
+  });
+
   return {
     createdAt: data.created_at,
     creditAmount: data.credit_delta,
@@ -499,6 +609,27 @@ export function buildCreditsApiError(error: unknown) {
       };
     }
 
+    if (error.message === "IDEMPOTENCY_KEY_REQUIRED") {
+      return {
+        category: "validation",
+        code: "billing.idempotency_key_required",
+        message: "This action needs a retry-safe request key before it can use credits.",
+        status: 400,
+      };
+    }
+
+    if (
+      error.message === "CREDIT_RESERVATION_NOT_FOUND" ||
+      error.message === "CREDIT_RESERVATION_NOT_FINALIZABLE"
+    ) {
+      return {
+        category: "billing",
+        code: "billing.reservation_failed",
+        message: "Credit reservation could not be finalized. Please retry the action once.",
+        status: 409,
+      };
+    }
+
     if (error.message === "PROMO_CODE_INVALID") {
       return {
         category: "validation",
@@ -594,6 +725,18 @@ function mapCreditError(message: string | undefined) {
     return new Error("AUTH_REQUIRED");
   }
 
+  if (normalizedMessage.includes("IDEMPOTENCY_KEY_REQUIRED")) {
+    return new Error("IDEMPOTENCY_KEY_REQUIRED");
+  }
+
+  if (normalizedMessage.includes("CREDIT_RESERVATION_NOT_FOUND")) {
+    return new Error("CREDIT_RESERVATION_NOT_FOUND");
+  }
+
+  if (normalizedMessage.includes("CREDIT_RESERVATION_NOT_FINALIZABLE")) {
+    return new Error("CREDIT_RESERVATION_NOT_FINALIZABLE");
+  }
+
   if (normalizedMessage.includes("ADMIN_REQUIRED")) {
     return new Error("ADMIN_REQUIRED");
   }
@@ -615,6 +758,15 @@ function mapCreditError(message: string | undefined) {
   }
 
   return new Error("CREDIT_OPERATION_FAILED");
+}
+
+function normalizeReservationResult(data: unknown): CreditReservationResult {
+  const parsed = creditReservationResultSchema.parse(data);
+
+  return {
+    ...parsed,
+    summary: withPurchaseOptions(parsed.summary),
+  };
 }
 
 function normalizeCreditSummary(

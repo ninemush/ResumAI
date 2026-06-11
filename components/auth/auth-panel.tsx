@@ -145,23 +145,20 @@ export function AuthPanel() {
             data: await response.json(),
             ok: response.ok,
           }))
-        : await createClient()
-          .auth.signUp({
-            email,
-            password,
-            options: {
-              data: {
-                full_name: fullName,
-                name: fullName,
-                terms_accepted_at: termsAcceptedAt,
-                terms_version: TERMS_VERSION,
-                privacy_policy_version: PRIVACY_POLICY_VERSION,
-              },
-            },
-          })
-          .then((response) => ({
-            data: response,
-            ok: !response.error,
+        : await fetch("/api/auth/sign-up", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email,
+              fullName,
+              password,
+              privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+              termsAccepted,
+              termsVersion: TERMS_VERSION,
+            }),
+          }).then(async (response) => ({
+            data: await response.json(),
+            ok: response.ok,
           }));
 
     setIsSubmitting(false);
@@ -179,15 +176,24 @@ export function AuthPanel() {
     }
 
     if (mode === "sign-up") {
+      if (readSignedIn(result.data)) {
+        window.location.reload();
+        return;
+      }
+
+      if (readNeedsEmailConfirmation(result.data)) {
+        setMode("sign-in");
+        setPassword("");
+        setStatus("Account created. Check your email to confirm the account, then sign in.");
+        return;
+      }
+
       await saveSignupProfileName({
         fullName,
         termsAcceptedAt,
         termsVersion: TERMS_VERSION,
       });
-      await createClient().auth.signOut();
-      setMode("sign-in");
-      setPassword("");
-      setStatus("Account created. Sign in now and I will send an email code to verify this device.");
+      window.location.reload();
       return;
     }
 
@@ -685,6 +691,22 @@ function readEmailCodeTarget(payload: unknown) {
   }
 
   return typeof payload.email === "string" ? payload.email : null;
+}
+
+function readSignedIn(payload: unknown) {
+  if (!payload || typeof payload !== "object" || !("signedIn" in payload)) {
+    return false;
+  }
+
+  return payload.signedIn === true;
+}
+
+function readNeedsEmailConfirmation(payload: unknown) {
+  if (!payload || typeof payload !== "object" || !("needsEmailConfirmation" in payload)) {
+    return false;
+  }
+
+  return payload.needsEmailConfirmation === true;
 }
 
 async function saveSignupProfileName({

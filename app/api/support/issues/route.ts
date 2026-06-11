@@ -4,14 +4,12 @@ import { z } from "zod";
 import {
   buildSupportIssueAnalysis,
   supportIssueCreateSchema,
-  supportIssueShortId,
   toUserSupportIssue,
   type UserSupportTicketRow,
 } from "@/lib/support/issues";
 import { reviewSupportTicketWithAutopilot } from "@/lib/support/autopilot";
 import {
   buildL1SupportPacket,
-  getEscalationReason,
   sanitizeSupportIssueInput,
 } from "@/lib/support/privacy";
 import { checkRateLimit, getClientRateLimitKey, rateLimitResponse } from "@/lib/security/rate-limit";
@@ -135,7 +133,6 @@ export async function POST(request: Request) {
       input: safeInput,
       requestId,
     });
-    const escalationReason = getEscalationReason(safeInput, analysis);
     const existingIssue = await findActiveDuplicateIssue({
       area: safeInput.area,
       errorCode: safeInput.errorCode ?? "USER_REPORTED_ISSUE",
@@ -145,15 +142,13 @@ export async function POST(request: Request) {
     });
 
     if (existingIssue) {
-      await appendSupportIssueMessages({
-        errorCode: safeInput.errorCode ?? null,
-        errorMessage: safeInput.errorMessage,
+      const groupedIssue = await createSupportIssueWithMessages({
+        analysis,
+        existingTicketId: existingIssue.id,
+        l1SupportPacket,
         requestId,
+        safeInput,
         supabase,
-        systemResponse: safeInput.systemResponse,
-        ticketId: existingIssue.id,
-        userId: user.id,
-        userMessage: safeInput.userMessage,
       });
 
       const autopilotResult = await safelyRunIntakeAutopilot({
@@ -166,93 +161,21 @@ export async function POST(request: Request) {
         requestId,
         issue: {
           groupedWithExisting: true,
-          id: existingIssue.id,
-          shortId: supportIssueShortId(existingIssue.id),
-          status: autopilotResult?.status ?? existingIssue.status,
-          subject: existingIssue.subject,
-          summary: existingIssue.summary,
+          id: groupedIssue.id,
+          shortId: groupedIssue.shortId,
+          status: autopilotResult?.status ?? groupedIssue.status,
+          subject: groupedIssue.subject,
+          summary: groupedIssue.summary,
         },
       });
     }
 
-    const { data: errorEvent } = await supabase
-      .from("error_events")
-      .insert({
-        area: safeInput.area,
-        error_code: safeInput.errorCode ?? "USER_REPORTED_ISSUE",
-        fix_required: analysis.fixStatus === "needs_code_fix",
-        message:
-          safeInput.errorMessage ??
-          safeInput.systemResponse ??
-          safeInput.userMessage ??
-          analysis.summary,
-        metadata: {
-          ...safeInput.metadata,
-          errorMessage: safeInput.errorMessage ?? null,
-          requestId,
-          source: safeInput.source,
-          systemResponse: safeInput.systemResponse ?? null,
-          title: analysis.title,
-          userMessage: safeInput.userMessage ?? null,
-        },
-        rationale: analysis.rootCause,
-        root_cause_category: analysis.rootCauseCategory,
-        severity: analysis.priority === "urgent" ? "critical" : analysis.priority === "high" ? "high" : "medium",
-        user_id: user.id,
-      })
-      .select("id")
-      .single();
-
-    const { data: ticket, error: ticketError } = await supabase
-      .from("support_tickets")
-      .insert({
-        area: safeInput.area,
-        error_code: safeInput.errorCode ?? "USER_REPORTED_ISSUE",
-        escalated_to_l2: l1SupportPacket.escalationRequired,
-        escalation_reason: escalationReason,
-        fix_status: analysis.fixStatus,
-        linked_error_event_id: errorEvent?.id ?? null,
-        l1_disposition: l1SupportPacket.escalationRequired
-          ? "l2_packet_prepared"
-          : "intake_packet_prepared",
-        metadata: {
-          ...safeInput.metadata,
-          errorCode: safeInput.errorCode ?? null,
-          errorMessage: safeInput.errorMessage ?? null,
-          l1SupportPacket,
-          requestId,
-          source: safeInput.source,
-          supportContextIncluded: safeInput.supportContextConsent,
-          systemResponse: safeInput.systemResponse ?? null,
-          userMessagePreview: safeInput.userMessage ? safeInput.userMessage.slice(0, 240) : null,
-        },
-        priority: analysis.priority,
-        root_cause: analysis.rootCause,
-        root_cause_category: analysis.rootCauseCategory,
-        sentiment: inferSentiment(safeInput.userMessage ?? safeInput.systemResponse ?? ""),
-        source: safeInput.source,
-        status: l1SupportPacket.escalationRequired ? "escalated" : "open",
-        subject: analysis.title,
-        suggested_fix: analysis.suggestedFix,
-        summary: analysis.summary,
-        user_id: user.id,
-      })
-      .select("id, status, subject, summary")
-      .single();
-
-    if (ticketError || !ticket) {
-      throw new Error("SUPPORT_ISSUE_INSERT_FAILED");
-    }
-
-    await appendSupportIssueMessages({
-      errorCode: safeInput.errorCode ?? null,
-      errorMessage: safeInput.errorMessage,
+    const ticket = await createSupportIssueWithMessages({
+      analysis,
+      l1SupportPacket,
       requestId,
+      safeInput,
       supabase,
-      systemResponse: safeInput.systemResponse,
-      ticketId: ticket.id,
-      userId: user.id,
-      userMessage: safeInput.userMessage,
     });
 
     const autopilotResult = await safelyRunIntakeAutopilot({
@@ -265,7 +188,7 @@ export async function POST(request: Request) {
       requestId,
       issue: {
         id: ticket.id,
-        shortId: supportIssueShortId(ticket.id),
+        shortId: ticket.shortId,
         status: autopilotResult?.status ?? ticket.status,
         subject: ticket.subject,
         summary: ticket.summary,
@@ -364,44 +287,143 @@ async function findActiveDuplicateIssue({
     | null;
 }
 
-async function appendSupportIssueMessages({
-  errorCode,
-  errorMessage,
+type SupportIssueAnalysis = ReturnType<typeof buildSupportIssueAnalysis>;
+type L1SupportPacket = ReturnType<typeof buildL1SupportPacket>;
+type SanitizedSupportIssueInput = z.infer<typeof supportIssueCreateSchema>;
+
+async function createSupportIssueWithMessages({
+  analysis,
+  existingTicketId,
+  l1SupportPacket,
   requestId,
+  safeInput,
   supabase,
-  systemResponse,
-  ticketId,
-  userId,
-  userMessage,
 }: {
-  errorCode: string | null;
-  errorMessage?: string;
+  analysis: SupportIssueAnalysis;
+  existingTicketId?: string;
+  l1SupportPacket: L1SupportPacket;
   requestId: string;
+  safeInput: SanitizedSupportIssueInput;
   supabase: Awaited<ReturnType<typeof createClient>>;
-  systemResponse?: string;
-  ticketId: string;
-  userId: string;
-  userMessage?: string;
 }) {
-  if (userMessage) {
-    await supabase.from("support_ticket_messages").insert({
-      message: userMessage,
-      metadata: { requestId },
-      speaker: "user",
-      ticket_id: ticketId,
-      user_id: userId,
-    });
+  const { data, error } = await supabase.rpc("create_support_issue_with_messages", {
+    p_area: safeInput.area,
+    p_error_code: safeInput.errorCode ?? "USER_REPORTED_ISSUE",
+    p_escalated_to_l2: l1SupportPacket.escalationRequired,
+    p_escalation_reason: l1SupportPacket.escalationReason,
+    p_existing_ticket_id: existingTicketId ?? null,
+    p_fix_status: analysis.fixStatus,
+    p_l1_disposition: l1SupportPacket.escalationRequired
+      ? "l2_packet_prepared"
+      : "intake_packet_prepared",
+    p_metadata: buildSupportTicketMetadata({
+      analysis,
+      l1SupportPacket,
+      requestId,
+      safeInput,
+    }),
+    p_priority: analysis.priority,
+    p_root_cause: analysis.rootCause,
+    p_root_cause_category: analysis.rootCauseCategory,
+    p_sensitive_context: buildSensitiveSupportContext({
+      analysis,
+      l1SupportPacket,
+      requestId,
+      safeInput,
+    }),
+    p_sentiment: inferSentiment(safeInput.userMessage ?? safeInput.systemResponse ?? ""),
+    p_source: safeInput.source,
+    p_status: l1SupportPacket.escalationRequired ? "escalated" : "open",
+    p_subject: analysis.title,
+    p_suggested_fix: analysis.suggestedFix,
+    p_summary: analysis.summary,
+    p_system_message: safeInput.systemResponse ?? safeInput.errorMessage ?? null,
+    p_user_message: safeInput.userMessage ?? null,
+  });
+
+  if (error) {
+    throw new Error("SUPPORT_ISSUE_TRANSACTION_FAILED");
   }
 
-  if (systemResponse || errorMessage) {
-    await supabase.from("support_ticket_messages").insert({
-      message: systemResponse ?? errorMessage ?? "Support issue recurrence captured.",
-      metadata: { requestId, errorCode },
-      speaker: "system",
-      ticket_id: ticketId,
-      user_id: userId,
-    });
+  return parseSupportTicketRpcResult(data);
+}
+
+function buildSupportTicketMetadata({
+  analysis,
+  l1SupportPacket,
+  requestId,
+  safeInput,
+}: {
+  analysis: SupportIssueAnalysis;
+  l1SupportPacket: L1SupportPacket;
+  requestId: string;
+  safeInput: SanitizedSupportIssueInput;
+}) {
+  return {
+    ...safeInput.metadata,
+    errorCode: safeInput.errorCode ?? null,
+    l1SupportPacket,
+    requestId,
+    rootCauseCategory: analysis.rootCauseCategory,
+    source: safeInput.source,
+    supportContextIncluded: safeInput.supportContextConsent,
+    title: analysis.title,
+    userMessagePreview: safeInput.userMessage ? safeInput.userMessage.slice(0, 240) : null,
+  };
+}
+
+function buildSensitiveSupportContext({
+  analysis,
+  l1SupportPacket,
+  requestId,
+  safeInput,
+}: {
+  analysis: SupportIssueAnalysis;
+  l1SupportPacket: L1SupportPacket;
+  requestId: string;
+  safeInput: SanitizedSupportIssueInput;
+}) {
+  if (!safeInput.supportContextConsent) {
+    return null;
   }
+
+  return {
+    analysis: {
+      priority: analysis.priority,
+      rootCauseCategory: analysis.rootCauseCategory,
+    },
+    errorCode: safeInput.errorCode ?? null,
+    errorMessage: safeInput.errorMessage ?? null,
+    metadata: safeInput.metadata,
+    requestId,
+    source: safeInput.source,
+    systemResponse: safeInput.systemResponse ?? null,
+    supportPacket: l1SupportPacket,
+  };
+}
+
+function parseSupportTicketRpcResult(data: unknown) {
+  if (!data || typeof data !== "object") {
+    throw new Error("SUPPORT_ISSUE_TRANSACTION_EMPTY");
+  }
+
+  const result = data as Record<string, unknown>;
+  const id = typeof result.id === "string" ? result.id : null;
+  const status = typeof result.status === "string" ? result.status : null;
+  const subject = typeof result.subject === "string" ? result.subject : null;
+  const summary = typeof result.summary === "string" ? result.summary : null;
+
+  if (!id || !status || !subject || !summary) {
+    throw new Error("SUPPORT_ISSUE_TRANSACTION_INVALID");
+  }
+
+  return {
+    id,
+    shortId: typeof result.shortId === "string" ? result.shortId : `PR-${id.slice(0, 8).toUpperCase()}`,
+    status,
+    subject,
+    summary,
+  };
 }
 
 function inferSentiment(text: string) {
