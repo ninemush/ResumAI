@@ -199,8 +199,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         }) === selectedRootCause;
       const matchesMode =
         queueMode === "all" ||
-        (queueMode === "open" && error.status !== "resolved") ||
-        (queueMode === "history" && error.status === "resolved");
+        (queueMode === "open" && error.status !== "resolved" && error.fixRequired) ||
+        (queueMode === "history" && (error.status === "resolved" || !error.fixRequired));
 
       return matchesRootCause && matchesMode;
     });

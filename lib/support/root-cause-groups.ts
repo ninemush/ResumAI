@@ -64,7 +64,8 @@ export function buildRootCauseGroups(signals: RootCauseSignal[]) {
     const existing = groups.get(key);
     const createdAt = signal.createdAt;
     const isActiveTicket = signal.source === "support" && activeTicketStatuses.has(signal.status ?? "open");
-    const isActiveError = signal.source === "error" && signal.status !== "resolved";
+    const isActiveError =
+      signal.source === "error" && signal.status !== "resolved" && signal.fixRequired !== false;
     const resolvedSignals = isActiveTicket || isActiveError ? 0 : 1;
 
     if (!existing) {

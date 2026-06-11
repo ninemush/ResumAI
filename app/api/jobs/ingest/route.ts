@@ -141,6 +141,16 @@ function toApiError(error: unknown) {
       };
     }
 
+    if (error.message === "JOB_POSTING_UNAVAILABLE") {
+      return {
+        category: "validation",
+        code: "job.posting_unavailable",
+        message:
+          "That job post now opens a company board or unavailable-posting page. Paste the job description text instead.",
+        status: 422,
+      };
+    }
+
     if (error.message === "JOB_TEXT_TOO_SHORT") {
       return {
         category: "validation",

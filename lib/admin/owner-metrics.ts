@@ -278,14 +278,116 @@ export async function getOwnerMetrics(periodDays = 30): Promise<OwnerMetrics> {
     throw new Error(mapOwnerMetricsError(error?.message));
   }
 
-  const metrics = await attachUserCreditMetrics(
-    supabase,
-    ownerMetricsSchema.parse(data),
-    normalizedPeriodDays,
+  const metrics = normalizeOwnerErrorDetails(
+    await attachUserCreditMetrics(
+      supabase,
+      ownerMetricsSchema.parse(data),
+      normalizedPeriodDays,
+    ),
   );
   const supportTickets = await readSupportIssues(supabase, metrics.period.startedAt, metrics.usersList);
 
   return supportTickets.length > 0 ? { ...metrics, supportTickets } : metrics;
+}
+
+function normalizeOwnerErrorDetails(metrics: OwnerMetrics): OwnerMetrics {
+  const errorDetails = metrics.errorDetails.map(normalizeOwnerErrorSignal);
+  const activeFixRequired = errorDetails.filter(
+    (error) => error.fixRequired && error.status !== "resolved",
+  ).length;
+
+  return {
+    ...metrics,
+    errorDetails,
+    systemHealth: {
+      ...metrics.systemHealth,
+      fixRequired: activeFixRequired,
+    },
+  };
+}
+
+function normalizeOwnerErrorSignal(
+  error: OwnerMetrics["errorDetails"][number],
+): OwnerMetrics["errorDetails"][number] {
+  if (error.status === "resolved") {
+    return { ...error, fixRequired: false };
+  }
+
+  const source = error.source.toLowerCase();
+  const code = error.code.toLowerCase();
+  const rootCause = error.rootCause.toLowerCase();
+  const searchable = [code, rootCause, error.summary, error.rationale].join(" ").toLowerCase();
+
+  if (source === "profile_source" && isProfileSourceGuidanceSignal(searchable)) {
+    return {
+      ...error,
+      fixRequired: false,
+      rootCause: readProfileSourceGuidanceRootCause(searchable, error.rootCause),
+      status: "resolved",
+    };
+  }
+
+  if (source === "job_ingestion" && isJobIngestionGuidanceSignal(searchable)) {
+    return {
+      ...error,
+      fixRequired: false,
+      rootCause: readJobIngestionGuidanceRootCause(searchable, error.rootCause),
+      status: "resolved",
+    };
+  }
+
+  return error;
+}
+
+function isProfileSourceGuidanceSignal(value: string) {
+  return /\b(unsupported|blocked|empty|too_short|too short|too_big|too big|too_large|too large|limit|exceeded)\b/.test(
+    value,
+  );
+}
+
+function readProfileSourceGuidanceRootCause(value: string, fallback: string) {
+  if (/\b(too_big|too big|too_large|too large|limit|exceeded)\b/.test(value)) {
+    return "input_limit";
+  }
+
+  if (/\b(empty|too_short|too short)\b/.test(value)) {
+    return "source_quality";
+  }
+
+  if (/\bblocked\b/.test(value)) {
+    return "third_party_blocked";
+  }
+
+  if (/\bunsupported\b/.test(value)) {
+    return "unsupported_input";
+  }
+
+  return fallback;
+}
+
+function isJobIngestionGuidanceSignal(value: string) {
+  return (
+    /\b(job_unsupported_content_type|job_posting_unavailable|posting unavailable|unavailable-posting|unsupported_content_type|robots\.txt|blocked|too_short|too short|empty)\b/.test(
+      value,
+    ) ||
+    (/\bjob_fetch_failed\b/.test(value) && /job-boards\.greenhouse\.io\/\S*\/jobs\//.test(value))
+  );
+}
+
+function readJobIngestionGuidanceRootCause(value: string, fallback: string) {
+  if (/\b(job_posting_unavailable|posting unavailable|unavailable-posting|blocked)\b/.test(value)) {
+    return "third_party_blocked";
+  }
+
+  if (/\b(job_unsupported_content_type|unsupported_content_type|robots\.txt)\b/.test(value)) {
+    return "unsupported_site";
+  }
+
+  if (/\b(empty|too_short|too short)\b/.test(value)) {
+    return "source_quality";
+  }
+
+  return fallback;
 }
 
 function mapOwnerMetricsError(message: string | undefined) {

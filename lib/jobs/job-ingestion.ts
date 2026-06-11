@@ -7,6 +7,7 @@ import { z } from "zod";
 import { createOpenAIResponse, getProfileIntakeModel } from "@/lib/ai/openai";
 import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
 import { cleanJobCompany, cleanJobTitle, readJobMetadataFromTitle } from "@/lib/jobs/job-metadata";
+import { isUnavailableJobPostingRedirect } from "@/lib/jobs/job-url-diagnostics";
 import { safeFetchExternalHtml } from "@/lib/security/safe-fetch";
 import { assertExternalHttpUrl, isHttpUrl } from "@/lib/security/url-safety";
 import { createClient } from "@/lib/supabase/server";
@@ -237,6 +238,10 @@ async function fetchJobPage(jobUrl: string) {
     maxRedirects: 3,
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
+
+  if (isUnavailableJobPostingRedirect({ requestedUrl: jobUrl, resolvedUrl: finalUrl })) {
+    throw new Error("JOB_POSTING_UNAVAILABLE");
+  }
 
   if (!response.ok) {
     throw new Error("JOB_FETCH_FAILED");

@@ -12,6 +12,7 @@ import {
   type SupportAutopilotTicketDecision,
   type SupportAutopilotTicketSnapshot,
 } from "@/lib/support/autopilot-policy";
+import { markLinkedErrorEventsResolved } from "@/lib/support/error-events";
 
 const REOPEN_WINDOW_DAYS = 10;
 
@@ -318,34 +319,6 @@ async function applyErrorDecision({
   if (error) {
     throw new Error("SUPPORT_AUTOPILOT_ERROR_UPDATE_FAILED");
   }
-}
-
-async function markLinkedErrorEventsResolved(supabase: SupabaseClient, ticket: SupportTicketRow) {
-  const resolvedAt = new Date().toISOString();
-
-  if (ticket.linked_error_event_id) {
-    await supabase
-      .from("error_events")
-      .update({ fix_required: false, resolved_at: resolvedAt })
-      .eq("id", ticket.linked_error_event_id);
-  }
-
-  if (!ticket.user_id || !ticket.root_cause_category) {
-    return;
-  }
-
-  let query = supabase
-    .from("error_events")
-    .update({ fix_required: false, resolved_at: resolvedAt })
-    .eq("user_id", ticket.user_id)
-    .eq("root_cause_category", ticket.root_cause_category)
-    .is("resolved_at", null);
-
-  if (ticket.error_code) {
-    query = query.eq("error_code", ticket.error_code);
-  }
-
-  await query;
 }
 
 function toTicketSnapshot(ticket: SupportTicketRow): SupportAutopilotTicketSnapshot {

@@ -562,6 +562,7 @@ function formatFailureReason(reason: string) {
   const friendlyMessages: Record<string, string> = {
     JOB_FETCH_FAILED: "The page could not be fetched.",
     JOB_PAGE_TOO_LARGE: "The page is too large for the current ingest limit.",
+    JOB_POSTING_UNAVAILABLE: "The specific post now opens a board or unavailable-posting page.",
     JOB_TEXT_TOO_SHORT: "Not enough job-post text was found.",
     JOB_UNSUPPORTED_CONTENT_TYPE: "The link did not return enough job-post detail.",
     JOB_URL_BLOCKED: "This URL is blocked for safety.",

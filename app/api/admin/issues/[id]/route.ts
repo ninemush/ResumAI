@@ -6,6 +6,7 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { markLinkedErrorEventsResolved } from "@/lib/support/error-events";
 import { supportIssueUpdateSchema } from "@/lib/support/issues";
 import { createClient } from "@/lib/supabase/server";
 
@@ -197,40 +198,4 @@ function buildAdminAuditMessage(input: z.infer<typeof supportIssueUpdateSchema>)
   ].filter(Boolean);
 
   return parts.length > 0 ? `Owner updated issue: ${parts.join("; ")}` : "Owner updated issue.";
-}
-
-async function markLinkedErrorEventsResolved(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  ticket: {
-    error_code: string | null;
-    linked_error_event_id: string | null;
-    root_cause_category: string | null;
-    user_id: string | null;
-  },
-) {
-  const resolvedAt = new Date().toISOString();
-
-  if (ticket.linked_error_event_id) {
-    await supabase
-      .from("error_events")
-      .update({ resolved_at: resolvedAt })
-      .eq("id", ticket.linked_error_event_id);
-  }
-
-  if (!ticket.user_id || !ticket.root_cause_category) {
-    return;
-  }
-
-  let query = supabase
-    .from("error_events")
-    .update({ resolved_at: resolvedAt })
-    .eq("user_id", ticket.user_id)
-    .eq("root_cause_category", ticket.root_cause_category)
-    .is("resolved_at", null);
-
-  if (ticket.error_code) {
-    query = query.eq("error_code", ticket.error_code);
-  }
-
-  await query;
 }
