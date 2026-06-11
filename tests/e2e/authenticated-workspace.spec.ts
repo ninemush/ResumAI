@@ -73,15 +73,24 @@ test.describe("authenticated workspace", () => {
       await page.setViewportSize({ width, height: 720 });
       await page.goto("/");
 
-      const input = page.getByPlaceholder(/Notes, role, link, or resume/i);
+      const input = page.getByPlaceholder(/Role, link, notes, or resume|Notes, role, link, or resume/i);
       await expect(input).toBeVisible();
       await input.fill("nfkdsnfskd");
-      await assertComposerGeometry(page, `compact ${width}px`, false);
+      const compact = await assertComposerGeometry(page, `compact ${width}px`, false);
 
-      await input.fill(
-        "snfkj nskfnsknfsknfksdnfks nfkdsnfkdsnfksnfkdsnfkds nfdksnfkdsnfdsknd and another specific sentence to expand the composer",
+      await input.fill("First useful line\nSecond useful line\nThird useful line");
+      const expanded = await assertComposerGeometry(page, `three-line ${width}px`, true);
+      expect(expanded.form.height, `three-line ${width}px: composer grows`).toBeGreaterThan(compact.form.height);
+      expect(expanded.textarea?.scrollHeight ?? 0, `three-line ${width}px: no internal scroll yet`).toBeLessThanOrEqual(
+        (expanded.textarea?.clientHeight ?? 0) + 2,
       );
-      await assertComposerGeometry(page, `expanded ${width}px`, true);
+
+      await input.fill("Line one\nLine two\nLine three\nLine four should scroll\nLine five should scroll");
+      const overflowing = await assertComposerGeometry(page, `overflowing ${width}px`, true);
+      expect(overflowing.textarea?.scrollHeight ?? 0, `overflowing ${width}px: internal scroll exists`).toBeGreaterThan(
+        (overflowing.textarea?.clientHeight ?? 0) + 2,
+      );
+      expect(overflowing.textarea?.overflowY, `overflowing ${width}px: textarea scrolls`).toBe("auto");
     }
   });
 
@@ -407,7 +416,12 @@ async function assertComposerGeometry(page: Page, label: string, expectedExpande
         left: rect.left,
         opacity: Number(styles.opacity || "1"),
         outlineStyle: styles.outlineStyle,
+        overflowY: styles.overflowY,
         right: rect.right,
+        scrollHeight:
+          element instanceof HTMLTextAreaElement ? element.scrollHeight : rect.height,
+        clientHeight:
+          element instanceof HTMLTextAreaElement ? element.clientHeight : rect.height,
         top: rect.top,
         visibility: styles.visibility,
         width: rect.width,
@@ -455,13 +469,13 @@ async function assertComposerGeometry(page: Page, label: string, expectedExpande
   }
 
   expect(metrics.textarea?.outlineStyle, `${label}: textarea outline`).toBe("none");
-  if (!expectedExpanded) {
-    expect(metrics.textarea?.left ?? 0, `${label}: textarea after mic`).toBeGreaterThan(metrics.mic?.right ?? 0);
-    expect(metrics.send?.left ?? 0, `${label}: send after textarea`).toBeGreaterThan(metrics.textarea?.left ?? 0);
-  } else {
-    expect(metrics.attach?.top ?? 0, `${label}: controls below textarea`).toBeGreaterThan(metrics.textarea?.top ?? 0);
-    expect(metrics.send?.left ?? 0, `${label}: send remains right aligned`).toBeGreaterThan(metrics.mic?.right ?? 0);
-  }
+  expect(metrics.textarea?.left ?? 0, `${label}: textarea after mic`).toBeGreaterThan(metrics.mic?.right ?? 0);
+  expect(metrics.send?.left ?? 0, `${label}: send after textarea`).toBeGreaterThan(metrics.textarea?.left ?? 0);
+  expect(Math.abs((metrics.attach?.bottom ?? 0) - (metrics.send?.bottom ?? 0)), `${label}: attach bottom-aligned`).toBeLessThanOrEqual(4);
+  expect(Math.abs((metrics.mic?.bottom ?? 0) - (metrics.send?.bottom ?? 0)), `${label}: mic bottom-aligned`).toBeLessThanOrEqual(4);
+  expect(metrics.send?.bottom ?? 0, `${label}: controls sit near composer bottom`).toBeGreaterThan((metrics.form.bottom ?? 0) - 14);
+
+  return metrics;
 }
 
 async function expectCompactRecordIfPresent(page: Page, heading: string, rowSelector: string) {

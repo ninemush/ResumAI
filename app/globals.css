@@ -8106,8 +8106,8 @@ input:focus {
   z-index: 2;
 }
 
-.chat-input {
-  align-items: center;
+  .chat-input {
+  align-items: end;
   background: rgba(251, 249, 244, 0.96);
   border: 1px solid var(--line);
   border-radius: var(--pr-radius-pill);
@@ -8129,22 +8129,21 @@ input:focus {
 }
 
 .chat-input.expanded {
-  align-items: center;
+  align-items: end;
   border-radius: 26px;
-  grid-template-areas:
-    "message message message message"
-    "attach voice spacer send";
-  grid-template-rows: auto 44px;
-  min-height: 118px;
-  padding: 8px;
+  grid-template-areas: "attach voice message send";
+  grid-template-columns: 36px 36px minmax(0, 1fr) 44px;
+  grid-template-rows: minmax(44px, auto);
+  min-height: 90px;
+  padding: 5px;
 }
 
 .chat-input.expanded textarea {
-  align-self: start;
+  align-self: end;
   grid-area: message;
   max-height: 78px;
-  min-height: 54px;
-  padding: 8px 12px 4px;
+  min-height: 38px;
+  padding: 4px 8px;
 }
 
 .chat-input.expanded .attach-button {
@@ -8157,7 +8156,6 @@ input:focus {
 
 .chat-input.expanded button[type="submit"] {
   grid-area: send;
-  justify-self: end;
 }
 
 .chat-input:focus-within {
@@ -8202,6 +8200,7 @@ input:focus {
 
 .chat-input button {
   align-items: center;
+  align-self: end;
   background: var(--sage-strong);
   border-radius: var(--pr-radius-pill);
   color: var(--pr-soft-ivory);
@@ -8783,7 +8782,7 @@ input:focus {
     gap: 6px;
   }
 
-  .chat-input {
+.chat-input {
     background: rgba(251, 249, 244, 0.98);
     box-shadow: 0 -10px 24px rgba(14, 25, 43, 0.04);
     grid-template-columns: 36px 36px minmax(0, 1fr) 42px;
@@ -8791,20 +8790,21 @@ input:focus {
   }
 
   .chat-input.expanded {
+    align-items: end;
     border-radius: 28px;
-    grid-template-areas:
-      "message message message message"
-      "attach voice spacer send";
+    grid-template-areas: "attach voice message send";
     grid-template-columns: 36px 36px minmax(0, 1fr) 42px;
-    grid-template-rows: auto 42px;
-    min-height: 112px;
-    row-gap: 4px;
+    grid-template-rows: minmax(42px, auto);
+    min-height: 86px;
+    row-gap: 6px;
   }
 
   .chat-input.expanded textarea {
+    align-self: end;
     grid-area: message;
     max-height: 74px;
-    padding: 8px 12px 6px;
+    min-height: 36px;
+    padding: 4px 8px;
   }
 
   .chat-input.expanded .attach-button {
