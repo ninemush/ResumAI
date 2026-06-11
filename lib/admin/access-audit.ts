@@ -83,6 +83,18 @@ export async function logAdminUserAccesses({
   );
 
   if (error) {
-    throw new Error("ADMIN_ACCESS_AUDIT_FAILED");
+    console.warn(
+      JSON.stringify({
+        code: error.code ?? null,
+        event: "admin_access_audit_failed",
+        message: error.message ?? "Unknown admin access audit failure",
+        resourceType,
+        visibilityLevel,
+      }),
+    );
+
+    if (visibilityLevel === "owner_override" || visibilityLevel === "sensitive_source_review") {
+      throw new Error("ADMIN_ACCESS_AUDIT_FAILED");
+    }
   }
 }

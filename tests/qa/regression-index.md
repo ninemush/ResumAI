@@ -23,9 +23,9 @@ lowest useful layer. Keep this index short and traceable.
 - Area: Signed-in workspace, credits, privacy deletion, RLS isolation, and AI evidence grounding.
 - Root cause: Launch QA found missing execution evidence for deletion, weak two-user isolation evidence, hidden file input labeling, retry credit risk, and over-authoritative inferred facts.
 - User impact: Users could lose trust through inaccessible intake, cross-user exposure risk, duplicate credit consumption, incomplete deletion, or unsupported resume claims.
-- Regression test: `npm run test:unit`, `npm run test:e2e:accessibility`, `tests/e2e/two-user-isolation.spec.ts`
+- Regression test: `npm run test:unit`, `npm run test:e2e:accessibility`, `tests/e2e/two-user-isolation.spec.ts`, `tests/e2e/schema-readiness-maturity.spec.ts`
 - Layer: unit | api | database_rls | e2e
-- Notes: Two-user isolation requires dedicated QA user credentials before it runs.
+- Notes: Two-user isolation requires dedicated QA user credentials before it runs. Launch maturity evidence adds gated schema readiness, privacy deletion execution, seeded cross-user isolation, RevenueCat webhook idempotency, AI evidence contract, and Jobs density checks.
 
 ## 2026-06-05 - Public Page Contrast
 

@@ -168,6 +168,36 @@ may use harmless local placeholders. Signed-in journey QA requires real public
 Supabase values plus demo credentials through `.env.local`, an optional QA env
 file, or CI variables.
 
+### Launch Maturity Gates
+
+Launch-readiness evidence tests are intentionally gated because they seed QA
+records and require owner/admin access. Set `RUN_LAUNCH_READINESS_GATES=1` only
+for a pre-release maturity pass.
+
+Required variables:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `QA_DEMO_EMAIL`
+- `QA_DEMO_PASSWORD`
+- `QA_DEMO_USER_A_EMAIL`
+- `QA_DEMO_USER_A_PASSWORD`
+- `QA_DEMO_USER_B_EMAIL`
+- `QA_DEMO_USER_B_PASSWORD`
+- `QA_ADMIN_EMAIL`
+- `QA_ADMIN_PASSWORD`
+
+These tests must skip clearly when the launch gate or credentials are missing.
+Service-role helpers are test-only and must never be imported into app, route,
+component, or browser code.
+
+`tests/e2e/schema-readiness-maturity.spec.ts` is the first gate in a launch
+pass. It must pass before seeded privacy, isolation, payment, or density tests
+are treated as meaningful evidence, because it proves the target Supabase
+schema has the launch-required artifact versioning and owner access audit
+tables.
+
 ### Every PR
 
 - `npm run lint`

@@ -5625,7 +5625,9 @@ input:focus {
 }
 
 .application-record {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns:
+    minmax(0, 1.08fr) minmax(0, 0.92fr) minmax(148px, auto)
+    minmax(126px, auto);
   max-width: 100%;
   min-width: 0;
 }
@@ -5636,11 +5638,11 @@ input:focus {
 }
 
 .application-stage-cell {
-  grid-column: 1;
+  grid-column: auto;
 }
 
 .application-record .record-actions {
-  grid-column: 2;
+  grid-column: auto;
 }
 
 .application-detail-actions {
@@ -5771,6 +5773,34 @@ input:focus {
   padding: 4px;
 }
 
+.jobs-panel .record-list-controls {
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.jobs-panel .record-filter-strip {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.jobs-panel .record-filter-chip {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  min-height: 34px;
+  min-width: 0;
+  padding: 6px 9px;
+}
+
+.jobs-panel .record-filter-chip strong {
+  font-family: var(--font-pr-sans);
+  font-size: 0.82rem;
+}
+
 .record-view-button {
   align-items: center;
   background: transparent;
@@ -5852,10 +5882,23 @@ input:focus {
   gap: 6px;
 }
 
+.applications-panel .record-list-controls {
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.applications-panel .record-filter-strip {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+}
+
 .applications-panel .record-filter-chip {
   align-items: center;
   border-radius: 999px;
   display: inline-flex;
+  flex: 0 0 auto;
   gap: 7px;
   min-height: 34px;
   min-width: 0;
@@ -5920,6 +5963,15 @@ input:focus {
 
 .artifact-record {
   grid-template-columns: auto minmax(0, 1fr) auto minmax(180px, auto);
+  padding: 8px 10px;
+}
+
+.artifact-record .record-main-button {
+  gap: 3px;
+}
+
+.artifact-record .record-summary {
+  -webkit-line-clamp: 1;
 }
 
 .artifact-actions {
@@ -6060,6 +6112,48 @@ input:focus {
 
 .jobs-panel .job-add-panel {
   gap: 10px;
+  padding: 12px;
+}
+
+.job-add-panel-body {
+  display: grid;
+  gap: 10px;
+}
+
+.job-add-panel-compact {
+  border-radius: var(--pr-radius-sm);
+  gap: 0;
+  padding: 0;
+}
+
+.job-add-panel-compact summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  list-style-position: inside;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.job-add-panel-compact summary span {
+  color: var(--sage-strong);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.job-add-panel-compact summary strong {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.job-add-panel-compact[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.job-add-panel-compact .job-add-panel-body {
   padding: 12px;
 }
 
@@ -8899,6 +8993,49 @@ input:focus {
   .application-record .record-actions,
   .application-plan-editor {
     grid-template-columns: 1fr;
+  }
+
+  .jobs-panel .record-list-controls,
+  .applications-panel .record-list-controls {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .jobs-panel .record-filter-strip,
+  .applications-panel .record-filter-strip {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .jobs-panel .record-filter-chip,
+  .applications-panel .record-filter-chip {
+    flex: 1 1 calc(33.33% - 6px);
+    justify-content: center;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .record-row > *,
+  .record-main,
+  .record-main-button,
+  .record-actions {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .record-title,
+  .record-meta,
+  .record-summary,
+  .record-subnote,
+  .record-subtle-line,
+  .record-next-action,
+  .application-next-line {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .decision-card {
+    padding: 12px;
   }
 
   .application-plan-actions {

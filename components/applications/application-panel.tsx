@@ -418,26 +418,6 @@ export function ApplicationPanel({
               </button>
             ))}
           </div>
-          <div className="record-search-sort-row" aria-label="Application search and sort">
-            <label className="record-search-field">
-              <Search size={15} aria-hidden="true" />
-              <input
-                onChange={(event) => setApplicationQuery(event.target.value)}
-                placeholder="Search role, company, stage"
-                value={applicationQuery}
-              />
-            </label>
-            <select
-              aria-label="Sort applications"
-              className="record-sort-select"
-              onChange={(event) => setApplicationSort(event.target.value as ApplicationSort)}
-              value={applicationSort}
-            >
-              <option value="recent">Recently updated</option>
-              <option value="oldest">Oldest first</option>
-              <option value="needs_action">Needs action first</option>
-            </select>
-          </div>
         </div>
       ) : null}
 
@@ -477,18 +457,11 @@ export function ApplicationPanel({
                 <span className="record-meta">
                   {cleanDisplayText(application.companyName)} · Updated {formatShortDate(application.updatedAt)}
                 </span>
-                <span className="record-subtle-line">
-                  {formatLatestActivity(application)}
+                <span className="record-summary application-next-line">
+                  {formatLatestActivity(application)} · Next: {readApplicationNextAction(application)}
+                  {formatFollowUpBadge(application) ? ` · ${formatFollowUpBadge(application)}` : ""}
+                  {isStaleApplication(application) ? " · Needs follow-up" : ""}
                 </span>
-                <span className="record-next-action">
-                  Next: {readApplicationNextAction(application)}
-                </span>
-                {formatFollowUpBadge(application) ? (
-                  <span className="record-follow-up-marker">{formatFollowUpBadge(application)}</span>
-                ) : null}
-                {isStaleApplication(application) ? (
-                  <span className="record-stale-marker">Needs follow-up</span>
-                ) : null}
               </button>
 
             <div className="application-material-cell">
@@ -708,6 +681,29 @@ export function ApplicationPanel({
           </div>
         ))}
       </div>
+
+      {overview.recentApplications.length > 0 ? (
+        <div className="record-search-sort-row application-secondary-controls" aria-label="Application search and sort">
+          <label className="record-search-field">
+            <Search size={15} aria-hidden="true" />
+            <input
+              onChange={(event) => setApplicationQuery(event.target.value)}
+              placeholder="Search role, company, stage"
+              value={applicationQuery}
+            />
+          </label>
+          <select
+            aria-label="Sort applications"
+            className="record-sort-select"
+            onChange={(event) => setApplicationSort(event.target.value as ApplicationSort)}
+            value={applicationSort}
+          >
+            <option value="recent">Recently updated</option>
+            <option value="oldest">Oldest first</option>
+            <option value="needs_action">Needs action first</option>
+          </select>
+        </div>
+      ) : null}
 
       {activeReview ? (
         <section className="materials-review" aria-label="Application materials review">

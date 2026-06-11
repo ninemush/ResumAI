@@ -49,6 +49,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
   );
   const visibleJobs = jobsInArchiveView.filter((job) => jobMatchesFilter(job, activeJobFilter));
   const filterCounts = buildJobFilterCounts(jobsInArchiveView);
+  const hasRecentJobs = overview.recentJobs.length > 0;
 
   async function ingestJobFromUrl(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -237,46 +238,21 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         </p>
       </div>
 
-      <section className="job-add-panel" aria-label="Add a job for review">
-        <form className="job-url-form" onSubmit={ingestJobFromUrl}>
-          <label>
-            <Link2 size={16} aria-hidden="true" />
-            <span className="sr-only">Public job URL</span>
-            <input
-              inputMode="url"
-              onChange={(event) => setJobUrl(event.target.value)}
-              placeholder="Paste a public job URL"
-              value={jobUrl}
-            />
-          </label>
-          <button disabled={isIngestingJob || !jobUrl.trim()} type="submit">
-            <Send size={15} aria-hidden="true" />
-            {isIngestingJob ? "Reading..." : "Review fit"}
-          </button>
-        </form>
-        <div className="job-text-fallback">
-          <label>
-            <ClipboardPaste size={16} aria-hidden="true" />
-            <span>Unreadable posting or private page</span>
-            <textarea
-              onChange={(event) => setJobText(event.target.value)}
-              placeholder="Paste job description text here, then save it for profile-aware review."
-              rows={2}
-              value={jobText}
-            />
-          </label>
-          <button
-            className="secondary-action compact-action"
-            disabled={isIngestingJob || !jobText.trim()}
-            onClick={() => void ingestJobFromText()}
-            type="button"
-          >
-            Analyze pasted text
-          </button>
-        </div>
-      </section>
+      {!hasRecentJobs ? (
+        <section className="job-add-panel" aria-label="Add a job for review">
+          <JobAddPanelContent
+            ingestJobFromText={ingestJobFromText}
+            ingestJobFromUrl={ingestJobFromUrl}
+            isIngestingJob={isIngestingJob}
+            jobText={jobText}
+            jobUrl={jobUrl}
+            setJobText={setJobText}
+            setJobUrl={setJobUrl}
+          />
+        </section>
+      ) : null}
 
-      {overview.recentJobs.length > 0 ? (
+      {hasRecentJobs ? (
         <div className="record-list-controls">
           <div className="record-view-toggle" aria-label="Job archive view">
             <button
@@ -315,7 +291,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
 
       <div className="record-list job-record-list">
         {message ? <p className="system-note success">{message}</p> : null}
-        {overview.recentJobs.length === 0 ? (
+        {!hasRecentJobs ? (
           <div className="record-empty-panel">
             <Sparkles size={18} aria-hidden="true" />
             <div>
@@ -324,7 +300,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
             </div>
           </div>
         ) : null}
-        {overview.recentJobs.length > 0 && jobsInArchiveView.length === 0 ? (
+        {hasRecentJobs && jobsInArchiveView.length === 0 ? (
           <p className="empty-state">
             {archiveView === "archived"
               ? "No archived roles yet."
@@ -481,7 +457,84 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
           </article>
         ))}
       </div>
+
+      {hasRecentJobs ? (
+        <details className="job-add-panel job-add-panel-compact" aria-label="Add a job for review">
+          <summary>
+            <span>Add another role</span>
+            <strong>URL or pasted job text</strong>
+          </summary>
+          <JobAddPanelContent
+            ingestJobFromText={ingestJobFromText}
+            ingestJobFromUrl={ingestJobFromUrl}
+            isIngestingJob={isIngestingJob}
+            jobText={jobText}
+            jobUrl={jobUrl}
+            setJobText={setJobText}
+            setJobUrl={setJobUrl}
+          />
+        </details>
+      ) : null}
     </section>
+  );
+}
+
+function JobAddPanelContent({
+  ingestJobFromText,
+  ingestJobFromUrl,
+  isIngestingJob,
+  jobText,
+  jobUrl,
+  setJobText,
+  setJobUrl,
+}: {
+  ingestJobFromText: () => Promise<void>;
+  ingestJobFromUrl: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  isIngestingJob: boolean;
+  jobText: string;
+  jobUrl: string;
+  setJobText: (value: string) => void;
+  setJobUrl: (value: string) => void;
+}) {
+  return (
+    <div className="job-add-panel-body">
+      <form className="job-url-form" onSubmit={ingestJobFromUrl}>
+        <label>
+          <Link2 size={16} aria-hidden="true" />
+          <span className="sr-only">Public job URL</span>
+          <input
+            inputMode="url"
+            onChange={(event) => setJobUrl(event.target.value)}
+            placeholder="Paste a public job URL"
+            value={jobUrl}
+          />
+        </label>
+        <button disabled={isIngestingJob || !jobUrl.trim()} type="submit">
+          <Send size={15} aria-hidden="true" />
+          {isIngestingJob ? "Reading..." : "Review fit"}
+        </button>
+      </form>
+      <div className="job-text-fallback">
+        <label>
+          <ClipboardPaste size={16} aria-hidden="true" />
+          <span>Unreadable posting or private page</span>
+          <textarea
+            onChange={(event) => setJobText(event.target.value)}
+            placeholder="Paste job description text here, then save it for profile-aware review."
+            rows={2}
+            value={jobText}
+          />
+        </label>
+        <button
+          className="secondary-action compact-action"
+          disabled={isIngestingJob || !jobText.trim()}
+          onClick={() => void ingestJobFromText()}
+          type="button"
+        >
+          Analyze pasted text
+        </button>
+      </div>
+    </div>
   );
 }
 

@@ -168,6 +168,10 @@ export function WorkspaceLayout({
 
   useEffect(() => {
     function handleFocusChat() {
+      setLayout((currentLayout) => ({
+        ...currentLayout,
+        conversationCollapsed: false,
+      }));
       setMobileSurface("chat");
     }
 

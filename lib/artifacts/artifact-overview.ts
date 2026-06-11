@@ -32,35 +32,37 @@ export async function getArtifactOverview(userId: string): Promise<ArtifactOverv
     await Promise.all([
       supabase
         .from("generated_resumes")
-        .select("id, application_id, resume_type, content_json, pdf_storage_path, docx_storage_path, status, version_number, created_at, updated_at")
+        .select("id, application_id, resume_type, content_json, pdf_storage_path, docx_storage_path, status, created_at, updated_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(100),
       supabase
         .from("generated_cover_letters")
-        .select("id, application_id, content, pdf_storage_path, docx_storage_path, status, version_number, created_at, updated_at")
+        .select("id, application_id, content, pdf_storage_path, docx_storage_path, status, created_at, updated_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(100),
     ]);
 
-  if (resumeError || coverError) {
-    throw new Error("ARTIFACT_OVERVIEW_READ_FAILED");
-  }
+  warnArtifactOverviewReadFailure("generated_resumes", resumeError);
+  warnArtifactOverviewReadFailure("generated_cover_letters", coverError);
+
+  const safeResumes = resumeError ? [] : resumes ?? [];
+  const safeCoverLetters = coverError ? [] : coverLetters ?? [];
 
   const applicationIds = Array.from(
     new Set(
-      [...(resumes ?? []), ...(coverLetters ?? [])]
+      [...safeResumes, ...safeCoverLetters]
         .map((artifact) => artifact.application_id)
         .filter(Boolean),
     ),
   ) as string[];
   const applications = await readApplications(applicationIds, userId);
-  const resumeVersions = buildVersionMap(resumes ?? []);
-  const coverLetterVersions = buildVersionMap(coverLetters ?? []);
+  const resumeVersions = buildVersionMap(safeResumes);
+  const coverLetterVersions = buildVersionMap(safeCoverLetters);
 
   const artifacts: ArtifactOverview["artifacts"] = [
-    ...(resumes ?? []).map((resume) => {
+    ...safeResumes.map((resume) => {
       const application = resume.application_id
         ? applications.get(resume.application_id)
         : null;
@@ -91,7 +93,7 @@ export async function getArtifactOverview(userId: string): Promise<ArtifactOverv
         version,
       };
     }),
-    ...(coverLetters ?? []).map((coverLetter) => {
+    ...safeCoverLetters.map((coverLetter) => {
       const application = coverLetter.application_id
         ? applications.get(coverLetter.application_id)
         : null;
@@ -149,7 +151,8 @@ async function readApplications(applicationIds: string[], userId: string) {
     .in("id", applicationIds);
 
   if (error) {
-    throw new Error("ARTIFACT_APPLICATIONS_READ_FAILED");
+    warnArtifactOverviewReadFailure("applications", error);
+    return new Map<string, { companyName: string; jobTitle: string | null }>();
   }
 
   return (data ?? []).reduce<Map<string, { companyName: string; jobTitle: string | null }>>(
@@ -195,8 +198,36 @@ function buildArtifactDownloadUrl({
   return hasFile ? `/api/artifacts/${kind}/${id}/download?format=${format}` : null;
 }
 
-function readArtifactVersion(artifact: { version_number?: number | null }, fallback?: number) {
-  return artifact.version_number && artifact.version_number > 0 ? artifact.version_number : fallback ?? 1;
+function readArtifactVersion(artifact: unknown, fallback?: number) {
+  if (
+    artifact &&
+    typeof artifact === "object" &&
+    "version_number" in artifact &&
+    typeof artifact.version_number === "number" &&
+    artifact.version_number > 0
+  ) {
+    return artifact.version_number;
+  }
+
+  return fallback ?? 1;
+}
+
+function warnArtifactOverviewReadFailure(
+  table: "applications" | "generated_cover_letters" | "generated_resumes",
+  error: { code?: string; message?: string } | null,
+) {
+  if (!error) {
+    return;
+  }
+
+  console.warn(
+    JSON.stringify({
+      code: error.code ?? null,
+      event: "artifact_overview_read_failed",
+      message: error.message ?? "Unknown artifact overview read failure",
+      table,
+    }),
+  );
 }
 
 function readResumeLabel(contentJson: unknown, resumeType: string) {

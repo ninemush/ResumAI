@@ -59,6 +59,27 @@ export function hasTwoUserIsolationEnv() {
   );
 }
 
+export function hasAdminQaEnv() {
+  loadLocalEnv();
+
+  return Boolean(
+    hasDemoAuthEnv() &&
+      process.env.QA_ADMIN_EMAIL &&
+      process.env.QA_ADMIN_PASSWORD,
+  );
+}
+
+export function hasLaunchReadinessEnv() {
+  loadLocalEnv();
+
+  return Boolean(
+    process.env.RUN_LAUNCH_READINESS_GATES === "1" &&
+      hasTwoUserIsolationEnv() &&
+      hasAdminQaEnv() &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
+}
+
 export async function authenticateDemoUser({
   context,
   request,
@@ -116,6 +137,20 @@ export async function authenticateDemoUser({
       },
     ],
   );
+}
+
+export async function buildAdminAuthCookieHeader({
+  request,
+}: {
+  request: APIRequestContext;
+}) {
+  loadLocalEnv();
+
+  return buildAuthCookieHeader({
+    email: requireEnv("QA_ADMIN_EMAIL"),
+    password: requireEnv("QA_ADMIN_PASSWORD"),
+    request,
+  });
 }
 
 export async function buildAuthCookieHeader({

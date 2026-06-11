@@ -214,7 +214,7 @@ test.describe("authenticated workspace", () => {
 
     await page.goto("/");
 
-    const input = page.getByPlaceholder(/Notes, role, link, or resume/i);
+    const input = page.getByPlaceholder(/Role, link, notes, or resume|Notes, role, link, or resume/i);
     await input.fill("What credits do I have?");
     await page.getByRole("button", { name: /Send message/i }).click();
 
