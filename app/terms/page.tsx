@@ -154,7 +154,8 @@ export default function TermsPage() {
 
         <h2>15. Contact</h2>
         <p>
-          For questions about these Terms, contact the {brand.name} operator through
+          For questions about these Terms, contact{" "}
+          <a href={`mailto:${brand.supportEmail}`}>{brand.supportEmail}</a> or use
           the support channel made available in the product.
         </p>
       </section>

@@ -697,7 +697,8 @@ export function SettingsPanel({
             <strong>Issue history available</strong>
             <p>
               Use {brand.name} chat for help. Product issues are logged with context
-              and visible in the Support area.
+              and visible in the Support area. For direct support, email{" "}
+              <a href={`mailto:${brand.supportEmail}`}>{brand.supportEmail}</a>.
             </p>
             <div className="settings-link-row">
               <button

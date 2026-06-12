@@ -661,6 +661,7 @@ export function AuthPanel() {
 
       <footer className="auth-public-footer" aria-label="Public policy links">
         <span>{brand.name}</span>
+        <a href={`mailto:${brand.contactEmail}`}>{brand.contactEmail}</a>
         <a href="/terms">Terms</a>
         <a href={publicPolicyPaths.privacy}>Privacy</a>
         <a href={publicPolicyPaths.dataRetention}>Data Retention</a>

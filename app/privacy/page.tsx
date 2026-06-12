@@ -150,7 +150,8 @@ export default function PrivacyPage() {
 
         <h2>15. Contact</h2>
         <p>
-          For privacy questions or requests, contact the {brand.name} operator through
+          For privacy questions or requests, contact{" "}
+          <a href={`mailto:${brand.supportEmail}`}>{brand.supportEmail}</a> or use
           the support channel made available in the product.
         </p>
       </section>

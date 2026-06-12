@@ -40,6 +40,10 @@ export default function DataRetentionPage() {
           minimized or retained where needed for support, accounting, fraud,
           dispute, or legal review.
         </p>
+        <p>
+          For privacy or data-rights help, contact{" "}
+          <a href={`mailto:${brand.supportEmail}`}>{brand.supportEmail}</a>.
+        </p>
       </section>
     </main>
   );

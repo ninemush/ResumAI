@@ -112,7 +112,7 @@ export function EmailMfaGate({ email }: EmailMfaGateProps) {
             disabled={isSubmitting}
             onClick={() =>
               setStatus(
-                "If you cannot access this email, sign out and use another account. For account recovery, create a Support issue from the email address you want to use and include the inaccessible address, but do not include passwords or private employer records.",
+                `If you cannot access this email, sign out and use another account. For account recovery, create a Support issue from the email address you want to use or contact ${brand.supportEmail}. Include the inaccessible address, but do not include passwords or private employer records.`,
               )
             }
             type="button"

@@ -52,6 +52,29 @@ http://localhost:3000/auth/callback
 http://127.0.0.1:3000/auth/callback
 ```
 
+### Supabase Email Identity
+
+Supabase custom SMTP is configured outside the app. Auth and system emails
+should send as:
+
+```text
+Pramania <noreply@pramania.com>
+```
+
+Use `noreply@pramania.com` only for Supabase authentication/system email
+sender identity. Do not show it as a customer contact address. User support,
+legal/privacy/terms, billing/refund, and account help should point to:
+
+```text
+Pramania Support <support@pramania.com>
+```
+
+General public enquiries should point to:
+
+```text
+Pramania <hello@pramania.com>
+```
+
 ### Microsoft Outlook/Hotmail
 
 In Microsoft Entra:
