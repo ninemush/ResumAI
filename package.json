@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit --pretty false",
     "test": "npm run test:unit && npm run test:e2e:smoke",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
@@ -16,6 +17,10 @@
     "test:e2e:launch-readiness": "node scripts/check-launch-readiness-env.mjs && playwright test tests/e2e/authenticated-workspace.spec.ts tests/e2e/two-user-isolation.spec.ts tests/e2e/privacy-deletion-execution.spec.ts tests/e2e/revenuecat-webhook-idempotency.spec.ts tests/e2e/schema-readiness-maturity.spec.ts --project=chromium-desktop",
     "test:e2e:accessibility": "RUN_ACCESSIBILITY_GATES=1 NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://127.0.0.1:54321} NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-local-placeholder-anon-key} NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-http://localhost:3000} playwright test tests/e2e/accessibility.spec.ts --project=chromium-desktop",
     "test:e2e:cross-browser": "NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://127.0.0.1:54321} NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-local-placeholder-anon-key} NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-http://localhost:3000} playwright test --project=chromium-desktop --project=firefox-desktop --project=webkit-desktop"
+  },
+  "engines": {
+    "node": ">=26 <27",
+    "npm": ">=11 <12"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

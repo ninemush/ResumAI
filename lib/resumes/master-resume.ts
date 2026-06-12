@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import { buildAtsResumeDocx, buildAtsResumePdf } from "@/lib/artifacts/ats-template";
+import { hasBlockingExportRisks } from "@/lib/applications/export-gates";
 import { validateGeneratedPdf } from "@/lib/applications/pdf-validation";
 import { getMaterialsModel, createOpenAIResponse } from "@/lib/ai/openai";
 import {
@@ -1426,6 +1427,11 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeArtifac
     sourceEvidence: sourceError ? [] : prioritizeSourceEvidence(sourceEvidence ?? []),
     promptVersion: latestResume.prompt_version,
   });
+
+  if (hasBlockingExportRisks(normalizedResume)) {
+    throw new Error("MASTER_RESUME_CLAIM_REVIEW_REQUIRED");
+  }
+
   const templateInput = {
     contextLine: [profile.target_direction, profile.target_level].filter(Boolean).join(" | "),
     displayName: profile.display_name,
@@ -1437,7 +1443,9 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeArtifac
   ]);
   const validation = await validateGeneratedPdf({
     bytes: pdfBytes,
+    maxPages: 4,
     requiredPhrases: [normalizedResume.headline, normalizedResume.summary],
+    requiredSections: ["Skills", "Experience"],
   });
 
   if (!validation.valid) {

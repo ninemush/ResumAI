@@ -19,9 +19,9 @@ test.describe("RevenueCat webhook maturity", () => {
     const admin = createServiceRoleClient();
     const userId = await readUserIdByEmail(process.env.QA_DEMO_USER_A_EMAIL ?? "");
     const eventId = `launch-maturity-${crypto.randomUUID()}`;
-    const authorization = process.env.REVENUECAT_WEBHOOK_SECRET
+    const authorization: Record<string, string> | undefined = process.env.REVENUECAT_WEBHOOK_SECRET
       ? { authorization: `Bearer ${process.env.REVENUECAT_WEBHOOK_SECRET}` }
-      : {};
+      : undefined;
 
     try {
       const payload = {
@@ -56,31 +56,97 @@ test.describe("RevenueCat webhook maturity", () => {
       expect(eventError).toBeNull();
       expect(events).toHaveLength(1);
 
-      const ledgerId = events?.[0]?.credit_ledger_id as string | null;
+      const eventRows = (events ?? []) as Array<{ credit_ledger_id: string | null; id: string }>;
+      const ledgerId = eventRows[0]?.credit_ledger_id ?? null;
       expect(ledgerId).toMatch(/[0-9a-f-]{36}/i);
 
       const { data: ledgerRows, error: ledgerError } = await admin
         .from("credit_ledger")
         .select("id, credit_delta, event_type, metadata")
-        .eq("id", ledgerId);
+        .eq("id", ledgerId as string);
 
       expect(ledgerError).toBeNull();
-      expect(ledgerRows).toHaveLength(1);
-      expect(ledgerRows?.[0]?.credit_delta).toBe(25);
-      expect(ledgerRows?.[0]?.event_type).toBe("revenuecat_purchase");
-      expect((ledgerRows?.[0]?.metadata as { event_id?: string } | null)?.event_id).toBe(eventId);
+      const ledgerRowList = (ledgerRows ?? []) as Array<{
+        credit_delta: number;
+        event_type: string;
+        id: string;
+        metadata: { event_id?: string } | null;
+      }>;
+      expect(ledgerRowList).toHaveLength(1);
+      expect(ledgerRowList[0]?.credit_delta).toBe(25);
+      expect(ledgerRowList[0]?.event_type).toBe("revenuecat_purchase");
+      expect(ledgerRowList[0]?.metadata?.event_id).toBe(eventId);
     } finally {
       const { data: events } = await admin
         .from("revenuecat_events")
         .select("id, credit_ledger_id")
         .eq("event_id", eventId);
-      const eventIds = (events ?? []).map((event) => event.id as string);
-      const ledgerIds = (events ?? [])
-        .map((event) => event.credit_ledger_id as string | null)
+      const eventRows = (events ?? []) as Array<{ credit_ledger_id: string | null; id: string }>;
+      const eventIds = eventRows.map((event) => event.id);
+      const ledgerIds = eventRows
+        .map((event) => event.credit_ledger_id)
         .filter((id): id is string => Boolean(id));
 
       await cleanRowsByIds(admin, "revenuecat_events", eventIds);
       await cleanRowsByIds(admin, "credit_ledger", ledgerIds);
+    }
+  });
+
+  test("persists unknown products as ignored without granting credits", async ({ request }) => {
+    loadLocalEnv();
+
+    const admin = createServiceRoleClient();
+    const userId = await readUserIdByEmail(process.env.QA_DEMO_USER_A_EMAIL ?? "");
+    const eventId = `launch-unknown-product-${crypto.randomUUID()}`;
+    const authorization: Record<string, string> | undefined = process.env.REVENUECAT_WEBHOOK_SECRET
+      ? { authorization: `Bearer ${process.env.REVENUECAT_WEBHOOK_SECRET}` }
+      : undefined;
+
+    try {
+      const response = await request.post("/api/revenuecat/webhook", {
+        data: {
+          event: {
+            app_user_id: userId,
+            id: eventId,
+            product_id: "unknown_credit_pack",
+            type: "PURCHASE_REDEEMED",
+          },
+        },
+        headers: authorization,
+      });
+      const payload = await response.json();
+
+      expect(response.ok()).toBe(true);
+      expect(payload).toMatchObject({
+        ignored: true,
+        reason: "ignored_unknown_product",
+      });
+      expect(payload.creditsGranted).toBeUndefined();
+
+      const { data: events, error: eventError } = await admin
+        .from("revenuecat_events")
+        .select("id, credit_amount, credit_ledger_id, processed_status")
+        .eq("event_id", eventId);
+      const eventRows = (events ?? []) as Array<{
+        credit_amount: number;
+        credit_ledger_id: string | null;
+        id: string;
+        processed_status: string;
+      }>;
+
+      expect(eventError).toBeNull();
+      expect(eventRows).toHaveLength(1);
+      expect(eventRows[0]?.credit_amount).toBe(0);
+      expect(eventRows[0]?.credit_ledger_id).toBeNull();
+      expect(eventRows[0]?.processed_status).toBe("ignored_unknown_product");
+    } finally {
+      const { data: events } = await admin
+        .from("revenuecat_events")
+        .select("id")
+        .eq("event_id", eventId);
+      const eventRows = (events ?? []) as Array<{ id: string }>;
+
+      await cleanRowsByIds(admin, "revenuecat_events", eventRows.map((event) => event.id));
     }
   });
 });

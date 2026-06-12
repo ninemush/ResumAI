@@ -3,7 +3,9 @@ import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBo
 import {
   buildCreditsApiError,
   finalizeCreditReservation,
+  getFinalizedCreditOperationOutput,
   getCreditOperationKey,
+  recordCreditOperationOutput,
   requireCredits,
   releaseCreditReservation,
   reserveCredits,
@@ -96,16 +98,36 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     await requireCredits("applicationMaterialsGenerate");
+    const operationKey = getCreditOperationKey(
+      request,
+      parsed.data.idempotencyKey ??
+        `applicationMaterialsGenerate:${params.id}:${parsed.data.mode}:${hashOperationInput(parsed.data.reason ?? "default")}`,
+    );
+    const finalizedOutput = await getFinalizedCreditOperationOutput({
+      feature: "applicationMaterialsGenerate",
+      operationKey,
+    });
+
+    if (finalizedOutput) {
+      return apiSuccess({
+        requestId,
+        coverLetterId: readStringOutput(finalizedOutput.output_ids.coverLetterId),
+        didGenerate: false,
+        model: readStringOutput(finalizedOutput.metadata.model) ?? "stored",
+        promptVersion: readStringOutput(finalizedOutput.metadata.promptVersion) ?? "stored",
+        resumeId: readStringOutput(finalizedOutput.output_ids.resumeId),
+        reused: true,
+        summary: "Returned the existing application materials for this retry-safe operation.",
+      });
+    }
+
     const reservation = await reserveCredits({
       feature: "applicationMaterialsGenerate",
       metadata: {
         mode: parsed.data.mode,
         reason: parsed.data.reason ?? null,
       },
-      operationKey: getCreditOperationKey(
-        request,
-        parsed.data.idempotencyKey ?? `applicationMaterialsGenerate:${params.id}`,
-      ),
+      operationKey,
       resourceId: params.id,
       resourceType: "application_materials",
     });
@@ -122,13 +144,29 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     if (result.didGenerate) {
-      await finalizeCreditReservation({
+      const finalizedReservation = await finalizeCreditReservation({
         metadata: {
           cover_letter_id: result.coverLetterId,
           resume_id: result.resumeId,
         },
         reservationId: reservation.reservationId,
         resourceId: params.id,
+      });
+      await recordCreditOperationOutput({
+        feature: "applicationMaterialsGenerate",
+        ledgerEventId: finalizedReservation.ledgerEventId,
+        metadata: {
+          model: result.model,
+          promptVersion: result.promptVersion,
+        },
+        operationKey,
+        outputIds: {
+          coverLetterId: result.coverLetterId,
+          resumeId: result.resumeId,
+        },
+        reservationId: reservation.reservationId,
+        resourceId: params.id,
+        resourceType: "application_materials",
       });
     } else {
       await releaseCreditReservation({
@@ -155,6 +193,20 @@ export async function POST(request: Request, context: RouteContext) {
 
 function isBillingError(error: unknown) {
   return error instanceof Error && error.message.startsWith("CREDITS_");
+}
+
+function hashOperationInput(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash.toString(16);
+}
+
+function readStringOutput(value: unknown) {
+  return typeof value === "string" ? value : null;
 }
 
 export async function PATCH(request: Request, context: RouteContext) {

@@ -1,9 +1,13 @@
+import { createHash } from "node:crypto";
+
 import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
   finalizeCreditReservation,
+  getFinalizedCreditOperationOutput,
   getCreditOperationKey,
+  recordCreditOperationOutput,
   requireCredits,
   releaseCreditReservation,
   reserveCredits,
@@ -11,6 +15,7 @@ import {
 import {
   generateMasterResume,
   generateMasterResumeSchema,
+  getMasterResumeOverview,
   updateMasterResume,
   updateMasterResumeSchema,
 } from "@/lib/resumes/master-resume";
@@ -49,12 +54,27 @@ export async function POST(request: Request) {
   }
 
   try {
-    await requireProtectedApiSession();
+    const session = await requireProtectedApiSession();
     await requireCredits("masterResumeGenerate");
-    const operationKey = getCreditOperationKey(
-      request,
-      `masterResumeGenerate:${crypto.randomUUID()}`,
-    );
+    const operationKey = getCreditOperationKey(request, buildMasterResumeOperationKey({
+      instruction: parsed.data.instruction,
+      userId: session.user.id,
+    }));
+    const finalizedOutput = await getFinalizedCreditOperationOutput({
+      feature: "masterResumeGenerate",
+      operationKey,
+    });
+
+    if (finalizedOutput) {
+      return apiSuccess({
+        requestId,
+        overview: await getMasterResumeOverview(session.user.id),
+        resumeId: readStringOutput(finalizedOutput.output_ids.resumeId),
+        reused: true,
+        summary: "Returned the existing master resume draft for this retry-safe operation.",
+      });
+    }
+
     const reservation = await reserveCredits({
       feature: "masterResumeGenerate",
       metadata: { instruction: parsed.data.instruction ?? null },
@@ -74,10 +94,20 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    await finalizeCreditReservation({
+    const finalizedReservation = await finalizeCreditReservation({
       metadata: { resume_id: result.resumeId },
       reservationId: reservation.reservationId,
       resourceId: result.resumeId,
+    });
+    await recordCreditOperationOutput({
+      feature: "masterResumeGenerate",
+      ledgerEventId: finalizedReservation.ledgerEventId,
+      metadata: { instruction: parsed.data.instruction ?? null },
+      operationKey,
+      outputIds: { resumeId: result.resumeId },
+      reservationId: reservation.reservationId,
+      resourceId: result.resumeId,
+      resourceType: "master_resume",
     });
 
     return apiSuccess({
@@ -207,4 +237,23 @@ function toApiError(error: unknown) {
 
 function isBillingError(error: unknown) {
   return error instanceof Error && error.message.startsWith("CREDITS_");
+}
+
+function buildMasterResumeOperationKey({
+  instruction,
+  userId,
+}: {
+  instruction?: string;
+  userId: string;
+}) {
+  const inputHash = createHash("sha256")
+    .update([userId, instruction?.trim() || "default"].join(":"))
+    .digest("hex")
+    .slice(0, 24);
+
+  return `masterResumeGenerate:${userId}:${inputHash}`;
+}
+
+function readStringOutput(value: unknown) {
+  return typeof value === "string" ? value : null;
 }

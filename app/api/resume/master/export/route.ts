@@ -4,6 +4,7 @@ import {
   buildCreditsApiError,
   finalizeCreditReservation,
   getCreditOperationKey,
+  recordCreditOperationOutput,
   requireCredits,
   releaseCreditReservation,
   reserveCredits,
@@ -47,12 +48,13 @@ export async function POST(request: Request) {
     }
 
     await requireCredits("masterResumeExport");
+    const operationKey = getCreditOperationKey(
+      request,
+      "masterResumeExport:latest",
+    );
     const reservation = await reserveCredits({
       feature: "masterResumeExport",
-      operationKey: getCreditOperationKey(
-        request,
-        "masterResumeExport:latest",
-      ),
+      operationKey,
       resourceId: null,
       resourceType: "master_resume_export",
     });
@@ -69,10 +71,19 @@ export async function POST(request: Request) {
     }
 
     if (result.didExport) {
-      await finalizeCreditReservation({
+      const finalizedReservation = await finalizeCreditReservation({
         metadata: { resume_id: result.overview.latestResume?.id ?? null },
         reservationId: reservation.reservationId,
         resourceId: result.overview.latestResume?.id,
+      });
+      await recordCreditOperationOutput({
+        feature: "masterResumeExport",
+        ledgerEventId: finalizedReservation.ledgerEventId,
+        operationKey,
+        outputIds: { resumeId: result.overview.latestResume?.id ?? null },
+        reservationId: reservation.reservationId,
+        resourceId: result.overview.latestResume?.id,
+        resourceType: "master_resume_export",
       });
     } else {
       await releaseCreditReservation({
@@ -124,6 +135,16 @@ function toApiError(error: unknown) {
         code: "resume.pdf_validation_failed",
         message:
           "The master resume PDF did not pass content validation. Review the draft, save it, and try preparing the files again.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "MASTER_RESUME_CLAIM_REVIEW_REQUIRED") {
+      return {
+        category: "validation",
+        code: "resume.claim_review_required",
+        message:
+          "Resolve unsupported high-impact claim notes before exporting the master resume files.",
         status: 422,
       };
     }

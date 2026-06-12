@@ -108,6 +108,34 @@ test.describe("authenticated workspace", () => {
     await expect(page.getByRole("heading", { name: /Role decisions/i })).toBeVisible();
     await expect(page.getByText("Career advisor")).toBeHidden();
     await expect(page.locator(".mobile-workspace-nav")).toBeVisible();
+    await expect(page.locator(".conversation-pane-controls")).toBeHidden();
+    await expect(page.locator(".conversation-resize-handle")).toBeHidden();
+    await expect(page.locator(".conversation-collapsed-rail")).toBeHidden();
+    await expect(page.getByRole("button", { name: /^S$/ })).toBeHidden();
+    await expect(page.getByRole("button", { name: /^M$/ })).toBeHidden();
+    await expect(page.getByRole("button", { name: /^L$/ })).toBeHidden();
+  });
+
+  test("keeps the mobile More drawer keyboard-contained", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "Mobile drawer keyboard behavior is mobile-specific.");
+
+    await page.goto("/");
+    const moreButton = page.getByRole("button", { name: /^More$/i });
+    await moreButton.click();
+
+    const drawer = page.getByRole("dialog", { name: "More workspace destinations" });
+    await expect(drawer).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Resume$/i })).toBeFocused();
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(drawer.getByRole("button").last()).toBeFocused();
+
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: /^Resume$/i })).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(drawer).toBeHidden();
+    await expect(moreButton).toBeFocused();
   });
 
   test("keeps profile mode chat-first on mobile without profile overview overlap", async ({ page, isMobile }) => {

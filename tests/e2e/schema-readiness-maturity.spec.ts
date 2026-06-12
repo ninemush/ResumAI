@@ -29,6 +29,16 @@ test.describe("Supabase schema readiness maturity", () => {
         reason: "owner access audit evidence",
         table: "admin_access_audit_events",
       },
+      {
+        columns: "feature, operation_key, output_ids",
+        reason: "durable credit operation output tracing",
+        table: "credit_operation_outputs",
+      },
+      {
+        columns: "provider_reference, reason, user_notice_sent",
+        reason: "refund and reversal reconciliation evidence",
+        table: "credit_reversals",
+      },
     ];
     const failures: string[] = [];
 
@@ -46,5 +56,16 @@ test.describe("Supabase schema readiness maturity", () => {
     }
 
     expect(failures).toEqual([]);
+  });
+
+  test("proves owner and stale reservation operational functions exist", async () => {
+    const admin = createServiceRoleClient();
+    const ownerProbe = await admin.rpc("is_owner");
+    const staleCleanupProbe = await admin.rpc("cleanup_stale_credit_reservations");
+
+    expect(ownerProbe.error).toBeNull();
+    expect(typeof ownerProbe.data).toBe("boolean");
+    expect(staleCleanupProbe.error).toBeNull();
+    expect(typeof staleCleanupProbe.data).toBe("number");
   });
 });

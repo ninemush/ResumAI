@@ -114,7 +114,7 @@ function toApiError(error: unknown) {
       return {
         category: "validation",
         code: "application.final_materials_required",
-        message: "Export final resume and cover-letter PDFs before marking this application applied.",
+        message: "Export final resume and cover-letter PDF/DOCX files before marking this application applied.",
         status: 422,
       };
     }

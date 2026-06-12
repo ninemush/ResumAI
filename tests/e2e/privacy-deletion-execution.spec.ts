@@ -16,6 +16,8 @@ import {
 type CleanupMap = Record<string, string[]>;
 
 test.describe("privacy deletion execution maturity", () => {
+  test.setTimeout(90_000);
+
   test.skip(
     !hasLaunchReadinessEnv(),
     "Launch readiness env, service role, admin, and two-user QA credentials are required for deletion execution evidence.",
@@ -43,6 +45,7 @@ test.describe("privacy deletion execution maturity", () => {
       generated_resumes: [],
       applications: [],
       quota_events: [],
+      sensitive_support_contexts: [],
       career_profiles: [],
       profile_source_analyses: [],
       profile_facts: [],
@@ -113,6 +116,12 @@ test.describe("privacy deletion execution maturity", () => {
           merge_metadata: { marker },
           status: "ready",
           is_current: false,
+        }),
+      );
+      cleanup.sensitive_support_contexts.push(
+        await insertRow(admin, "sensitive_support_contexts", {
+          user_id: subjectUserId,
+          context_json: { marker, privateSupportContext: true },
         }),
       );
       cleanup.generated_resumes.push(
@@ -278,7 +287,11 @@ test.describe("privacy deletion execution maturity", () => {
         expect.arrayContaining([
           expect.objectContaining({ action: "deleted", table: "profile_sources" }),
           expect.objectContaining({ action: "deleted", table: "profile_facts" }),
+          expect.objectContaining({ action: "deleted", table: "profile_source_analyses" }),
+          expect.objectContaining({ action: "deleted", table: "career_profiles" }),
+          expect.objectContaining({ action: "deleted", table: "sensitive_support_contexts" }),
           expect.objectContaining({ action: "minimized", table: "applications(non_draft)" }),
+          expect.objectContaining({ action: "minimized", table: "credit_reservations" }),
           expect.objectContaining({ action: "retained_with_reason", table: "credit_ledger" }),
           expect.objectContaining({ action: "retained_with_reason", table: "quota_events" }),
         ]),
@@ -286,6 +299,9 @@ test.describe("privacy deletion execution maturity", () => {
 
       await expectMissing(admin, "profile_sources", sourceId);
       await expectMissing(admin, "profile_facts", cleanup.profile_facts[0]);
+      await expectMissing(admin, "profile_source_analyses", cleanup.profile_source_analyses[0]);
+      await expectMissing(admin, "career_profiles", cleanup.career_profiles[0]);
+      await expectMissing(admin, "sensitive_support_contexts", cleanup.sensitive_support_contexts[0]);
       await expectMissing(admin, "generated_resumes", cleanup.generated_resumes[0]);
       await expectMissing(admin, "applications", draftApplicationId);
 
@@ -305,7 +321,13 @@ test.describe("privacy deletion execution maturity", () => {
       expect(coverLetter.pdf_storage_path).toBeNull();
 
       const creditLedger = await readRow(admin, "credit_ledger", cleanup.credit_ledger[0]);
-      expect(creditLedger.metadata.marker).toBe(marker);
+      expect((creditLedger.metadata as { marker?: string }).marker).toBe(marker);
+
+      const creditReservation = await readRow(admin, "credit_reservations", cleanup.credit_reservations[0]);
+      expect(creditReservation.idempotency_key).toMatch(/^privacy-minimized:/);
+      expect((creditReservation.metadata as { privacy_request_id?: string }).privacy_request_id).toBe(
+        privacyRequestId,
+      );
 
       const auditEvents = await readAuditEvents(admin, subjectUserId, privacyRequestId);
       expect(auditEvents.some((event) => event.event_type === "privacy.deletion_execution.completed")).toBe(true);
@@ -350,8 +372,10 @@ async function ensureProfile(
     throw new Error(`Unable to read seeded profile: ${readError.message}`);
   }
 
-  if (existing?.id) {
-    return existing.id as string;
+  const existingProfile = existing as { id?: string } | null;
+
+  if (existingProfile?.id) {
+    return existingProfile.id;
   }
 
   const profileId = await insertRow(admin, "profiles", {
@@ -431,7 +455,7 @@ async function readAuditEvents(
     throw new Error(`Unable to read audit events: ${error.message}`);
   }
 
-  return data ?? [];
+  return (data ?? []) as Array<{ event_type: string; id: string }>;
 }
 
 async function cleanupSeededRows(
@@ -445,6 +469,7 @@ async function cleanupSeededRows(
   await cleanRowsByIds(admin, "quota_events", cleanup.quota_events);
   await cleanRowsByIds(admin, "credit_reservations", cleanup.credit_reservations);
   await cleanRowsByIds(admin, "credit_ledger", cleanup.credit_ledger);
+  await cleanRowsByIds(admin, "sensitive_support_contexts", cleanup.sensitive_support_contexts);
   await cleanRowsByIds(admin, "career_profiles", cleanup.career_profiles);
   await cleanRowsByIds(admin, "profile_source_analyses", cleanup.profile_source_analyses);
   await cleanRowsByIds(admin, "profile_facts", cleanup.profile_facts);
