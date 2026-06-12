@@ -4,8 +4,14 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import { buildAtsResumeDocx, buildAtsResumePdf } from "@/lib/artifacts/ats-template";
-import { hasBlockingExportRisks } from "@/lib/applications/export-gates";
-import { validateGeneratedPdf } from "@/lib/applications/pdf-validation";
+import {
+  ClaimReviewRequiredError,
+  getBlockingExportRisks,
+} from "@/lib/applications/export-gates";
+import {
+  validateGeneratedDocx,
+  validateGeneratedPdf,
+} from "@/lib/applications/pdf-validation";
 import { getMaterialsModel, createOpenAIResponse } from "@/lib/ai/openai";
 import {
   buildSupportedEvidenceCorpus,
@@ -67,6 +73,8 @@ type ProfileRecord = {
 type ResumeRow = {
   content_json: unknown;
   docx_storage_path: string | null;
+  export_status?: string | null;
+  claim_review_acknowledged_at?: string | null;
   id: string;
   model: string | null;
   pdf_storage_path: string | null;
@@ -109,6 +117,8 @@ type MasterResumeEvidenceBundle = {
     sourceType: string;
   }[];
 };
+
+type ExportStatus = "not_exported" | "export_pending" | "export_validated" | "export_failed";
 
 export type MasterResumeOverview = {
   canGenerate: boolean;
@@ -1300,8 +1310,15 @@ export async function updateMasterResume(
   const { error: updateError } = await supabase
     .from("generated_resumes")
     .update({
+      claim_review_acknowledged_at: null,
+      claim_review_acknowledged_by: null,
+      claim_review_acknowledgement: {},
       content_json: normalizedResume,
       docx_storage_path: null,
+      export_failed_reason: null,
+      export_status: "not_exported",
+      export_validation: {},
+      export_validated_at: null,
       pdf_storage_path: null,
       prompt_version: MASTER_RESUME_PROMPT_VERSION,
       status: "draft",
@@ -1330,7 +1347,7 @@ export async function getReusableMasterResumeExport(): Promise<MasterResumeOverv
 
   const { data: latestResume, error: resumeReadError } = await supabase
     .from("generated_resumes")
-    .select("docx_storage_path, pdf_storage_path, status")
+    .select("docx_storage_path, pdf_storage_path, status, export_status")
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .eq("resume_type", "master")
@@ -1354,7 +1371,9 @@ export async function getReusableMasterResumeExport(): Promise<MasterResumeOverv
   return getMasterResumeOverview(userId);
 }
 
-export async function exportMasterResumeArtifacts(): Promise<MasterResumeArtifactExportResult> {
+export async function exportMasterResumeArtifacts(
+  options: { acknowledgeClaimReview?: boolean } = {},
+): Promise<MasterResumeArtifactExportResult> {
   const { supabase, userId } = await getAuthenticatedContext();
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -1368,7 +1387,9 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeArtifac
 
   const { data: latestResume, error: resumeReadError } = await supabase
     .from("generated_resumes")
-    .select("id, content_json, docx_storage_path, pdf_storage_path, prompt_version, status")
+    .select(
+      "id, content_json, docx_storage_path, pdf_storage_path, prompt_version, status, export_status, claim_review_acknowledged_at",
+    )
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .eq("resume_type", "master")
@@ -1428,9 +1449,27 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeArtifac
     promptVersion: latestResume.prompt_version,
   });
 
-  if (hasBlockingExportRisks(normalizedResume)) {
-    throw new Error("MASTER_RESUME_CLAIM_REVIEW_REQUIRED");
+  const blockingRisks = getBlockingExportRisks(normalizedResume);
+
+  if (blockingRisks.length > 0 && !latestResume.claim_review_acknowledged_at) {
+    if (!options.acknowledgeClaimReview) {
+      throw new ClaimReviewRequiredError("MASTER_RESUME_CLAIM_REVIEW_REQUIRED", blockingRisks);
+    }
+
+    await acknowledgeMasterResumeClaimReview({
+      resumeId: latestResume.id,
+      risks: blockingRisks,
+      supabase,
+      userId,
+    });
   }
+
+  await markMasterResumeExportStatus({
+    resumeId: latestResume.id,
+    status: "export_pending",
+    supabase,
+    userId,
+  });
 
   const templateInput = {
     contextLine: [profile.target_direction, profile.target_level].filter(Boolean).join(" | "),
@@ -1441,60 +1480,176 @@ export async function exportMasterResumeArtifacts(): Promise<MasterResumeArtifac
     buildAtsResumePdf(templateInput),
     buildAtsResumeDocx(templateInput),
   ]);
-  const validation = await validateGeneratedPdf({
-    bytes: pdfBytes,
-    maxPages: 4,
-    requiredPhrases: [normalizedResume.headline, normalizedResume.summary],
-    requiredSections: ["Skills", "Experience"],
-  });
+  const [pdfValidation, docxValidation] = await Promise.all([
+    validateGeneratedPdf({
+      bytes: pdfBytes,
+      maxPages: 4,
+      requiredPhrases: [normalizedResume.headline, normalizedResume.summary],
+      requiredSections: ["Skills", "Experience"],
+    }),
+    validateGeneratedDocx({
+      bytes: docxBytes,
+      requiredPhrases: [normalizedResume.headline, normalizedResume.summary],
+    }),
+  ]);
 
-  if (!validation.valid) {
-    throw new Error("PDF_VALIDATION_FAILED");
+  if (!pdfValidation.valid || !docxValidation.valid) {
+    await markMasterResumeExportStatus({
+      reason: "ARTIFACT_VALIDATION_FAILED",
+      resumeId: latestResume.id,
+      status: "export_failed",
+      supabase,
+      userId,
+      validation: {
+        docx: docxValidation,
+        pdf: pdfValidation,
+      },
+    });
+    throw new Error("ARTIFACT_VALIDATION_FAILED");
   }
 
   const pdfPath = `${userId}/master/${latestResume.id}-master-resume.pdf`;
   const docxPath = `${userId}/master/${latestResume.id}-master-resume.docx`;
-  const [{ error: pdfUploadError }, { error: docxUploadError }] = await Promise.all([
-    supabase.storage.from(GENERATED_ARTIFACT_BUCKET).upload(pdfPath, pdfBytes, {
-      contentType: "application/pdf",
-      upsert: true,
-    }),
-    supabase.storage.from(GENERATED_ARTIFACT_BUCKET).upload(docxPath, docxBytes, {
-      contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      upsert: true,
-    }),
-  ]);
+  const uploadedPaths: string[] = [];
 
-  if (pdfUploadError || docxUploadError) {
-    throw new Error("ARTIFACT_UPLOAD_FAILED");
-  }
+  try {
+    await uploadArtifact(pdfPath, pdfBytes, "application/pdf");
+    await uploadArtifact(
+      docxPath,
+      docxBytes,
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
 
-  const { error: updateError } = await supabase
-    .from("generated_resumes")
-    .update({
-      docx_storage_path: docxPath,
-      pdf_storage_path: pdfPath,
-      status: "ready",
-    })
-    .eq("id", latestResume.id)
-    .eq("user_id", userId);
+    const { error: updateError } = await supabase
+      .from("generated_resumes")
+      .update({
+        docx_storage_path: docxPath,
+        export_failed_reason: null,
+        export_status: "export_validated",
+        export_validation: {
+          docx: docxValidation,
+          pdf: pdfValidation,
+        },
+        export_validated_at: new Date().toISOString(),
+        pdf_storage_path: pdfPath,
+        status: "ready",
+      })
+      .eq("id", latestResume.id)
+      .eq("user_id", userId);
 
-  if (updateError) {
-    throw new Error("ARTIFACT_METADATA_UPDATE_FAILED");
+    if (updateError) {
+      throw new Error("ARTIFACT_METADATA_UPDATE_FAILED");
+    }
+  } catch (error) {
+    if (uploadedPaths.length > 0) {
+      await supabase.storage.from(GENERATED_ARTIFACT_BUCKET).remove(uploadedPaths).catch(() => undefined);
+    }
+    await markMasterResumeExportStatus({
+      reason: error instanceof Error ? error.message : "ARTIFACT_EXPORT_FAILED",
+      resumeId: latestResume.id,
+      status: "export_failed",
+      supabase,
+      userId,
+    }).catch(() => undefined);
+    throw error;
   }
 
   return {
     didExport: true,
     overview: await getMasterResumeOverview(userId),
   };
+
+  async function uploadArtifact(path: string, bytes: Uint8Array, contentType: string) {
+    const { error } = await supabase.storage.from(GENERATED_ARTIFACT_BUCKET).upload(path, bytes, {
+      contentType,
+      upsert: true,
+    });
+
+    if (error) {
+      throw new Error("ARTIFACT_UPLOAD_FAILED");
+    }
+
+    uploadedPaths.push(path);
+  }
 }
 
 function isResumeExportReady(resume: {
   docx_storage_path: string | null;
+  export_status?: string | null;
   pdf_storage_path: string | null;
   status: string;
 }) {
-  return resume.status === "ready" && Boolean(resume.docx_storage_path && resume.pdf_storage_path);
+  return (
+    resume.status === "ready" &&
+    readExportStatus(resume.export_status) === "export_validated" &&
+    Boolean(resume.docx_storage_path && resume.pdf_storage_path)
+  );
+}
+
+async function acknowledgeMasterResumeClaimReview({
+  resumeId,
+  risks,
+  supabase,
+  userId,
+}: {
+  resumeId: string;
+  risks: ReturnType<typeof getBlockingExportRisks>;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+}) {
+  const { error } = await supabase
+    .from("generated_resumes")
+    .update({
+      claim_review_acknowledged_at: new Date().toISOString(),
+      claim_review_acknowledged_by: userId,
+      claim_review_acknowledgement: {
+        risks,
+        riskCount: risks.length,
+      },
+    })
+    .eq("id", resumeId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error("MASTER_RESUME_CLAIM_ACK_SAVE_FAILED");
+  }
+}
+
+async function markMasterResumeExportStatus({
+  reason = null,
+  resumeId,
+  status,
+  supabase,
+  userId,
+  validation = {},
+}: {
+  reason?: string | null;
+  resumeId: string;
+  status: ExportStatus;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  validation?: Record<string, unknown>;
+}) {
+  const { error } = await supabase
+    .from("generated_resumes")
+    .update({
+      export_failed_reason: status === "export_failed" ? reason : null,
+      export_status: status,
+      export_validation: validation,
+      export_validated_at: status === "export_validated" ? new Date().toISOString() : null,
+    })
+    .eq("id", resumeId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error("ARTIFACT_METADATA_UPDATE_FAILED");
+  }
+}
+
+function readExportStatus(value: unknown): ExportStatus {
+  return value === "export_pending" || value === "export_validated" || value === "export_failed"
+    ? value
+    : "not_exported";
 }
 
 async function getAuthenticatedContext() {

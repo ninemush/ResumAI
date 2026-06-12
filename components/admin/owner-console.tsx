@@ -7,6 +7,7 @@ import {
   CircleDollarSign,
   Clock3,
   Activity,
+  Download,
   ExternalLink,
   FileText,
   HeartHandshake,
@@ -301,6 +302,10 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         setIssueUpdateMessage("Owner metrics could not be refreshed. Try again before acting on stale data.");
       }
     });
+  }
+
+  function downloadMetricsExport() {
+    window.location.href = `/api/admin/metrics/export?periodDays=${periodDays}`;
   }
 
   async function loadCompliance() {
@@ -727,6 +732,10 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           <button className="secondary-action" disabled={isPending} onClick={() => loadPeriod(periodDays)} type="button">
             <RefreshCcw size={16} aria-hidden="true" />
             Refresh
+          </button>
+          <button className="secondary-action" disabled={isPending} onClick={downloadMetricsExport} type="button">
+            <Download size={16} aria-hidden="true" />
+            Export CSV
           </button>
         </div>
       </div>

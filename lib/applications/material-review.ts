@@ -9,11 +9,15 @@ import {
   buildCoverLetterPdf,
 } from "@/lib/artifacts/ats-template";
 import {
+  ClaimReviewRequiredError,
   classifyResumeExportRisks,
-  hasBlockingExportRisks,
+  getBlockingExportRisks,
   type ExportRisk,
 } from "@/lib/applications/export-gates";
-import { validateGeneratedPdf } from "@/lib/applications/pdf-validation";
+import {
+  validateGeneratedDocx,
+  validateGeneratedPdf,
+} from "@/lib/applications/pdf-validation";
 import {
   parseResumeContent,
   resumeContentSchema,
@@ -53,7 +57,9 @@ export type MaterialReview = {
   exportReadiness: {
     blockingRisks: ExportRisk[];
     canExport: boolean;
-    status: "missing_materials" | "ready_to_export" | "exported";
+    claimReviewAcknowledged: boolean;
+    requiresClaimReview: boolean;
+    status: "missing_materials" | "ready_to_export" | "export_pending" | "export_failed" | "exported";
     warnings: string[];
   };
   resume: {
@@ -70,6 +76,8 @@ export type MaterialArtifactExportResult = {
   didExport: boolean;
   review: MaterialReview;
 };
+
+type ExportStatus = "not_exported" | "export_pending" | "export_validated" | "export_failed";
 
 export async function getMaterialReview(
   input: z.input<typeof materialReviewSchema>,
@@ -154,8 +162,15 @@ export async function updateMaterialReview(input: z.input<typeof updateMaterialR
       ? supabase
           .from("generated_resumes")
           .update({
+            claim_review_acknowledged_at: null,
+            claim_review_acknowledged_by: null,
+            claim_review_acknowledgement: {},
             content_json: parsed.resume,
             docx_storage_path: null,
+            export_failed_reason: null,
+            export_status: "not_exported",
+            export_validation: {},
+            export_validated_at: null,
             pdf_storage_path: null,
             status: "ready",
           })
@@ -166,8 +181,15 @@ export async function updateMaterialReview(input: z.input<typeof updateMaterialR
       ? supabase
           .from("generated_cover_letters")
           .update({
+            claim_review_acknowledged_at: null,
+            claim_review_acknowledged_by: null,
+            claim_review_acknowledgement: {},
             content: parsed.coverLetter,
             docx_storage_path: null,
+            export_failed_reason: null,
+            export_status: "not_exported",
+            export_validation: {},
+            export_validated_at: null,
             pdf_storage_path: null,
             status: "ready",
           })
@@ -193,6 +215,7 @@ export async function getReusableMaterialExport(
 
 export async function exportMaterialArtifacts(
   input: z.input<typeof materialReviewSchema>,
+  options: { acknowledgeClaimReview?: boolean } = {},
 ): Promise<MaterialArtifactExportResult> {
   const parsed = materialReviewSchema.parse(input);
   const { supabase, userId } = await getAuthenticatedContext();
@@ -214,10 +237,30 @@ export async function exportMaterialArtifacts(
   }
 
   const resumeContent = parseResumeContent(resume.content_json);
+  const blockingRisks = getBlockingExportRisks(resumeContent);
 
-  if (hasBlockingExportRisks(resumeContent)) {
-    throw new Error("MATERIAL_CLAIM_ACK_REQUIRED");
+  if (blockingRisks.length > 0 && !resume.claim_review_acknowledged_at) {
+    if (!options.acknowledgeClaimReview) {
+      throw new ClaimReviewRequiredError("MATERIAL_CLAIM_ACK_REQUIRED", blockingRisks);
+    }
+
+    await acknowledgeMaterialClaimReview({
+      applicationId: parsed.applicationId,
+      coverLetterId: coverLetter.id,
+      resumeId: resume.id,
+      risks: blockingRisks,
+      supabase,
+      userId,
+    });
   }
+
+  await markMaterialExportStatus({
+    coverLetterId: coverLetter.id,
+    resumeId: resume.id,
+    status: "export_pending",
+    supabase,
+    userId,
+  });
 
   const contextLine = formatApplicationContextLine(application);
   const [resumePdf, resumeDocx, coverLetterPdf, coverLetterDocx] = await Promise.all([
@@ -226,63 +269,123 @@ export async function exportMaterialArtifacts(
     buildCoverLetterPdf({ contextLine, coverLetter: coverLetter.content }),
     buildCoverLetterDocx({ contextLine, coverLetter: coverLetter.content }),
   ]);
-  const [resumeValidation, coverLetterValidation] = await Promise.all([
+  const [resumePdfValidation, resumeDocxValidation, coverLetterPdfValidation, coverLetterDocxValidation] = await Promise.all([
     validateGeneratedPdf({
       bytes: resumePdf,
       maxPages: 4,
       requiredPhrases: [resumeContent.headline, resumeContent.summary],
       requiredSections: ["Skills", "Experience"],
     }),
+    validateGeneratedDocx({
+      bytes: resumeDocx,
+      requiredPhrases: [resumeContent.headline, resumeContent.summary],
+    }),
     validateGeneratedPdf({
       bytes: coverLetterPdf,
       maxPages: 2,
       requiredPhrases: [application.companyName, coverLetter.content.slice(0, 80)],
     }),
+    validateGeneratedDocx({
+      bytes: coverLetterDocx,
+      requiredPhrases: [application.companyName, coverLetter.content.slice(0, 80)],
+    }),
   ]);
 
-  if (!resumeValidation.valid || !coverLetterValidation.valid) {
-    throw new Error("PDF_VALIDATION_FAILED");
+  if (
+    !resumePdfValidation.valid ||
+    !resumeDocxValidation.valid ||
+    !coverLetterPdfValidation.valid ||
+    !coverLetterDocxValidation.valid
+  ) {
+    await markMaterialExportStatus({
+      coverLetterId: coverLetter.id,
+      reason: "ARTIFACT_VALIDATION_FAILED",
+      resumeId: resume.id,
+      status: "export_failed",
+      supabase,
+      userId,
+      validation: {
+        coverLetterDocx: coverLetterDocxValidation,
+        coverLetterPdf: coverLetterPdfValidation,
+        resumeDocx: resumeDocxValidation,
+        resumePdf: resumePdfValidation,
+      },
+    });
+    throw new Error("ARTIFACT_VALIDATION_FAILED");
   }
 
   const resumePath = `${userId}/${application.id}/${resume.id}-resume.pdf`;
   const resumeDocxPath = `${userId}/${application.id}/${resume.id}-resume.docx`;
   const coverLetterPath = `${userId}/${application.id}/${coverLetter.id}-cover-letter.pdf`;
   const coverLetterDocxPath = `${userId}/${application.id}/${coverLetter.id}-cover-letter.docx`;
+  const uploadedPaths: string[] = [];
 
-  await Promise.all([
-    uploadArtifact(resumePath, resumePdf, "application/pdf"),
-    uploadArtifact(
+  try {
+    await uploadArtifact(resumePath, resumePdf, "application/pdf");
+    await uploadArtifact(
       resumeDocxPath,
       resumeDocx,
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ),
-    uploadArtifact(coverLetterPath, coverLetterPdf, "application/pdf"),
-    uploadArtifact(
+    );
+    await uploadArtifact(coverLetterPath, coverLetterPdf, "application/pdf");
+    await uploadArtifact(
       coverLetterDocxPath,
       coverLetterDocx,
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ),
-  ]);
+    );
 
-  const [{ error: resumeError }, { error: coverLetterError }] = await Promise.all([
-    supabase
-      .from("generated_resumes")
-      .update({ docx_storage_path: resumeDocxPath, pdf_storage_path: resumePath, status: "ready" })
-      .eq("id", resume.id)
-      .eq("user_id", userId),
-    supabase
-      .from("generated_cover_letters")
-      .update({
-        docx_storage_path: coverLetterDocxPath,
-        pdf_storage_path: coverLetterPath,
-        status: "ready",
-      })
-      .eq("id", coverLetter.id)
-      .eq("user_id", userId),
-  ]);
+    const now = new Date().toISOString();
+    const [{ error: resumeError }, { error: coverLetterError }] = await Promise.all([
+      supabase
+        .from("generated_resumes")
+        .update({
+          docx_storage_path: resumeDocxPath,
+          export_failed_reason: null,
+          export_status: "export_validated",
+          export_validation: {
+            docx: resumeDocxValidation,
+            pdf: resumePdfValidation,
+          },
+          export_validated_at: now,
+          pdf_storage_path: resumePath,
+          status: "ready",
+        })
+        .eq("id", resume.id)
+        .eq("user_id", userId),
+      supabase
+        .from("generated_cover_letters")
+        .update({
+          docx_storage_path: coverLetterDocxPath,
+          export_failed_reason: null,
+          export_status: "export_validated",
+          export_validation: {
+            docx: coverLetterDocxValidation,
+            pdf: coverLetterPdfValidation,
+          },
+          export_validated_at: now,
+          pdf_storage_path: coverLetterPath,
+          status: "ready",
+        })
+        .eq("id", coverLetter.id)
+        .eq("user_id", userId),
+    ]);
 
-  if (resumeError || coverLetterError) {
-    throw new Error("ARTIFACT_METADATA_UPDATE_FAILED");
+    if (resumeError || coverLetterError) {
+      throw new Error("ARTIFACT_METADATA_UPDATE_FAILED");
+    }
+  } catch (error) {
+    if (uploadedPaths.length > 0) {
+      await supabase.storage.from(GENERATED_ARTIFACT_BUCKET).remove(uploadedPaths).catch(() => undefined);
+    }
+    await markMaterialExportStatus({
+      coverLetterId: coverLetter.id,
+      reason: error instanceof Error ? error.message : "ARTIFACT_EXPORT_FAILED",
+      resumeId: resume.id,
+      status: "export_failed",
+      supabase,
+      userId,
+    }).catch(() => undefined);
+    throw error;
   }
 
   return {
@@ -299,6 +402,8 @@ export async function exportMaterialArtifacts(
     if (error) {
       throw new Error("ARTIFACT_UPLOAD_FAILED");
     }
+
+    uploadedPaths.push(path);
   }
 }
 
@@ -312,6 +417,8 @@ function isMaterialExportReady({
   return Boolean(
     resume?.status === "ready" &&
       coverLetter?.status === "ready" &&
+      readExportStatus(resume.export_status) === "export_validated" &&
+      readExportStatus(coverLetter.export_status) === "export_validated" &&
       resume.pdf_storage_path &&
       resume.docx_storage_path &&
       coverLetter.pdf_storage_path &&
@@ -332,6 +439,8 @@ function buildExportReadiness({
     return {
       blockingRisks: [],
       canExport: false,
+      claimReviewAcknowledged: false,
+      requiresClaimReview: false,
       status: "missing_materials",
       warnings: ["Create both resume and cover-letter drafts before downloading files."],
     };
@@ -340,6 +449,9 @@ function buildExportReadiness({
   const resumeContent = parseResumeContent(resume.content_json);
   const risks = classifyResumeExportRisks(resumeContent);
   const blockingRisks = risks.filter((risk) => risk.severity === "high");
+  const claimReviewAcknowledged = Boolean(resume.claim_review_acknowledged_at);
+  const resumeExportStatus = readExportStatus(resume.export_status);
+  const coverLetterExportStatus = readExportStatus(coverLetter.export_status);
 
   if (resumeContent.keywordGaps.length > 0) {
     warnings.push("Review keyword gaps before submitting these materials.");
@@ -357,18 +469,124 @@ function buildExportReadiness({
     warnings.push("DOCX files need export after the latest edits.");
   }
 
+  if (blockingRisks.length > 0 && !claimReviewAcknowledged) {
+    warnings.push("High-impact claims or evidence gaps need your export-time acknowledgement.");
+  }
+
+  if (resumeExportStatus === "export_failed" || coverLetterExportStatus === "export_failed") {
+    warnings.push("The last export attempt failed validation or secure storage. Review edits and prepare the files again.");
+  }
+
   return {
     blockingRisks,
-    canExport: blockingRisks.length === 0,
+    canExport: blockingRisks.length === 0 || claimReviewAcknowledged,
+    claimReviewAcknowledged,
+    requiresClaimReview: blockingRisks.length > 0 && !claimReviewAcknowledged,
     status:
-      resume.pdf_storage_path &&
+      resumeExportStatus === "export_failed" || coverLetterExportStatus === "export_failed"
+        ? "export_failed"
+        : resumeExportStatus === "export_pending" || coverLetterExportStatus === "export_pending"
+          ? "export_pending"
+          : resume.pdf_storage_path &&
       coverLetter.pdf_storage_path &&
       resume.docx_storage_path &&
-      coverLetter.docx_storage_path
-        ? "exported"
-        : "ready_to_export",
+      coverLetter.docx_storage_path &&
+      resumeExportStatus === "export_validated" &&
+      coverLetterExportStatus === "export_validated"
+            ? "exported"
+            : "ready_to_export",
     warnings,
   };
+}
+
+async function acknowledgeMaterialClaimReview({
+  applicationId,
+  coverLetterId,
+  resumeId,
+  risks,
+  supabase,
+  userId,
+}: {
+  applicationId: string;
+  coverLetterId: string;
+  resumeId: string;
+  risks: ExportRisk[];
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+}) {
+  const acknowledgedAt = new Date().toISOString();
+  const acknowledgement = {
+    applicationId,
+    risks,
+    riskCount: risks.length,
+  };
+  const [{ error: resumeError }, { error: coverLetterError }] = await Promise.all([
+    supabase
+      .from("generated_resumes")
+      .update({
+        claim_review_acknowledged_at: acknowledgedAt,
+        claim_review_acknowledged_by: userId,
+        claim_review_acknowledgement: acknowledgement,
+      })
+      .eq("id", resumeId)
+      .eq("user_id", userId),
+    supabase
+      .from("generated_cover_letters")
+      .update({
+        claim_review_acknowledged_at: acknowledgedAt,
+        claim_review_acknowledged_by: userId,
+        claim_review_acknowledgement: acknowledgement,
+      })
+      .eq("id", coverLetterId)
+      .eq("user_id", userId),
+  ]);
+
+  if (resumeError || coverLetterError) {
+    throw new Error("MATERIAL_CLAIM_ACK_SAVE_FAILED");
+  }
+}
+
+async function markMaterialExportStatus({
+  coverLetterId,
+  reason = null,
+  resumeId,
+  status,
+  supabase,
+  userId,
+  validation = {},
+}: {
+  coverLetterId: string;
+  reason?: string | null;
+  resumeId: string;
+  status: ExportStatus;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  validation?: Record<string, unknown>;
+}) {
+  const updates = {
+    export_failed_reason: status === "export_failed" ? reason : null,
+    export_status: status,
+    export_validation: validation,
+    export_validated_at: status === "export_validated" ? new Date().toISOString() : null,
+  };
+  const [{ error: resumeError }, { error: coverLetterError }] = await Promise.all([
+    supabase.from("generated_resumes").update(updates).eq("id", resumeId).eq("user_id", userId),
+    supabase
+      .from("generated_cover_letters")
+      .update(updates)
+      .eq("id", coverLetterId)
+      .eq("user_id", userId),
+  ]);
+
+  if (resumeError || coverLetterError) {
+    throw new Error("ARTIFACT_METADATA_UPDATE_FAILED");
+  }
+}
+
+function readExportStatus(value: unknown): ExportStatus {
+  return value === "export_pending" || value === "export_validated" || value === "export_failed"
+    ? value
+    : "not_exported";
 }
 
 async function getAuthenticatedContext() {
@@ -459,7 +677,9 @@ async function readLatestResume(applicationId: string, userId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("generated_resumes")
-    .select("id, content_json, pdf_storage_path, docx_storage_path, status, updated_at")
+    .select(
+      "id, content_json, pdf_storage_path, docx_storage_path, status, export_status, claim_review_acknowledged_at, updated_at",
+    )
     .eq("application_id", applicationId)
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
@@ -477,7 +697,9 @@ async function readLatestCoverLetter(applicationId: string, userId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("generated_cover_letters")
-    .select("id, content, pdf_storage_path, docx_storage_path, status, updated_at")
+    .select(
+      "id, content, pdf_storage_path, docx_storage_path, status, export_status, claim_review_acknowledged_at, updated_at",
+    )
     .eq("application_id", applicationId)
     .eq("user_id", userId)
     .order("created_at", { ascending: false })

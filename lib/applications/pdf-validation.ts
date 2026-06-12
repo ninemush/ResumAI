@@ -1,11 +1,18 @@
 import "server-only";
 
+import mammoth from "mammoth";
 import { PDFDocument } from "pdf-lib";
 import { extractText } from "unpdf";
 
 export type PdfValidationResult = {
   errors: string[];
   pageCount: number | null;
+  textLength: number;
+  valid: boolean;
+};
+
+export type DocxValidationResult = {
+  errors: string[];
   textLength: number;
   valid: boolean;
 };
@@ -79,6 +86,52 @@ export async function validateGeneratedPdf({
   return {
     errors,
     pageCount,
+    textLength: extractedText.length,
+    valid: errors.length === 0,
+  };
+}
+
+export async function validateGeneratedDocx({
+  bytes,
+  minTextLength = 80,
+  requiredPhrases,
+}: {
+  bytes: Uint8Array;
+  minTextLength?: number;
+  requiredPhrases: string[];
+}): Promise<DocxValidationResult> {
+  const errors: string[] = [];
+  let extractedText = "";
+
+  if (bytes.length === 0) {
+    errors.push("DOCX_EMPTY");
+  }
+
+  try {
+    const result = await mammoth.extractRawText({
+      buffer: Buffer.from(bytes),
+    });
+    extractedText = result.value;
+  } catch {
+    errors.push("DOCX_OPEN_FAILED");
+  }
+
+  const normalizedText = normalizePdfText(extractedText);
+
+  for (const phrase of requiredPhrases) {
+    const normalizedPhrase = normalizePdfText(phrase);
+
+    if (normalizedPhrase && !normalizedText.includes(normalizedPhrase)) {
+      errors.push(`DOCX_MISSING_REQUIRED_TEXT:${phrase.slice(0, 80)}`);
+    }
+  }
+
+  if (extractedText.trim().length < minTextLength) {
+    errors.push("DOCX_TEXT_TOO_SHORT");
+  }
+
+  return {
+    errors,
     textLength: extractedText.length,
     valid: errors.length === 0,
   };

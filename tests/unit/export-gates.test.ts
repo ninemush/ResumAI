@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  ClaimReviewRequiredError,
   classifyResumeExportRisks,
+  getBlockingExportRisks,
   hasBlockingExportRisks,
 } from "@/lib/applications/export-gates";
 import type { ResumeContent } from "@/lib/resumes/resume-content";
@@ -20,6 +22,7 @@ describe("export gates", () => {
         text: "Verify employer before export: Example Bank",
       },
     ]);
+    expect(getBlockingExportRisks(resume)).toHaveLength(1);
   });
 
   test("allows low-impact keyword notes to remain warnings", () => {
@@ -35,6 +38,19 @@ describe("export gates", () => {
         text: "Add more product terminology if relevant",
       },
     ]);
+  });
+
+  test("carries unresolved claim review items through the export error", () => {
+    const risks = getBlockingExportRisks(
+      buildResume({
+        reviewerNotes: ["Verify director title and exact dates before export."],
+      }),
+    );
+    const error = new ClaimReviewRequiredError("MASTER_RESUME_CLAIM_REVIEW_REQUIRED", risks);
+
+    expect(error.message).toBe("MASTER_RESUME_CLAIM_REVIEW_REQUIRED");
+    expect(error.risks).toEqual(risks);
+    expect(error.risks[0]?.severity).toBe("high");
   });
 });
 
