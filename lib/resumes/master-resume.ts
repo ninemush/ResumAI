@@ -6,6 +6,10 @@ import { z } from "zod";
 import { buildAtsResumeDocx, buildAtsResumePdf } from "@/lib/artifacts/ats-template";
 import { validateGeneratedPdf } from "@/lib/applications/pdf-validation";
 import { getMaterialsModel, createOpenAIResponse } from "@/lib/ai/openai";
+import {
+  buildSupportedEvidenceCorpus,
+  reviewResumeClaimProvenance,
+} from "@/lib/ai/claim-provenance";
 import { brand } from "@/lib/brand";
 import { recordQuotaEvent } from "@/lib/quota/quota-events";
 import {
@@ -462,13 +466,16 @@ async function generateMasterResumeDraft({
     if (response.error || response.incomplete_details) {
       strictFailureCode = "AI_MASTER_RESUME_INCOMPLETE";
     } else {
-      return enrichMasterResumeWithConfirmedFacts(
-        enrichMasterResumeWithSourceEvidence(
-          parseMasterResumeModelOutput(response.output_text),
-          sourceEvidence,
+      return reviewResumeClaimProvenance({
+        evidenceCorpus: buildMasterResumeEvidenceCorpus(confirmedFacts, sourceEvidence),
+        resume: enrichMasterResumeWithConfirmedFacts(
+          enrichMasterResumeWithSourceEvidence(
+            parseMasterResumeModelOutput(response.output_text),
+            sourceEvidence,
+          ),
+          confirmedFacts,
         ),
-        confirmedFacts,
-      );
+      });
     }
   } catch (error) {
     strictFailureCode = toMasterResumeFailureCode(error);
@@ -494,7 +501,30 @@ async function generateMasterResumeDraft({
     throw new Error(strictFailureCode ?? "AI_MASTER_RESUME_FAILED");
   }
 
-  return enrichMasterResumeWithConfirmedFacts(relaxedResume, confirmedFacts);
+  return reviewResumeClaimProvenance({
+    evidenceCorpus: buildMasterResumeEvidenceCorpus(confirmedFacts, sourceEvidence),
+    resume: enrichMasterResumeWithConfirmedFacts(relaxedResume, confirmedFacts),
+  });
+}
+
+function buildMasterResumeEvidenceCorpus(
+  confirmedFacts: ConfirmedFact[],
+  sourceEvidence: SourceEvidence[],
+) {
+  return buildSupportedEvidenceCorpus([
+    ...confirmedFacts.map((fact) => ({
+      label: fact.fact_type,
+      status: fact.evidence_status,
+      text: fact.fact_value,
+      userConfirmed: fact.user_confirmed,
+    })),
+    ...sourceEvidence.map((source) => ({
+      label: source.original_filename ?? source.source_url ?? source.source_type,
+      status: "source_excerpt",
+      text: source.extracted_text,
+      userConfirmed: true,
+    })),
+  ]);
 }
 
 async function runRelaxedMasterResumeModel({

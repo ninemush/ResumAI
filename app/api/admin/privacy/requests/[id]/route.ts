@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
 import {
   attachDeletionPlanToRequest,
   completeDeletionReviewForRequest,
@@ -38,6 +39,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   try {
+    await requireProtectedApiSession({ requireAdmin: true });
     const { id } = await context.params;
     const input = adminPrivacyPatchSchema.parse(await request.json());
 
@@ -104,12 +106,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
 
-    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-      return NextResponse.json(
-        { ok: false, requestId, error: { code: "auth.required", message: "Sign in is required." } },
-        { status: 401 },
-      );
-    }
+    const authResponse = apiAuthErrorResponse({
+      error,
+      fallbackMessage: "Sign in is required.",
+      requestId,
+    });
+    if (authResponse) return authResponse;
 
     if (error instanceof Error && error.message === "ADMIN_REQUIRED") {
       return NextResponse.json(

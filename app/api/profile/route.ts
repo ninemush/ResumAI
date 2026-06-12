@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { updateProfileDraft, updateProfileDraftSchema } from "@/lib/profile/profile-commands";
 import {
   checkRateLimit,
@@ -59,6 +60,7 @@ export async function PATCH(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const profile = await updateProfileDraft(parsed.data);
 
     return NextResponse.json({
@@ -81,14 +83,8 @@ export async function PATCH(request: Request) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-    return {
-      category: "auth",
-      code: "auth.required",
-      message: "Please sign in before updating your profile.",
-      status: 401,
-    };
-  }
+  const authError = apiAuthErrorDetails(error, "Please sign in before updating your profile.");
+  if (authError) return authError;
 
   if (error instanceof Error && error.message === "INVALID_PHOTO_STORAGE_PATH") {
     return {

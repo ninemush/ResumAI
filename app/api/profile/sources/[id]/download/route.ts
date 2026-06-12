@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
 import { checkRateLimit, getClientRateLimitKey, rateLimitResponse } from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,6 +26,18 @@ export async function GET(request: Request, context: RouteContext) {
       requestId,
       result: rateLimit,
     });
+  }
+
+  try {
+    await requireProtectedApiSession();
+  } catch (error) {
+    const authResponse = apiAuthErrorResponse({
+      error,
+      fallbackMessage: "Please sign in before downloading profile sources.",
+      requestId,
+    });
+    if (authResponse) return authResponse;
+    throw error;
   }
 
   const params = await context.params;

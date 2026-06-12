@@ -79,6 +79,19 @@ input:disabled {
   cursor: not-allowed;
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+.segmented-control button:focus-visible,
+.oauth-button:focus-visible,
+.workspace-shell button:focus-visible {
+  outline: 3px solid rgba(118, 90, 44, 0.72);
+  outline-offset: 3px;
+}
+
 .sr-only {
   border: 0;
   clip: rect(0, 0, 0, 0);
@@ -8701,6 +8714,19 @@ input:focus {
     color: var(--ink);
   }
 
+  .mobile-more-backdrop {
+    background: rgba(17, 27, 42, 0.16);
+    border: 0;
+    border-radius: 0;
+    bottom: 0;
+    left: 0;
+    padding: 0;
+    position: fixed;
+    right: 0;
+    top: 0;
+    z-index: 69;
+  }
+
   .mobile-more-drawer {
     background: rgba(251, 249, 244, 0.98);
     border: 1px solid var(--line);
@@ -8733,7 +8759,8 @@ input:focus {
   }
 
   .mobile-more-drawer button.active,
-  .mobile-more-drawer button:hover {
+  .mobile-more-drawer button:hover,
+  .mobile-more-drawer button:focus-visible {
     background: var(--surface-strong);
     color: var(--ink);
   }

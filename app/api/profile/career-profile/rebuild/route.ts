@@ -1,3 +1,4 @@
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
 import { mergeCareerProfile } from "@/lib/profile/career-profile-merge";
 import { getCareerProfileOverview } from "@/lib/profile/career-profile-overview";
@@ -26,23 +27,12 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return apiError(requestId, {
-      category: "auth",
-      code: "auth.required",
-      message: "Please sign in before rebuilding your career profile.",
-      status: 401,
-    });
-  }
 
   try {
+    const session = await requireProtectedApiSession();
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .upsert({ user_id: user.id }, { onConflict: "user_id" })
+      .upsert({ user_id: session.user.id }, { onConflict: "user_id" })
       .select("id")
       .single();
 
@@ -54,7 +44,7 @@ export async function POST(request: Request) {
       .from("profile_sources")
       .select("id, source_type, source_url, original_filename, extracted_text")
       .eq("profile_id", profile.id)
-      .eq("user_id", user.id)
+      .eq("user_id", session.user.id)
       .not("extracted_text", "is", null)
       .neq("extraction_status", "deleted")
       .order("updated_at", { ascending: false })
@@ -79,7 +69,7 @@ export async function POST(request: Request) {
         sourceId: source.id,
         sourceType: source.source_type,
         text,
-        userId: user.id,
+        userId: session.user.id,
       });
       lastSourceAnalysisId = result.analysisId;
     }
@@ -87,9 +77,9 @@ export async function POST(request: Request) {
     const mergeResult = await mergeCareerProfile({
       lastSourceAnalysisId,
       profileId: profile.id,
-      userId: user.id,
+      userId: session.user.id,
     });
-    const overview = await getCareerProfileOverview(user.id);
+    const overview = await getCareerProfileOverview(session.user.id);
 
     return apiSuccess({
       careerProfile: mergeResult,
@@ -102,14 +92,8 @@ export async function POST(request: Request) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-    return {
-      category: "auth",
-      code: "auth.required",
-      message: "Please sign in before rebuilding your career profile.",
-      status: 401,
-    };
-  }
+  const authError = apiAuthErrorDetails(error, "Please sign in before rebuilding your career profile.");
+  if (authError) return authError;
 
   return {
     category: "server",

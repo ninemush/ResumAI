@@ -1,7 +1,12 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-import { authenticateDemoUser, hasDemoAuthEnv } from "./helpers/demo-auth";
+import {
+  authenticateDemoUser,
+  buildAuthCookieHeader,
+  hasDemoAuthEnv,
+  loadLocalEnv,
+} from "./helpers/demo-auth";
 
 test.describe("authenticated workspace", () => {
   test.skip(!hasDemoAuthEnv(), "Demo auth env is required for signed-in workspace QA.");
@@ -395,6 +400,33 @@ test.describe("authenticated workspace", () => {
 
     await page.locator(".side-nav").getByRole("button", { name: /^Home$/i }).click();
     await expect(page.getByRole("heading", { name: /Master profile and resume/i })).toBeVisible();
+  });
+});
+
+test.describe("protected API auth gates", () => {
+  test.skip(!hasDemoAuthEnv(), "Demo auth env is required for API auth-gate QA.");
+
+  test("blocks password sessions that have not completed email-code verification", async ({ request }) => {
+    loadLocalEnv();
+    test.skip(
+      process.env.AUTH_REQUIRE_EMAIL_CODE !== "true",
+      "AUTH_REQUIRE_EMAIL_CODE=true is required for the MFA direct-API regression.",
+    );
+
+    const cookie = await buildAuthCookieHeader({
+      email: process.env.QA_DEMO_EMAIL ?? "",
+      includeEmailMfa: false,
+      password: process.env.QA_DEMO_PASSWORD ?? "",
+      request,
+    });
+
+    const response = await request.get("/api/billing/credits", {
+      headers: { cookie },
+    });
+    const payload = await response.json();
+
+    expect(response.status()).toBe(403);
+    expect(payload.error.code).toBe("auth.email_code_required");
   });
 });
 

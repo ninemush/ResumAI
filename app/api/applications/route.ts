@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import {
   createApplicationFromJob,
   createApplicationFromJobSchema,
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const result = await createApplicationFromJob(parsed.data);
 
     return NextResponse.json({
@@ -88,16 +90,10 @@ export async function POST(request: Request) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message === "AUTH_REQUIRED") {
-      return {
-        category: "auth",
-        code: "auth.required",
-        message: "Please sign in before logging an application.",
-        status: 401,
-      };
-    }
+  const authError = apiAuthErrorDetails(error, "Please sign in before logging an application.");
+  if (authError) return authError;
 
+  if (error instanceof Error) {
     if (error.message === "JOB_NOT_FOUND") {
       return {
         category: "not_found",

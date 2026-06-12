@@ -21,6 +21,7 @@ export type JobFitAnalysis = {
   senioritySignals: string[];
   summary: string;
   evidenceBased?: EvidenceBasedFitAnalysis;
+  evidenceConfidence?: "high" | "medium" | "low" | "needs_evidence";
   fitBand?: "Strong fit" | "Plausible fit" | "Stretch" | "Poor fit" | "Needs more profile evidence";
 };
 
@@ -223,6 +224,7 @@ export function analyzeJobFit({
   });
 
   return {
+    evidenceConfidence: readEvidenceConfidence(score),
     matchedKeywords,
     missingKeywords,
     questions,
@@ -241,6 +243,7 @@ export function analyzeJobFit({
 
 function buildEmptyFit(summary: string): JobFitAnalysis {
   return {
+    evidenceConfidence: "needs_evidence",
     matchedKeywords: [],
     missingKeywords: [],
     questions: ["Share a resume, profile, or role-history note before deciding whether to proceed."],
@@ -459,7 +462,14 @@ function buildFitSummary({
       ? ` Matched areas include ${matchedKeywords.slice(0, 4).join(", ")}.`
       : "";
 
-  return `Match is ${score}% and ${label}.${alignmentText}${matchText}`;
+  return `Evidence overlap is ${score}% with ${readEvidenceConfidence(score)} confidence; this ${label}.${alignmentText}${matchText}`;
+}
+
+function readEvidenceConfidence(score: number): JobFitAnalysis["evidenceConfidence"] {
+  if (score >= 70) return "high";
+  if (score >= 40) return "medium";
+  if (score >= 1) return "low";
+  return "needs_evidence";
 }
 
 function readSignalGroups(text: string) {

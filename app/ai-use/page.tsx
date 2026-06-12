@@ -34,8 +34,11 @@ export default function AiUsePage() {
         <h2>Boundaries</h2>
         <p>
           {brand.name} does not auto-apply to jobs, submit applications to
-          employers, or make hiring decisions. Generated content may be
-          inaccurate or incomplete.
+          employers, scan job boards, automate browsers, act on employer sites,
+          or make hiring decisions. LinkedIn sign-in is authentication only;
+          any LinkedIn URL, pasted profile text, or exported file is
+          user-provided evidence. Generated content may be inaccurate or
+          incomplete.
         </p>
       </section>
     </main>

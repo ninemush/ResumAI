@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
 import { listAdminPrivacyRequests } from "@/lib/privacy/requests";
 import {
   checkRateLimit,
@@ -20,16 +21,17 @@ export async function GET(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession({ requireAdmin: true });
     const requests = await listAdminPrivacyRequests();
 
     return NextResponse.json({ ok: true, requestId, requests });
   } catch (error) {
-    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-      return NextResponse.json(
-        { ok: false, requestId, error: { code: "auth.required", message: "Sign in is required." } },
-        { status: 401 },
-      );
-    }
+    const authResponse = apiAuthErrorResponse({
+      error,
+      fallbackMessage: "Sign in is required.",
+      requestId,
+    });
+    if (authResponse) return authResponse;
 
     return NextResponse.json(
       {

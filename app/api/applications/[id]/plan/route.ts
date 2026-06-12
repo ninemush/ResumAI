@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import {
   updateApplicationPlan,
   updateApplicationPlanSchema,
@@ -73,6 +74,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   try {
+    await requireProtectedApiSession();
     const result = await updateApplicationPlan(parsed.data);
 
     return NextResponse.json({
@@ -99,16 +101,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message === "AUTH_REQUIRED") {
-      return {
-        category: "auth",
-        code: "auth.required",
-        message: "Please sign in before updating an application plan.",
-        status: 401,
-      };
-    }
+  const authError = apiAuthErrorDetails(error, "Please sign in before updating an application plan.");
+  if (authError) return authError;
 
+  if (error instanceof Error) {
     if (error.message === "APPLICATION_NOT_FOUND") {
       return {
         category: "not_found",

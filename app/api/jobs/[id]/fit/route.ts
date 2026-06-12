@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { analyzeJobFitForJobId, jobFitRequestSchema } from "@/lib/jobs/job-fit";
 
 type RouteContext = {
@@ -29,6 +30,7 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   try {
+    await requireProtectedApiSession();
     const fitAnalysis = await analyzeJobFitForJobId(parsed.data);
 
     return NextResponse.json({
@@ -51,14 +53,8 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-    return {
-      category: "auth",
-      code: "auth.required",
-      message: "Please sign in before reviewing job fit.",
-      status: 401,
-    };
-  }
+  const authError = apiAuthErrorDetails(error, "Please sign in before reviewing job fit.");
+  if (authError) return authError;
 
   if (error instanceof Error && error.message === "JOB_NOT_FOUND") {
     return {

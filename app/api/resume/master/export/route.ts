@@ -1,3 +1,4 @@
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const reusableOverview = await getReusableMasterResumeExport();
 
     if (reusableOverview) {
@@ -100,16 +102,13 @@ function isBillingError(error: unknown) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message === "AUTH_REQUIRED") {
-      return {
-        category: "auth",
-        code: "auth.required",
-        message: "Please sign in before downloading your master resume files.",
-        status: 401,
-      };
-    }
+  const authError = apiAuthErrorDetails(
+    error,
+    "Please sign in before downloading your master resume files.",
+  );
+  if (authError) return authError;
 
+  if (error instanceof Error) {
     if (error.message === "PROFILE_NOT_FOUND" || error.message === "MASTER_RESUME_NOT_FOUND") {
       return {
         category: "not_found",

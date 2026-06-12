@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
 import { checkRateLimit, getClientRateLimitKey, rateLimitResponse } from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -53,6 +54,18 @@ export async function GET(request: Request, context: RouteContext) {
       },
       { status: 400 },
     );
+  }
+
+  try {
+    await requireProtectedApiSession();
+  } catch (error) {
+    const authResponse = apiAuthErrorResponse({
+      error,
+      fallbackMessage: "Please sign in before downloading generated files.",
+      requestId,
+    });
+    if (authResponse) return authResponse;
+    throw error;
   }
 
   const supabase = await createClient();

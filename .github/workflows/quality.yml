@@ -1,6 +1,7 @@
 name: Quality
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -43,3 +44,44 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  launch-readiness:
+    name: Launch-readiness evidence gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: github.event_name == 'workflow_dispatch'
+    env:
+      AUTH_REQUIRE_EMAIL_CODE: "true"
+      RUN_LAUNCH_READINESS_GATES: "1"
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://pramania.com' }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      QA_DEMO_EMAIL: ${{ secrets.QA_DEMO_EMAIL }}
+      QA_DEMO_PASSWORD: ${{ secrets.QA_DEMO_PASSWORD }}
+      QA_DEMO_USER_A_EMAIL: ${{ secrets.QA_DEMO_USER_A_EMAIL }}
+      QA_DEMO_USER_A_PASSWORD: ${{ secrets.QA_DEMO_USER_A_PASSWORD }}
+      QA_DEMO_USER_B_EMAIL: ${{ secrets.QA_DEMO_USER_B_EMAIL }}
+      QA_DEMO_USER_B_PASSWORD: ${{ secrets.QA_DEMO_USER_B_PASSWORD }}
+      QA_ADMIN_EMAIL: ${{ secrets.QA_ADMIN_EMAIL }}
+      QA_ADMIN_PASSWORD: ${{ secrets.QA_ADMIN_PASSWORD }}
+      REVENUECAT_WEBHOOK_SECRET: ${{ secrets.REVENUECAT_WEBHOOK_SECRET }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Launch-readiness e2e evidence
+        run: npm run test:e2e:launch-readiness

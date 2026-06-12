@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import {
   checkRateLimit,
   getClientRateLimitKey,
@@ -42,6 +43,7 @@ export async function GET() {
   const supabase = await createClient();
 
   try {
+    await requireProtectedApiSession({ requireAdmin: true });
     await requireAdmin(supabase);
 
     const { data, error } = await supabase
@@ -128,6 +130,7 @@ export async function POST(request: Request) {
   const supabase = await createClient();
 
   try {
+    await requireProtectedApiSession({ requireAdmin: true });
     const adminUserId = await requireAdmin(supabase);
     const mutation = parsed.data;
     const patch = {
@@ -221,14 +224,8 @@ function normalizeTierRow(row: TierRow) {
 }
 
 function toTierApiError(error: unknown, code: string, message: string) {
-  if (error instanceof Error && error.message === "ADMIN_REQUIRED") {
-    return {
-      category: "auth",
-      code: "admin.required",
-      message: "Owner or admin access is required.",
-      status: 403,
-    };
-  }
+  const authError = apiAuthErrorDetails(error, "Sign in is required.");
+  if (authError) return authError;
 
   return {
     category: "server",

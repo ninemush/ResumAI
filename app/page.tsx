@@ -2,7 +2,8 @@ import { AuthPanel } from "@/components/auth/auth-panel";
 import { EmailMfaGate } from "@/components/auth/email-mfa-gate";
 import { WorkspaceShell } from "@/components/app-shell/workspace-shell";
 import { TermsGate } from "@/components/legal/terms-gate";
-import { isEmailMfaVerified, isEmailPasswordProvider } from "@/lib/auth/session-security";
+import { isEmailMfaVerified } from "@/lib/auth/session-security";
+import { shouldRequireEmailCodeMfa } from "@/lib/api/auth";
 import { getWorkspaceSession } from "@/lib/commands/session";
 
 export default async function Home() {
@@ -13,7 +14,7 @@ export default async function Home() {
   }
 
   if (
-    isEmailPasswordProvider(session.user.authProvider) &&
+    shouldRequireEmailCodeMfa(session) &&
     !(await isEmailMfaVerified({ email: session.user.email, userId: session.user.id }))
   ) {
     return <EmailMfaGate email={session.user.email ?? "your email"} />;

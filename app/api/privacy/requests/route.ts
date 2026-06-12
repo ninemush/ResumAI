@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
 import {
   createPrivacyRequest,
   listUserPrivacyRequests,
@@ -25,6 +26,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const requests = await listUserPrivacyRequests();
 
     return NextResponse.json({ ok: true, requestId, requests });
@@ -50,6 +52,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const input = privacyRequestCreateSchema.parse(await request.json());
     const privacyRequest = await createPrivacyRequest(input);
 
@@ -79,16 +82,12 @@ function privacyApiError(error: unknown, requestId: string, code: string) {
     );
   }
 
-  if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: { category: "auth", code: "auth.required", message: "Sign in is required." },
-      },
-      { status: 401 },
-    );
-  }
+  const authResponse = apiAuthErrorResponse({
+    error,
+    fallbackMessage: "Sign in is required.",
+    requestId,
+  });
+  if (authResponse) return authResponse;
 
   console.warn(
     JSON.stringify({

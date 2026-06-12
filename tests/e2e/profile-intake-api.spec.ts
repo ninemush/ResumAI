@@ -9,7 +9,7 @@ test("requires authentication before career profile intake", async ({ request })
   const payload = await response.json();
 
   expect(response.status()).toBe(401);
-  expect(payload.error).toBe("Sign in is required.");
+  expect(payload.error.code).toBe("auth.required");
 });
 
 test("requires authentication before saving conversation messages", async ({ request }) => {
@@ -22,7 +22,7 @@ test("requires authentication before saving conversation messages", async ({ req
   const payload = await response.json();
 
   expect(response.status()).toBe(401);
-  expect(payload.error).toBe("Sign in is required.");
+  expect(payload.error.code).toBe("auth.required");
 });
 
 test("requires authentication before using the contextual advisor", async ({ request }) => {
@@ -156,8 +156,8 @@ test("requires owner access before reading operating metrics", async ({ request 
   const response = await request.get("/api/admin/metrics?periodDays=7");
   const payload = await response.json();
 
-  expect(response.status()).toBe(403);
-  expect(payload.error.code).toBe("admin.required");
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
 });
 
 test("requires authentication before logging support issues", async ({ request }) => {

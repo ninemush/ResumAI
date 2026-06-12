@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
 import {
   buildSupportIssueAnalysis,
   supportIssueCreateSchema,
@@ -20,21 +21,8 @@ export async function GET() {
   const requestId = crypto.randomUUID();
 
   try {
+    const session = await requireProtectedApiSession();
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: { code: "auth.required", message: "Sign in is required." },
-        },
-        { status: 401 },
-      );
-    }
 
     const { data: issues, error } = await supabase
       .from("support_tickets")
@@ -58,7 +46,7 @@ export async function GET() {
           "closed_reason",
         ].join(", "),
       )
-      .eq("user_id", user.id)
+      .eq("user_id", session.user.id)
       .order("updated_at", { ascending: false })
       .limit(25);
 
@@ -74,6 +62,13 @@ export async function GET() {
       ),
     });
   } catch (error) {
+    const authResponse = apiAuthErrorResponse({
+      error,
+      fallbackMessage: "Sign in is required.",
+      requestId,
+    });
+    if (authResponse) return authResponse;
+
     console.warn(
       JSON.stringify({
         event: "support_issues_read_failed",
@@ -109,21 +104,8 @@ export async function POST(request: Request) {
   }
 
   try {
+    const session = await requireProtectedApiSession();
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: { code: "auth.required", message: "Sign in is required." },
-        },
-        { status: 401 },
-      );
-    }
 
     const input = supportIssueCreateSchema.parse(await request.json());
     const safeInput = sanitizeSupportIssueInput(input);
@@ -138,7 +120,7 @@ export async function POST(request: Request) {
       errorCode: safeInput.errorCode ?? "USER_REPORTED_ISSUE",
       rootCauseCategory: analysis.rootCauseCategory,
       supabase,
-      userId: user.id,
+      userId: session.user.id,
     });
 
     if (existingIssue) {
@@ -195,6 +177,13 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    const authResponse = apiAuthErrorResponse({
+      error,
+      fallbackMessage: "Sign in is required.",
+      requestId,
+    });
+    if (authResponse) return authResponse;
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         {

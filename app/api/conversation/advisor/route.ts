@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
 import {
   conversationAdvisorRequestSchema,
   runConversationAdvisor,
@@ -48,16 +49,17 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const result = await runConversationAdvisor(parsed.data);
 
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
-    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-      return NextResponse.json(
-        { error: { message: `Please sign in before asking ${brand.name} to review your profile.` } },
-        { status: 401 },
-      );
-    }
+    const authResponse = apiAuthErrorResponse({
+      error,
+      fallbackMessage: `Please sign in before asking ${brand.name} to review your profile.`,
+      requestId,
+    });
+    if (authResponse) return authResponse;
 
     console.warn(
       JSON.stringify({
