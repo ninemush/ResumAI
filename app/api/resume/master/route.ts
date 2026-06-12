@@ -55,7 +55,6 @@ export async function POST(request: Request) {
 
   try {
     const session = await requireProtectedApiSession();
-    await requireCredits("masterResumeGenerate");
     const operationKey = getCreditOperationKey(request, buildMasterResumeOperationKey({
       instruction: parsed.data.instruction,
       userId: session.user.id,
@@ -75,6 +74,7 @@ export async function POST(request: Request) {
       });
     }
 
+    await requireCredits("masterResumeGenerate");
     const reservation = await reserveCredits({
       feature: "masterResumeGenerate",
       metadata: { instruction: parsed.data.instruction ?? null },
@@ -95,7 +95,12 @@ export async function POST(request: Request) {
     }
 
     const finalizedReservation = await finalizeCreditReservation({
-      metadata: { resume_id: result.resumeId },
+      metadata: {
+        output_ids: { resumeId: result.resumeId },
+        resource_id: result.resumeId,
+        resource_type: "master_resume",
+        resume_id: result.resumeId,
+      },
       reservationId: reservation.reservationId,
       resourceId: result.resumeId,
     });

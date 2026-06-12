@@ -1,8 +1,10 @@
 import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
-import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
+import { apiError, apiSuccess, createRequestId, readOptionalJsonBody } from "@/lib/api/responses";
+import { ClaimReviewRequiredError } from "@/lib/applications/export-gates";
 import {
   buildCreditsApiError,
   finalizeCreditReservation,
+  getFinalizedCreditOperationOutput,
   getCreditOperationKey,
   recordCreditOperationOutput,
   requireCredits,
@@ -11,6 +13,7 @@ import {
 } from "@/lib/billing/credits";
 import {
   exportMaterialArtifacts,
+  getMaterialReview,
   getReusableMaterialExport,
   materialReviewSchema,
 } from "@/lib/applications/material-review";
@@ -56,6 +59,15 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     await requireProtectedApiSession();
+    const body = await readOptionalJsonBody(request);
+    const acknowledgeClaimReview =
+      typeof body === "object" &&
+      body !== null &&
+      (body as { acknowledgeClaimReview?: unknown }).acknowledgeClaimReview === true;
+    const operationKey = getCreditOperationKey(
+      request,
+      `applicationMaterialsExport:${params.id}`,
+    );
     const reusableReview = await getReusableMaterialExport(parsed.data);
 
     if (reusableReview) {
@@ -66,11 +78,21 @@ export async function POST(request: Request, context: RouteContext) {
       });
     }
 
+    const finalizedOutput = await getFinalizedCreditOperationOutput({
+      feature: "applicationMaterialsExport",
+      operationKey,
+    });
+
+    if (finalizedOutput) {
+      return apiSuccess({
+        requestId,
+        operationOutput: finalizedOutput.output_ids,
+        review: await getMaterialReview(parsed.data),
+        reused: true,
+      });
+    }
+
     await requireCredits("applicationMaterialsExport");
-    const operationKey = getCreditOperationKey(
-      request,
-      `applicationMaterialsExport:${params.id}`,
-    );
     const reservation = await reserveCredits({
       feature: "applicationMaterialsExport",
       operationKey,
@@ -80,7 +102,7 @@ export async function POST(request: Request, context: RouteContext) {
     let result: Awaited<ReturnType<typeof exportMaterialArtifacts>>;
 
     try {
-      result = await exportMaterialArtifacts(parsed.data);
+      result = await exportMaterialArtifacts(parsed.data, { acknowledgeClaimReview });
     } catch (error) {
       await releaseCreditReservation({
         reason: error instanceof Error ? error.message : "APPLICATION_MATERIAL_EXPORT_FAILED",
@@ -91,7 +113,16 @@ export async function POST(request: Request, context: RouteContext) {
 
     if (result.didExport) {
       const finalizedReservation = await finalizeCreditReservation({
-        metadata: { application_id: params.id },
+        metadata: {
+          application_id: params.id,
+          output_ids: {
+            applicationId: params.id,
+            coverLetterId: result.review.coverLetter?.id ?? null,
+            resumeId: result.review.resume?.id ?? null,
+          },
+          resource_id: params.id,
+          resource_type: "application_materials_export",
+        },
         reservationId: reservation.reservationId,
         resourceId: params.id,
       });
@@ -139,6 +170,18 @@ function toApiError(error: unknown) {
   const authError = apiAuthErrorDetails(error, "Please sign in before downloading application files.");
   if (authError) return authError;
 
+  if (error instanceof ClaimReviewRequiredError) {
+    return {
+      category: "validation",
+      claimReviewRequired: true,
+      code: "application.claim_review_required",
+      message:
+        "Review and acknowledge the highlighted high-impact claims before preparing final application files.",
+      reviewItems: error.risks,
+      status: 422,
+    };
+  }
+
   if (error instanceof Error) {
     if (error.message === "APPLICATION_NOT_FOUND") {
       return {
@@ -158,11 +201,12 @@ function toApiError(error: unknown) {
       };
     }
 
-    if (error.message === "PDF_VALIDATION_FAILED") {
+    if (error.message === "PDF_VALIDATION_FAILED" || error.message === "ARTIFACT_VALIDATION_FAILED") {
       return {
         category: "validation",
-        code: "application.pdf_validation_failed",
-        message: "The PDF did not pass layout/content validation. Keep the editable materials and try again after reviewing the content.",
+        code: "application.artifact_validation_failed",
+        message:
+          "The PDF or DOCX did not pass content validation. Keep the editable materials and try again after reviewing the content.",
         status: 422,
       };
     }

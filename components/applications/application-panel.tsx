@@ -46,8 +46,15 @@ type MaterialReview = {
     updatedAt: string;
   } | null;
   exportReadiness: {
+    blockingRisks: {
+      category: "keyword_gap" | "reviewer_note";
+      severity: "high" | "medium";
+      text: string;
+    }[];
     canExport: boolean;
-    status: "exported" | "missing_materials" | "ready_to_export";
+    claimReviewAcknowledged: boolean;
+    requiresClaimReview: boolean;
+    status: "export_failed" | "export_pending" | "exported" | "missing_materials" | "ready_to_export";
     warnings: string[];
   };
   resume: {
@@ -107,6 +114,7 @@ export function ApplicationPanel({
   const [applicationSort, setApplicationSort] = useState<ApplicationSort>("recent");
   const [coverLetterDraft, setCoverLetterDraft] = useState("");
   const [resumeDraft, setResumeDraft] = useState<ResumeContent | null>(null);
+  const [claimReviewAcknowledged, setClaimReviewAcknowledged] = useState(false);
   const [exportingApplicationId, setExportingApplicationId] = useState<string | null>(null);
   const [editingPlanApplicationId, setEditingPlanApplicationId] = useState<string | null>(null);
   const [expandedApplicationId, setExpandedApplicationId] = useState<string | null>(null);
@@ -131,6 +139,11 @@ export function ApplicationPanel({
     applicationSort,
   );
   const stageCounts = buildStageFilterCounts(applicationsInArchiveView);
+  const activeReviewClaimAckSatisfied = Boolean(
+    !activeReview?.exportReadiness.requiresClaimReview ||
+      activeReview.exportReadiness.claimReviewAcknowledged ||
+      claimReviewAcknowledged,
+  );
 
   async function updateStatus(applicationId: string, status: string) {
     setPendingApplicationId(applicationId);
@@ -322,6 +335,7 @@ export function ApplicationPanel({
 
       setActiveReview(payload.review);
       setActiveReviewMode("preview");
+      setClaimReviewAcknowledged(false);
       setResumeDraft(payload.review.resume?.content ?? null);
       setCoverLetterDraft(payload.review.coverLetter?.content ?? "");
       setMessage("Saved material edits. Exports were reset so downloads match the latest content.");
@@ -341,9 +355,16 @@ export function ApplicationPanel({
 
     try {
       const response = await fetch(`/api/applications/${activeReview.application.id}/materials/export`, {
-        headers: createIdempotencyHeaders(
-          `applicationMaterialsExport:${activeReview.application.id}:applications-panel`,
-        ),
+        body: JSON.stringify({
+          acknowledgeClaimReview:
+            activeReview.exportReadiness.requiresClaimReview && claimReviewAcknowledged,
+        }),
+        headers: {
+          ...createIdempotencyHeaders(
+            `applicationMaterialsExport:${activeReview.application.id}:applications-panel`,
+          ),
+          "Content-Type": "application/json",
+        },
         method: "POST",
       });
       const payload = await response.json();
@@ -355,6 +376,7 @@ export function ApplicationPanel({
 
       setActiveReview(payload.review);
       setActiveReviewMode("preview");
+      setClaimReviewAcknowledged(false);
       setResumeDraft(payload.review.resume?.content ?? null);
       setCoverLetterDraft(payload.review.coverLetter?.content ?? "");
       setMessage("PDF and DOCX files are prepared. You can download them from this packet.");
@@ -752,8 +774,11 @@ export function ApplicationPanel({
               <button
                 className="secondary-action"
                 disabled={
-                  !activeReview.exportReadiness.canExport ||
+                  (!activeReview.exportReadiness.canExport &&
+                    !activeReview.exportReadiness.requiresClaimReview) ||
+                  !activeReviewClaimAckSatisfied ||
                   activeReview.exportReadiness.status === "exported" ||
+                  activeReview.exportReadiness.status === "export_pending" ||
                   exportingApplicationId === activeReview.application.id
                 }
                 onClick={exportFiles}
@@ -761,7 +786,7 @@ export function ApplicationPanel({
                   activeReview.exportReadiness.status === "exported"
                     ? "Files are already prepared. Use the links below."
                     : activeReview.exportReadiness.canExport
-                      ? "Prepare resume and cover-letter PDF/DOCX files after previewing. This costs 1 credit."
+                      ? "Prepare resume and cover-letter PDF/DOCX files after previewing and acknowledging high-impact review items. This costs 1 credit."
                     : "Create both resume and cover-letter drafts before downloading"
                 }
                 type="button"
@@ -771,6 +796,8 @@ export function ApplicationPanel({
                   ? "Preparing..."
                   : activeReview.exportReadiness.status === "exported"
                     ? "Files prepared"
+                    : activeReview.exportReadiness.status === "export_pending"
+                      ? "Preparing..."
                     : "Prepare downloads"}
               </button>
             </div>
@@ -798,6 +825,31 @@ export function ApplicationPanel({
               </p>
             )}
           </div>
+
+          {activeReview.exportReadiness.requiresClaimReview ? (
+            <div className="material-readiness claim-review-required">
+              <strong>
+                <AlertTriangle size={15} aria-hidden="true" />
+                Review high-impact facts before export
+              </strong>
+              <ul>
+                {activeReview.exportReadiness.blockingRisks.map((risk) => (
+                  <li key={`${risk.category}-${risk.text}`}>
+                    <AlertTriangle size={14} aria-hidden="true" />
+                    {risk.text}
+                  </li>
+                ))}
+              </ul>
+              <label className="inline-checkbox">
+                <input
+                  checked={claimReviewAcknowledged}
+                  onChange={(event) => setClaimReviewAcknowledged(event.target.checked)}
+                  type="checkbox"
+                />
+                I reviewed these items and want to prepare the final PDF/DOCX files.
+              </label>
+            </div>
+          ) : null}
 
           {!resumeDraft || !activeReview.coverLetter ? (
             <p className="empty-state">Create the packet first, then this review area becomes editable.</p>
@@ -1105,6 +1157,8 @@ function hasApplicationPacket(application: ApplicationOverview["recentApplicatio
 
 function formatExportStatus(status: MaterialReview["exportReadiness"]["status"]) {
   const labels: Record<MaterialReview["exportReadiness"]["status"], string> = {
+    export_failed: "Export needs review",
+    export_pending: "Export in progress",
     exported: "Files exported",
     missing_materials: "Packet incomplete",
     ready_to_export: "Preview ready",

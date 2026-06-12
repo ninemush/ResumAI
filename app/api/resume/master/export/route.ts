@@ -1,8 +1,10 @@
 import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
-import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
+import { apiError, apiSuccess, createRequestId, readOptionalJsonBody } from "@/lib/api/responses";
+import { ClaimReviewRequiredError } from "@/lib/applications/export-gates";
 import {
   buildCreditsApiError,
   finalizeCreditReservation,
+  getFinalizedCreditOperationOutput,
   getCreditOperationKey,
   recordCreditOperationOutput,
   requireCredits,
@@ -11,6 +13,7 @@ import {
 } from "@/lib/billing/credits";
 import {
   exportMasterResumeArtifacts,
+  getMasterResumeOverview,
   getReusableMasterResumeExport,
 } from "@/lib/resumes/master-resume";
 import {
@@ -36,7 +39,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    await requireProtectedApiSession();
+    const session = await requireProtectedApiSession();
+    const body = await readOptionalJsonBody(request);
+    const acknowledgeClaimReview =
+      typeof body === "object" &&
+      body !== null &&
+      (body as { acknowledgeClaimReview?: unknown }).acknowledgeClaimReview === true;
+    const operationKey = getCreditOperationKey(
+      request,
+      "masterResumeExport:latest",
+    );
     const reusableOverview = await getReusableMasterResumeExport();
 
     if (reusableOverview) {
@@ -47,11 +59,21 @@ export async function POST(request: Request) {
       });
     }
 
+    const finalizedOutput = await getFinalizedCreditOperationOutput({
+      feature: "masterResumeExport",
+      operationKey,
+    });
+
+    if (finalizedOutput) {
+      return apiSuccess({
+        requestId,
+        operationOutput: finalizedOutput.output_ids,
+        overview: await getMasterResumeOverview(session.user.id),
+        reused: true,
+      });
+    }
+
     await requireCredits("masterResumeExport");
-    const operationKey = getCreditOperationKey(
-      request,
-      "masterResumeExport:latest",
-    );
     const reservation = await reserveCredits({
       feature: "masterResumeExport",
       operationKey,
@@ -61,7 +83,7 @@ export async function POST(request: Request) {
     let result: Awaited<ReturnType<typeof exportMasterResumeArtifacts>>;
 
     try {
-      result = await exportMasterResumeArtifacts();
+      result = await exportMasterResumeArtifacts({ acknowledgeClaimReview });
     } catch (error) {
       await releaseCreditReservation({
         reason: error instanceof Error ? error.message : "MASTER_RESUME_EXPORT_FAILED",
@@ -72,7 +94,12 @@ export async function POST(request: Request) {
 
     if (result.didExport) {
       const finalizedReservation = await finalizeCreditReservation({
-        metadata: { resume_id: result.overview.latestResume?.id ?? null },
+        metadata: {
+          output_ids: { resumeId: result.overview.latestResume?.id ?? null },
+          resource_id: result.overview.latestResume?.id ?? null,
+          resource_type: "master_resume_export",
+          resume_id: result.overview.latestResume?.id ?? null,
+        },
         reservationId: reservation.reservationId,
         resourceId: result.overview.latestResume?.id,
       });
@@ -119,6 +146,18 @@ function toApiError(error: unknown) {
   );
   if (authError) return authError;
 
+  if (error instanceof ClaimReviewRequiredError) {
+    return {
+      category: "validation",
+      claimReviewRequired: true,
+      code: "resume.claim_review_required",
+      message:
+        "Review and acknowledge the highlighted high-impact claims before preparing the master resume files.",
+      reviewItems: error.risks,
+      status: 422,
+    };
+  }
+
   if (error instanceof Error) {
     if (error.message === "PROFILE_NOT_FOUND" || error.message === "MASTER_RESUME_NOT_FOUND") {
       return {
@@ -129,12 +168,12 @@ function toApiError(error: unknown) {
       };
     }
 
-    if (error.message === "PDF_VALIDATION_FAILED") {
+    if (error.message === "PDF_VALIDATION_FAILED" || error.message === "ARTIFACT_VALIDATION_FAILED") {
       return {
         category: "validation",
-        code: "resume.pdf_validation_failed",
+        code: "resume.artifact_validation_failed",
         message:
-          "The master resume PDF did not pass content validation. Review the draft, save it, and try preparing the files again.",
+          "The master resume PDF or DOCX did not pass content validation. Review the draft, save it, and try preparing the files again.",
         status: 422,
       };
     }

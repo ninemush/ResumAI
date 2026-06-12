@@ -97,7 +97,6 @@ export async function POST(request: Request, context: RouteContext) {
       });
     }
 
-    await requireCredits("applicationMaterialsGenerate");
     const operationKey = getCreditOperationKey(
       request,
       parsed.data.idempotencyKey ??
@@ -121,6 +120,7 @@ export async function POST(request: Request, context: RouteContext) {
       });
     }
 
+    await requireCredits("applicationMaterialsGenerate");
     const reservation = await reserveCredits({
       feature: "applicationMaterialsGenerate",
       metadata: {
@@ -147,6 +147,12 @@ export async function POST(request: Request, context: RouteContext) {
       const finalizedReservation = await finalizeCreditReservation({
         metadata: {
           cover_letter_id: result.coverLetterId,
+          output_ids: {
+            coverLetterId: result.coverLetterId,
+            resumeId: result.resumeId,
+          },
+          resource_id: params.id,
+          resource_type: "application_materials",
           resume_id: result.resumeId,
         },
         reservationId: reservation.reservationId,

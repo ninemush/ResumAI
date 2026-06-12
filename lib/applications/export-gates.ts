@@ -16,6 +16,15 @@ export type ExportRisk = {
   text: string;
 };
 
+export class ClaimReviewRequiredError extends Error {
+  readonly risks: ExportRisk[];
+
+  constructor(code: "MASTER_RESUME_CLAIM_REVIEW_REQUIRED" | "MATERIAL_CLAIM_ACK_REQUIRED", risks: ExportRisk[]) {
+    super(code);
+    this.risks = risks;
+  }
+}
+
 export function classifyResumeExportRisks(resume: ResumeContent): ExportRisk[] {
   return [
     ...resume.keywordGaps.map((text) => classifyRisk("keyword_gap", text)),
@@ -25,6 +34,10 @@ export function classifyResumeExportRisks(resume: ResumeContent): ExportRisk[] {
 
 export function hasBlockingExportRisks(resume: ResumeContent) {
   return classifyResumeExportRisks(resume).some((risk) => risk.severity === "high");
+}
+
+export function getBlockingExportRisks(resume: ResumeContent) {
+  return classifyResumeExportRisks(resume).filter((risk) => risk.severity === "high");
 }
 
 function classifyRisk(category: ExportRisk["category"], text: string): ExportRisk {

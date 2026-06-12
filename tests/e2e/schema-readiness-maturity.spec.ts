@@ -15,13 +15,15 @@ test.describe("Supabase schema readiness maturity", () => {
     const admin = createServiceRoleClient();
     const requiredReads = [
       {
-        columns: "version_number",
-        reason: "artifact versioning and duplicate-output reconciliation",
+        columns:
+          "version_number, export_status, export_validation, export_validated_at, export_failed_reason, claim_review_acknowledged_at, claim_review_acknowledgement",
+        reason: "artifact versioning, validation states, and export-time claim acknowledgement",
         table: "generated_resumes",
       },
       {
-        columns: "version_number",
-        reason: "artifact versioning and duplicate-output reconciliation",
+        columns:
+          "version_number, export_status, export_validation, export_validated_at, export_failed_reason, claim_review_acknowledged_at, claim_review_acknowledgement",
+        reason: "artifact versioning, validation states, and export-time claim acknowledgement",
         table: "generated_cover_letters",
       },
       {

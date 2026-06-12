@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { brand } from "@/lib/brand";
+import { getBlockingExportRisks } from "@/lib/applications/export-gates";
 import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
 import {
   looksLikeEmploymentTypeLabel,
@@ -62,6 +63,7 @@ export function MasterResumePanel({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [claimReviewAcknowledged, setClaimReviewAcknowledged] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [variantFocus, setVariantFocus] = useState("");
   const [isGeneratingVariant, setIsGeneratingVariant] = useState(false);
@@ -95,6 +97,10 @@ export function MasterResumePanel({
   const sourceProof = useMemo(
     () => buildResumeSourceProof({ overview: currentOverview, profileOverview }),
     [currentOverview, profileOverview],
+  );
+  const blockingExportRisks = useMemo(
+    () => (draft ? getBlockingExportRisks(draft) : []),
+    [draft],
   );
 
   useEffect(() => {
@@ -283,7 +289,13 @@ export function MasterResumePanel({
 
     try {
       const response = await fetch("/api/resume/master/export", {
-        headers: createIdempotencyHeaders("masterResumeExport:resume-panel"),
+        body: JSON.stringify({
+          acknowledgeClaimReview: blockingExportRisks.length > 0 && claimReviewAcknowledged,
+        }),
+        headers: {
+          ...createIdempotencyHeaders("masterResumeExport:resume-panel"),
+          "Content-Type": "application/json",
+        },
         method: "POST",
       });
       const payload = await response.json();
@@ -296,6 +308,7 @@ export function MasterResumePanel({
       setCurrentOverview(payload.overview);
       setDraft(payload.overview.latestResume?.content ?? draft);
       setSavedDraft(payload.overview.latestResume?.content ?? draft);
+      setClaimReviewAcknowledged(false);
       setMessage("Your master resume PDF and DOCX are ready to download.");
       router.refresh();
     } finally {
@@ -1246,6 +1259,24 @@ export function MasterResumePanel({
           <span>{currentOverview.canGenerate ? "Ready" : "Needs work"}</span>
           <strong>Improve or download</strong>
           <p>{currentOverview.readinessNote}</p>
+          {blockingExportRisks.length > 0 ? (
+            <div className="resume-export-claim-review">
+              <strong>Review high-impact facts before export</strong>
+              <ul>
+                {blockingExportRisks.map((risk) => (
+                  <li key={`${risk.category}-${risk.text}`}>{risk.text}</li>
+                ))}
+              </ul>
+              <label>
+                <input
+                  checked={claimReviewAcknowledged}
+                  onChange={(event) => setClaimReviewAcknowledged(event.target.checked)}
+                  type="checkbox"
+                />
+                I reviewed these items and want to prepare the final PDF/DOCX files.
+              </label>
+            </div>
+          ) : null}
         </div>
         <div className="resume-readiness-actions">
           <button
@@ -1278,9 +1309,13 @@ export function MasterResumePanel({
           </button>
           <button
             className="secondary-action"
-            disabled={!draft || isExporting}
+            disabled={
+              !draft ||
+              isExporting ||
+              (blockingExportRisks.length > 0 && !claimReviewAcknowledged)
+            }
             onClick={exportResumeFiles}
-            title="Create downloadable ATS-friendly PDF and DOCX files from the standard template"
+            title="Create downloadable ATS-friendly PDF and DOCX files from the standard template after review"
             type="button"
           >
             <Download size={15} aria-hidden="true" />
