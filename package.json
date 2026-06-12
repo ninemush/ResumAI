@@ -19,7 +19,7 @@
     "test:e2e:cross-browser": "NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://127.0.0.1:54321} NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-local-placeholder-anon-key} NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-http://localhost:3000} playwright test --project=chromium-desktop --project=firefox-desktop --project=webkit-desktop"
   },
   "engines": {
-    "node": ">=26 <27",
+    "node": "24.x",
     "npm": ">=11 <12"
   },
   "dependencies": {
