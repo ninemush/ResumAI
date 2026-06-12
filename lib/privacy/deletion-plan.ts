@@ -44,9 +44,16 @@ const deletionExecutionSchema = z.object({
   subjectUserId: z.string(),
   actions: z.array(
     z.object({
-      action: z.enum(["deleted", "minimized", "retained_with_reason", "blocked_pending_review"]),
+      action: z.enum(["deleted", "minimized", "retained", "retained_with_reason", "failed", "blocked_pending_review"]),
       count: z.number().int().nonnegative(),
       detail: z.string(),
+      reason: z.string(),
+      status: z.enum(["deleted", "minimized", "retained", "failed", "blocked_pending_review"]),
+      storage: z.object({
+        deletedPathCount: z.number().int().nonnegative(),
+        failedPathCount: z.number().int().nonnegative(),
+        pathCount: z.number().int().nonnegative(),
+      }),
       table: z.string(),
     }),
   ),
@@ -360,21 +367,73 @@ async function executeDeletionPlan({
   const storagePaths = collectExecutionStoragePaths(plan);
   const storageResult = await deleteStoragePaths(storagePaths);
   const actions: DeletionExecution["actions"] = [];
+  const pushAction = ({
+    action,
+    count,
+    detail,
+    reason,
+    table,
+  }: {
+    action: "deleted" | "minimized" | "retained";
+    count: number;
+    detail: string;
+    reason: string;
+    table: string;
+  }) => {
+    actions.push({
+      action: action === "retained" ? "retained_with_reason" : action,
+      count,
+      detail,
+      reason,
+      status: action,
+      storage: readActionStorageResult({ plan, storageResult, table }),
+      table,
+    });
+  };
+
+  await admin.from("profile_source_analyses").delete().eq("user_id", subjectUserId);
+  pushAction({
+    action: "deleted",
+    count: countPlanItem(plan.delete, "profile_source_analyses"),
+    detail: "Deleted derived profile-source analysis records.",
+    reason: readPlanReason(plan.delete, "profile_source_analyses"),
+    table: "profile_source_analyses",
+  });
+
+  await admin.from("career_profiles").delete().eq("user_id", subjectUserId);
+  pushAction({
+    action: "deleted",
+    count: countPlanItem(plan.delete, "career_profiles"),
+    detail: "Deleted canonical derived career profile records.",
+    reason: readPlanReason(plan.delete, "career_profiles"),
+    table: "career_profiles",
+  });
 
   await admin.from("profile_facts").delete().eq("user_id", subjectUserId);
-  actions.push({
+  pushAction({
     action: "deleted",
     count: countPlanItem(plan.delete, "profile_facts"),
     detail: "Deleted editable extracted profile facts.",
+    reason: readPlanReason(plan.delete, "profile_facts"),
     table: "profile_facts",
   });
 
   await admin.from("profile_sources").delete().eq("user_id", subjectUserId);
-  actions.push({
+  pushAction({
     action: "deleted",
     count: countPlanItem(plan.delete, "profile_sources"),
     detail: "Deleted uploaded and pasted profile source records.",
+    reason: readPlanReason(plan.delete, "profile_sources"),
     table: "profile_sources",
+  });
+
+  await admin.from("sensitive_support_contexts").delete().eq("user_id", subjectUserId);
+  pushAction({
+    action: "deleted",
+    count: countPlanItem(plan.delete, "sensitive_support_contexts"),
+    detail: "Deleted sensitive support context records associated with the user.",
+    reason: readPlanReason(plan.delete, "sensitive_support_contexts"),
+    table: "sensitive_support_contexts",
   });
 
   await admin
@@ -382,10 +441,11 @@ async function executeDeletionPlan({
     .delete()
     .eq("user_id", subjectUserId)
     .eq("resume_type", "master");
-  actions.push({
+  pushAction({
     action: "deleted",
     count: countPlanItem(plan.delete, "generated_resumes(master)"),
     detail: "Deleted user-controlled master resume drafts and exports.",
+    reason: readPlanReason(plan.delete, "generated_resumes(master)"),
     table: "generated_resumes(master)",
   });
 
@@ -403,10 +463,11 @@ async function executeDeletionPlan({
     await admin.from("applications").delete().in("id", draftApplicationIds);
   }
 
-  actions.push({
+  pushAction({
     action: "deleted",
     count: countPlanItem(plan.delete, "applications(draft)"),
     detail: "Deleted draft applications after removing dependent draft artifacts and status history.",
+    reason: readPlanReason(plan.delete, "applications(draft)"),
     table: "applications(draft)",
   });
 
@@ -419,10 +480,11 @@ async function executeDeletionPlan({
     })
     .eq("user_id", subjectUserId)
     .neq("status", "draft");
-  actions.push({
+  pushAction({
     action: "minimized",
     count: countPlanItem(plan.minimize, "applications(non_draft)"),
     detail: "Minimized submitted or status-bearing application metadata while preserving quota/status evidence.",
+    reason: readPlanReason(plan.minimize, "applications(non_draft)"),
     table: "applications(non_draft)",
   });
 
@@ -437,10 +499,11 @@ async function executeDeletionPlan({
     })
     .eq("user_id", subjectUserId)
     .eq("resume_type", "application");
-  actions.push({
+  pushAction({
     action: "minimized",
     count: countPlanItem(plan.minimize, "generated_resumes(application)"),
     detail: "Cleared generated application resume content and artifact paths while retaining minimal audit linkage.",
+    reason: readPlanReason(plan.minimize, "generated_resumes(application)"),
     table: "generated_resumes(application)",
   });
 
@@ -453,29 +516,61 @@ async function executeDeletionPlan({
       status: "deleted",
     })
     .eq("user_id", subjectUserId);
-  actions.push({
+  pushAction({
     action: "minimized",
     count: countPlanItem(plan.minimize, "generated_cover_letters"),
     detail: "Cleared generated cover letter content and artifact paths while retaining minimal audit linkage.",
+    reason: readPlanReason(plan.minimize, "generated_cover_letters"),
     table: "generated_cover_letters",
+  });
+
+  const { data: creditReservations } = await admin
+    .from("credit_reservations")
+    .select("id")
+    .eq("user_id", subjectUserId);
+  const minimizedAt = new Date().toISOString();
+
+  await Promise.all(
+    (creditReservations ?? []).map((reservation) =>
+      admin
+        .from("credit_reservations")
+        .update({
+          idempotency_key: `privacy-minimized:${reservation.id}`,
+          metadata: {
+            privacy_minimized_at: minimizedAt,
+            privacy_request_id: requestId,
+          },
+        })
+        .eq("id", reservation.id)
+        .eq("user_id", subjectUserId),
+    ),
+  );
+  pushAction({
+    action: "minimized",
+    count: countPlanItem(plan.minimize, "credit_reservations"),
+    detail: "Minimized retry keys and reservation metadata while preserving billing traceability.",
+    reason: readPlanReason(plan.minimize, "credit_reservations"),
+    table: "credit_reservations",
   });
 
   await admin
     .from("admin_access_audit_events")
     .update({ metadata: {} })
     .eq("target_user_id", subjectUserId);
-  actions.push({
+  pushAction({
     action: "minimized",
     count: countPlanItem(plan.minimize, "admin_access_audit_events"),
     detail: "Cleared admin access audit metadata while preserving accountability records.",
+    reason: readPlanReason(plan.minimize, "admin_access_audit_events"),
     table: "admin_access_audit_events",
   });
 
   for (const retained of plan.retain) {
-    actions.push({
-      action: "retained_with_reason",
+    pushAction({
+      action: "retained",
       count: retained.count,
       detail: retained.reason,
+      reason: retained.reason,
       table: retained.table,
     });
   }
@@ -505,6 +600,53 @@ function countPlanItem(
   table: string,
 ) {
   return items.find((item) => item.table === table)?.count ?? 0;
+}
+
+function readPlanReason(
+  items: Array<{ reason: string; table: string }>,
+  table: string,
+) {
+  return items.find((item) => item.table === table)?.reason ?? "No plan reason recorded.";
+}
+
+function readActionStorageResult({
+  plan,
+  storageResult,
+  table,
+}: {
+  plan: DeletionPlan;
+  storageResult: DeletionExecution["storage"];
+  table: string;
+}) {
+  const plannedPaths = [
+    ...plan.delete.filter((item) => item.table === table).flatMap((item) => item.storagePaths),
+    ...plan.minimize.filter((item) => item.table === table).flatMap((item) => item.storagePaths),
+  ];
+  const plannedPathSet = new Set(plannedPaths);
+
+  if (plannedPathSet.size === 0) {
+    return {
+      deletedPathCount: 0,
+      failedPathCount: 0,
+      pathCount: 0,
+    };
+  }
+
+  const relevantBuckets = storageResult.buckets.filter((bucket) =>
+    bucket.paths.some((path) => plannedPathSet.has(path)),
+  );
+
+  return {
+    deletedPathCount: relevantBuckets.reduce((sum, bucket) => {
+      if (bucket.failedPathCount > 0) return sum;
+      return sum + bucket.paths.filter((path) => plannedPathSet.has(path)).length;
+    }, 0),
+    failedPathCount: relevantBuckets.reduce((sum, bucket) => {
+      if (bucket.failedPathCount === 0) return sum;
+      return sum + bucket.paths.filter((path) => plannedPathSet.has(path)).length;
+    }, 0),
+    pathCount: plannedPathSet.size,
+  };
 }
 
 function collectExecutionStoragePaths(plan: DeletionPlan) {
@@ -574,7 +716,7 @@ async function deleteStoragePaths(
 }
 
 async function countRows(table: string, userId: string) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { count, error } = await supabase
     .from(table)
     .select("id", { count: "exact", head: true })
@@ -588,7 +730,7 @@ async function countRows(table: string, userId: string) {
 }
 
 async function countRowsByColumn(table: string, column: string, value: string) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { count, error } = await supabase
     .from(table)
     .select("id", { count: "exact", head: true })
@@ -607,7 +749,7 @@ async function selectRows(
   userId: string,
   filter?: { column: string; value: string },
 ) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   let query = supabase.from(table).select(columns).eq("user_id", userId);
 
   if (filter?.value.startsWith("not:")) {

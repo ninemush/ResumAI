@@ -99,6 +99,20 @@ export type CreditReservationResult = z.infer<typeof creditReservationResultSche
   summary: CreditSummary;
 };
 
+const creditOperationOutputSchema = z.object({
+  feature: z.string(),
+  ledger_event_id: z.string().uuid().nullable(),
+  metadata: z.record(z.string(), z.unknown()),
+  operation_key: z.string(),
+  output_ids: z.record(z.string(), z.unknown()),
+  reservation_id: z.string().uuid().nullable(),
+  resource_id: z.string().uuid().nullable(),
+  resource_type: z.string(),
+  status: z.string(),
+});
+
+export type CreditOperationOutput = z.infer<typeof creditOperationOutputSchema>;
+
 export async function getCreditSummary(): Promise<CreditSummary> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("get_credit_summary");
@@ -237,6 +251,84 @@ export function getCreditOperationKey(request: Request, fallback: string) {
   }
 
   return normalized;
+}
+
+export async function getFinalizedCreditOperationOutput({
+  feature,
+  operationKey,
+}: {
+  feature: CreditFeature;
+  operationKey: string;
+}): Promise<CreditOperationOutput | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("credit_operation_outputs")
+    .select(
+      "feature, operation_key, reservation_id, ledger_event_id, resource_type, resource_id, output_ids, status, metadata",
+    )
+    .eq("feature", feature)
+    .eq("operation_key", operationKey)
+    .eq("status", "succeeded")
+    .maybeSingle();
+
+  if (error) {
+    return null;
+  }
+
+  return data ? creditOperationOutputSchema.parse(data) : null;
+}
+
+export async function recordCreditOperationOutput({
+  feature,
+  ledgerEventId,
+  metadata = {},
+  operationKey,
+  outputIds,
+  reservationId,
+  resourceId,
+  resourceType,
+  status = "succeeded",
+}: {
+  feature: CreditFeature;
+  ledgerEventId?: string | null;
+  metadata?: Record<string, unknown>;
+  operationKey: string;
+  outputIds: Record<string, unknown>;
+  reservationId?: string | null;
+  resourceId?: string | null;
+  resourceType: string;
+  status?: "succeeded" | "failed" | "ignored" | "reversed";
+}) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const { error } = await supabase.from("credit_operation_outputs").upsert(
+    {
+      feature,
+      ledger_event_id: ledgerEventId ?? null,
+      metadata,
+      operation_key: operationKey,
+      output_ids: outputIds,
+      reservation_id: reservationId ?? null,
+      resource_id: resourceId ?? null,
+      resource_type: resourceType,
+      status,
+      user_id: user.id,
+    },
+    {
+      onConflict: "user_id,feature,operation_key",
+    },
+  );
+
+  if (error) {
+    throw new Error("CREDIT_OPERATION_OUTPUT_RECORD_FAILED");
+  }
 }
 
 export async function redeemPromoCode(code: string) {

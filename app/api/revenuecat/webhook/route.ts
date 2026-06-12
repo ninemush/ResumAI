@@ -123,10 +123,34 @@ export async function POST(request: Request) {
   }
 
   if (!creditAmount) {
+    try {
+      await persistIgnoredRevenueCatEvent({
+        appUserId,
+        body,
+        eventId: parsed.data.event.id,
+        eventType,
+        productId,
+        processedStatus: "ignored_unknown_product",
+      });
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: {
+            category: "server",
+            code: "revenuecat.ignored_event_persist_failed",
+            message: "RevenueCat event could not be recorded for reconciliation.",
+          },
+        },
+        { status: 500 },
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       ignored: true,
-      reason: "product_not_mapped",
+      reason: "ignored_unknown_product",
       requestId,
     });
   }
@@ -219,4 +243,44 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+async function persistIgnoredRevenueCatEvent({
+  appUserId,
+  body,
+  eventId,
+  eventType,
+  processedStatus,
+  productId,
+}: {
+  appUserId: string;
+  body: unknown;
+  eventId: string;
+  eventType: string;
+  processedStatus: string;
+  productId: string;
+}) {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("revenuecat_events").upsert(
+    {
+      app_user_id: appUserId,
+      credit_amount: 0,
+      event_id: eventId,
+      product_id: productId,
+      processed_status: processedStatus,
+      raw_event: {
+        eventType,
+        payload: body,
+      },
+      user_id: isUuid(appUserId) ? appUserId : null,
+    },
+    {
+      ignoreDuplicates: true,
+      onConflict: "event_id",
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
 }

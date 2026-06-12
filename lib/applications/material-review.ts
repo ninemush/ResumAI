@@ -8,6 +8,11 @@ import {
   buildCoverLetterDocx,
   buildCoverLetterPdf,
 } from "@/lib/artifacts/ats-template";
+import {
+  classifyResumeExportRisks,
+  hasBlockingExportRisks,
+  type ExportRisk,
+} from "@/lib/applications/export-gates";
 import { validateGeneratedPdf } from "@/lib/applications/pdf-validation";
 import {
   parseResumeContent,
@@ -46,6 +51,7 @@ export type MaterialReview = {
     updatedAt: string;
   } | null;
   exportReadiness: {
+    blockingRisks: ExportRisk[];
     canExport: boolean;
     status: "missing_materials" | "ready_to_export" | "exported";
     warnings: string[];
@@ -208,6 +214,11 @@ export async function exportMaterialArtifacts(
   }
 
   const resumeContent = parseResumeContent(resume.content_json);
+
+  if (hasBlockingExportRisks(resumeContent)) {
+    throw new Error("MATERIAL_CLAIM_ACK_REQUIRED");
+  }
+
   const contextLine = formatApplicationContextLine(application);
   const [resumePdf, resumeDocx, coverLetterPdf, coverLetterDocx] = await Promise.all([
     buildAtsResumePdf({ contextLine, displayName: application.displayName, resume: resumeContent }),
@@ -218,10 +229,13 @@ export async function exportMaterialArtifacts(
   const [resumeValidation, coverLetterValidation] = await Promise.all([
     validateGeneratedPdf({
       bytes: resumePdf,
+      maxPages: 4,
       requiredPhrases: [resumeContent.headline, resumeContent.summary],
+      requiredSections: ["Skills", "Experience"],
     }),
     validateGeneratedPdf({
       bytes: coverLetterPdf,
+      maxPages: 2,
       requiredPhrases: [application.companyName, coverLetter.content.slice(0, 80)],
     }),
   ]);
@@ -316,6 +330,7 @@ function buildExportReadiness({
 
   if (!resume || !coverLetter) {
     return {
+      blockingRisks: [],
       canExport: false,
       status: "missing_materials",
       warnings: ["Create both resume and cover-letter drafts before downloading files."],
@@ -323,6 +338,8 @@ function buildExportReadiness({
   }
 
   const resumeContent = parseResumeContent(resume.content_json);
+  const risks = classifyResumeExportRisks(resumeContent);
+  const blockingRisks = risks.filter((risk) => risk.severity === "high");
 
   if (resumeContent.keywordGaps.length > 0) {
     warnings.push("Review keyword gaps before submitting these materials.");
@@ -341,7 +358,8 @@ function buildExportReadiness({
   }
 
   return {
-    canExport: true,
+    blockingRisks,
+    canExport: blockingRisks.length === 0,
     status:
       resume.pdf_storage_path &&
       coverLetter.pdf_storage_path &&

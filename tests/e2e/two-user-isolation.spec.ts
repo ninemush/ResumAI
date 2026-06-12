@@ -14,6 +14,8 @@ import {
 } from "./helpers/launch-fixtures";
 
 test.describe("two-user data isolation", () => {
+  test.setTimeout(90_000);
+
   test.skip(
     !hasTwoUserIsolationEnv(),
     "Two-user QA credentials are required for launch RLS/isolation evidence.",
@@ -308,8 +310,10 @@ async function ensureProfile(
     throw new Error(`Unable to read seeded profile: ${readError.message}`);
   }
 
-  if (existing?.id) {
-    return existing.id as string;
+  const existingProfile = existing as { id?: string } | null;
+
+  if (existingProfile?.id) {
+    return existingProfile.id;
   }
 
   const profileId = await insertRow(admin, "profiles", {

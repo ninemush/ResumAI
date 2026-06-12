@@ -11,6 +11,7 @@ const required = [
   "QA_DEMO_USER_B_PASSWORD",
   "QA_ADMIN_EMAIL",
   "QA_ADMIN_PASSWORD",
+  "RATE_LIMIT_BACKEND",
   "REVENUECAT_WEBHOOK_SECRET",
 ];
 
@@ -22,6 +23,10 @@ if (process.env.RUN_LAUNCH_READINESS_GATES !== "1") {
 
 if (process.env.AUTH_REQUIRE_EMAIL_CODE !== "true") {
   missing.push("AUTH_REQUIRE_EMAIL_CODE=true");
+}
+
+if (process.env.RATE_LIMIT_BACKEND !== "supabase") {
+  missing.push("RATE_LIMIT_BACKEND=supabase");
 }
 
 if (missing.length > 0) {

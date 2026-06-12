@@ -120,9 +120,24 @@ export async function PATCH(request: Request, context: RouteContext) {
       visibilityLevel: "user_support_context",
     });
 
+    await supabase.from("audit_events").insert({
+      actor_user_id: user.id,
+      event_type: "admin.support_ticket.updated",
+      metadata: {
+        patch,
+        requestId,
+      },
+      resource_id: ticket.id,
+      resource_type: "support_ticket",
+      user_id: null,
+    });
+
     await supabase.from("support_ticket_messages").insert({
-      message: buildAdminAuditMessage(input),
-      metadata: { requestId, patch },
+      message: buildUserVisibleAdminMessage(input),
+      metadata: {
+        publicFields: readUserVisibleSupportFields(input),
+        requestId,
+      },
       speaker: "admin",
       ticket_id: id,
       user_id: user.id,
@@ -202,16 +217,22 @@ function toSupportTicketPatch(input: z.infer<typeof supportIssueUpdateSchema>) {
   return patch;
 }
 
-function buildAdminAuditMessage(input: z.infer<typeof supportIssueUpdateSchema>) {
+function buildUserVisibleAdminMessage(input: z.infer<typeof supportIssueUpdateSchema>) {
   const parts = [
     input.status ? `status=${input.status}` : null,
-    input.fixStatus ? `fix=${input.fixStatus}` : null,
     input.priority ? `priority=${input.priority}` : null,
-    input.resolutionVerification ? `verified=${input.resolutionVerification}` : null,
-    input.userVisibleResolution ? `user_visible_resolution=${input.userVisibleResolution}` : null,
-    input.ownerNotes ? `owner_notes=${input.ownerNotes}` : null,
-    input.closedReason ? `reason=${input.closedReason}` : null,
+    input.userVisibleResolution ? `resolution=${input.userVisibleResolution}` : null,
   ].filter(Boolean);
 
-  return parts.length > 0 ? `Owner updated issue: ${parts.join("; ")}` : "Owner updated issue.";
+  return parts.length > 0 ? `Support updated this issue: ${parts.join("; ")}` : "Support updated this issue.";
+}
+
+function readUserVisibleSupportFields(input: z.infer<typeof supportIssueUpdateSchema>) {
+  return Object.fromEntries(
+    [
+      ["priority", input.priority],
+      ["status", input.status],
+      ["userVisibleResolution", input.userVisibleResolution],
+    ].filter(([, value]) => value !== undefined),
+  );
 }

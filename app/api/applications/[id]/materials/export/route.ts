@@ -4,6 +4,7 @@ import {
   buildCreditsApiError,
   finalizeCreditReservation,
   getCreditOperationKey,
+  recordCreditOperationOutput,
   requireCredits,
   releaseCreditReservation,
   reserveCredits,
@@ -66,12 +67,13 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     await requireCredits("applicationMaterialsExport");
+    const operationKey = getCreditOperationKey(
+      request,
+      `applicationMaterialsExport:${params.id}`,
+    );
     const reservation = await reserveCredits({
       feature: "applicationMaterialsExport",
-      operationKey: getCreditOperationKey(
-        request,
-        `applicationMaterialsExport:${params.id}`,
-      ),
+      operationKey,
       resourceId: params.id,
       resourceType: "application_materials_export",
     });
@@ -88,10 +90,23 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     if (result.didExport) {
-      await finalizeCreditReservation({
+      const finalizedReservation = await finalizeCreditReservation({
         metadata: { application_id: params.id },
         reservationId: reservation.reservationId,
         resourceId: params.id,
+      });
+      await recordCreditOperationOutput({
+        feature: "applicationMaterialsExport",
+        ledgerEventId: finalizedReservation.ledgerEventId,
+        operationKey,
+        outputIds: {
+          applicationId: params.id,
+          coverLetterId: result.review.coverLetter?.id ?? null,
+          resumeId: result.review.resume?.id ?? null,
+        },
+        reservationId: reservation.reservationId,
+        resourceId: params.id,
+        resourceType: "application_materials_export",
       });
     } else {
       await releaseCreditReservation({
@@ -148,6 +163,16 @@ function toApiError(error: unknown) {
         category: "validation",
         code: "application.pdf_validation_failed",
         message: "The PDF did not pass layout/content validation. Keep the editable materials and try again after reviewing the content.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "MATERIAL_CLAIM_ACK_REQUIRED") {
+      return {
+        category: "validation",
+        code: "application.claim_review_required",
+        message:
+          "Resolve unsupported high-impact claim notes before exporting final application files.",
         status: 422,
       };
     }

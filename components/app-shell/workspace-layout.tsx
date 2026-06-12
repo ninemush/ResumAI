@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import {
   ArrowRight,
@@ -467,6 +467,12 @@ function MobileWorkspaceNav({
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const closeMoreDrawer = useCallback((restoreFocus = true) => {
+    setIsMoreOpen(false);
+    if (restoreFocus) {
+      window.setTimeout(() => moreButtonRef.current?.focus(), 0);
+    }
+  }, []);
   const items = [
     {
       icon: MessageCircle,
@@ -499,15 +505,37 @@ function MobileWorkspaceNav({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setIsMoreOpen(false);
-        moreButtonRef.current?.focus();
+        closeMoreDrawer();
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const focusable = Array.from(
+        drawerRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).filter((button) => !button.disabled);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (!first || !last) {
+        return;
+      }
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isMoreOpen]);
+  }, [closeMoreDrawer, isMoreOpen]);
 
   return (
     <>
@@ -516,10 +544,7 @@ function MobileWorkspaceNav({
           <button
             aria-hidden="true"
             className="mobile-more-backdrop"
-            onClick={() => {
-              setIsMoreOpen(false);
-              moreButtonRef.current?.focus();
-            }}
+            onClick={() => closeMoreDrawer()}
             tabIndex={-1}
             type="button"
           />
@@ -539,7 +564,7 @@ function MobileWorkspaceNav({
                   className={activeView === item.target ? "active" : undefined}
                   key={item.target}
                   onClick={() => {
-                    setIsMoreOpen(false);
+                    closeMoreDrawer(false);
                     onSelectView(item.target);
                   }}
                   type="button"
@@ -553,7 +578,7 @@ function MobileWorkspaceNav({
               <button
                 className={activeView === "owner" ? "active" : undefined}
                 onClick={() => {
-                  setIsMoreOpen(false);
+                  closeMoreDrawer(false);
                   onSelectView("owner");
                 }}
                 type="button"
@@ -586,7 +611,7 @@ function MobileWorkspaceNav({
               aria-controls={"more" in item ? "mobile-more-drawer" : undefined}
               onClick={() => {
                 if (item.chat) {
-                  setIsMoreOpen(false);
+                  closeMoreDrawer(false);
                   onSelectChat();
                   return;
                 }
@@ -596,7 +621,7 @@ function MobileWorkspaceNav({
                   return;
                 }
 
-                setIsMoreOpen(false);
+                closeMoreDrawer(false);
                 onSelectView(item.target);
               }}
               type="button"
