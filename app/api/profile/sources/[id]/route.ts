@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { removeProfileSource } from "@/lib/profile/profile-source-ingestion";
 import {
   checkRateLimit,
@@ -47,6 +48,7 @@ export async function DELETE(request: Request, context: RouteContext) {
   }
 
   try {
+    await requireProtectedApiSession();
     const removed = await removeProfileSource(params.id);
 
     return NextResponse.json({
@@ -79,16 +81,10 @@ function isUuid(value: string) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message === "AUTH_REQUIRED") {
-      return {
-        category: "auth",
-        code: "auth.required",
-        message: "Please sign in before removing profile sources.",
-        status: 401,
-      };
-    }
+  const authError = apiAuthErrorDetails(error, "Please sign in before removing profile sources.");
+  if (authError) return authError;
 
+  if (error instanceof Error) {
     if (error.message === "SOURCE_NOT_FOUND") {
       return {
         category: "not_found",

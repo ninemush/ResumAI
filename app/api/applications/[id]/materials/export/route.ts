@@ -1,3 +1,4 @@
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
@@ -17,7 +18,6 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
-import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = {
   params: Promise<{
@@ -54,7 +54,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
-    await requireSignedInUser();
+    await requireProtectedApiSession();
     const reusableReview = await getReusableMaterialExport(parsed.data);
 
     if (reusableReview) {
@@ -120,28 +120,11 @@ function isBillingError(error: unknown) {
   return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
-async function requireSignedInUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("AUTH_REQUIRED");
-  }
-}
-
 function toApiError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message === "AUTH_REQUIRED") {
-      return {
-        category: "auth",
-        code: "auth.required",
-        message: "Please sign in before downloading application files.",
-        status: 401,
-      };
-    }
+  const authError = apiAuthErrorDetails(error, "Please sign in before downloading application files.");
+  if (authError) return authError;
 
+  if (error instanceof Error) {
     if (error.message === "APPLICATION_NOT_FOUND") {
       return {
         category: "not_found",

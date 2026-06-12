@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { requireProtectedApiSession } from "@/lib/api/auth";
 import { buildCreditsApiError, getCreditSummary } from "@/lib/billing/credits";
-import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
   const requestId = crypto.randomUUID();
 
   try {
-    await requireSignedInUser();
+    await requireProtectedApiSession();
     const summary = await getCreditSummary();
 
     return NextResponse.json({
@@ -26,16 +26,5 @@ export async function GET() {
       },
       { status: apiError.status },
     );
-  }
-}
-
-async function requireSignedInUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("AUTH_REQUIRED");
   }
 }

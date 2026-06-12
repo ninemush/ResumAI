@@ -1,3 +1,4 @@
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { apiError, apiSuccess, createRequestId, readJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const reusableJob = await getReusableJobIngestion(parsed.data);
 
     if (reusableJob) {
@@ -130,16 +132,10 @@ function isBillingError(error: unknown) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message === "AUTH_REQUIRED") {
-      return {
-        category: "auth",
-        code: "auth.required",
-        message: "Please sign in before ingesting a job post.",
-        status: 401,
-      };
-    }
+  const authError = apiAuthErrorDetails(error, "Please sign in before ingesting a job post.");
+  if (authError) return authError;
 
+  if (error instanceof Error) {
     if (error.message === "JOB_URL_BLOCKED") {
       return {
         category: "validation",

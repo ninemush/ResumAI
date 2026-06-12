@@ -1,3 +1,4 @@
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
@@ -22,7 +23,6 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
-import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = {
   params: Promise<{
@@ -35,6 +35,7 @@ export async function GET(_request: Request, context: RouteContext) {
   const params = await context.params;
 
   try {
+    await requireProtectedApiSession();
     const review = await getMaterialReview({ applicationId: params.id });
 
     return apiSuccess({
@@ -80,7 +81,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
-    await requireSignedInUser();
+    await requireProtectedApiSession();
     const reusableMaterials =
       parsed.data.mode === "reuse"
         ? await getReusableApplicationMaterials(parsed.data)
@@ -156,17 +157,6 @@ function isBillingError(error: unknown) {
   return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
-async function requireSignedInUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("AUTH_REQUIRED");
-  }
-}
-
 export async function PATCH(request: Request, context: RouteContext) {
   const requestId = createRequestId();
   const rateLimit = await checkRateLimit({
@@ -213,6 +203,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   try {
+    await requireProtectedApiSession();
     const review = await updateMaterialReview(parsed.data);
 
     return apiSuccess({
@@ -225,16 +216,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message === "AUTH_REQUIRED") {
-      return {
-        category: "auth",
-        code: "auth.required",
-        message: "Please sign in before generating materials.",
-        status: 401,
-      };
-    }
+  const authError = apiAuthErrorDetails(error, "Please sign in before generating materials.");
+  if (authError) return authError;
 
+  if (error instanceof Error) {
     if (error.message === "APPLICATION_NOT_FOUND") {
       return {
         category: "not_found",

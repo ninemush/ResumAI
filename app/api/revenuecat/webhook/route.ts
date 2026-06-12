@@ -13,6 +13,12 @@ const revenueCatEventSchema = z.object({
 });
 
 const productCreditMapSchema = z.record(z.string(), z.number().int().positive());
+const revenueCatProcessResultSchema = z.object({
+  creditsGranted: z.number().int().positive().optional(),
+  duplicate: z.boolean(),
+  eventId: z.string().uuid().nullable().optional(),
+  ledgerId: z.string().uuid().nullable().optional(),
+});
 const PURCHASE_REDEEMED_EVENT_TYPES = new Set(["PURCHASE_REDEEMED"]);
 
 export async function POST(request: Request) {
@@ -143,13 +149,23 @@ export async function POST(request: Request) {
   try {
     const supabase = createAdminClient();
 
-    const { data: existing } = await supabase
-      .from("revenuecat_events")
-      .select("id")
-      .eq("event_id", parsed.data.event.id)
-      .maybeSingle();
+    const { data, error } = await supabase.rpc("process_revenuecat_credit_event", {
+      p_app_user_id: appUserId,
+      p_credit_amount: creditAmount,
+      p_event_id: parsed.data.event.id,
+      p_event_type: eventType,
+      p_product_id: productId,
+      p_raw_event: body,
+      p_user_id: appUserId,
+    });
 
-    if (existing) {
+    if (error || !data) {
+      throw new Error(error?.message ?? "REVENUECAT_EVENT_PROCESSING_FAILED");
+    }
+
+    const result = revenueCatProcessResultSchema.parse(data);
+
+    if (result.duplicate) {
       return NextResponse.json({
         ok: true,
         duplicate: true,
@@ -157,43 +173,9 @@ export async function POST(request: Request) {
       });
     }
 
-    const { data: ledger, error: ledgerError } = await supabase
-      .from("credit_ledger")
-      .insert({
-        credit_delta: creditAmount,
-        event_type: "revenuecat_purchase",
-        metadata: {
-          event_id: parsed.data.event.id,
-          product_id: productId,
-          revenuecat_type: eventType,
-        },
-        resource_type: "revenuecat_purchase",
-        user_id: appUserId,
-      })
-      .select("id")
-      .single();
-
-    if (ledgerError || !ledger) {
-      throw new Error("CREDIT_LEDGER_INSERT_FAILED");
-    }
-
-    const { error: eventError } = await supabase.from("revenuecat_events").insert({
-      app_user_id: appUserId,
-      credit_amount: creditAmount,
-      credit_ledger_id: ledger.id,
-      event_id: parsed.data.event.id,
-      product_id: productId,
-      raw_event: body,
-      user_id: appUserId,
-    });
-
-    if (eventError) {
-      throw new Error("REVENUECAT_EVENT_INSERT_FAILED");
-    }
-
     return NextResponse.json({
       ok: true,
-      creditsGranted: creditAmount,
+      creditsGranted: result.creditsGranted ?? creditAmount,
       requestId,
     });
   } catch (error) {

@@ -600,6 +600,24 @@ export function buildCreditsApiError(error: unknown) {
       };
     }
 
+    if (error.message === "TERMS_REQUIRED") {
+      return {
+        category: "auth",
+        code: "terms.required",
+        message: "Accept the current Terms and Privacy Policy before using credits.",
+        status: 403,
+      };
+    }
+
+    if (error.message === "EMAIL_MFA_REQUIRED") {
+      return {
+        category: "auth",
+        code: "auth.email_code_required",
+        message: "Verify your email code before using credits.",
+        status: 403,
+      };
+    }
+
     if (error.message === "ADMIN_REQUIRED") {
       return {
         category: "auth",

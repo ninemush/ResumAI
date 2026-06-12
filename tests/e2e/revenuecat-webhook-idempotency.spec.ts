@@ -24,37 +24,29 @@ test.describe("RevenueCat webhook maturity", () => {
       : {};
 
     try {
-      const firstResponse = await request.post("/api/revenuecat/webhook", {
-        data: {
-          event: {
-            app_user_id: userId,
-            id: eventId,
-            product_id: "pramania_credits_25",
-            type: "PURCHASE_REDEEMED",
-          },
+      const payload = {
+        event: {
+          app_user_id: userId,
+          id: eventId,
+          product_id: "pramania_credits_25",
+          type: "PURCHASE_REDEEMED",
         },
-        headers: authorization,
-      });
-      const firstPayload = await firstResponse.json();
+      };
+      const responses = await Promise.all([
+        request.post("/api/revenuecat/webhook", {
+          data: payload,
+          headers: authorization,
+        }),
+        request.post("/api/revenuecat/webhook", {
+          data: payload,
+          headers: authorization,
+        }),
+      ]);
+      const responsePayloads = await Promise.all(responses.map((response) => response.json()));
 
-      expect(firstResponse.ok()).toBe(true);
-      expect(firstPayload.creditsGranted).toBe(25);
-
-      const duplicateResponse = await request.post("/api/revenuecat/webhook", {
-        data: {
-          event: {
-            app_user_id: userId,
-            id: eventId,
-            product_id: "pramania_credits_25",
-            type: "PURCHASE_REDEEMED",
-          },
-        },
-        headers: authorization,
-      });
-      const duplicatePayload = await duplicateResponse.json();
-
-      expect(duplicateResponse.ok()).toBe(true);
-      expect(duplicatePayload.duplicate).toBe(true);
+      expect(responses.every((response) => response.ok())).toBe(true);
+      expect(responsePayloads.filter((payload) => payload.creditsGranted === 25)).toHaveLength(1);
+      expect(responsePayloads.filter((payload) => payload.duplicate === true)).toHaveLength(1);
 
       const { data: events, error: eventError } = await admin
         .from("revenuecat_events")

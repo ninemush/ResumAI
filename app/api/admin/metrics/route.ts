@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { getOwnerMetrics } from "@/lib/admin/owner-metrics";
 
 export async function GET(request: Request) {
@@ -8,6 +9,7 @@ export async function GET(request: Request) {
   const periodDays = parsePeriodDays(url.searchParams.get("periodDays"));
 
   try {
+    await requireProtectedApiSession({ requireAdmin: true });
     const metrics = await getOwnerMetrics(periodDays);
 
     return NextResponse.json({
@@ -30,14 +32,8 @@ export async function GET(request: Request) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error && error.message === "ADMIN_REQUIRED") {
-    return {
-      category: "auth",
-      code: "admin.required",
-      message: "Owner or admin access is required.",
-      status: 403,
-    };
-  }
+  const authError = apiAuthErrorDetails(error, "Sign in is required.");
+  if (authError) return authError;
 
   return {
     category: "server",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { brand } from "@/lib/brand";
 import {
   buildCreditsApiError,
@@ -18,7 +19,6 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
-import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = {
   params: Promise<{
@@ -63,7 +63,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
-    await requireSignedInUser();
+    await requireProtectedApiSession();
     await requireCredits("profileSourceExtract");
     const reservation = await reserveCredits({
       feature: "profileSourceExtract",
@@ -131,32 +131,15 @@ export async function POST(request: Request, context: RouteContext) {
   }
 }
 
-async function requireSignedInUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("AUTH_REQUIRED");
-  }
-}
-
 function isBillingError(error: unknown) {
   return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message === "AUTH_REQUIRED") {
-      return {
-        category: "auth",
-        code: "auth.required",
-        message: "Please sign in before extracting profile sources.",
-        status: 401,
-      };
-    }
+  const authError = apiAuthErrorDetails(error, "Please sign in before extracting profile sources.");
+  if (authError) return authError;
 
+  if (error instanceof Error) {
     if (error.message === "SOURCE_NOT_FOUND") {
       return {
         category: "not_found",

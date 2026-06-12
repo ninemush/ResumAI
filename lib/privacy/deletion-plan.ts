@@ -28,6 +28,7 @@ export const deletionPlanSchema = z.object({
     z.object({
       fields: z.array(z.string()),
       reason: z.string(),
+      storagePaths: z.array(z.string()).default([]),
       table: z.string(),
       count: z.number().int().nonnegative(),
     }),
@@ -50,6 +51,14 @@ const deletionExecutionSchema = z.object({
     }),
   ),
   storage: z.object({
+    buckets: z.array(
+      z.object({
+        bucket: z.string(),
+        deletedPathCount: z.number().int().nonnegative(),
+        failedPathCount: z.number().int().nonnegative(),
+        paths: z.array(z.string()),
+      }),
+    ),
     deletedPathCount: z.number().int().nonnegative(),
     failedPathCount: z.number().int().nonnegative(),
   }),
@@ -188,6 +197,7 @@ export async function buildDeletionPlanForRequest(requestId: string): Promise<De
         fields: ["company_name", "job_title", "job_url"],
         reason:
           "Application records tied to quota or status history should preserve minimal evidence while removing unnecessary free text.",
+        storagePaths: [],
         table: "applications(non_draft)",
       },
       {
@@ -195,6 +205,7 @@ export async function buildDeletionPlanForRequest(requestId: string): Promise<De
         fields: ["content_json", "storage_path", "pdf_storage_path", "docx_storage_path"],
         reason:
           "Generated application resumes may be tied to quota and dispute evidence; minimize content and artifacts instead of blind deletion.",
+        storagePaths: applicationResumeStoragePaths,
         table: "generated_resumes(application)",
       },
       {
@@ -202,6 +213,7 @@ export async function buildDeletionPlanForRequest(requestId: string): Promise<De
         fields: ["content", "pdf_storage_path", "docx_storage_path"],
         reason:
           "Generated cover letters may be tied to application records; minimize content and artifacts after review.",
+        storagePaths: coverLetterStoragePaths,
         table: "generated_cover_letters",
       },
       {
@@ -209,6 +221,7 @@ export async function buildDeletionPlanForRequest(requestId: string): Promise<De
         fields: ["idempotency_key", "metadata"],
         reason:
           "Credit reservations may be needed for billing/support reconciliation; minimize retry keys and metadata after review.",
+        storagePaths: [],
         table: "credit_reservations",
       },
       {
@@ -216,6 +229,7 @@ export async function buildDeletionPlanForRequest(requestId: string): Promise<De
         fields: ["metadata"],
         reason:
           "Admin access audit rows are retained for accountability, but request-specific metadata should be minimized after review.",
+        storagePaths: [],
         table: "admin_access_audit_events",
       },
     ],
@@ -304,16 +318,19 @@ export async function completeDeletionReviewForRequest({
     requestId,
     subjectUserId: request.user_id as string,
   });
+  const storageDeleteFailed = deletionExecution.storage.failedPathCount > 0;
 
   const { data, error } = await supabase
     .from("privacy_requests")
     .update({
       admin_notes:
-        "Deletion/minimization execution completed. Retained records are limited to documented audit-safe evidence.",
+        storageDeleteFailed
+          ? "Deletion/minimization execution is partial because one or more private storage objects could not be deleted. Review deletion_execution storage details."
+          : "Deletion/minimization execution completed. Retained records are limited to documented audit-safe evidence.",
       deletion_execution: deletionExecution,
       resolution_summary: resolutionSummary,
-      resolved_at: new Date().toISOString(),
-      status: "completed",
+      resolved_at: storageDeleteFailed ? null : new Date().toISOString(),
+      status: storageDeleteFailed ? "waiting_for_user" : "completed",
     })
     .eq("id", requestId)
     .select("id")
@@ -323,7 +340,11 @@ export async function completeDeletionReviewForRequest({
     throw new Error("DELETION_REVIEW_COMPLETE_FAILED");
   }
 
-  return { deletionExecution, id: data.id as string };
+  return {
+    deletionExecution,
+    id: data.id as string,
+    status: storageDeleteFailed ? "waiting_for_user" : "completed",
+  };
 }
 
 async function executeDeletionPlan({
@@ -487,45 +508,68 @@ function countPlanItem(
 }
 
 function collectExecutionStoragePaths(plan: DeletionPlan) {
-  const paths = new Set<string>();
+  const pathsByBucket = new Map<string, Set<string>>();
+
+  const addPath = (bucket: string, path: string) => {
+    const trimmed = path.trim();
+
+    if (!trimmed) return;
+
+    const paths = pathsByBucket.get(bucket) ?? new Set<string>();
+    paths.add(trimmed);
+    pathsByBucket.set(bucket, paths);
+  };
 
   for (const item of plan.delete) {
     for (const path of item.storagePaths) {
-      paths.add(path);
+      addPath(item.table === "profile_sources" ? "profile-sources" : "generated-artifacts", path);
     }
   }
 
-  return Array.from(paths);
+  for (const item of plan.minimize) {
+    for (const path of item.storagePaths) {
+      addPath("generated-artifacts", path);
+    }
+  }
+
+  return Array.from(pathsByBucket.entries()).map(([bucket, paths]) => ({
+    bucket,
+    paths: Array.from(paths),
+  }));
 }
 
-async function deleteStoragePaths(paths: string[]) {
+async function deleteStoragePaths(
+  groups: Array<{
+    bucket: string;
+    paths: string[];
+  }>,
+) {
   const admin = createAdminClient();
-  const profileSourcePaths = paths.filter((path) => path.trim().length > 0);
-  let failedPathCount = 0;
+  const buckets: Array<{
+    bucket: string;
+    deletedPathCount: number;
+    failedPathCount: number;
+    paths: string[];
+  }> = [];
 
-  if (profileSourcePaths.length === 0) {
-    return { deletedPathCount: 0, failedPathCount };
-  }
+  for (const group of groups) {
+    if (group.paths.length === 0) continue;
 
-  const profileSourceResult = await admin.storage
-    .from("profile-sources")
-    .remove(profileSourcePaths);
+    const result = await admin.storage.from(group.bucket).remove(group.paths);
+    const failedPathCount = result.error ? group.paths.length : 0;
 
-  if (profileSourceResult.error) {
-    failedPathCount += profileSourcePaths.length;
-  }
-
-  const artifactResult = await admin.storage
-    .from("generated-artifacts")
-    .remove(profileSourcePaths);
-
-  if (artifactResult.error) {
-    failedPathCount += profileSourcePaths.length;
+    buckets.push({
+      bucket: group.bucket,
+      deletedPathCount: failedPathCount > 0 ? 0 : group.paths.length,
+      failedPathCount,
+      paths: group.paths,
+    });
   }
 
   return {
-    deletedPathCount: failedPathCount > 0 ? 0 : profileSourcePaths.length,
-    failedPathCount,
+    buckets,
+    deletedPathCount: buckets.reduce((sum, bucket) => sum + bucket.deletedPathCount, 0),
+    failedPathCount: buckets.reduce((sum, bucket) => sum + bucket.failedPathCount, 0),
   };
 }
 

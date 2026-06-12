@@ -23,7 +23,7 @@ test("requires authentication before creating privacy requests", async ({ reques
   expect(payload.error.code).toBe("auth.required");
 });
 
-test("validates privacy request payloads before creation", async ({ request }) => {
+test("requires authentication before validating privacy request payloads", async ({ request }) => {
   const response = await request.post("/api/privacy/requests", {
     data: {
       requestType: "account_delete",
@@ -31,8 +31,8 @@ test("validates privacy request payloads before creation", async ({ request }) =
   });
   const payload = await response.json();
 
-  expect(response.status()).toBe(400);
-  expect(payload.error.code).toBe("privacy.invalid_request");
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
 });
 
 test("requires authentication before generating a privacy export", async ({ request }) => {
@@ -63,7 +63,7 @@ test("requires owner or admin access before updating privacy requests", async ({
   expect(payload.error.code).toBe("auth.required");
 });
 
-test("validates admin privacy request updates", async ({ request }) => {
+test("requires authentication before validating admin privacy request updates", async ({ request }) => {
   const response = await request.patch(`/api/admin/privacy/requests/${requestId}`, {
     data: {
       status: "erased",
@@ -71,11 +71,11 @@ test("validates admin privacy request updates", async ({ request }) => {
   });
   const payload = await response.json();
 
-  expect(response.status()).toBe(400);
-  expect(payload.error.code).toBe("privacy.invalid_admin_update");
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
 });
 
-test("requires a resolution summary before completing deletion review", async ({ request }) => {
+test("requires authentication before validating deletion review completion", async ({ request }) => {
   const response = await request.patch(`/api/admin/privacy/requests/${requestId}`, {
     data: {
       action: "complete_deletion_review",
@@ -83,8 +83,8 @@ test("requires a resolution summary before completing deletion review", async ({
   });
   const payload = await response.json();
 
-  expect(response.status()).toBe(400);
-  expect(payload.error.code).toBe("privacy.resolution_summary_required");
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
 });
 
 test("requires owner or admin access before completing deletion review", async ({ request }) => {

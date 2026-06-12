@@ -27,6 +27,13 @@ test.describe("privacy deletion execution maturity", () => {
     const admin = createServiceRoleClient();
     const marker = `launch-deletion-${crypto.randomUUID()}`;
     const subjectUserId = await readUserIdByEmail(process.env.QA_DEMO_USER_A_EMAIL ?? "");
+    const sourceStoragePath = `${subjectUserId}/${marker}/source.txt`;
+    const masterPdfPath = `${subjectUserId}/${marker}/master.pdf`;
+    const masterDocxPath = `${subjectUserId}/${marker}/master.docx`;
+    const applicationPdfPath = `${subjectUserId}/${marker}/application.pdf`;
+    const applicationDocxPath = `${subjectUserId}/${marker}/application.docx`;
+    const coverPdfPath = `${subjectUserId}/${marker}/cover.pdf`;
+    const coverDocxPath = `${subjectUserId}/${marker}/cover.docx`;
     const cleanup: CleanupMap = {
       admin_access_audit_events: [],
       audit_events: [],
@@ -45,6 +52,14 @@ test.describe("privacy deletion execution maturity", () => {
     };
 
     try {
+      await uploadStorageObject(admin, "profile-sources", sourceStoragePath, `source ${marker}`);
+      await uploadStorageObject(admin, "generated-artifacts", masterPdfPath, `master pdf ${marker}`);
+      await uploadStorageObject(admin, "generated-artifacts", masterDocxPath, `master docx ${marker}`);
+      await uploadStorageObject(admin, "generated-artifacts", applicationPdfPath, `application pdf ${marker}`);
+      await uploadStorageObject(admin, "generated-artifacts", applicationDocxPath, `application docx ${marker}`);
+      await uploadStorageObject(admin, "generated-artifacts", coverPdfPath, `cover pdf ${marker}`);
+      await uploadStorageObject(admin, "generated-artifacts", coverDocxPath, `cover docx ${marker}`);
+
       const userCookies = await buildAuthCookieHeader({
         email: process.env.QA_DEMO_USER_A_EMAIL ?? "",
         password: process.env.QA_DEMO_USER_A_PASSWORD ?? "",
@@ -56,7 +71,7 @@ test.describe("privacy deletion execution maturity", () => {
         user_id: subjectUserId,
         profile_id: profileId,
         source_type: "txt",
-        storage_path: `${subjectUserId}/${marker}/source.txt`,
+        storage_path: sourceStoragePath,
         original_filename: `${marker}.txt`,
         mime_type: "text/plain",
         extracted_text: `Deletion execution source ${marker}`,
@@ -109,8 +124,8 @@ test.describe("privacy deletion execution maturity", () => {
           model: "test",
           content_json: { marker, kind: "master" },
           storage_path: `${subjectUserId}/${marker}/master.json`,
-          pdf_storage_path: `${subjectUserId}/${marker}/master.pdf`,
-          docx_storage_path: `${subjectUserId}/${marker}/master.docx`,
+          pdf_storage_path: masterPdfPath,
+          docx_storage_path: masterDocxPath,
           status: "ready",
           is_current: false,
         }),
@@ -153,8 +168,8 @@ test.describe("privacy deletion execution maturity", () => {
           prompt_version: "launch-maturity-test",
           model: "test",
           content_json: { marker, kind: "application" },
-          pdf_storage_path: `${subjectUserId}/${marker}/application.pdf`,
-          docx_storage_path: `${subjectUserId}/${marker}/application.docx`,
+          pdf_storage_path: applicationPdfPath,
+          docx_storage_path: applicationDocxPath,
           status: "ready",
           is_current: false,
         }),
@@ -166,8 +181,8 @@ test.describe("privacy deletion execution maturity", () => {
           prompt_version: "launch-maturity-test",
           model: "test",
           content: `Deletion execution cover letter ${marker}`,
-          pdf_storage_path: `${subjectUserId}/${marker}/cover.pdf`,
-          docx_storage_path: `${subjectUserId}/${marker}/cover.docx`,
+          pdf_storage_path: coverPdfPath,
+          docx_storage_path: coverDocxPath,
           status: "ready",
           is_current: false,
         }),
@@ -252,6 +267,13 @@ test.describe("privacy deletion execution maturity", () => {
       const completePayload = await completeResponse.json();
 
       expect(completeResponse.ok()).toBe(true);
+      expect(completePayload.completed.status).toBe("completed");
+      expect(completePayload.completed.deletionExecution.storage.buckets).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ bucket: "profile-sources", failedPathCount: 0 }),
+          expect.objectContaining({ bucket: "generated-artifacts", failedPathCount: 0 }),
+        ]),
+      );
       expect(completePayload.completed.deletionExecution.actions).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ action: "deleted", table: "profile_sources" }),
@@ -287,7 +309,26 @@ test.describe("privacy deletion execution maturity", () => {
 
       const auditEvents = await readAuditEvents(admin, subjectUserId, privacyRequestId);
       expect(auditEvents.some((event) => event.event_type === "privacy.deletion_execution.completed")).toBe(true);
+
+      await expectStorageMissing(admin, "profile-sources", sourceStoragePath);
+      await expectStorageMissing(admin, "generated-artifacts", masterPdfPath);
+      await expectStorageMissing(admin, "generated-artifacts", masterDocxPath);
+      await expectStorageMissing(admin, "generated-artifacts", applicationPdfPath);
+      await expectStorageMissing(admin, "generated-artifacts", applicationDocxPath);
+      await expectStorageMissing(admin, "generated-artifacts", coverPdfPath);
+      await expectStorageMissing(admin, "generated-artifacts", coverDocxPath);
     } finally {
+      await admin.storage.from("profile-sources").remove([sourceStoragePath]);
+      await admin.storage
+        .from("generated-artifacts")
+        .remove([
+          masterPdfPath,
+          masterDocxPath,
+          applicationPdfPath,
+          applicationDocxPath,
+          coverPdfPath,
+          coverDocxPath,
+        ]);
       await cleanupSeededRows(admin, cleanup);
     }
   });
@@ -346,6 +387,33 @@ async function expectMissing(
 
   expect(error).toBeNull();
   expect(data).toBeNull();
+}
+
+async function uploadStorageObject(
+  admin: ReturnType<typeof createServiceRoleClient>,
+  bucket: string,
+  path: string,
+  body: string,
+) {
+  const { error } = await admin.storage.from(bucket).upload(path, new Blob([body]), {
+    contentType: "text/plain",
+    upsert: true,
+  });
+
+  if (error) {
+    throw new Error(`Unable to upload ${bucket}/${path}: ${error.message}`);
+  }
+}
+
+async function expectStorageMissing(
+  admin: ReturnType<typeof createServiceRoleClient>,
+  bucket: string,
+  path: string,
+) {
+  const { data, error } = await admin.storage.from(bucket).download(path);
+
+  expect(data).toBeNull();
+  expect(error?.message ?? "").toMatch(/not found|object/i);
 }
 
 async function readAuditEvents(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import {
   ArrowRight,
@@ -465,6 +465,8 @@ function MobileWorkspaceNav({
   session: WorkspaceSession;
 }) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
   const items = [
     {
       icon: MessageCircle,
@@ -472,7 +474,7 @@ function MobileWorkspaceNav({
       target: "profile" as const,
       chat: true,
     },
-    { icon: FileText, label: "Profile", target: "resume" as const },
+    { icon: FileText, label: "Profile", target: "profile" as const },
     { icon: BriefcaseBusiness, label: "Jobs", target: "jobs" as const },
     { icon: ClipboardList, label: "Apps", target: "applications" as const },
     {
@@ -483,47 +485,85 @@ function MobileWorkspaceNav({
     },
   ];
   const moreItems = [
+    { icon: FileText, label: "Resume", target: "resume" as const },
     { icon: Library, label: "Library", target: "library" as const },
     { icon: Settings, label: "Settings", target: "settings" as const },
     { icon: HelpCircle, label: "Support", target: "support" as const },
   ];
 
+  useEffect(() => {
+    if (!isMoreOpen) return undefined;
+
+    const firstButton = drawerRef.current?.querySelector("button");
+    firstButton?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMoreOpen(false);
+        moreButtonRef.current?.focus();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isMoreOpen]);
+
   return (
     <>
       {isMoreOpen ? (
-        <div className="mobile-more-drawer" role="dialog" aria-label="More workspace destinations">
-          {moreItems.map((item) => {
-            const Icon = item.icon;
+        <>
+          <button
+            aria-hidden="true"
+            className="mobile-more-backdrop"
+            onClick={() => {
+              setIsMoreOpen(false);
+              moreButtonRef.current?.focus();
+            }}
+            tabIndex={-1}
+            type="button"
+          />
+          <div
+            aria-label="More workspace destinations"
+            aria-modal="true"
+            className="mobile-more-drawer"
+            id="mobile-more-drawer"
+            ref={drawerRef}
+            role="dialog"
+          >
+            {moreItems.map((item) => {
+              const Icon = item.icon;
 
-            return (
+              return (
+                <button
+                  className={activeView === item.target ? "active" : undefined}
+                  key={item.target}
+                  onClick={() => {
+                    setIsMoreOpen(false);
+                    onSelectView(item.target);
+                  }}
+                  type="button"
+                >
+                  <Icon size={17} aria-hidden="true" />
+                  {item.label}
+                </button>
+              );
+            })}
+            {session.admin.isOwner ? (
               <button
-                className={activeView === item.target ? "active" : undefined}
-                key={item.target}
+                className={activeView === "owner" ? "active" : undefined}
                 onClick={() => {
                   setIsMoreOpen(false);
-                  onSelectView(item.target);
+                  onSelectView("owner");
                 }}
                 type="button"
               >
-                <Icon size={17} aria-hidden="true" />
-                {item.label}
+                <Shield size={17} aria-hidden="true" />
+                Owner
               </button>
-            );
-          })}
-          {session.admin.isOwner ? (
-            <button
-              className={activeView === "owner" ? "active" : undefined}
-              onClick={() => {
-                setIsMoreOpen(false);
-                onSelectView("owner");
-              }}
-              type="button"
-            >
-              <Shield size={17} aria-hidden="true" />
-              Owner
-            </button>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
+        </>
       ) : null}
       <nav className="mobile-workspace-nav" aria-label="Workspace sections">
         {items.map((item) => {
@@ -541,6 +581,9 @@ function MobileWorkspaceNav({
               aria-current={isActive ? "page" : undefined}
               className={isActive ? "active" : undefined}
               key={`${item.label}-${item.target}`}
+              ref={"more" in item ? moreButtonRef : undefined}
+              aria-expanded={"more" in item ? isMoreOpen : undefined}
+              aria-controls={"more" in item ? "mobile-more-drawer" : undefined}
               onClick={() => {
                 if (item.chat) {
                   setIsMoreOpen(false);

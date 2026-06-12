@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 
+import {
+  apiAuthErrorDetails,
+  apiAuthErrorResponse,
+  requireProtectedApiSession,
+} from "@/lib/api/auth";
 import { brand } from "@/lib/brand";
 import {
   getRecentProfileSources,
@@ -16,6 +21,7 @@ export async function GET() {
   const requestId = crypto.randomUUID();
 
   try {
+    await requireProtectedApiSession();
     const sources = await getRecentProfileSources();
 
     return NextResponse.json({
@@ -24,20 +30,12 @@ export async function GET() {
       sources,
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: {
-            category: "auth",
-            code: "auth.required",
-            message: "Please sign in before reading profile sources.",
-          },
-        },
-        { status: 401 },
-      );
-    }
+    const authResponse = apiAuthErrorResponse({
+      error,
+      fallbackMessage: "Please sign in before reading profile sources.",
+      requestId,
+    });
+    if (authResponse) return authResponse;
 
     return NextResponse.json(
       {
@@ -107,6 +105,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const source = await ingestProfileSource(parsed.data);
 
     return NextResponse.json({
@@ -115,14 +114,14 @@ export async function POST(request: Request) {
       source,
     });
   } catch (error) {
-    const { code, message, status } = toApiError(error);
+    const { category, code, message, status } = toApiError(error);
 
     return NextResponse.json(
       {
         ok: false,
         requestId,
         error: {
-          category: status === 401 ? "auth" : "validation",
+          category,
           code,
           message,
         },
@@ -133,9 +132,13 @@ export async function POST(request: Request) {
 }
 
 function toApiError(error: unknown) {
+  const authError = apiAuthErrorDetails(error, "Please sign in before adding profile sources.");
+  if (authError) return authError;
+
   if (error instanceof Error) {
     if (error.message === "AUTH_REQUIRED") {
       return {
+        category: "auth",
         code: "auth.required",
         message: "Please sign in before adding profile sources.",
         status: 401,
@@ -144,6 +147,7 @@ function toApiError(error: unknown) {
 
     if (error.message === "INVALID_STORAGE_PATH") {
       return {
+        category: "validation",
         code: "source.invalid_storage_path",
         message: "Uploaded files must stay inside your private user folder.",
         status: 400,
@@ -152,6 +156,7 @@ function toApiError(error: unknown) {
 
     if (error.message === "LINKEDIN_URL_REQUIRED") {
       return {
+        category: "validation",
         code: "source.linkedin_url_required",
         message: "LinkedIn sources must use a linkedin.com URL.",
         status: 400,
@@ -160,6 +165,7 @@ function toApiError(error: unknown) {
 
     if (error.message === "LINKEDIN_SOURCE_REQUIRED") {
       return {
+        category: "validation",
         code: "source.linkedin_source_required",
         message: "LinkedIn sources need a profile URL or an uploaded LinkedIn export.",
         status: 400,
@@ -168,6 +174,7 @@ function toApiError(error: unknown) {
 
     if (error.message === "DOC_UNSUPPORTED") {
       return {
+        category: "validation",
         code: "source.doc_unsupported",
         message: `Older .doc files are not reliable for profile intake. Save or export the file as PDF or DOCX and drop it into ${brand.name}.`,
         status: 422,
@@ -176,6 +183,7 @@ function toApiError(error: unknown) {
 
     if (error.message.endsWith("_REQUIRED")) {
       return {
+        category: "validation",
         code: `source.${error.message.toLowerCase()}`,
         message: "The source type and provided source details do not match.",
         status: 400,
@@ -184,6 +192,7 @@ function toApiError(error: unknown) {
   }
 
   return {
+    category: "validation",
     code: "source.create_failed",
     message: "Unable to save that profile source yet.",
     status: 400,

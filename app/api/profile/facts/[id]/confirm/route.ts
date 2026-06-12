@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import {
   confirmProfileFact,
   confirmProfileFactSchema,
@@ -50,6 +51,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
+    await requireProtectedApiSession();
     const fact = await confirmProfileFact(parsed.data);
 
     return NextResponse.json({
@@ -128,6 +130,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   try {
+    await requireProtectedApiSession();
     const fact = await updateProfileFact(parsed.data);
 
     return NextResponse.json({
@@ -184,6 +187,7 @@ export async function DELETE(request: Request, context: RouteContext) {
   }
 
   try {
+    await requireProtectedApiSession();
     const fact = await deleteProfileFact(parsed.data);
 
     return NextResponse.json({
@@ -206,14 +210,8 @@ export async function DELETE(request: Request, context: RouteContext) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-    return {
-      category: "auth",
-      code: "auth.required",
-      message: "Please sign in before confirming profile details.",
-      status: 401,
-    };
-  }
+  const authError = apiAuthErrorDetails(error, "Please sign in before confirming profile details.");
+  if (authError) return authError;
 
   if (error instanceof Error && error.message === "PROFILE_FACT_NOT_FOUND") {
     return {

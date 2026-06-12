@@ -1,3 +1,4 @@
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
@@ -18,7 +19,6 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
-import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   const requestId = createRequestId();
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await requireSignedInUser();
+    await requireProtectedApiSession();
     await requireCredits("masterResumeGenerate");
     const operationKey = getCreditOperationKey(
       request,
@@ -135,6 +135,7 @@ export async function PATCH(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const overview = await updateMasterResume(parsed.data);
 
     return apiSuccess({
@@ -146,26 +147,9 @@ export async function PATCH(request: Request) {
   }
 }
 
-async function requireSignedInUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("AUTH_REQUIRED");
-  }
-}
-
 function toApiError(error: unknown) {
-  if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-    return {
-      category: "auth",
-      code: "auth.required",
-      message: "Please sign in before working on your resume.",
-      status: 401,
-    };
-  }
+  const authError = apiAuthErrorDetails(error, "Please sign in before working on your resume.");
+  if (authError) return authError;
 
   if (error instanceof Error && error.message === "MASTER_RESUME_CONTEXT_TOO_THIN") {
     return {

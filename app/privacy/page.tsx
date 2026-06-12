@@ -47,7 +47,7 @@ export default function PrivacyPage() {
           We use information to authenticate users, build and maintain career
           profiles, parse sources, generate and export resumes and cover letters,
           compare jobs against profile context, track applications, enforce
-          subscription or credit limits, maintain audit trails, provide support,
+          credit and usage limits, maintain audit trails, provide support,
           improve reliability, prevent abuse, debug errors, secure the product,
           and comply with legal obligations.
         </p>
@@ -78,6 +78,12 @@ export default function PrivacyPage() {
           responsible for ensuring you have the right to submit any link, file, or
           content you provide.
         </p>
+        <p>
+          LinkedIn sign-in is used only for authentication in V1. Public LinkedIn
+          URLs, pasted profile text, or exported profile files are treated as
+          user-provided evidence. {brand.name} does not offer authenticated
+          LinkedIn import in V1.
+        </p>
 
         <h2>7. Data Separation and Access Control</h2>
         <p>
@@ -99,7 +105,8 @@ export default function PrivacyPage() {
         <h2>9. Your Choices</h2>
         <p>
           You can choose what to upload, paste, save, edit, export, or submit
-          outside {brand.name}. You may request access, correction, deletion, or export
+          outside {brand.name}. {brand.name} prepares and tracks materials; you decide
+          where and when to submit them. You may request access, correction, deletion, or export
           of your personal information through the support channel made available
           in the product. Some audit-minimum records may be retained where legally
           or operationally required.

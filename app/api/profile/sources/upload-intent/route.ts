@@ -1,3 +1,4 @@
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { apiError, apiSuccess, createRequestId, readJsonBody } from "@/lib/api/responses";
 import {
   createProfileSourceUploadIntent,
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const intent = await createProfileSourceUploadIntent(parsed.data);
 
     return apiSuccess({
@@ -49,14 +51,8 @@ export async function POST(request: Request) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-    return {
-      category: "auth",
-      code: "auth.required",
-      message: "Please sign in before uploading profile sources.",
-      status: 401,
-    };
-  }
+  const authError = apiAuthErrorDetails(error, "Please sign in before uploading profile sources.");
+  if (authError) return authError;
 
   if (error instanceof Error && error.message === "UNSUPPORTED_UPLOAD_TYPE") {
     return {

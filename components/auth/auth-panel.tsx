@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Brain,
@@ -111,6 +111,13 @@ export function AuthPanel() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement | null>(null);
+
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.focus();
+    }
+  }, [error]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -343,7 +350,7 @@ export function AuthPanel() {
         </div>
         <div className="trust-note">
           <ShieldCheck size={18} aria-hidden="true" />
-          <span>Private by default. You approve what is saved, used, and exported.</span>
+          <span>Private by default. You control uploads, review inferred facts, and approve exports.</span>
         </div>
       </div>
 
@@ -474,7 +481,11 @@ export function AuthPanel() {
           </label>
         ) : null}
 
-        {error ? <p className="form-message error">{error}</p> : null}
+        {error ? (
+          <p className="form-message error" ref={errorRef} role="alert" tabIndex={-1}>
+            {error}
+          </p>
+        ) : null}
         {status ? <p className="form-message">{status}</p> : null}
 
         <button className="primary-action" disabled={isSubmitting} type="submit">
@@ -547,7 +558,7 @@ export function AuthPanel() {
             <div className="oauth-grid" aria-label="Social sign in options">
               {oauthProviders.map((provider) => (
                 <button
-                  aria-label={`Continue with ${provider.label}`}
+                  aria-label={provider.label}
                   className="oauth-button"
                   disabled={isSubmitting}
                   key={provider.label}
@@ -626,7 +637,7 @@ export function AuthPanel() {
 
       <section className="auth-section auth-pricing-section" id="pricing" aria-labelledby="pricing-title">
         <p className="eyebrow">Pricing</p>
-        <h2 id="pricing-title">Pricing for a job search, not a forever subscription.</h2>
+        <h2 id="pricing-title">Credit packs for a focused job search.</h2>
         <p>
           We know job hunting is usually a focused phase. {brand.name} uses credits so you can
           start with what you need, add more as you go, and stay in control. There are no

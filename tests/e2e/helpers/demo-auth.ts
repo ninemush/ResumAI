@@ -155,10 +155,12 @@ export async function buildAdminAuthCookieHeader({
 
 export async function buildAuthCookieHeader({
   email,
+  includeEmailMfa = true,
   password,
   request,
 }: {
   email: string;
+  includeEmailMfa?: boolean;
   password: string;
   request: APIRequestContext;
 }) {
@@ -183,15 +185,19 @@ export async function buildAuthCookieHeader({
   const cookieName = `sb-${projectRef}-auth-token`;
   const cookieValue = `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`;
   const chunks = createChunks(cookieName, cookieValue);
-  const mfaCookieValue = signMfaCookie({
-    email,
-    userId: session.user.id,
-  });
+  const mfaCookieValue = includeEmailMfa
+    ? signMfaCookie({
+        email,
+        userId: session.user.id,
+      })
+    : null;
 
   return [
     ...chunks.map(({ name, value }) => `${name}=${value}`),
-    `pramania_email_mfa=${mfaCookieValue}`,
-  ].join("; ");
+    mfaCookieValue ? `pramania_email_mfa=${mfaCookieValue}` : null,
+  ]
+    .filter(Boolean)
+    .join("; ");
 }
 
 function signMfaCookie({ email, userId }: { email: string; userId: string }) {

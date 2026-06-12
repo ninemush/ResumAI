@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
 import {
   profileIntakeRequestSchema,
   runProfileIntake,
@@ -44,13 +45,17 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const result = await runProfileIntake(parsed.data);
 
     return NextResponse.json(result);
   } catch (error) {
-    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-      return NextResponse.json({ error: "Sign in is required." }, { status: 401 });
-    }
+    const authResponse = apiAuthErrorResponse({
+      error,
+      fallbackMessage: "Sign in is required.",
+      requestId,
+    });
+    if (authResponse) return authResponse;
 
     console.warn(
       JSON.stringify({

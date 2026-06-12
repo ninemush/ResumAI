@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import {
   updateApplicationArchiveState,
   updateApplicationArchiveStateSchema,
@@ -72,6 +73,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   try {
+    await requireProtectedApiSession();
     const result = await updateApplicationArchiveState(parsed.data);
 
     return NextResponse.json({
@@ -98,16 +100,13 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message === "AUTH_REQUIRED") {
-      return {
-        category: "auth",
-        code: "auth.required",
-        message: "Please sign in before changing an application archive state.",
-        status: 401,
-      };
-    }
+  const authError = apiAuthErrorDetails(
+    error,
+    "Please sign in before changing an application archive state.",
+  );
+  if (authError) return authError;
 
+  if (error instanceof Error) {
     if (error.message === "APPLICATION_NOT_FOUND") {
       return {
         category: "not_found",

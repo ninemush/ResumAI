@@ -88,7 +88,7 @@ export const APP_CAPABILITIES: AppCapability[] = [
   {
     actionLabel: "Review jobs",
     creditCost: null,
-    description: "Review roles that were ingested from URLs or found for the user.",
+    description: "Review roles the user provided through job URLs or pasted job text.",
     examples: ["job post", "job URL", "fit", "role under review"],
     id: "jobs",
     userValue: "See fit, gaps, risks, and the next decision for each role.",

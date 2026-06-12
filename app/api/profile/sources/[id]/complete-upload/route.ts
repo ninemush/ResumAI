@@ -1,3 +1,4 @@
+import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { apiError, apiSuccess, createRequestId } from "@/lib/api/responses";
 import { completeProfileSourceUpload } from "@/lib/profile/profile-source-ingestion";
 import {
@@ -31,6 +32,7 @@ export async function POST(request: Request, context: RouteContext) {
   const params = await context.params;
 
   try {
+    await requireProtectedApiSession();
     const source = await completeProfileSourceUpload({ sourceId: params.id });
 
     return apiSuccess({
@@ -43,14 +45,8 @@ export async function POST(request: Request, context: RouteContext) {
 }
 
 function toApiError(error: unknown) {
-  if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-    return {
-      category: "auth",
-      code: "auth.required",
-      message: "Please sign in before completing profile uploads.",
-      status: 401,
-    };
-  }
+  const authError = apiAuthErrorDetails(error, "Please sign in before completing profile uploads.");
+  if (authError) return authError;
 
   if (error instanceof Error && error.message === "SOURCE_NOT_FOUND") {
     return {

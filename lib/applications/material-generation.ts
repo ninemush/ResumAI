@@ -7,6 +7,10 @@ import {
   APPLICATION_MATERIALS_INSTRUCTIONS,
   APPLICATION_MATERIALS_PROMPT_VERSION,
 } from "@/lib/ai/prompts/application-materials";
+import {
+  buildSupportedEvidenceCorpus,
+  reviewResumeClaimProvenance,
+} from "@/lib/ai/claim-provenance";
 import { getMaterialsModel, createOpenAIResponse } from "@/lib/ai/openai";
 import { analyzeJobFit, readUserFitContext, type JobFitAnalysis } from "@/lib/jobs/job-fit";
 import {
@@ -380,7 +384,10 @@ export async function generateApplicationMaterials(
   }
 
   const generated = generatedMaterialsSchema.parse(JSON.parse(response.output_text));
-  const generatedResume = normalizeGeneratedApplicationResume(generated.resume, masterResume);
+  const generatedResume = reviewResumeClaimProvenance({
+    evidenceCorpus: buildApplicationResumeEvidenceCorpus(facts ?? [], masterResume),
+    resume: normalizeGeneratedApplicationResume(generated.resume, masterResume),
+  });
   const nextVersion = existingMaterials
     ? Math.max(existingMaterials.resume.version_number, existingMaterials.coverLetter.version_number) + 1
     : 1;
@@ -816,6 +823,67 @@ function normalizeGeneratedApplicationResume(resume: ResumeContent, masterResume
     certifications:
       resume.certifications.length > 0 ? resume.certifications : (masterResume?.certifications ?? []),
   });
+}
+
+function buildApplicationResumeEvidenceCorpus(
+  facts: Array<{
+    evidence_status: string | null;
+    fact_type: string;
+    fact_value: string;
+    user_confirmed: boolean | null;
+  }>,
+  masterResume: ResumeContent | null,
+) {
+  return buildSupportedEvidenceCorpus([
+    ...facts.map((fact) => ({
+      label: fact.fact_type,
+      status: fact.evidence_status,
+      text: fact.fact_value,
+      userConfirmed: fact.user_confirmed,
+    })),
+    {
+      label: "master resume",
+      status: "source_excerpt",
+      text: masterResume ? flattenResumeEvidence(masterResume) : null,
+      userConfirmed: true,
+    },
+  ]);
+}
+
+function flattenResumeEvidence(resume: ResumeContent) {
+  return [
+    resume.headline,
+    resume.summary,
+    ...resume.skills,
+    ...resume.experienceBullets,
+    ...resume.experienceSections.flatMap((section) => [
+      section.roleTitle,
+      section.company,
+      section.location,
+      section.dates,
+      ...section.bullets,
+    ]),
+    ...resume.specialProjects.flatMap((project) => [
+      project.name,
+      project.context,
+      project.dates,
+      ...project.bullets,
+    ]),
+    ...resume.languages.flatMap((language) => [language.name, language.proficiency]),
+    ...resume.education.flatMap((education) => [
+      education.institution,
+      education.credential,
+      education.location,
+      education.dates,
+    ]),
+    ...resume.certifications.flatMap((certification) => [
+      certification.name,
+      certification.issuer,
+      certification.date,
+    ]),
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function normalizeApplicationContext(application: RawApplicationContext): ApplicationContext {

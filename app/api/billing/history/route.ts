@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { requireProtectedApiSession } from "@/lib/api/auth";
 import { buildCreditsApiError, getCreditHistory } from "@/lib/billing/credits";
 
 export async function GET() {
   const requestId = crypto.randomUUID();
 
   try {
+    await requireProtectedApiSession();
     const history = await getCreditHistory();
 
     return NextResponse.json({

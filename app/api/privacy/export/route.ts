@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
 import { createUserDataExport } from "@/lib/privacy/data-export";
 import {
   checkRateLimit,
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession();
     const exportResult = await createUserDataExport();
 
     return NextResponse.json({
@@ -34,16 +36,12 @@ export async function POST(request: Request) {
       storagePath: exportResult.storagePath,
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: { category: "auth", code: "auth.required", message: "Sign in is required." },
-        },
-        { status: 401 },
-      );
-    }
+    const authResponse = apiAuthErrorResponse({
+      error,
+      fallbackMessage: "Sign in is required.",
+      requestId,
+    });
+    if (authResponse) return authResponse;
 
     console.warn(
       JSON.stringify({
