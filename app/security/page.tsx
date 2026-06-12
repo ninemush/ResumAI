@@ -38,6 +38,10 @@ export default function SecurityPage() {
           notification may be required, but final notification decisions require
           qualified review.
         </p>
+        <p>
+          To report a security or account-access concern, contact{" "}
+          <a href={`mailto:${brand.supportEmail}`}>{brand.supportEmail}</a>.
+        </p>
 
         <h2>Production Hardening Backlog</h2>
         {complianceHardeningChecklist.map((item) => (

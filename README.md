@@ -49,9 +49,14 @@ OPENAI_FALLBACK_MODEL=gpt-4.1
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_APP_NAME=Pramania
 NEXT_PUBLIC_APP_TAGLINE=Career clarity, guided by intelligence
+NEXT_PUBLIC_CONTACT_EMAIL=hello@pramania.com
+NEXT_PUBLIC_SUPPORT_EMAIL=support@pramania.com
 ```
 
 For production, set `NEXT_PUBLIC_SITE_URL=https://pramania.com`.
+Public website enquiries use `hello@pramania.com`. Product support,
+legal/privacy/terms, billing/refund, and account help use
+`support@pramania.com`.
 
 ## Development
 

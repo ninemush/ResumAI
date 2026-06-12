@@ -40,6 +40,10 @@ export default function AiUsePage() {
           user-provided evidence. Generated content may be inaccurate or
           incomplete.
         </p>
+        <p>
+          For AI-assisted processing questions, contact{" "}
+          <a href={`mailto:${brand.supportEmail}`}>{brand.supportEmail}</a>.
+        </p>
       </section>
     </main>
   );

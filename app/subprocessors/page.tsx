@@ -33,6 +33,10 @@ export default function SubprocessorsPage() {
             <p>Operational status: {processor.status}.</p>
           </section>
         ))}
+        <p>
+          For privacy or subprocessor questions, contact{" "}
+          <a href={`mailto:${brand.supportEmail}`}>{brand.supportEmail}</a>.
+        </p>
       </section>
     </main>
   );

@@ -149,7 +149,8 @@ export function SupportPanel() {
         <p>
           Create a support issue directly for product problems, billing/refund
           questions, privacy or security requests, and account recovery help.
-          Chat can still help with quick guidance.
+          Chat can still help with quick guidance. You can also email{" "}
+          <a href={`mailto:${brand.supportEmail}`}>{brand.supportEmail}</a>.
         </p>
       </div>
 
@@ -182,7 +183,7 @@ export function SupportPanel() {
             <p>
               Do not include patient names, MRNs, DOBs, clinical notes, SSNs,
               private employer records, or other unauthorized sensitive data in
-              support messages. Use de-identified examples instead.
+              support messages or emails. Use de-identified examples instead.
             </p>
           </div>
         </article>

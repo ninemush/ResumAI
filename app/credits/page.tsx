@@ -199,6 +199,7 @@ export default function CreditsPage() {
           <div className="credits-legal-links">
             <Link href="/terms">Terms and Conditions</Link>
             <Link href="/privacy">Privacy Policy</Link>
+            <a href={`mailto:${brand.supportEmail}`}>Billing support</a>
           </div>
         </section>
       </section>
