@@ -26,6 +26,7 @@ export type JobFitAnalysis = {
 };
 
 type ProfileFact = {
+  evidence_status?: "user_confirmed" | "source_supported" | "inferred" | "conflict" | "missing_evidence" | null;
   fact_type: string;
   fact_value: string;
   user_confirmed?: boolean;
@@ -138,7 +139,7 @@ export async function readUserFitContext(userId: string) {
     await Promise.all([
       supabase
         .from("profile_facts")
-        .select("fact_type, fact_value, user_confirmed")
+        .select("fact_type, fact_value, evidence_status, user_confirmed")
         .eq("user_id", userId)
         .order("user_confirmed", { ascending: false })
         .order("confidence", { ascending: false })
@@ -221,6 +222,7 @@ export function analyzeJobFit({
     missingKeywords,
     senioritySignals,
     signalGaps: jobSignalGroups.filter((signal) => !candidateSignalGroups.includes(signal)),
+    untrustedFacts: profileFacts.filter((fact) => !isTrustedProfileFact(fact)),
   });
 
   return {
@@ -262,6 +264,7 @@ function extractCandidateKeywords({
   masterResume: ResumeContent | null;
   profileFacts: ProfileFact[];
 }) {
+  const trustedFacts = profileFacts.filter(isTrustedProfileFact);
   const resumeTerms = masterResume
     ? [
         masterResume.headline,
@@ -270,7 +273,7 @@ function extractCandidateKeywords({
         ...masterResume.experienceBullets,
       ]
     : [];
-  const factTerms = profileFacts
+  const factTerms = trustedFacts
     .flatMap((fact) => [fact.fact_value]);
 
   return uniqueKeywords([...resumeTerms, ...factTerms].flatMap(extractTerms)).slice(0, 60);
@@ -283,12 +286,14 @@ function buildCandidateText({
   masterResume: ResumeContent | null;
   profileFacts: ProfileFact[];
 }) {
+  const trustedFacts = profileFacts.filter(isTrustedProfileFact);
+
   return [
     masterResume?.headline,
     masterResume?.summary,
     ...(masterResume?.skills ?? []),
     ...(masterResume?.experienceBullets ?? []),
-    ...profileFacts.map((fact) => fact.fact_value),
+    ...trustedFacts.map((fact) => fact.fact_value),
   ]
     .filter(Boolean)
     .join("\n");
@@ -347,7 +352,7 @@ function readRecommendation({
   score: number;
   signalScore: number;
 }): JobFitAnalysis["recommendation"] {
-  if (profileFacts.length < 3) {
+  if (profileFacts.filter(isTrustedProfileFact).length < 3) {
     return "needs_profile";
   }
 
@@ -372,8 +377,8 @@ function readFitRisks({
 }) {
   const risks: string[] = [];
 
-  if (profileFacts.length < 3) {
-    risks.push("The profile has too little role evidence for a confident fit call.");
+  if (profileFacts.filter(isTrustedProfileFact).length < 3) {
+    risks.push("The profile has too little trusted role evidence for a confident fit call.");
   }
 
   if (!masterResume) {
@@ -395,12 +400,23 @@ function readFitQuestions({
   missingKeywords,
   senioritySignals,
   signalGaps,
+  untrustedFacts,
 }: {
   missingKeywords: string[];
   senioritySignals: string[];
   signalGaps: string[];
+  untrustedFacts: ProfileFact[];
 }) {
   const questions: string[] = [];
+
+  if (untrustedFacts.length > 0) {
+    questions.push(
+      `Confirm or remove unsupported profile facts before relying on them: ${untrustedFacts
+        .slice(0, 2)
+        .map((fact) => fact.fact_value)
+        .join("; ")}.`,
+    );
+  }
 
   if (signalGaps.length > 0) {
     questions.push(`Can we substantiate ${signalGaps.slice(0, 2).join(" and ")} with real examples?`);
@@ -417,6 +433,14 @@ function readFitQuestions({
   questions.push("Do you want to log this as an application and generate tailored materials?");
 
   return questions.slice(0, 3);
+}
+
+function isTrustedProfileFact(fact: ProfileFact) {
+  return (
+    fact.user_confirmed === true ||
+    fact.evidence_status === "user_confirmed" ||
+    fact.evidence_status === "source_supported"
+  );
 }
 
 function readSenioritySignals(jobText: string) {

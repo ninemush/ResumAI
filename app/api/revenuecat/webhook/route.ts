@@ -20,6 +20,7 @@ const revenueCatProcessResultSchema = z.object({
   ledgerId: z.string().uuid().nullable().optional(),
 });
 const PURCHASE_REDEEMED_EVENT_TYPES = new Set(["PURCHASE_REDEEMED"]);
+const REVERSAL_EVENT_PATTERN = /\b(refund|reversal|chargeback|cancellation)\b/i;
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
@@ -93,6 +94,28 @@ export async function POST(request: Request) {
   }
 
   const eventType = parsed.data.event.type ?? "";
+  const productId = parsed.data.event.product_id ?? "";
+  const appUserId = parsed.data.event.app_user_id ?? "";
+
+  if (REVERSAL_EVENT_PATTERN.test(eventType)) {
+    if (appUserId && isUuid(appUserId)) {
+      await persistRevenueCatReversalEvent({
+        appUserId,
+        body,
+        eventId: parsed.data.event.id,
+        eventType,
+        productId,
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      ignored: true,
+      reason: "recorded_reversal_metadata",
+      requestId,
+    });
+  }
+
   if (!PURCHASE_REDEEMED_EVENT_TYPES.has(eventType)) {
     return NextResponse.json({
       ok: true,
@@ -102,8 +125,6 @@ export async function POST(request: Request) {
     });
   }
 
-  const productId = parsed.data.event.product_id ?? "";
-  const appUserId = parsed.data.event.app_user_id ?? "";
   const productMap = readProductCreditMap();
   const creditAmount = productMap[productId] ?? 0;
 
@@ -277,6 +298,54 @@ async function persistIgnoredRevenueCatEvent({
     {
       ignoreDuplicates: true,
       onConflict: "event_id",
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function persistRevenueCatReversalEvent({
+  appUserId,
+  body,
+  eventId,
+  eventType,
+  productId,
+}: {
+  appUserId: string;
+  body: unknown;
+  eventId: string;
+  eventType: string;
+  productId: string;
+}) {
+  const supabase = createAdminClient();
+  const { data: priorEvent } = await supabase
+    .from("revenuecat_events")
+    .select("credit_ledger_id")
+    .eq("app_user_id", appUserId)
+    .eq("product_id", productId)
+    .not("credit_ledger_id", "is", null)
+    .order("processed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = await supabase.from("credit_reversals").upsert(
+    {
+      metadata: {
+        event_id: eventId,
+        event_type: eventType,
+        product_id: productId,
+        raw_event: body,
+      },
+      original_ledger_event_id: priorEvent?.credit_ledger_id ?? null,
+      provider_reference: eventId,
+      reason: eventType || "revenuecat_reversal",
+      user_id: appUserId,
+    },
+    {
+      ignoreDuplicates: true,
+      onConflict: "provider_reference",
     },
   );
 

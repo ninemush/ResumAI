@@ -40,11 +40,6 @@ test.describe("hostile source ingestion maturity", () => {
       },
       {
         fileSize: 256,
-        mimeType: "application/zip",
-        originalFilename: "linkedin-archive.zip",
-      },
-      {
-        fileSize: 256,
         mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         originalFilename: "misleading.pdf",
       },

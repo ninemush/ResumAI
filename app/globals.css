@@ -5688,6 +5688,46 @@ input:focus {
   min-width: 0;
 }
 
+@media (max-width: 1440px) {
+  .workspace-shell {
+    grid-template-columns:
+      var(--nav-width, 260px) 6px minmax(0, 1fr) 6px
+      minmax(340px, var(--conversation-width, 380px));
+  }
+
+  .job-record-header,
+  .job-record {
+    grid-template-columns: minmax(0, 1fr) minmax(96px, auto) minmax(118px, auto);
+  }
+
+  .job-record .record-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .application-record-header,
+  .application-record {
+    grid-template-columns: minmax(0, 1.05fr) minmax(220px, 0.95fr);
+  }
+
+  .application-stage-cell,
+  .application-record .record-actions {
+    grid-column: span 1;
+  }
+
+  .application-record .record-actions {
+    justify-content: flex-start;
+  }
+
+  .application-record .record-actions .compact-action {
+    flex: 1 1 112px;
+  }
+
+  .fact-receipt-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .application-record-header span:nth-child(3),
 .application-record-header span:nth-child(4) {
   display: none;
@@ -7795,6 +7835,33 @@ input:focus {
   line-height: 1.45;
 }
 
+.fact-receipt-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fact-receipt-card p {
+  color: var(--ink-soft);
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
+.fact-receipt-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.fact-receipt-meta span {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-pill);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 5px 8px;
+}
+
 .fact-group textarea {
   background: rgba(255, 255, 255, 0.66);
   border: 1px solid var(--line);
@@ -8874,6 +8941,21 @@ input:focus {
     padding: 18px 18px 96px;
     position: relative;
     z-index: 1;
+  }
+
+  .profile-pane,
+  .jobs-panel,
+  .applications-panel,
+  .support-panel,
+  .settings-panel,
+  .settings-pane,
+  .library-workspace,
+  .resume-pane {
+    padding-bottom: calc(118px + env(safe-area-inset-bottom));
+  }
+
+  .conversation-pane {
+    padding-bottom: calc(106px + env(safe-area-inset-bottom));
   }
 
   .credit-status-banner,

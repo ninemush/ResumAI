@@ -38,16 +38,31 @@ type MaterialReview = {
     status: string;
   };
   coverLetter: {
+    claimRisks: {
+      category:
+        | "credential"
+        | "education"
+        | "employer"
+        | "location"
+        | "numeric_achievement"
+        | "salary"
+        | "seniority"
+        | "title"
+        | "work_eligibility";
+      severity: "high";
+      text: string;
+    }[];
     content: string;
     docxDownloadUrl: string | null;
     id: string;
     pdfDownloadUrl: string | null;
+    reviewerNotes: string[];
     status: string;
     updatedAt: string;
   } | null;
   exportReadiness: {
     blockingRisks: {
-      category: "keyword_gap" | "reviewer_note";
+      category: "cover_letter_claim" | "keyword_gap" | "reviewer_note";
       severity: "high" | "medium";
       text: string;
     }[];
@@ -830,7 +845,7 @@ export function ApplicationPanel({
             <div className="material-readiness claim-review-required">
               <strong>
                 <AlertTriangle size={15} aria-hidden="true" />
-                Review high-impact facts before export
+                Review resume and cover-letter facts before export
               </strong>
               <ul>
                 {activeReview.exportReadiness.blockingRisks.map((risk) => (
@@ -857,6 +872,7 @@ export function ApplicationPanel({
             <PacketPreview
               application={activeReview.application}
               coverLetter={coverLetterDraft}
+              coverLetterNotes={activeReview.coverLetter.reviewerNotes}
               resume={resumeDraft}
             />
           ) : (
@@ -1170,10 +1186,12 @@ function formatExportStatus(status: MaterialReview["exportReadiness"]["status"])
 function PacketPreview({
   application,
   coverLetter,
+  coverLetterNotes,
   resume,
 }: {
   application: MaterialReview["application"];
   coverLetter: string;
+  coverLetterNotes: string[];
   resume: ResumeContent;
 }) {
   const experienceSections = resume.experienceSections;
@@ -1309,6 +1327,16 @@ function PacketPreview({
             <p key={paragraph}>{paragraph}</p>
           ))}
         </div>
+        {coverLetterNotes.length > 0 ? (
+          <div className="packet-preview-section packet-preview-review">
+            <h4>Cover letter review</h4>
+            <ul>
+              {coverLetterNotes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </article>
     </div>
   );

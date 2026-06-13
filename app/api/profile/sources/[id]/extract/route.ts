@@ -4,12 +4,9 @@ import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth"
 import { brand } from "@/lib/brand";
 import {
   buildCreditsApiError,
-  finalizeCreditReservation,
   getCreditOperationKey,
-  requireCredits,
-  releaseCreditReservation,
-  reserveCredits,
 } from "@/lib/billing/credits";
+import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
   extractProfileSourceText,
   profileSourceExtractionRequestSchema,
@@ -64,41 +61,80 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     await requireProtectedApiSession();
-    await requireCredits("profileSourceExtract");
-    const reservation = await reserveCredits({
+    const operationKey = getCreditOperationKey(
+      request,
+      `profileSourceExtract:${params.id}`,
+    );
+    const paidOperation = await runPaidCreditOperation({
+      buildOutput: (result) => ({
+        ledgerMetadata: {
+          career_profile_id: result.careerProfile?.id ?? null,
+          source_analysis_id: result.sourceAnalysis?.id ?? null,
+        },
+        outputIds: {
+          careerProfileId: result.careerProfile?.id ?? null,
+          sourceAnalysisId: result.sourceAnalysis?.id ?? null,
+          sourceId: result.source.id,
+        },
+        recordMetadata: {
+          career_profile_id: result.careerProfile?.id ?? null,
+          source_analysis_id: result.sourceAnalysis?.id ?? null,
+          source_id: result.source.id,
+        },
+        resourceId: params.id,
+      }),
+      buildReusedResult: (output) => ({
+        careerProfile:
+          typeof output.output_ids.careerProfileId === "string"
+            ? {
+                id: output.output_ids.careerProfileId,
+                status: "ready",
+                versionNumber: 0,
+              }
+            : null,
+        intake: {
+          assistantMessage: "This source was already read for the same retry-safe operation.",
+          facts: [],
+          followUpQuestions: [],
+          inScope: true,
+          model: "stored",
+          profileDraft: {
+            displayName: null,
+            headline: null,
+            summary: null,
+            targetDirection: null,
+            targetLevel: null,
+          },
+          promptVersion: "stored",
+          roleRecommendations: [],
+          savedFactCount: 0,
+          suggestedDirection: null,
+        },
+        source: {
+          extractedTextLength: 0,
+          extractionStatus: "analyzed" as const,
+          id:
+            typeof output.output_ids.sourceId === "string"
+              ? output.output_ids.sourceId
+              : params.id,
+        },
+        sourceAnalysis:
+          typeof output.output_ids.sourceAnalysisId === "string"
+            ? { id: output.output_ids.sourceAnalysisId }
+            : null,
+      }),
       feature: "profileSourceExtract",
-      operationKey: getCreditOperationKey(
-        request,
-        `profileSourceExtract:${params.id}`,
-      ),
+      operationKey,
       resourceId: params.id,
       resourceType: "profile_source",
-    });
-    let result: Awaited<ReturnType<typeof extractProfileSourceText>>;
-
-    try {
-      result = await extractProfileSourceText(parsed.data);
-    } catch (error) {
-      await releaseCreditReservation({
-        reason: error instanceof Error ? error.message : "PROFILE_SOURCE_EXTRACTION_FAILED",
-        reservationId: reservation.reservationId,
-      }).catch(() => undefined);
-      throw error;
-    }
-
-    await finalizeCreditReservation({
-      metadata: {
-        career_profile_id: result.careerProfile?.id ?? null,
-        source_analysis_id: result.sourceAnalysis?.id ?? null,
-      },
-      reservationId: reservation.reservationId,
-      resourceId: params.id,
+      run: () => extractProfileSourceText(parsed.data),
     });
 
     return NextResponse.json({
       ok: true,
       requestId,
-      ...result,
+      ...paidOperation.result,
+      reused: paidOperation.reused,
     });
   } catch (error) {
     if (isBillingError(error)) {

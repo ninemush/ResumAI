@@ -138,6 +138,135 @@ test.describe("authenticated workspace", () => {
     await expect(moreButton).toBeFocused();
   });
 
+  test("keeps support and privacy requests keyboard-submit friendly", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop keyboard coverage complements the mobile drawer focus trap.");
+
+    await page.route("**/api/support/issues", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true, issues: [] }),
+          status: 200,
+        });
+        return;
+      }
+
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          issue: {
+            shortId: "QA-KBD-1",
+          },
+        }),
+        status: 200,
+      });
+    });
+
+    await page.route("**/api/privacy/requests", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true, requests: [] }),
+          status: 200,
+        });
+        return;
+      }
+
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          request: {
+            created_at: new Date().toISOString(),
+            id: "00000000-0000-4000-8000-000000000001",
+            requestType: "access",
+            status: "received",
+            summary: "Keyboard QA access request",
+          },
+        }),
+        status: 200,
+      });
+    });
+
+    await page.goto("/");
+
+    const attachButton = page.getByRole("button", { name: "Attach file" });
+    const fileInputId = await page.locator(".conversation-pane input[type='file']").getAttribute("id");
+    await attachButton.focus();
+    await expect(attachButton).toBeFocused();
+    await expect(attachButton).toHaveAttribute("aria-controls", fileInputId ?? "");
+
+    const settingsNav = page.locator(".side-nav").getByRole("button", { name: /^Settings$/i });
+    await settingsNav.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: /Account, billing, and access/i })).toBeVisible();
+
+    const openSupportButton = page.getByLabel("Account controls").getByRole("button", { name: /^Open support$/i });
+    await openSupportButton.focus();
+    await expect(openSupportButton).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: /Help and issue history/i })).toBeVisible();
+
+    await page.getByLabel("Subject").fill("Keyboard support smoke");
+    await page.getByLabel("Details").fill("The keyboard submit flow should create a routed support issue.");
+    const createIssueButton = page.getByRole("button", { name: /^Create issue$/i });
+    await createIssueButton.focus();
+    await expect(createIssueButton).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(/Created issue QA-KBD-1/i)).toBeVisible();
+
+    await settingsNav.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: /Account, billing, and access/i })).toBeVisible();
+
+    const accessReviewButton = page.getByRole("button", { name: /Access review/i });
+    await accessReviewButton.focus();
+    await expect(accessReviewButton).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(/Created request .* for access review/i)).toBeVisible();
+  });
+
+  test("keeps application status and export review controls keyboard-reachable", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop application keyboard coverage is enough for these dense controls.");
+
+    await page.goto("/");
+    await page.locator(".side-nav").getByRole("button", { name: /^Applications$/i }).click();
+    await expect(page.getByRole("heading", { name: /Roles you’re pursuing/i })).toBeVisible();
+
+    const statusSelect = page.locator(".compact-status-select").first();
+    test.skip((await statusSelect.count()) === 0, "No application records are available for keyboard QA.");
+
+    await statusSelect.focus();
+    await expect(statusSelect).toBeFocused();
+
+    const previewPacket = page.getByRole("button", { name: /Preview packet/i }).first();
+    test.skip((await previewPacket.count()) === 0, "No generated packet is available for export keyboard QA.");
+
+    await previewPacket.focus();
+    await expect(previewPacket).toBeFocused();
+    await previewPacket.press("Enter");
+    await expect(page.locator(".materials-review")).toBeVisible();
+
+    const claimReview = page.getByLabel(/I reviewed these items and want to prepare/i);
+    if ((await claimReview.count()) > 0) {
+      await claimReview.focus();
+      await expect(claimReview).toBeFocused();
+      await page.keyboard.press("Space");
+      await expect(claimReview).toBeChecked();
+    }
+
+    const exportButton = page.getByRole("button", {
+      name: /Prepare downloads|Files prepared|Preparing/i,
+    });
+    if (await exportButton.isDisabled()) {
+      await expect(exportButton).toBeDisabled();
+    } else {
+      await exportButton.focus();
+      await expect(exportButton).toBeFocused();
+    }
+  });
+
   test("keeps profile mode chat-first on mobile without profile overview overlap", async ({ page, isMobile }) => {
     test.skip(!isMobile, "Mobile chat-first layout is a mobile-specific regression check.");
 

@@ -73,6 +73,14 @@ export function fallbackAdvisorScopeDecision(message: string): AdvisorScopeDecis
     };
   }
 
+  if (isAmbiguousWorkspacePrompt(normalized)) {
+    return {
+      decision: "in_scope",
+      reason: "Ambiguous messages are allowed so the advisor can ask a career-grounding follow-up.",
+      redirectMessage: null,
+    };
+  }
+
   if (
     hasAnyTerm(normalized, offPurposeTerms) ||
     generalQuestionStarts.some((phrase) => normalized.startsWith(phrase))
@@ -122,6 +130,17 @@ function isModelQuestion(message: string) {
     "are you using",
     "powered by",
   ].some((phrase) => message.includes(phrase));
+}
+
+function isAmbiguousWorkspacePrompt(message: string) {
+  return [
+    "can you help me with this",
+    "help me with this",
+    "what should i do next",
+    "which one is better",
+    "that looks wrong",
+    "this looks wrong",
+  ].some((phrase) => message === phrase || message.startsWith(`${phrase}?`));
 }
 
 function hasAnyTerm(message: string, terms: string[]) {

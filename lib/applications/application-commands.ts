@@ -18,6 +18,7 @@ export const applicationStatusSchema = z.enum([
 export const createApplicationFromJobSchema = z.object({
   decision: z.enum(["apply", "network_first", "skip", "save_for_later", "needs_more_profile"]),
   decisionReason: z.string().trim().max(500).optional(),
+  idempotencyKey: z.string().trim().min(8).max(180).optional(),
   jobIngestionId: z.string().uuid(),
   overrideSkip: z.boolean().default(false),
   status: applicationStatusSchema.default("draft"),
@@ -92,6 +93,9 @@ export async function createApplicationFromJob(
     p_decision: parsed.decision,
     p_decision_reason: parsed.decisionReason ?? null,
     p_job_ingestion_id: parsed.jobIngestionId,
+    p_operation_key:
+      parsed.idempotencyKey ??
+      `applicationCreate:${parsed.jobIngestionId}:${parsed.decision}:${parsed.status}`,
     p_override_skip: parsed.overrideSkip,
     p_status: parsed.status,
   });
@@ -296,6 +300,8 @@ function mapApplicationCreateRpcError(message: string | undefined) {
   if (message?.includes("APPLICATION_SKIP_REQUIRES_OVERRIDE")) {
     return "APPLICATION_SKIP_REQUIRES_OVERRIDE";
   }
+  if (message?.includes("QUOTA_TIER_REQUIRED")) return "QUOTA_TIER_REQUIRED";
+  if (message?.includes("QUOTA_LIMIT_REACHED")) return "QUOTA_LIMIT_REACHED";
   if (message?.includes("INVALID_APPLICATION_DECISION")) return "INVALID_APPLICATION_DECISION";
   return "APPLICATION_CREATE_FAILED";
 }

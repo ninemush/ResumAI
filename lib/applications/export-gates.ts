@@ -11,7 +11,7 @@ const highImpactPatterns = [
 ];
 
 export type ExportRisk = {
-  category: "keyword_gap" | "reviewer_note";
+  category: "cover_letter_claim" | "keyword_gap" | "reviewer_note";
   severity: "high" | "medium";
   text: string;
 };

@@ -1568,7 +1568,12 @@ export function ConversationPanel({
         <ConversationCreditNotice onSelectView={onSelectView} />
       ) : null}
 
-      <div className="message-list" ref={messageListRef}>
+      <div
+        aria-label="Conversation messages"
+        className="message-list"
+        ref={messageListRef}
+        tabIndex={0}
+      >
         {sessionPrompt ? (
           <div className="session-prompt" aria-label="Suggested next step">
             {sessionPrompt}

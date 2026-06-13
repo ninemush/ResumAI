@@ -9,8 +9,10 @@ import {
   Compass,
   FileUp,
   Link2,
+  Pencil,
   Save,
   Sparkles,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import Image from "next/image";
@@ -215,6 +217,82 @@ export function ProfileExplorer({
     }
   }
 
+  async function confirmFact(factId: string) {
+    setPendingId(factId);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/profile/facts/${factId}/confirm`, {
+        method: "POST",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to confirm that profile fact.");
+        return;
+      }
+
+      setMessage("Confirmed that profile fact.");
+      router.refresh();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function editFact(factId: string, currentValue: string) {
+    const value = window.prompt("Edit profile fact", currentValue)?.trim();
+
+    if (!value || value === currentValue) {
+      return;
+    }
+
+    setPendingId(factId);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/profile/facts/${factId}/confirm`, {
+        body: JSON.stringify({ value }),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to update that profile fact.");
+        return;
+      }
+
+      setMessage("Updated and confirmed that profile fact.");
+      router.refresh();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function deleteFact(factId: string) {
+    setPendingId(factId);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/profile/facts/${factId}/confirm`, {
+        method: "DELETE",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Unable to remove that profile fact.");
+        return;
+      }
+
+      setMessage("Removed that profile fact.");
+      router.refresh();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  const learnedFactReceipt = buildLearnedFactReceipt(overview);
+
   return (
     <main className="profile-pane" aria-labelledby="profile-title">
       <div className="profile-heading">
@@ -283,6 +361,63 @@ export function ProfileExplorer({
           </div>
         ) : null}
       </section>
+
+      {learnedFactReceipt.length > 0 ? (
+        <section className="profile-editor-panel fact-receipt-panel" aria-label="Learned facts from sources">
+          <div className="section-heading">
+            <p className="eyebrow">Latest source receipt</p>
+            <h2>Facts I learned</h2>
+          </div>
+          <div className="fact-groups fact-receipt-list">
+            {learnedFactReceipt.map((fact) => (
+              <article className="fact-group fact-receipt-card" key={fact.id}>
+                <h3>{fact.type}</h3>
+                <p>{fact.value}</p>
+                <div className="fact-receipt-meta">
+                  <span>{fact.sourceLabel}</span>
+                  <span>{formatEvidenceStatus(fact.evidenceStatus)}</span>
+                </div>
+                <div className="fact-review-actions" aria-label={`Review ${fact.type} fact`}>
+                  {fact.userConfirmed ? (
+                    <span className="fact-confirmed-label">
+                      <CheckCircle2 size={13} aria-hidden="true" />
+                      Confirmed
+                    </span>
+                  ) : (
+                    <button
+                      className="fact-confirm-button"
+                      disabled={pendingId === fact.id}
+                      onClick={() => confirmFact(fact.id)}
+                      type="button"
+                    >
+                      <CheckCircle2 size={13} aria-hidden="true" />
+                      Confirm
+                    </button>
+                  )}
+                  <button
+                    className="fact-confirm-button"
+                    disabled={pendingId === fact.id}
+                    onClick={() => editFact(fact.id, fact.value)}
+                    type="button"
+                  >
+                    <Pencil size={13} aria-hidden="true" />
+                    Edit
+                  </button>
+                  <button
+                    className="fact-delete-button"
+                    disabled={pendingId === fact.id}
+                    onClick={() => deleteFact(fact.id)}
+                    type="button"
+                  >
+                    <Trash2 size={13} aria-hidden="true" />
+                    Delete
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="return-brief-panel" aria-label="Since your last visit">
         <div className="section-heading">
@@ -775,6 +910,42 @@ function draftProfileIntakePrompt(text: string) {
       },
     }),
   );
+}
+
+function buildLearnedFactReceipt(overview: ProfileOverview) {
+  const sourceLabelById = new Map(
+    overview.recentSources.map((source) => [
+      source.id,
+      source.original_filename ?? source.source_url ?? formatSourceLabel(source.source_type),
+    ]),
+  );
+
+  return Object.entries(overview.factsByType)
+    .flatMap(([type, facts]) =>
+      facts.map((fact) => ({
+        createdAt: fact.created_at,
+        evidenceStatus: fact.evidence_status,
+        id: fact.id,
+        sourceLabel:
+          fact.source_ids
+            .map((sourceId) => sourceLabelById.get(sourceId))
+            .find(Boolean) ?? "Profile input",
+        type,
+        userConfirmed: fact.user_confirmed,
+        value: fact.fact_value,
+      })),
+    )
+    .sort((first, second) => second.createdAt.localeCompare(first.createdAt))
+    .slice(0, 6);
+}
+
+function formatEvidenceStatus(status: string) {
+  if (status === "user_confirmed") return "Confirmed by you";
+  if (status === "source_supported") return "Source supported";
+  if (status === "conflict") return "Conflicting evidence";
+  if (status === "missing_evidence") return "Needs evidence";
+  if (status === "inferred") return "Needs confirmation";
+  return status.replaceAll("_", " ");
 }
 
 function mapStatusToStageFilter(status: string) {

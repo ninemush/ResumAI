@@ -68,6 +68,10 @@ test.describe("Supabase schema readiness maturity", () => {
     expect(ownerProbe.error).toBeNull();
     expect(typeof ownerProbe.data).toBe("boolean");
     expect(staleCleanupProbe.error).toBeNull();
-    expect(typeof staleCleanupProbe.data).toBe("number");
+    expect(staleCleanupProbe.data).toMatchObject({
+      affectedFeatureTotals: expect.any(Object),
+      expiredCount: expect.any(Number),
+      releasedCount: expect.any(Number),
+    });
   });
 });

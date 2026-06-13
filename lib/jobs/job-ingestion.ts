@@ -96,6 +96,34 @@ export async function getReusableJobIngestion({
   });
 }
 
+export async function getJobIngestionById({
+  jobId,
+  userId,
+}: {
+  jobId: string;
+  userId: string;
+}): Promise<JobIngestionResult | null> {
+  const supabase = await createClient();
+  const { data: job, error } = await supabase
+    .from("job_ingestions")
+    .select("id, job_url, resolved_url, title, company, extracted_text, ingestion_status")
+    .eq("id", jobId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error("JOB_READ_FAILED");
+  }
+
+  return job?.extracted_text
+    ? buildJobIngestionResult({
+        didIngest: false,
+        job,
+        userId,
+      })
+    : null;
+}
+
 export async function ingestJobUrl({
   jobText,
   jobUrl,
@@ -262,24 +290,48 @@ async function readReusableJobIngestion({
     return null;
   }
 
+  return buildJobIngestionResult({
+    didIngest: false,
+    job: existingJob,
+    userId,
+  });
+}
+
+async function buildJobIngestionResult({
+  didIngest,
+  job,
+  userId,
+}: {
+  didIngest: boolean;
+  job: {
+    company: string | null;
+    extracted_text: string;
+    id: string;
+    ingestion_status: "pending" | "processing" | "succeeded" | "failed" | "deleted";
+    job_url: string;
+    resolved_url: string | null;
+    title: string | null;
+  };
+  userId: string;
+}): Promise<JobIngestionResult> {
   const fitContext = await readUserFitContext(userId);
   const fitAnalysis = analyzeJobFit({
-    jobText: existingJob.extracted_text,
+    jobText: job.extracted_text,
     masterResume: fitContext.masterResume,
     profileFacts: fitContext.profileFacts,
   });
 
   return {
-    didIngest: false,
+    didIngest,
     job: {
-      id: existingJob.id,
-      jobUrl: existingJob.job_url,
-      resolvedUrl: existingJob.resolved_url,
-      title: existingJob.title,
-      company: existingJob.company,
-      extractedTextLength: existingJob.extracted_text.length,
+      id: job.id,
+      jobUrl: job.job_url,
+      resolvedUrl: job.resolved_url,
+      title: job.title,
+      company: job.company,
+      extractedTextLength: job.extracted_text.length,
       fitAnalysis: enrichFitAnalysis(fitAnalysis),
-      ingestionStatus: existingJob.ingestion_status,
+      ingestionStatus: job.ingestion_status,
     },
   };
 }

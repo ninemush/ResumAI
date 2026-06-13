@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { guardAdvisorMessage } from "@/lib/conversation/advisor-message-guard";
 
@@ -26,5 +28,14 @@ describe("advisor message guard", () => {
     expect(guarded).toMatch(/I can help you rebuild/i);
     expect(guarded).toMatch(/I can help you export/i);
     expect(guarded).toMatch(/I can help you save/i);
+  });
+
+  test("keeps external application submission outside the V1 advisor capability", () => {
+    const source = readFileSync(join(process.cwd(), "lib/conversation/advisor.ts"), "utf8");
+
+    expect(source).toContain("isExternalSubmissionRequest");
+    expect(source).toContain("apply for me");
+    expect(source).toContain("V1 never submits anything externally");
+    expect(source).toContain("applies on your behalf");
   });
 });

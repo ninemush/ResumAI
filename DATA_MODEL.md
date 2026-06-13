@@ -27,6 +27,8 @@ Admin-only operations use `admin_roles`.
 - `applications`: logged application opportunities.
 - `generated_resumes`: master and job-specific resume artifacts.
 - `generated_cover_letters`: job-specific cover letter artifacts.
+- `quota_reservations`: retry-safe, short-lived quota holds for application
+  logging and generation work before durable output exists.
 - `quota_events`: append-only quota consumption records.
 - `credit_ledger`: append-only credit grants and consumption events.
 - `promo_codes`: owner-created one-time or campaign credit grants.
@@ -44,7 +46,16 @@ Profile photos are optional personal data. They must be stored in private
 user-scoped storage and referenced from `profiles.photo_storage_path`.
 ATS-first resume formats must not include profile photos by default.
 
+Generated cover letters include `reviewer_notes` and `claim_risks` so
+unsupported high-impact claims can be blocked or acknowledged before export.
+
 Applications that consumed quota must retain audit-safe usage evidence. Deletion requests should minimize retained data while preserving the minimum quota/accounting/audit record required by the contract.
+
+Quota-consuming workflows reserve quota before expensive or irreversible work
+and finalize into `quota_events` only after the application or generated
+artifact exists. Released reservations are not counted against tier limits and
+same-key retries return the existing reservation/event rather than double
+counting usage.
 
 ## Credits And Pricing
 

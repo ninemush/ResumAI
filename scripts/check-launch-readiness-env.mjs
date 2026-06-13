@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const localEnvFiles = [".env.local", ".env.qa-demo.local", ".env.qa-v1-demo.local"];
 const required = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
@@ -14,6 +18,8 @@ const required = [
   "RATE_LIMIT_BACKEND",
   "REVENUECAT_WEBHOOK_SECRET",
 ];
+
+loadApprovedLocalEnv();
 
 const missing = required.filter((key) => !process.env[key]);
 
@@ -38,3 +44,53 @@ if (missing.length > 0) {
 }
 
 console.log("Launch-readiness environment is configured.");
+
+function loadApprovedLocalEnv() {
+  for (const file of localEnvFiles) {
+    try {
+      const content = readFileSync(join(process.cwd(), file), "utf8");
+      for (const line of content.split(/\n/)) {
+        const parsed = parseEnvLine(line);
+
+        if (!parsed) {
+          continue;
+        }
+
+        process.env[parsed.key] ||= parsed.value;
+      }
+    } catch {
+      // The launch gates can run in CI or on a local QA machine. Missing local
+      // files are fine as long as the environment is already populated.
+    }
+  }
+}
+
+function parseEnvLine(line) {
+  const trimmed = line.trim();
+
+  if (!trimmed || trimmed.startsWith("#")) {
+    return null;
+  }
+
+  const separatorIndex = trimmed.indexOf("=");
+
+  if (separatorIndex === -1) {
+    return null;
+  }
+
+  const key = trimmed.slice(0, separatorIndex).trim();
+  let value = trimmed.slice(separatorIndex + 1).trim();
+
+  if (!key) {
+    return null;
+  }
+
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1);
+  }
+
+  return { key, value };
+}

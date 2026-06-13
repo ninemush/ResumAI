@@ -2,14 +2,9 @@ import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth"
 import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
-  finalizeCreditReservation,
-  getFinalizedCreditOperationOutput,
   getCreditOperationKey,
-  recordCreditOperationOutput,
-  requireCredits,
-  releaseCreditReservation,
-  reserveCredits,
 } from "@/lib/billing/credits";
+import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
   getReusableApplicationMaterials,
   generateApplicationMaterials,
@@ -102,26 +97,30 @@ export async function POST(request: Request, context: RouteContext) {
       parsed.data.idempotencyKey ??
         `applicationMaterialsGenerate:${params.id}:${parsed.data.mode}:${hashOperationInput(parsed.data.reason ?? "default")}`,
     );
-    const finalizedOutput = await getFinalizedCreditOperationOutput({
-      feature: "applicationMaterialsGenerate",
-      operationKey,
-    });
-
-    if (finalizedOutput) {
-      return apiSuccess({
-        requestId,
-        coverLetterId: readStringOutput(finalizedOutput.output_ids.coverLetterId),
+    const paidOperation = await runPaidCreditOperation({
+      buildOutput: (result) => ({
+        finalize: result.didGenerate,
+        ledgerMetadata: {
+          cover_letter_id: result.coverLetterId,
+          resume_id: result.resumeId,
+        },
+        outputIds: {
+          coverLetterId: result.coverLetterId,
+          resumeId: result.resumeId,
+        },
+        recordMetadata: {
+          model: result.model,
+          promptVersion: result.promptVersion,
+        },
+      }),
+      buildReusedResult: (output) => ({
+        coverLetterId: readStringOutput(output.output_ids.coverLetterId) ?? "stored",
         didGenerate: false,
-        model: readStringOutput(finalizedOutput.metadata.model) ?? "stored",
-        promptVersion: readStringOutput(finalizedOutput.metadata.promptVersion) ?? "stored",
-        resumeId: readStringOutput(finalizedOutput.output_ids.resumeId),
-        reused: true,
+        model: readStringOutput(output.metadata.model) ?? "stored",
+        promptVersion: readStringOutput(output.metadata.promptVersion) ?? "stored",
+        resumeId: readStringOutput(output.output_ids.resumeId) ?? "stored",
         summary: "Returned the existing application materials for this retry-safe operation.",
-      });
-    }
-
-    await requireCredits("applicationMaterialsGenerate");
-    const reservation = await reserveCredits({
+      }),
       feature: "applicationMaterialsGenerate",
       metadata: {
         mode: parsed.data.mode,
@@ -130,61 +129,16 @@ export async function POST(request: Request, context: RouteContext) {
       operationKey,
       resourceId: params.id,
       resourceType: "application_materials",
+      run: () =>
+        generateApplicationMaterials(parsed.data, {
+          quotaOperationKey: operationKey,
+        }),
     });
-    let result: Awaited<ReturnType<typeof generateApplicationMaterials>>;
-
-    try {
-      result = await generateApplicationMaterials(parsed.data);
-    } catch (error) {
-      await releaseCreditReservation({
-        reason: error instanceof Error ? error.message : "APPLICATION_MATERIAL_GENERATION_FAILED",
-        reservationId: reservation.reservationId,
-      }).catch(() => undefined);
-      throw error;
-    }
-
-    if (result.didGenerate) {
-      const finalizedReservation = await finalizeCreditReservation({
-        metadata: {
-          cover_letter_id: result.coverLetterId,
-          output_ids: {
-            coverLetterId: result.coverLetterId,
-            resumeId: result.resumeId,
-          },
-          resource_id: params.id,
-          resource_type: "application_materials",
-          resume_id: result.resumeId,
-        },
-        reservationId: reservation.reservationId,
-        resourceId: params.id,
-      });
-      await recordCreditOperationOutput({
-        feature: "applicationMaterialsGenerate",
-        ledgerEventId: finalizedReservation.ledgerEventId,
-        metadata: {
-          model: result.model,
-          promptVersion: result.promptVersion,
-        },
-        operationKey,
-        outputIds: {
-          coverLetterId: result.coverLetterId,
-          resumeId: result.resumeId,
-        },
-        reservationId: reservation.reservationId,
-        resourceId: params.id,
-        resourceType: "application_materials",
-      });
-    } else {
-      await releaseCreditReservation({
-        reason: "APPLICATION_MATERIALS_REUSED",
-        reservationId: reservation.reservationId,
-      }).catch(() => undefined);
-    }
 
     return apiSuccess({
       requestId,
-      ...result,
-      reused: !result.didGenerate,
+      ...paidOperation.result,
+      reused: paidOperation.reused || !paidOperation.result.didGenerate,
     });
   } catch (error) {
     if (isBillingError(error)) {
@@ -284,6 +238,24 @@ function toApiError(error: unknown) {
         code: "application.not_found",
         message: "That application could not be found.",
         status: 404,
+      };
+    }
+
+    if (error.message === "QUOTA_TIER_REQUIRED") {
+      return {
+        category: "permission",
+        code: "quota.tier_required",
+        message: "Choose an active tier before generating more application materials.",
+        status: 402,
+      };
+    }
+
+    if (error.message === "QUOTA_LIMIT_REACHED") {
+      return {
+        category: "quota",
+        code: "quota.limit_reached",
+        message: "This tier has reached its generation limit for the current period.",
+        status: 429,
       };
     }
 

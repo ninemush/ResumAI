@@ -9,6 +9,7 @@ import {
 } from "@/lib/ai/prompts/application-materials";
 import {
   buildSupportedEvidenceCorpus,
+  reviewCoverLetterClaimProvenance,
   reviewResumeClaimProvenance,
 } from "@/lib/ai/claim-provenance";
 import { getMaterialsModel, createOpenAIResponse } from "@/lib/ai/openai";
@@ -17,7 +18,12 @@ import {
   buildProfileIntelligence,
   type ProfileIntelligence,
 } from "@/lib/profile/profile-intelligence";
-import { recordQuotaEvent } from "@/lib/quota/quota-events";
+import {
+  finalizeQuotaReservation,
+  releaseQuotaReservation,
+  reserveQuotaEvent,
+  type QuotaReservationResult,
+} from "@/lib/quota/quota-events";
 import {
   MAX_RESUME_CERTIFICATION_ITEMS,
   MAX_RESUME_EDUCATION_ITEMS,
@@ -116,6 +122,7 @@ export async function getReusableApplicationMaterials(
 
 export async function generateApplicationMaterials(
   input: z.input<typeof generateApplicationMaterialsSchema>,
+  options: { quotaOperationKey?: string } = {},
 ): Promise<GenerateApplicationMaterialsResult> {
   const parsed = generateApplicationMaterialsSchema.parse(input);
   const supabase = await createClient();
@@ -205,289 +212,282 @@ export async function generateApplicationMaterials(
     profile,
   });
   const model = getMaterialsModel();
-  const response = await createOpenAIResponse({
-    model,
-    instructions: APPLICATION_MATERIALS_INSTRUCTIONS,
-    input: buildMaterialsInput({
-      application: context,
-      facts: facts ?? [],
-      fitAnalysis,
-      intelligence,
-      masterResume,
-      profile,
-    }),
-    max_output_tokens: 3400,
-    metadata: {
-      application_id: context.id,
-      feature: "application_materials",
-      fit_recommendation: fitAnalysis.recommendation,
-      fit_score: fitAnalysis.score?.toString() ?? "unknown",
-      prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
-    },
-    safety_identifier: hashUserId(user.id),
-    store: false,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "application_materials",
-        strict: true,
-        schema: {
-          type: "object",
-          additionalProperties: false,
-          required: ["resume", "coverLetter"],
-          properties: {
-            resume: {
-              type: "object",
-              additionalProperties: false,
-              required: [
-                "contact",
-                "headline",
-                "summary",
-                "skills",
-                "experienceSections",
-                "specialProjects",
-                "languages",
-                "education",
-                "certifications",
-                "experienceBullets",
-                "keywordGaps",
-                "reviewerNotes",
-              ],
-              properties: {
-                contact: {
-                  type: "object",
-                  additionalProperties: false,
-                  required: ["email", "phone", "linkedin", "website", "location"],
-                  properties: {
-                    email: { anyOf: [{ type: "string" }, { type: "null" }] },
-                    phone: { anyOf: [{ type: "string" }, { type: "null" }] },
-                    linkedin: { anyOf: [{ type: "string" }, { type: "null" }] },
-                    website: { anyOf: [{ type: "string" }, { type: "null" }] },
-                    location: { anyOf: [{ type: "string" }, { type: "null" }] },
-                  },
-                },
-                headline: { type: "string" },
-                summary: { type: "string" },
-                skills: {
-                  type: "array",
-                  maxItems: 18,
-                  items: { type: "string" },
-                },
-                experienceSections: {
-                  type: "array",
-                  maxItems: MAX_RESUME_EXPERIENCE_SECTIONS,
-                  items: {
-                    type: "object",
-                    additionalProperties: false,
-                    required: ["roleTitle", "company", "location", "dates", "bullets"],
-                    properties: {
-                      roleTitle: { type: "string" },
-                      company: { anyOf: [{ type: "string" }, { type: "null" }] },
-                      location: { anyOf: [{ type: "string" }, { type: "null" }] },
-                      dates: { anyOf: [{ type: "string" }, { type: "null" }] },
-                      bullets: {
-                        type: "array",
-                        maxItems: 7,
-                        items: { type: "string" },
-                      },
-                    },
-                  },
-                },
-                specialProjects: {
-                  type: "array",
-                  maxItems: MAX_RESUME_SPECIAL_PROJECT_ITEMS,
-                  items: {
-                    type: "object",
-                    additionalProperties: false,
-                    required: ["name", "context", "dates", "bullets"],
-                    properties: {
-                      name: { type: "string" },
-                      context: { anyOf: [{ type: "string" }, { type: "null" }] },
-                      dates: { anyOf: [{ type: "string" }, { type: "null" }] },
-                      bullets: {
-                        type: "array",
-                        maxItems: 6,
-                        items: { type: "string" },
-                      },
-                    },
-                  },
-                },
-                languages: {
-                  type: "array",
-                  maxItems: MAX_RESUME_LANGUAGE_ITEMS,
-                  items: {
-                    type: "object",
-                    additionalProperties: false,
-                    required: ["name", "proficiency"],
-                    properties: {
-                      name: { type: "string" },
-                      proficiency: { anyOf: [{ type: "string" }, { type: "null" }] },
-                    },
-                  },
-                },
-                education: {
-                  type: "array",
-                  maxItems: MAX_RESUME_EDUCATION_ITEMS,
-                  items: {
-                    type: "object",
-                    additionalProperties: false,
-                    required: ["institution", "credential", "location", "dates"],
-                    properties: {
-                      institution: { type: "string" },
-                      credential: { anyOf: [{ type: "string" }, { type: "null" }] },
-                      location: { anyOf: [{ type: "string" }, { type: "null" }] },
-                      dates: { anyOf: [{ type: "string" }, { type: "null" }] },
-                    },
-                  },
-                },
-                certifications: {
-                  type: "array",
-                  maxItems: MAX_RESUME_CERTIFICATION_ITEMS,
-                  items: {
-                    type: "object",
-                    additionalProperties: false,
-                    required: ["name", "issuer", "date"],
-                    properties: {
-                      name: { type: "string" },
-                      issuer: { anyOf: [{ type: "string" }, { type: "null" }] },
-                      date: { anyOf: [{ type: "string" }, { type: "null" }] },
-                    },
-                  },
-                },
-                experienceBullets: {
-                  type: "array",
-                  maxItems: 10,
-                  items: { type: "string" },
-                },
-                keywordGaps: {
-                  type: "array",
-                  maxItems: 12,
-                  items: { type: "string" },
-                },
-                reviewerNotes: {
-                  type: "array",
-                  maxItems: 6,
-                  items: { type: "string" },
-                },
-              },
-            },
-            coverLetter: { type: "string" },
-          },
-        },
-      },
-      verbosity: "medium",
-    },
-  });
-
-  if (response.error || response.incomplete_details) {
-    throw new Error("AI_MATERIALS_FAILED");
-  }
-
-  const generated = generatedMaterialsSchema.parse(JSON.parse(response.output_text));
-  const generatedResume = reviewResumeClaimProvenance({
-    evidenceCorpus: buildApplicationResumeEvidenceCorpus(facts ?? [], masterResume),
-    resume: normalizeGeneratedApplicationResume(generated.resume, masterResume),
-  });
-  const nextVersion = existingMaterials
-    ? Math.max(existingMaterials.resume.version_number, existingMaterials.coverLetter.version_number) + 1
-    : 1;
-  const generationBasis = {
-    applicationId: context.id,
-    fitAnalysis,
-    fitDecision: context.fit_decision,
-    generationReason: parsed.reason ?? (parsed.mode === "regenerate" ? "regenerate" : "initial"),
-    generatedAt: new Date().toISOString(),
-    jobIngestionId: context.job_ingestions?.id ?? null,
-    masterResumeIncluded: Boolean(masterResume),
-    model,
-    promptVersion: APPLICATION_MATERIALS_PROMPT_VERSION,
-  };
-
-  if (existingMaterials && parsed.mode === "regenerate") {
-    await Promise.all([
-      supabase
-        .from("generated_resumes")
-        .update({ is_current: false })
-        .eq("id", existingMaterials.resume.id)
-        .eq("user_id", user.id),
-      supabase
-        .from("generated_cover_letters")
-        .update({ is_current: false })
-        .eq("id", existingMaterials.coverLetter.id)
-        .eq("user_id", user.id),
-    ]);
-  }
-
-  const [{ data: resume, error: resumeError }, { data: coverLetter, error: coverLetterError }] =
-    await Promise.all([
-      supabase
-        .from("generated_resumes")
-        .insert({
-          user_id: user.id,
-          profile_id: context.profile_id,
-          application_id: context.id,
-          resume_type: "application",
-          prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
-          model,
-          content_json: generatedResume,
-          generation_basis: generationBasis,
-          generation_reason: parsed.reason ?? (parsed.mode === "regenerate" ? "regenerate" : "initial"),
-          is_current: true,
-          parent_artifact_id: existingMaterials?.resume.id ?? null,
-          status: "ready",
-          version_number: nextVersion,
-        })
-        .select("id")
-        .single(),
-      supabase
-        .from("generated_cover_letters")
-        .insert({
-          user_id: user.id,
-          application_id: context.id,
-          prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
-          model,
-          content: generated.coverLetter,
-          generation_basis: generationBasis,
-          generation_reason: parsed.reason ?? (parsed.mode === "regenerate" ? "regenerate" : "initial"),
-          is_current: true,
-          parent_artifact_id: existingMaterials?.coverLetter.id ?? null,
-          status: "ready",
-          version_number: nextVersion,
-        })
-        .select("id")
-        .single(),
-    ]);
-
-  if (resumeError || !resume) {
-    throw new Error("RESUME_SAVE_FAILED");
-  }
-
-  if (coverLetterError || !coverLetter) {
-    throw new Error("COVER_LETTER_SAVE_FAILED");
-  }
-
-  await recordQuotaEvent({
+  const quotaReservation = await reserveQuotaEvent({
     eventType: "generation_created",
     metadata: {
-      cover_letter_id: coverLetter.id,
+      application_id: context.id,
       model,
       prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
-      resume_id: resume.id,
-      fit_recommendation: fitAnalysis.recommendation,
-      fit_score: fitAnalysis.score,
     },
+    operationKey:
+      options.quotaOperationKey ??
+      `applicationMaterialsGenerate:${context.id}:${parsed.mode}:${hashOperationInput(parsed.reason ?? "default")}`,
     resourceId: context.id,
     resourceType: "application_materials",
   });
 
-  return {
-    coverLetterId: coverLetter.id,
-    didGenerate: true,
-    model,
-    promptVersion: APPLICATION_MATERIALS_PROMPT_VERSION,
-    resumeId: resume.id,
-    summary: `Created a role-specific resume packet for ${context.job_title ?? "the role"} at ${context.company_name}.`,
-  };
+  try {
+    const response = await createOpenAIResponse({
+      model,
+      instructions: APPLICATION_MATERIALS_INSTRUCTIONS,
+      input: buildMaterialsInput({
+        application: context,
+        facts: facts ?? [],
+        fitAnalysis,
+        intelligence,
+        masterResume,
+        profile,
+      }),
+      max_output_tokens: 3400,
+      metadata: {
+        application_id: context.id,
+        feature: "application_materials",
+        fit_recommendation: fitAnalysis.recommendation,
+        fit_score: fitAnalysis.score?.toString() ?? "unknown",
+        prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
+      },
+      safety_identifier: hashUserId(user.id),
+      store: false,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "application_materials",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["resume", "coverLetter"],
+            properties: {
+              resume: {
+                type: "object",
+                additionalProperties: false,
+                required: [
+                  "contact",
+                  "headline",
+                  "summary",
+                  "skills",
+                  "experienceSections",
+                  "specialProjects",
+                  "languages",
+                  "education",
+                  "certifications",
+                  "experienceBullets",
+                  "keywordGaps",
+                  "reviewerNotes",
+                ],
+                properties: {
+                  contact: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["email", "phone", "linkedin", "website", "location"],
+                    properties: {
+                      email: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      phone: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      linkedin: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      website: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      location: { anyOf: [{ type: "string" }, { type: "null" }] },
+                    },
+                  },
+                  headline: { type: "string" },
+                  summary: { type: "string" },
+                  skills: {
+                    type: "array",
+                    maxItems: 18,
+                    items: { type: "string" },
+                  },
+                  experienceSections: {
+                    type: "array",
+                    maxItems: MAX_RESUME_EXPERIENCE_SECTIONS,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["roleTitle", "company", "location", "dates", "bullets"],
+                      properties: {
+                        roleTitle: { type: "string" },
+                        company: { anyOf: [{ type: "string" }, { type: "null" }] },
+                        location: { anyOf: [{ type: "string" }, { type: "null" }] },
+                        dates: { anyOf: [{ type: "string" }, { type: "null" }] },
+                        bullets: {
+                          type: "array",
+                          maxItems: 7,
+                          items: { type: "string" },
+                        },
+                      },
+                    },
+                  },
+                  specialProjects: {
+                    type: "array",
+                    maxItems: MAX_RESUME_SPECIAL_PROJECT_ITEMS,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["name", "context", "dates", "bullets"],
+                      properties: {
+                        name: { type: "string" },
+                        context: { anyOf: [{ type: "string" }, { type: "null" }] },
+                        dates: { anyOf: [{ type: "string" }, { type: "null" }] },
+                        bullets: {
+                          type: "array",
+                          maxItems: 6,
+                          items: { type: "string" },
+                        },
+                      },
+                    },
+                  },
+                  languages: {
+                    type: "array",
+                    maxItems: MAX_RESUME_LANGUAGE_ITEMS,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["name", "proficiency"],
+                      properties: {
+                        name: { type: "string" },
+                        proficiency: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      },
+                    },
+                  },
+                  education: {
+                    type: "array",
+                    maxItems: MAX_RESUME_EDUCATION_ITEMS,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["institution", "credential", "location", "dates"],
+                      properties: {
+                        institution: { type: "string" },
+                        credential: { anyOf: [{ type: "string" }, { type: "null" }] },
+                        location: { anyOf: [{ type: "string" }, { type: "null" }] },
+                        dates: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      },
+                    },
+                  },
+                  certifications: {
+                    type: "array",
+                    maxItems: MAX_RESUME_CERTIFICATION_ITEMS,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["name", "issuer", "date"],
+                      properties: {
+                        name: { type: "string" },
+                        issuer: { anyOf: [{ type: "string" }, { type: "null" }] },
+                        date: { anyOf: [{ type: "string" }, { type: "null" }] },
+                      },
+                    },
+                  },
+                  experienceBullets: {
+                    type: "array",
+                    maxItems: 10,
+                    items: { type: "string" },
+                  },
+                  keywordGaps: {
+                    type: "array",
+                    maxItems: 12,
+                    items: { type: "string" },
+                  },
+                  reviewerNotes: {
+                    type: "array",
+                    maxItems: 6,
+                    items: { type: "string" },
+                  },
+                },
+              },
+              coverLetter: { type: "string" },
+            },
+          },
+        },
+        verbosity: "medium",
+      },
+    });
+
+    if (response.error || response.incomplete_details) {
+      throw new Error("AI_MATERIALS_FAILED");
+    }
+
+    const generated = generatedMaterialsSchema.parse(JSON.parse(response.output_text));
+    const generatedResume = reviewResumeClaimProvenance({
+      evidenceCorpus: buildApplicationResumeEvidenceCorpus(facts ?? [], masterResume),
+      resume: normalizeGeneratedApplicationResume(generated.resume, masterResume),
+    });
+    const coverLetterReview = reviewCoverLetterClaimProvenance({
+      coverLetter: generated.coverLetter,
+      evidenceCorpus: buildApplicationCoverLetterEvidenceCorpus({
+        application: context,
+        facts: facts ?? [],
+        masterResume,
+      }),
+    });
+    const nextVersion = existingMaterials
+      ? Math.max(existingMaterials.resume.version_number, existingMaterials.coverLetter.version_number) + 1
+      : 1;
+    const generationBasis = {
+      applicationId: context.id,
+      fitAnalysis,
+      fitDecision: context.fit_decision,
+      generationReason: parsed.reason ?? (parsed.mode === "regenerate" ? "regenerate" : "initial"),
+      generatedAt: new Date().toISOString(),
+      jobIngestionId: context.job_ingestions?.id ?? null,
+      masterResumeIncluded: Boolean(masterResume),
+      model,
+      promptVersion: APPLICATION_MATERIALS_PROMPT_VERSION,
+    };
+
+    const { coverLetter, resume } = await createGeneratedMaterialPair({
+      applicationId: context.id,
+      coverLetter: generated.coverLetter,
+      coverLetterReview,
+      existingMaterials,
+      generationBasis,
+      generationReason: parsed.reason ?? (parsed.mode === "regenerate" ? "regenerate" : "initial"),
+      generatedResume,
+      model,
+      nextVersion,
+      profileId: context.profile_id,
+      supabase,
+      userId: user.id,
+    });
+
+    await finalizeQuotaReservation({
+      metadata: {
+        cover_letter_id: coverLetter.id,
+        cover_letter_claim_risk_count: coverLetterReview.claimRisks.length,
+        fit_recommendation: fitAnalysis.recommendation,
+        fit_score: fitAnalysis.score,
+        model,
+        prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
+        resume_id: resume.id,
+      },
+      reservationId: quotaReservation.reservationId,
+      resourceId: context.id,
+    });
+
+    return {
+      coverLetterId: coverLetter.id,
+      didGenerate: true,
+      model,
+      promptVersion: APPLICATION_MATERIALS_PROMPT_VERSION,
+      resumeId: resume.id,
+      summary: `Created a role-specific resume packet for ${context.job_title ?? "the role"} at ${context.company_name}.`,
+    };
+  } catch (error) {
+    await releaseApplicationMaterialsQuotaReservation(quotaReservation, error);
+    throw error;
+  }
+}
+
+async function releaseApplicationMaterialsQuotaReservation(
+  quotaReservation: QuotaReservationResult,
+  error: unknown,
+) {
+  if (quotaReservation.status !== "reserved") {
+    return;
+  }
+
+  await releaseQuotaReservation({
+    reason: error instanceof Error ? error.message : "APPLICATION_MATERIAL_GENERATION_FAILED",
+    reservationId: quotaReservation.reservationId,
+  }).catch(() => undefined);
 }
 
 async function readLatestMaterialPair({
@@ -534,6 +534,107 @@ async function readLatestMaterialPair({
 
   return {
     coverLetter,
+    resume,
+  };
+}
+
+async function createGeneratedMaterialPair({
+  applicationId,
+  coverLetter,
+  coverLetterReview,
+  existingMaterials,
+  generationBasis,
+  generationReason,
+  generatedResume,
+  model,
+  nextVersion,
+  profileId,
+  supabase,
+  userId,
+}: {
+  applicationId: string;
+  coverLetter: string;
+  coverLetterReview: ReturnType<typeof reviewCoverLetterClaimProvenance>;
+  existingMaterials: Awaited<ReturnType<typeof readLatestMaterialPair>>;
+  generationBasis: Record<string, unknown>;
+  generationReason: string;
+  generatedResume: ResumeContent;
+  model: string;
+  nextVersion: number;
+  profileId: string;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+}) {
+  const { data: resume, error: resumeError } = await supabase
+    .from("generated_resumes")
+    .insert({
+      user_id: userId,
+      profile_id: profileId,
+      application_id: applicationId,
+      resume_type: "application",
+      prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
+      model,
+      content_json: generatedResume,
+      generation_basis: generationBasis,
+      generation_reason: generationReason,
+      is_current: true,
+      parent_artifact_id: existingMaterials?.resume.id ?? null,
+      status: "ready",
+      version_number: nextVersion,
+    })
+    .select("id")
+    .single();
+
+  if (resumeError || !resume) {
+    throw new Error("RESUME_SAVE_FAILED");
+  }
+
+  const { data: savedCoverLetter, error: coverLetterError } = await supabase
+    .from("generated_cover_letters")
+    .insert({
+      user_id: userId,
+      application_id: applicationId,
+      claim_risks: coverLetterReview.claimRisks,
+      prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
+      model,
+      content: coverLetter,
+      generation_basis: generationBasis,
+      generation_reason: generationReason,
+      is_current: true,
+      parent_artifact_id: existingMaterials?.coverLetter.id ?? null,
+      reviewer_notes: coverLetterReview.reviewerNotes,
+      status: "ready",
+      version_number: nextVersion,
+    })
+    .select("id")
+    .single();
+
+  if (coverLetterError || !savedCoverLetter) {
+    await supabase
+      .from("generated_resumes")
+      .delete()
+      .eq("id", resume.id)
+      .eq("user_id", userId);
+    throw new Error("COVER_LETTER_SAVE_FAILED");
+  }
+
+  if (existingMaterials) {
+    await Promise.all([
+      supabase
+        .from("generated_resumes")
+        .update({ is_current: false })
+        .eq("id", existingMaterials.resume.id)
+        .eq("user_id", userId),
+      supabase
+        .from("generated_cover_letters")
+        .update({ is_current: false })
+        .eq("id", existingMaterials.coverLetter.id)
+        .eq("user_id", userId),
+    ]);
+  }
+
+  return {
+    coverLetter: savedCoverLetter,
     resume,
   };
 }
@@ -850,6 +951,50 @@ function buildApplicationResumeEvidenceCorpus(
   ]);
 }
 
+function buildApplicationCoverLetterEvidenceCorpus({
+  application,
+  facts,
+  masterResume,
+}: {
+  application: ApplicationContext;
+  facts: Array<{
+    evidence_status: string | null;
+    fact_type: string;
+    fact_value: string;
+    user_confirmed: boolean | null;
+  }>;
+  masterResume: ResumeContent | null;
+}) {
+  return buildSupportedEvidenceCorpus([
+    ...facts.map((fact) => ({
+      label: fact.fact_type,
+      status: fact.evidence_status,
+      text: fact.fact_value,
+      userConfirmed: fact.user_confirmed,
+    })),
+    {
+      label: "master resume",
+      status: "source_excerpt",
+      text: masterResume ? flattenResumeEvidence(masterResume) : null,
+      userConfirmed: true,
+    },
+    {
+      label: "target job",
+      status: "source_excerpt",
+      text: [
+        application.company_name,
+        application.job_title,
+        application.job_ingestions?.title,
+        application.job_ingestions?.company,
+        application.job_ingestions?.extracted_text,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      userConfirmed: true,
+    },
+  ]);
+}
+
 function flattenResumeEvidence(resume: ResumeContent) {
   return [
     resume.headline,
@@ -899,4 +1044,8 @@ function normalizeApplicationContext(application: RawApplicationContext): Applic
 
 function hashUserId(userId: string) {
   return createHash("sha256").update(userId).digest("hex");
+}
+
+function hashOperationInput(value: string) {
+  return createHash("sha256").update(value.trim() || "default").digest("hex").slice(0, 24);
 }

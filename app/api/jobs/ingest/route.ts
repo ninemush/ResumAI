@@ -2,17 +2,16 @@ import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth"
 import { apiError, apiSuccess, createRequestId, readJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
-  finalizeCreditReservation,
   getCreditOperationKey,
-  requireCredits,
-  releaseCreditReservation,
-  reserveCredits,
 } from "@/lib/billing/credits";
+import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
+  getJobIngestionById,
   getReusableJobIngestion,
   ingestJobUrl,
   jobIngestionRequestSchema,
 } from "@/lib/jobs/job-ingestion";
+import { buildJobIngestionOperationKey } from "@/lib/quota/operation-key";
 import {
   checkRateLimit,
   getClientRateLimitKey,
@@ -60,7 +59,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await requireProtectedApiSession();
+    const session = await requireProtectedApiSession();
     const reusableJob = await getReusableJobIngestion(parsed.data);
 
     if (reusableJob) {
@@ -71,12 +70,39 @@ export async function POST(request: Request) {
       });
     }
 
-    await requireCredits("jobIngest");
     const operationKey = getCreditOperationKey(
       request,
-      `jobIngest:${parsed.data.sourceType}:${parsed.data.jobUrl ?? "manual"}`,
+      buildJobIngestionOperationKey(parsed.data),
     );
-    const reservation = await reserveCredits({
+    const paidOperation = await runPaidCreditOperation({
+      buildOutput: (result) => ({
+        finalize: result.didIngest,
+        ledgerMetadata: {
+          job_ingestion_id: result.job.id,
+          output_ids: { jobId: result.job.id },
+        },
+        outputIds: { jobId: result.job.id },
+        recordMetadata: {
+          job_url: result.job.jobUrl,
+          source_type: parsed.data.sourceType,
+        },
+        resourceId: result.job.id,
+      }),
+      buildReusedResult: async (output) => {
+        const jobId = typeof output.output_ids.jobId === "string" ? output.output_ids.jobId : null;
+        const job = jobId
+          ? await getJobIngestionById({
+              jobId,
+              userId: session.user.id,
+            })
+          : null;
+
+        if (!job) {
+          throw new Error("JOB_READ_FAILED");
+        }
+
+        return job;
+      },
       feature: "jobIngest",
       metadata: {
         job_url: parsed.data.jobUrl ?? null,
@@ -85,36 +111,13 @@ export async function POST(request: Request) {
       operationKey,
       resourceId: null,
       resourceType: "job_ingestion",
+      run: () => ingestJobUrl(parsed.data),
     });
-    let result: Awaited<ReturnType<typeof ingestJobUrl>>;
-
-    try {
-      result = await ingestJobUrl(parsed.data);
-    } catch (error) {
-      await releaseCreditReservation({
-        reason: error instanceof Error ? error.message : "JOB_INGESTION_FAILED",
-        reservationId: reservation.reservationId,
-      }).catch(() => undefined);
-      throw error;
-    }
-
-    if (result.didIngest) {
-      await finalizeCreditReservation({
-        metadata: { job_id: result.job.id },
-        reservationId: reservation.reservationId,
-        resourceId: result.job.id,
-      });
-    } else {
-      await releaseCreditReservation({
-        reason: "JOB_REUSED",
-        reservationId: reservation.reservationId,
-      }).catch(() => undefined);
-    }
 
     return apiSuccess({
       requestId,
-      ...result,
-      reused: !result.didIngest,
+      ...paidOperation.result,
+      reused: paidOperation.reused || !paidOperation.result.didIngest,
     });
   } catch (error) {
     if (isBillingError(error)) {

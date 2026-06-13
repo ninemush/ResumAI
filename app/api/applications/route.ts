@@ -64,7 +64,10 @@ export async function POST(request: Request) {
 
   try {
     await requireProtectedApiSession();
-    const result = await createApplicationFromJob(parsed.data);
+    const result = await createApplicationFromJob({
+      ...parsed.data,
+      idempotencyKey: readApplicationIdempotencyKey(request) ?? parsed.data.idempotencyKey,
+    });
 
     return NextResponse.json({
       ok: true,
@@ -130,6 +133,24 @@ function toApiError(error: unknown) {
       };
     }
 
+    if (error.message === "QUOTA_TIER_REQUIRED") {
+      return {
+        category: "permission",
+        code: "quota.tier_required",
+        message: "Choose an active tier before logging applications.",
+        status: 402,
+      };
+    }
+
+    if (error.message === "QUOTA_LIMIT_REACHED") {
+      return {
+        category: "quota",
+        code: "quota.limit_reached",
+        message: "This tier has reached its application limit for the current period.",
+        status: 429,
+      };
+    }
+
     if (
       error.message === "QUOTA_EVENT_RECORD_FAILED" ||
       error.message === "APPLICATION_QUOTA_LINK_FAILED"
@@ -149,4 +170,16 @@ function toApiError(error: unknown) {
     message: "Unable to log that application right now.",
     status: 500,
   };
+}
+
+function readApplicationIdempotencyKey(request: Request) {
+  const headerValue = request.headers.get("Idempotency-Key")?.trim();
+
+  if (!headerValue) {
+    return null;
+  }
+
+  const normalized = headerValue.replace(/\s+/g, "-").slice(0, 180);
+
+  return /^[A-Za-z0-9._:/=-]{8,180}$/.test(normalized) ? normalized : null;
 }

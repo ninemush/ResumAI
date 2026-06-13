@@ -19,6 +19,7 @@ type MergeCareerProfileInput = {
 
 type FactRow = {
   confidence: number | null;
+  evidence_status?: "user_confirmed" | "source_supported" | "inferred" | "conflict" | "missing_evidence" | null;
   fact_type: string;
   fact_value: string;
   id: string;
@@ -72,7 +73,7 @@ export async function mergeCareerProfile({
       .limit(100),
     supabase
       .from("profile_facts")
-      .select("id, fact_type, fact_value, confidence, source_ids, source_label, source_type, user_confirmed")
+      .select("id, fact_type, fact_value, confidence, evidence_status, source_ids, source_label, source_type, user_confirmed")
       .eq("profile_id", profileId)
       .eq("user_id", userId)
       .order("user_confirmed", { ascending: false })
@@ -338,11 +339,32 @@ function mergeFacts(
     const evidence = {
       confidence: fact.confidence,
       excerpt: value,
+      evidenceStatus: fact.evidence_status ?? null,
       factId: fact.id,
       sourceId: fact.source_ids?.[0] ?? null,
       sourceLabel: fact.source_label ?? null,
       sourceType: fact.source_type ?? null,
     };
+
+    if (!isTrustedFact(fact)) {
+      if (fact.evidence_status === "conflict") {
+        conflicts.push({
+          evidence: [evidence],
+          existingValue: null,
+          field: fact.fact_type,
+          incomingValue: value,
+          reason: "Conflicting evidence needs review before it can shape the canonical profile.",
+        });
+      }
+      if (fact.evidence_status === "missing_evidence" || fact.evidence_status === "inferred") {
+        target.openQuestions = dedupe([
+          ...target.openQuestions,
+          `Can we confirm this ${fact.fact_type.replace(/_/g, " ")} claim with a source: ${value}?`,
+        ]);
+      }
+      target.evidence.push(evidence);
+      continue;
+    }
 
     if (fact.fact_type === "skill") target.skills = dedupe([...target.skills, value]);
     if (fact.fact_type === "credential") target.certifications = dedupe([...target.certifications, value]);
@@ -370,6 +392,14 @@ function mergeFacts(
       });
     }
   }
+}
+
+function isTrustedFact(fact: FactRow) {
+  return (
+    fact.user_confirmed === true ||
+    fact.evidence_status === "user_confirmed" ||
+    fact.evidence_status === "source_supported"
+  );
 }
 
 async function projectCareerProfileToProfileFields({

@@ -684,6 +684,12 @@ function parseCsv(value: string) {
   return rows;
 }
 
+export const __profileSourceExtractionTestUtils = {
+  extractLinkedInZipText,
+  formatLinkedInCsvText,
+  isLinkedInProfileArchiveFile,
+};
+
 async function extractPublicProfilePage(sourceUrl: string) {
   assertSafeProfileUrl(sourceUrl);
   const isLinkedInProfile = isLinkedInUrl(sourceUrl);

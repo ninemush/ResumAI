@@ -41,4 +41,19 @@ describe("advisor scope guardrails", () => {
     expect(shouldRunFullAdvisor(model)).toBe(false);
     expect(buildAdvisorScopeRedirect(model).assistantMessage).toMatch(/not a general chatbot/i);
   });
+
+  test("keeps ambiguous workspace prompts in advisor flow for a grounding follow-up", () => {
+    for (const prompt of [
+      "Can you help me with this?",
+      "What should I do next?",
+      "Which one is better?",
+      "That looks wrong",
+    ]) {
+      const decision = fallbackAdvisorScopeDecision(prompt);
+
+      expect(decision.decision).toBe("in_scope");
+      expect(shouldRunFullAdvisor(decision)).toBe(true);
+      expect(decision.reason).toMatch(/Ambiguous messages are allowed/i);
+    }
+  });
 });

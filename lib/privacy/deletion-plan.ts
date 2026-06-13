@@ -39,8 +39,11 @@ export const deletionPlanSchema = z.object({
 export type DeletionPlan = z.infer<typeof deletionPlanSchema>;
 
 const deletionExecutionSchema = z.object({
+  actorUserId: z.string(),
   executedAt: z.string(),
+  failedCategories: z.array(z.string()),
   requestId: z.string(),
+  retainedCategories: z.array(z.string()),
   subjectUserId: z.string(),
   actions: z.array(
     z.object({
@@ -269,7 +272,13 @@ export async function buildDeletionPlanForRequest(requestId: string): Promise<De
   };
 }
 
-export async function attachDeletionPlanToRequest(requestId: string) {
+export async function attachDeletionPlanToRequest({
+  actorUserId,
+  requestId,
+}: {
+  actorUserId: string;
+  requestId: string;
+}) {
   const supabase = await createClient();
   await requireAdmin(supabase);
   const plan = await buildDeletionPlanForRequest(requestId);
@@ -288,13 +297,33 @@ export async function attachDeletionPlanToRequest(requestId: string) {
     throw new Error("DELETION_PLAN_SAVE_FAILED");
   }
 
+  const { error: auditError } = await supabase.from("audit_events").insert({
+    actor_user_id: actorUserId,
+    event_type: "privacy.deletion_plan.generated",
+    metadata: {
+      deleteCategories: plan.delete.map((item) => item.table),
+      minimizeCategories: plan.minimize.map((item) => item.table),
+      privacyRequestId: requestId,
+      retainedCategories: plan.retain.map((item) => item.table),
+    },
+    request_id: requestId,
+    resource_id: requestId,
+    resource_type: "privacy_request",
+  });
+
+  if (auditError) {
+    throw new Error("DELETION_PLAN_AUDIT_FAILED");
+  }
+
   return plan;
 }
 
 export async function completeDeletionReviewForRequest({
+  actorUserId,
   requestId,
   resolutionSummary,
 }: {
+  actorUserId: string;
   requestId: string;
   resolutionSummary: string;
 }) {
@@ -321,23 +350,25 @@ export async function completeDeletionReviewForRequest({
 
   const plan = deletionPlanSchema.parse(request.deletion_plan);
   const deletionExecution = await executeDeletionPlan({
+    actorUserId,
     plan,
     requestId,
     subjectUserId: request.user_id as string,
   });
-  const storageDeleteFailed = deletionExecution.storage.failedPathCount > 0;
+  const executionFailed =
+    deletionExecution.storage.failedPathCount > 0 || deletionExecution.failedCategories.length > 0;
 
   const { data, error } = await supabase
     .from("privacy_requests")
     .update({
       admin_notes:
-        storageDeleteFailed
-          ? "Deletion/minimization execution is partial because one or more private storage objects could not be deleted. Review deletion_execution storage details."
+        executionFailed
+          ? "Deletion/minimization execution is partial. Review deletion_execution failed categories and storage details before completing this request."
           : "Deletion/minimization execution completed. Retained records are limited to documented audit-safe evidence.",
       deletion_execution: deletionExecution,
       resolution_summary: resolutionSummary,
-      resolved_at: storageDeleteFailed ? null : new Date().toISOString(),
-      status: storageDeleteFailed ? "waiting_for_user" : "completed",
+      resolved_at: executionFailed ? null : new Date().toISOString(),
+      status: executionFailed ? "in_review" : "completed",
     })
     .eq("id", requestId)
     .select("id")
@@ -350,15 +381,17 @@ export async function completeDeletionReviewForRequest({
   return {
     deletionExecution,
     id: data.id as string,
-    status: storageDeleteFailed ? "waiting_for_user" : "completed",
+    status: executionFailed ? "in_review" : "completed",
   };
 }
 
 async function executeDeletionPlan({
+  actorUserId,
   plan,
   requestId,
   subjectUserId,
 }: {
+  actorUserId: string;
   plan: DeletionPlan;
   requestId: string;
   subjectUserId: string;
@@ -367,203 +400,252 @@ async function executeDeletionPlan({
   const storagePaths = collectExecutionStoragePaths(plan);
   const storageResult = await deleteStoragePaths(storagePaths);
   const actions: DeletionExecution["actions"] = [];
+  const failedCategories = new Set<string>();
   const pushAction = ({
     action,
     count,
     detail,
+    failure,
     reason,
     table,
   }: {
     action: "deleted" | "minimized" | "retained";
     count: number;
     detail: string;
+    failure?: string | null;
     reason: string;
     table: string;
   }) => {
+    if (failure) {
+      failedCategories.add(table);
+    }
+
     actions.push({
-      action: action === "retained" ? "retained_with_reason" : action,
+      action: failure ? "failed" : action === "retained" ? "retained_with_reason" : action,
       count,
-      detail,
+      detail: failure ? `${detail} Failure: ${failure}` : detail,
       reason,
-      status: action,
+      status: failure ? "failed" : action,
       storage: readActionStorageResult({ plan, storageResult, table }),
       table,
     });
   };
 
-  await admin.from("profile_source_analyses").delete().eq("user_id", subjectUserId);
+  await runDeletionMutation(() => admin.from("profile_source_analyses").delete().eq("user_id", subjectUserId)).then((failure) =>
   pushAction({
     action: "deleted",
     count: countPlanItem(plan.delete, "profile_source_analyses"),
     detail: "Deleted derived profile-source analysis records.",
+    failure,
     reason: readPlanReason(plan.delete, "profile_source_analyses"),
     table: "profile_source_analyses",
-  });
+  }));
 
-  await admin.from("career_profiles").delete().eq("user_id", subjectUserId);
+  await runDeletionMutation(() => admin.from("career_profiles").delete().eq("user_id", subjectUserId)).then((failure) =>
   pushAction({
     action: "deleted",
     count: countPlanItem(plan.delete, "career_profiles"),
     detail: "Deleted canonical derived career profile records.",
+    failure,
     reason: readPlanReason(plan.delete, "career_profiles"),
     table: "career_profiles",
-  });
+  }));
 
-  await admin.from("profile_facts").delete().eq("user_id", subjectUserId);
+  await runDeletionMutation(() => admin.from("profile_facts").delete().eq("user_id", subjectUserId)).then((failure) =>
   pushAction({
     action: "deleted",
     count: countPlanItem(plan.delete, "profile_facts"),
     detail: "Deleted editable extracted profile facts.",
+    failure,
     reason: readPlanReason(plan.delete, "profile_facts"),
     table: "profile_facts",
-  });
+  }));
 
-  await admin.from("profile_sources").delete().eq("user_id", subjectUserId);
+  await runDeletionMutation(() => admin.from("profile_sources").delete().eq("user_id", subjectUserId)).then((failure) =>
   pushAction({
     action: "deleted",
     count: countPlanItem(plan.delete, "profile_sources"),
     detail: "Deleted uploaded and pasted profile source records.",
+    failure,
     reason: readPlanReason(plan.delete, "profile_sources"),
     table: "profile_sources",
-  });
+  }));
 
-  await admin.from("sensitive_support_contexts").delete().eq("user_id", subjectUserId);
+  await runDeletionMutation(() => admin.from("sensitive_support_contexts").delete().eq("user_id", subjectUserId)).then((failure) =>
   pushAction({
     action: "deleted",
     count: countPlanItem(plan.delete, "sensitive_support_contexts"),
     detail: "Deleted sensitive support context records associated with the user.",
+    failure,
     reason: readPlanReason(plan.delete, "sensitive_support_contexts"),
     table: "sensitive_support_contexts",
-  });
+  }));
 
-  await admin
-    .from("generated_resumes")
-    .delete()
-    .eq("user_id", subjectUserId)
-    .eq("resume_type", "master");
+  await runDeletionMutation(() =>
+    admin
+      .from("generated_resumes")
+      .delete()
+      .eq("user_id", subjectUserId)
+      .eq("resume_type", "master"),
+  ).then((failure) =>
   pushAction({
     action: "deleted",
     count: countPlanItem(plan.delete, "generated_resumes(master)"),
     detail: "Deleted user-controlled master resume drafts and exports.",
+    failure,
     reason: readPlanReason(plan.delete, "generated_resumes(master)"),
     table: "generated_resumes(master)",
-  });
+  }));
 
-  const { data: draftApplications } = await admin
+  const { data: draftApplications, error: draftApplicationsError } = await admin
     .from("applications")
     .select("id")
     .eq("user_id", subjectUserId)
     .eq("status", "draft");
+  if (draftApplicationsError) {
+    failedCategories.add("applications(draft)");
+  }
   const draftApplicationIds = (draftApplications ?? []).map((row) => row.id as string);
 
+  let draftDeletionFailure: string | null = readMutationFailure(draftApplicationsError);
   if (draftApplicationIds.length > 0) {
-    await admin.from("application_status_events").delete().in("application_id", draftApplicationIds);
-    await admin.from("generated_cover_letters").delete().in("application_id", draftApplicationIds);
-    await admin.from("generated_resumes").delete().in("application_id", draftApplicationIds);
-    await admin.from("applications").delete().in("id", draftApplicationIds);
+    const draftFailures = await Promise.all([
+      runDeletionMutation(() =>
+        admin.from("application_status_events").delete().in("application_id", draftApplicationIds),
+      ),
+      runDeletionMutation(() =>
+        admin.from("generated_cover_letters").delete().in("application_id", draftApplicationIds),
+      ),
+      runDeletionMutation(() =>
+        admin.from("generated_resumes").delete().in("application_id", draftApplicationIds),
+      ),
+      runDeletionMutation(() => admin.from("applications").delete().in("id", draftApplicationIds)),
+    ]);
+    draftDeletionFailure = draftFailures.filter(Boolean).join("; ") || null;
   }
 
   pushAction({
     action: "deleted",
     count: countPlanItem(plan.delete, "applications(draft)"),
     detail: "Deleted draft applications after removing dependent draft artifacts and status history.",
+    failure: draftDeletionFailure,
     reason: readPlanReason(plan.delete, "applications(draft)"),
     table: "applications(draft)",
   });
 
-  await admin
-    .from("applications")
-    .update({
-      company_name: "Deleted per privacy request",
-      job_title: null,
-      job_url: "https://deleted.invalid/privacy-request",
-    })
-    .eq("user_id", subjectUserId)
-    .neq("status", "draft");
+  await runDeletionMutation(() =>
+    admin
+      .from("applications")
+      .update({
+        company_name: "Deleted per privacy request",
+        job_title: null,
+        job_url: "https://deleted.invalid/privacy-request",
+      })
+      .eq("user_id", subjectUserId)
+      .neq("status", "draft"),
+  ).then((failure) =>
   pushAction({
     action: "minimized",
     count: countPlanItem(plan.minimize, "applications(non_draft)"),
     detail: "Minimized submitted or status-bearing application metadata while preserving quota/status evidence.",
+    failure,
     reason: readPlanReason(plan.minimize, "applications(non_draft)"),
     table: "applications(non_draft)",
-  });
+  }));
 
-  await admin
-    .from("generated_resumes")
-    .update({
-      content_json: {},
-      docx_storage_path: null,
-      pdf_storage_path: null,
-      status: "deleted",
-      storage_path: null,
-    })
-    .eq("user_id", subjectUserId)
-    .eq("resume_type", "application");
+  await runDeletionMutation(() =>
+    admin
+      .from("generated_resumes")
+      .update({
+        content_json: {},
+        docx_storage_path: null,
+        pdf_storage_path: null,
+        status: "deleted",
+        storage_path: null,
+      })
+      .eq("user_id", subjectUserId)
+      .eq("resume_type", "application"),
+  ).then((failure) =>
   pushAction({
     action: "minimized",
     count: countPlanItem(plan.minimize, "generated_resumes(application)"),
     detail: "Cleared generated application resume content and artifact paths while retaining minimal audit linkage.",
+    failure,
     reason: readPlanReason(plan.minimize, "generated_resumes(application)"),
     table: "generated_resumes(application)",
-  });
+  }));
 
-  await admin
-    .from("generated_cover_letters")
-    .update({
-      content: "",
-      docx_storage_path: null,
-      pdf_storage_path: null,
-      status: "deleted",
-    })
-    .eq("user_id", subjectUserId);
+  await runDeletionMutation(() =>
+    admin
+      .from("generated_cover_letters")
+      .update({
+        claim_risks: [],
+        content: "",
+        docx_storage_path: null,
+        pdf_storage_path: null,
+        reviewer_notes: [],
+        status: "deleted",
+      })
+      .eq("user_id", subjectUserId),
+  ).then((failure) =>
   pushAction({
     action: "minimized",
     count: countPlanItem(plan.minimize, "generated_cover_letters"),
     detail: "Cleared generated cover letter content and artifact paths while retaining minimal audit linkage.",
+    failure,
     reason: readPlanReason(plan.minimize, "generated_cover_letters"),
     table: "generated_cover_letters",
-  });
+  }));
 
-  const { data: creditReservations } = await admin
+  const { data: creditReservations, error: creditReservationsError } = await admin
     .from("credit_reservations")
     .select("id")
     .eq("user_id", subjectUserId);
   const minimizedAt = new Date().toISOString();
 
-  await Promise.all(
+  const creditReservationFailures = await Promise.all(
     (creditReservations ?? []).map((reservation) =>
-      admin
-        .from("credit_reservations")
-        .update({
-          idempotency_key: `privacy-minimized:${reservation.id}`,
-          metadata: {
-            privacy_minimized_at: minimizedAt,
-            privacy_request_id: requestId,
-          },
-        })
-        .eq("id", reservation.id)
-        .eq("user_id", subjectUserId),
+      runDeletionMutation(() =>
+        admin
+          .from("credit_reservations")
+          .update({
+            idempotency_key: `privacy-minimized:${reservation.id}`,
+            metadata: {
+              privacy_minimized_at: minimizedAt,
+              privacy_request_id: requestId,
+            },
+          })
+          .eq("id", reservation.id)
+          .eq("user_id", subjectUserId),
+      ),
     ),
   );
   pushAction({
     action: "minimized",
     count: countPlanItem(plan.minimize, "credit_reservations"),
     detail: "Minimized retry keys and reservation metadata while preserving billing traceability.",
+    failure:
+      [readMutationFailure(creditReservationsError), ...creditReservationFailures]
+        .filter(Boolean)
+        .join("; ") || null,
     reason: readPlanReason(plan.minimize, "credit_reservations"),
     table: "credit_reservations",
   });
 
-  await admin
-    .from("admin_access_audit_events")
-    .update({ metadata: {} })
-    .eq("target_user_id", subjectUserId);
+  await runDeletionMutation(() =>
+    admin
+      .from("admin_access_audit_events")
+      .update({ metadata: {} })
+      .eq("target_user_id", subjectUserId),
+  ).then((failure) =>
   pushAction({
     action: "minimized",
     count: countPlanItem(plan.minimize, "admin_access_audit_events"),
     detail: "Cleared admin access audit metadata while preserving accountability records.",
+    failure,
     reason: readPlanReason(plan.minimize, "admin_access_audit_events"),
     table: "admin_access_audit_events",
-  });
+  }));
 
   for (const retained of plan.retain) {
     pushAction({
@@ -577,19 +659,45 @@ async function executeDeletionPlan({
 
   const execution = deletionExecutionSchema.parse({
     actions,
+    actorUserId,
     executedAt: new Date().toISOString(),
+    failedCategories: Array.from(failedCategories),
     requestId,
+    retainedCategories: plan.retain.map((item) => item.table),
     storage: storageResult,
     subjectUserId,
   });
+  const executionHadFailures =
+    execution.failedCategories.length > 0 || execution.storage.failedPathCount > 0;
 
-  await admin.from("audit_events").insert({
-    event_type: "privacy.deletion_execution.completed",
-    metadata: execution,
+  await runDeletionMutation(() => admin.from("audit_events").insert({
+    actor_user_id: actorUserId,
+    event_type: executionHadFailures
+      ? "privacy.deletion_execution.partial"
+      : "privacy.deletion_execution.completed",
+    metadata: {
+      ...execution,
+      failedCategories: execution.failedCategories,
+      retainedCategories: execution.retainedCategories,
+      storage: execution.storage,
+    },
     request_id: requestId,
     resource_id: requestId,
     resource_type: "privacy_request",
     user_id: subjectUserId,
+  })).then((failure) => {
+    if (failure) {
+      execution.failedCategories.push("audit_events");
+      execution.actions.push({
+        action: "failed",
+        count: 1,
+        detail: `Deletion execution audit event could not be recorded. Failure: ${failure}`,
+        reason: "Audit event is required for deletion execution accountability.",
+        status: "failed",
+        storage: { deletedPathCount: 0, failedPathCount: 0, pathCount: 0 },
+        table: "audit_events",
+      });
+    }
   });
 
   return execution;
@@ -607,6 +715,22 @@ function readPlanReason(
   table: string,
 ) {
   return items.find((item) => item.table === table)?.reason ?? "No plan reason recorded.";
+}
+
+async function runDeletionMutation(
+  mutation: () => PromiseLike<{ error: { message?: string } | null }>,
+) {
+  try {
+    const result = await mutation();
+
+    return readMutationFailure(result.error);
+  } catch (error) {
+    return error instanceof Error ? error.message : "UNKNOWN_MUTATION_FAILURE";
+  }
+}
+
+function readMutationFailure(error: { message?: string } | null | undefined) {
+  return error ? error.message ?? "DATABASE_MUTATION_FAILED" : null;
 }
 
 function readActionStorageResult({

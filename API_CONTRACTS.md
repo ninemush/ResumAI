@@ -170,6 +170,7 @@ Controls:
 
 - Auth required.
 - Requires 2 available credits.
+- Requires available generation quota on the active tier.
 - AI output schema validation required.
 - Must not invent facts.
 - Stores generated resume artifact metadata.
@@ -177,6 +178,8 @@ Controls:
   and raw source text as fallback.
 - Credits are reserved before generation and finalized only after the resume row
   exists.
+- Tier quota is reserved before generation, finalized only after the resume row
+  exists, and released on recoverable generation failure.
 
 ## `GET /api/profile/career-profile`
 
@@ -270,7 +273,9 @@ Controls:
 
 - Auth required.
 - Server-side tier/quota check.
-- Creates quota event.
+- Reserves tier quota before creating a new application.
+- Finalizes the quota event only after the application row exists.
+- Same-key retry must not create a duplicate quota event.
 - Creates application record.
 - Cannot erase quota evidence.
 - Requires explicit decision: `apply`, `network_first`, `skip`,
@@ -295,12 +300,48 @@ Controls:
 
 - Auth required.
 - Requires 4 available credits.
+- Requires available generation quota on the active tier.
 - Application ownership required.
 - AI output schema validation required.
 - Stores PDF and DOCX artifacts in private user-scoped storage.
+- Runs resume and cover-letter claim provenance review before final export.
+- Persists cover-letter `reviewerNotes` and `claimRisks` for unsupported
+  employer, title, dates, education, credential, location, work eligibility,
+  salary, seniority, or numeric achievement claims.
 - Existing material pair plus `reuse` returns free.
 - `regenerate` creates new artifact versions and costs credits.
 - Credits are reserved before generation and finalized only after durable output exists.
+- Tier quota is reserved before generation, finalized only after both material
+  rows exist, and released on recoverable generation failure.
+
+Quota errors:
+
+```json
+{
+  "ok": false,
+  "requestId": "uuid",
+  "error": {
+    "code": "quota.limit_reached",
+    "message": "This tier has reached its generation limit for the current period.",
+    "category": "quota"
+  }
+}
+```
+
+Claim review errors:
+
+```json
+{
+  "ok": false,
+  "requestId": "uuid",
+  "error": {
+    "code": "application.claim_review_required",
+    "message": "Review and acknowledge the highlighted high-impact claims before preparing final application files.",
+    "category": "validation",
+    "claimReviewRequired": true
+  }
+}
+```
 
 ## `PATCH /api/applications/:id/status`
 
@@ -446,3 +487,17 @@ Controls:
 - L1 agent can access only support-safe context.
 - Refund, legal/privacy/security, unresolved, and sensitive issues must escalate.
 - All support actions and autonomous responses must be logged.
+
+## Admin Privacy Deletion Review
+
+Purpose: owner/admin generation and completion of deletion/minimization plans.
+
+Controls:
+
+- Owner/admin auth required.
+- Build-plan and complete-review actions record the executing admin actor.
+- Completion inspects database and storage mutation outcomes.
+- Any failed database mutation or storage deletion keeps the request `in_review`
+  and stores partial execution details in `deletion_execution`.
+- Audit metadata includes actor id, subject user id, privacy request id,
+  retained categories, failed categories, and storage outcomes.

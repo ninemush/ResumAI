@@ -39,12 +39,15 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   try {
-    await requireProtectedApiSession({ requireAdmin: true });
+    const session = await requireProtectedApiSession({ requireAdmin: true });
     const { id } = await context.params;
     const input = adminPrivacyPatchSchema.parse(await request.json());
 
     if (input.action === "build_deletion_plan") {
-      const deletionPlan = await attachDeletionPlanToRequest(id);
+      const deletionPlan = await attachDeletionPlanToRequest({
+        actorUserId: session.user.id,
+        requestId: id,
+      });
 
       return NextResponse.json({
         ok: true,
@@ -72,6 +75,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
 
       const completed = await completeDeletionReviewForRequest({
+        actorUserId: session.user.id,
         requestId: id,
         resolutionSummary,
       });

@@ -3,14 +3,9 @@ import { apiError, apiSuccess, createRequestId, readOptionalJsonBody } from "@/l
 import { ClaimReviewRequiredError } from "@/lib/applications/export-gates";
 import {
   buildCreditsApiError,
-  finalizeCreditReservation,
-  getFinalizedCreditOperationOutput,
   getCreditOperationKey,
-  recordCreditOperationOutput,
-  requireCredits,
-  releaseCreditReservation,
-  reserveCredits,
 } from "@/lib/billing/credits";
+import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
   exportMaterialArtifacts,
   getMaterialReview,
@@ -78,78 +73,37 @@ export async function POST(request: Request, context: RouteContext) {
       });
     }
 
-    const finalizedOutput = await getFinalizedCreditOperationOutput({
-      feature: "applicationMaterialsExport",
-      operationKey,
-    });
-
-    if (finalizedOutput) {
-      return apiSuccess({
-        requestId,
-        operationOutput: finalizedOutput.output_ids,
-        review: await getMaterialReview(parsed.data),
-        reused: true,
-      });
-    }
-
-    await requireCredits("applicationMaterialsExport");
-    const reservation = await reserveCredits({
-      feature: "applicationMaterialsExport",
-      operationKey,
-      resourceId: params.id,
-      resourceType: "application_materials_export",
-    });
-    let result: Awaited<ReturnType<typeof exportMaterialArtifacts>>;
-
-    try {
-      result = await exportMaterialArtifacts(parsed.data, { acknowledgeClaimReview });
-    } catch (error) {
-      await releaseCreditReservation({
-        reason: error instanceof Error ? error.message : "APPLICATION_MATERIAL_EXPORT_FAILED",
-        reservationId: reservation.reservationId,
-      }).catch(() => undefined);
-      throw error;
-    }
-
-    if (result.didExport) {
-      const finalizedReservation = await finalizeCreditReservation({
-        metadata: {
+    const paidOperation = await runPaidCreditOperation({
+      buildOutput: (result) => ({
+        finalize: result.didExport,
+        ledgerMetadata: {
           application_id: params.id,
-          output_ids: {
-            applicationId: params.id,
-            coverLetterId: result.review.coverLetter?.id ?? null,
-            resumeId: result.review.resume?.id ?? null,
-          },
-          resource_id: params.id,
-          resource_type: "application_materials_export",
         },
-        reservationId: reservation.reservationId,
-        resourceId: params.id,
-      });
-      await recordCreditOperationOutput({
-        feature: "applicationMaterialsExport",
-        ledgerEventId: finalizedReservation.ledgerEventId,
-        operationKey,
         outputIds: {
           applicationId: params.id,
           coverLetterId: result.review.coverLetter?.id ?? null,
           resumeId: result.review.resume?.id ?? null,
         },
-        reservationId: reservation.reservationId,
-        resourceId: params.id,
-        resourceType: "application_materials_export",
-      });
-    } else {
-      await releaseCreditReservation({
-        reason: "APPLICATION_MATERIAL_EXPORT_REUSED",
-        reservationId: reservation.reservationId,
-      }).catch(() => undefined);
-    }
+      }),
+      buildReusedResult: async (output) => ({
+        didExport: false,
+        operationOutput: output.output_ids,
+        review: await getMaterialReview(parsed.data),
+      } as Awaited<ReturnType<typeof exportMaterialArtifacts>> & {
+        operationOutput: Record<string, unknown>;
+      }),
+      feature: "applicationMaterialsExport",
+      operationKey,
+      resourceId: params.id,
+      resourceType: "application_materials_export",
+      run: () => exportMaterialArtifacts(parsed.data, { acknowledgeClaimReview }),
+    });
 
     return apiSuccess({
       requestId,
-      review: result.review,
-      reused: !result.didExport,
+      operationOutput: "operationOutput" in paidOperation.result ? paidOperation.result.operationOutput : undefined,
+      review: paidOperation.result.review,
+      reused: paidOperation.reused || !paidOperation.result.didExport,
     });
   } catch (error) {
     if (isBillingError(error)) {

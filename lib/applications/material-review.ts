@@ -9,6 +9,11 @@ import {
   buildCoverLetterPdf,
 } from "@/lib/artifacts/ats-template";
 import {
+  buildSupportedEvidenceCorpus,
+  reviewCoverLetterClaimProvenance,
+  type CoverLetterClaimRisk,
+} from "@/lib/ai/claim-provenance";
+import {
   ClaimReviewRequiredError,
   classifyResumeExportRisks,
   getBlockingExportRisks,
@@ -47,10 +52,12 @@ export type MaterialReview = {
     status: string;
   };
   coverLetter: {
+    claimRisks: CoverLetterClaimRisk[];
     content: string;
     docxDownloadUrl: string | null;
     id: string;
     pdfDownloadUrl: string | null;
+    reviewerNotes: string[];
     status: string;
     updatedAt: string;
   } | null;
@@ -95,9 +102,11 @@ export async function getMaterialReview(
     coverLetter: coverLetter
       ? {
           content: coverLetter.content,
+          claimRisks: normalizeCoverLetterClaimRisks(coverLetter.claim_risks),
           docxDownloadUrl: await createSignedUrl(coverLetter.docx_storage_path),
           id: coverLetter.id,
           pdfDownloadUrl: await createSignedUrl(coverLetter.pdf_storage_path),
+          reviewerNotes: normalizeTextArray(coverLetter.reviewer_notes),
           status: coverLetter.status,
           updatedAt: coverLetter.updated_at,
         }
@@ -157,6 +166,13 @@ export async function updateMaterialReview(input: z.input<typeof updateMaterialR
     throw new Error("COVER_LETTER_NOT_FOUND");
   }
 
+  const coverLetterReview = parsed.coverLetter
+    ? reviewCoverLetterClaimProvenance({
+        coverLetter: parsed.coverLetter,
+        evidenceCorpus: await readApplicationEvidenceCorpus(parsed.applicationId, userId),
+      })
+    : null;
+
   await Promise.all([
     parsed.resume && resume
       ? supabase
@@ -181,6 +197,7 @@ export async function updateMaterialReview(input: z.input<typeof updateMaterialR
       ? supabase
           .from("generated_cover_letters")
           .update({
+            claim_risks: coverLetterReview?.claimRisks ?? [],
             claim_review_acknowledged_at: null,
             claim_review_acknowledged_by: null,
             claim_review_acknowledgement: {},
@@ -191,6 +208,7 @@ export async function updateMaterialReview(input: z.input<typeof updateMaterialR
             export_validation: {},
             export_validated_at: null,
             pdf_storage_path: null,
+            reviewer_notes: coverLetterReview?.reviewerNotes ?? [],
             status: "ready",
           })
           .eq("id", coverLetter.id)
@@ -237,9 +255,22 @@ export async function exportMaterialArtifacts(
   }
 
   const resumeContent = parseResumeContent(resume.content_json);
-  const blockingRisks = getBlockingExportRisks(resumeContent);
+  const coverLetterReview = reviewCoverLetterClaimProvenance({
+    coverLetter: coverLetter.content,
+    evidenceCorpus: await readApplicationEvidenceCorpus(parsed.applicationId, userId),
+  });
+  const resumeRisks = getBlockingExportRisks(resumeContent);
+  const coverLetterRisks = coverLetterReview.claimRisks.map(mapCoverLetterRiskToExportRisk);
+  const blockingRisks = [...resumeRisks, ...coverLetterRisks];
 
-  if (blockingRisks.length > 0 && !resume.claim_review_acknowledged_at) {
+  await persistCoverLetterClaimReview({
+    coverLetterId: coverLetter.id,
+    review: coverLetterReview,
+    supabase,
+    userId,
+  });
+
+  if (blockingRisks.length > 0 && !hasMaterialClaimReviewAcknowledgement({ coverLetter, resume })) {
     if (!options.acknowledgeClaimReview) {
       throw new ClaimReviewRequiredError("MATERIAL_CLAIM_ACK_REQUIRED", blockingRisks);
     }
@@ -447,9 +478,12 @@ function buildExportReadiness({
   }
 
   const resumeContent = parseResumeContent(resume.content_json);
-  const risks = classifyResumeExportRisks(resumeContent);
+  const risks = [
+    ...classifyResumeExportRisks(resumeContent),
+    ...normalizeCoverLetterClaimRisks(coverLetter.claim_risks).map(mapCoverLetterRiskToExportRisk),
+  ];
   const blockingRisks = risks.filter((risk) => risk.severity === "high");
-  const claimReviewAcknowledged = Boolean(resume.claim_review_acknowledged_at);
+  const claimReviewAcknowledged = hasMaterialClaimReviewAcknowledgement({ coverLetter, resume });
   const resumeExportStatus = readExportStatus(resume.export_status);
   const coverLetterExportStatus = readExportStatus(coverLetter.export_status);
 
@@ -459,6 +493,10 @@ function buildExportReadiness({
 
   if (resumeContent.reviewerNotes.length > 0) {
     warnings.push("Reviewer notes include fit or evidence items to verify.");
+  }
+
+  if (normalizeTextArray(coverLetter.reviewer_notes).length > 0) {
+    warnings.push("Cover-letter reviewer notes include evidence items to verify.");
   }
 
   if (!resume.pdf_storage_path || !coverLetter.pdf_storage_path) {
@@ -535,7 +573,11 @@ async function acknowledgeMaterialClaimReview({
       .update({
         claim_review_acknowledged_at: acknowledgedAt,
         claim_review_acknowledged_by: userId,
-        claim_review_acknowledgement: acknowledgement,
+        claim_review_acknowledgement: {
+          ...acknowledgement,
+          artifactType: "cover_letter",
+          coverLetterId,
+        },
       })
       .eq("id", coverLetterId)
       .eq("user_id", userId),
@@ -587,6 +629,149 @@ function readExportStatus(value: unknown): ExportStatus {
   return value === "export_pending" || value === "export_validated" || value === "export_failed"
     ? value
     : "not_exported";
+}
+
+function hasMaterialClaimReviewAcknowledgement({
+  coverLetter,
+  resume,
+}: {
+  coverLetter: Awaited<ReturnType<typeof readLatestCoverLetter>>;
+  resume: Awaited<ReturnType<typeof readLatestResume>>;
+}) {
+  return Boolean(resume?.claim_review_acknowledged_at && coverLetter?.claim_review_acknowledged_at);
+}
+
+async function persistCoverLetterClaimReview({
+  coverLetterId,
+  review,
+  supabase,
+  userId,
+}: {
+  coverLetterId: string;
+  review: ReturnType<typeof reviewCoverLetterClaimProvenance>;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+}) {
+  const { error } = await supabase
+    .from("generated_cover_letters")
+    .update({
+      claim_risks: review.claimRisks,
+      reviewer_notes: review.reviewerNotes,
+    })
+    .eq("id", coverLetterId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error("COVER_LETTER_CLAIM_REVIEW_SAVE_FAILED");
+  }
+}
+
+function mapCoverLetterRiskToExportRisk(risk: CoverLetterClaimRisk): ExportRisk {
+  return {
+    category: "cover_letter_claim",
+    severity: "high",
+    text: `Cover letter: ${risk.text}`,
+  };
+}
+
+function normalizeCoverLetterClaimRisks(value: unknown): CoverLetterClaimRisk[] {
+  const result = z.array(z.object({
+    category: z.enum([
+      "credential",
+      "education",
+      "employer",
+      "location",
+      "numeric_achievement",
+      "salary",
+      "seniority",
+      "title",
+      "work_eligibility",
+    ]),
+    severity: z.literal("high"),
+    text: z.string(),
+  })).safeParse(value);
+
+  return result.success ? result.data : [];
+}
+
+function normalizeTextArray(value: unknown) {
+  return z.array(z.string()).safeParse(value).success ? z.array(z.string()).parse(value) : [];
+}
+
+async function readApplicationEvidenceCorpus(applicationId: string, userId: string) {
+  const supabase = await createClient();
+  const { data: application, error: applicationError } = await supabase
+    .from("applications")
+    .select(
+      "id, company_name, job_title, profile_id, job_ingestions(id, extracted_text, title, company)",
+    )
+    .eq("id", applicationId)
+    .eq("user_id", userId)
+    .single();
+
+  if (applicationError || !application) {
+    throw new Error("APPLICATION_NOT_FOUND");
+  }
+
+  const jobIngestion = Array.isArray(application.job_ingestions)
+    ? application.job_ingestions[0] ?? null
+    : application.job_ingestions;
+  const [{ data: facts, error: factsError }, { data: masterResume, error: resumeError }] =
+    await Promise.all([
+      supabase
+        .from("profile_facts")
+        .select("fact_type, fact_value, evidence_status, user_confirmed")
+        .eq("profile_id", application.profile_id)
+        .eq("user_id", userId)
+        .limit(100),
+      supabase
+        .from("generated_resumes")
+        .select("content_json")
+        .eq("profile_id", application.profile_id)
+        .eq("user_id", userId)
+        .eq("resume_type", "master")
+        .is("application_id", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+  if (factsError) {
+    throw new Error("PROFILE_FACTS_READ_FAILED");
+  }
+
+  if (resumeError) {
+    throw new Error("MASTER_RESUME_READ_FAILED");
+  }
+
+  return buildSupportedEvidenceCorpus([
+    ...(facts ?? []).map((fact) => ({
+      label: fact.fact_type,
+      status: fact.evidence_status,
+      text: fact.fact_value,
+      userConfirmed: fact.user_confirmed,
+    })),
+    {
+      label: "master resume",
+      status: "source_excerpt",
+      text: masterResume?.content_json ? JSON.stringify(masterResume.content_json) : null,
+      userConfirmed: true,
+    },
+    {
+      label: "target job",
+      status: "source_excerpt",
+      text: [
+        application.company_name,
+        application.job_title,
+        jobIngestion?.company,
+        jobIngestion?.title,
+        jobIngestion?.extracted_text,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      userConfirmed: true,
+    },
+  ]);
 }
 
 async function getAuthenticatedContext() {
@@ -698,7 +883,7 @@ async function readLatestCoverLetter(applicationId: string, userId: string) {
   const { data, error } = await supabase
     .from("generated_cover_letters")
     .select(
-      "id, content, pdf_storage_path, docx_storage_path, status, export_status, claim_review_acknowledged_at, updated_at",
+      "id, content, pdf_storage_path, docx_storage_path, status, export_status, claim_review_acknowledged_at, claim_risks, reviewer_notes, updated_at",
     )
     .eq("application_id", applicationId)
     .eq("user_id", userId)

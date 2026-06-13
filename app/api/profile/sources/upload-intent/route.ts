@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     return apiError(requestId, {
       category: "validation",
       code: "source.invalid_upload_intent",
-      message: "Choose a supported PDF, DOCX, TXT, JPG, PNG, or WebP source.",
+      message: "Choose a supported PDF, DOCX, TXT, CSV, ZIP, JPG, PNG, or WebP source.",
       status: 400,
     });
   }
@@ -58,7 +58,7 @@ function toApiError(error: unknown) {
     return {
       category: "validation",
       code: "source.unsupported_upload_type",
-      message: "Use PDF, DOCX, TXT, JPG, PNG, or WebP. HEIC and HEIF are not supported yet.",
+      message: "Use PDF, DOCX, TXT, LinkedIn CSV/ZIP, JPG, PNG, or WebP. HEIC and HEIF are not supported yet.",
       status: 422,
     };
   }

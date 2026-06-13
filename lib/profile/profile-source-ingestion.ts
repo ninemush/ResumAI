@@ -42,10 +42,14 @@ export type ProfileSourceRequest = z.infer<typeof profileSourceRequestSchema>;
 
 const uploadMimeTypes = {
   "application/pdf": "pdf",
+  "application/csv": "linkedin",
+  "application/zip": "linkedin",
+  "application/x-zip-compressed": "linkedin",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
   "image/jpeg": "image",
   "image/png": "image",
   "image/webp": "image",
+  "text/csv": "linkedin",
   "text/plain": "txt",
 } as const;
 
@@ -84,7 +88,11 @@ export async function createProfileSourceUploadIntent(
   const parsed = profileSourceUploadIntentSchema.parse(input);
   const sourceType = uploadMimeTypes[parsed.mimeType as keyof typeof uploadMimeTypes];
 
-  if (!sourceType || /\.(heic|heif)$/i.test(parsed.originalFilename)) {
+  if (
+    !sourceType ||
+    /\.(heic|heif)$/i.test(parsed.originalFilename) ||
+    !filenameMatchesMimeType(parsed.originalFilename, parsed.mimeType)
+  ) {
     throw new Error("UNSUPPORTED_UPLOAD_TYPE");
   }
 
@@ -436,6 +444,29 @@ function readSafeFileExtension(filename: string, mimeType: string) {
   };
 
   return fallbackByMime[mimeType] ?? "";
+}
+
+function filenameMatchesMimeType(filename: string, mimeType: string) {
+  const ext = filename.match(/\.[A-Za-z0-9]{1,12}$/)?.[0]?.toLowerCase();
+
+  if (!ext) {
+    return true;
+  }
+
+  const allowedExtensionsByMime: Record<string, string[]> = {
+    "application/csv": [".csv"],
+    "application/pdf": [".pdf"],
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+    "application/x-zip-compressed": [".zip"],
+    "application/zip": [".zip"],
+    "image/jpeg": [".jpg", ".jpeg"],
+    "image/png": [".png"],
+    "image/webp": [".webp"],
+    "text/csv": [".csv"],
+    "text/plain": [".txt"],
+  };
+
+  return allowedExtensionsByMime[mimeType]?.includes(ext) ?? false;
 }
 
 function slugifyFilename(filename: string) {

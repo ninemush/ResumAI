@@ -18,7 +18,12 @@ import {
   reviewResumeClaimProvenance,
 } from "@/lib/ai/claim-provenance";
 import { brand } from "@/lib/brand";
-import { recordQuotaEvent } from "@/lib/quota/quota-events";
+import {
+  finalizeQuotaReservation,
+  releaseQuotaReservation,
+  reserveQuotaEvent,
+  type QuotaReservationResult,
+} from "@/lib/quota/quota-events";
 import {
   buildProfileIntelligence,
   type ProfileIntelligence,
@@ -226,6 +231,7 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
 
 export async function generateMasterResume(
   input: z.input<typeof generateMasterResumeSchema> = {},
+  options: { quotaOperationKey?: string } = {},
 ): Promise<GenerateMasterResumeResult> {
   const parsed = generateMasterResumeSchema.parse(input);
   const { supabase, userId } = await getAuthenticatedContext();
@@ -237,50 +243,87 @@ export async function generateMasterResume(
   }
 
   const model = getMaterialsModel();
-  const resume = await generateMasterResumeDraft({
-    confirmedFacts,
-    instruction: parsed.instruction,
-    model,
-    profile,
-    sourceEvidence,
-    userId,
-  });
-
-  const { data: generatedResume, error: resumeError } = await supabase
-    .from("generated_resumes")
-    .insert({
-      user_id: userId,
-      profile_id: profile.id,
-      application_id: null,
-      resume_type: "master",
-      prompt_version: MASTER_RESUME_PROMPT_VERSION,
-      model,
-      content_json: resume,
-      status: "draft",
-    })
-    .select("id")
-    .single();
-
-  if (resumeError || !generatedResume) {
-    throw new Error("MASTER_RESUME_SAVE_FAILED");
-  }
-
-  await recordQuotaEvent({
+  const quotaReservation = await reserveQuotaEvent({
     eventType: "generation_created",
     metadata: {
       model,
       prompt_version: MASTER_RESUME_PROMPT_VERSION,
-      resume_id: generatedResume.id,
     },
-    resourceId: generatedResume.id,
+    operationKey:
+      options.quotaOperationKey ??
+      `masterResumeGenerate:${profile.id}:${hashOperationInput(parsed.instruction ?? "default")}`,
+    resourceId: null,
     resourceType: "master_resume",
   });
+  let generatedResumeId: string | null = null;
+
+  try {
+    const resume = await generateMasterResumeDraft({
+      confirmedFacts,
+      instruction: parsed.instruction,
+      model,
+      profile,
+      sourceEvidence,
+      userId,
+    });
+
+    const { data: generatedResume, error: resumeError } = await supabase
+      .from("generated_resumes")
+      .insert({
+        user_id: userId,
+        profile_id: profile.id,
+        application_id: null,
+        resume_type: "master",
+        prompt_version: MASTER_RESUME_PROMPT_VERSION,
+        model,
+        content_json: resume,
+        status: "draft",
+      })
+      .select("id")
+      .single();
+
+    if (resumeError || !generatedResume) {
+      throw new Error("MASTER_RESUME_SAVE_FAILED");
+    }
+
+    generatedResumeId = generatedResume.id;
+    await finalizeQuotaReservation({
+      metadata: {
+        model,
+        prompt_version: MASTER_RESUME_PROMPT_VERSION,
+        resume_id: generatedResume.id,
+      },
+      reservationId: quotaReservation.reservationId,
+      resourceId: generatedResume.id,
+    });
+  } catch (error) {
+    await releaseMasterResumeQuotaReservation(quotaReservation, error);
+    throw error;
+  }
+
+  if (!generatedResumeId) {
+    throw new Error("MASTER_RESUME_SAVE_FAILED");
+  }
 
   return {
     overview: await getMasterResumeOverview(userId),
-    resumeId: generatedResume.id,
+    resumeId: generatedResumeId,
     summary: "Created a master resume draft from your current career foundation.",
   };
+}
+
+async function releaseMasterResumeQuotaReservation(
+  quotaReservation: QuotaReservationResult,
+  error: unknown,
+) {
+  if (quotaReservation.status !== "reserved") {
+    return;
+  }
+
+  await releaseQuotaReservation({
+    reason: error instanceof Error ? error.message : "MASTER_RESUME_GENERATION_FAILED",
+    reservationId: quotaReservation.reservationId,
+  }).catch(() => undefined);
 }
 
 async function generateMasterResumeDraft({
@@ -2312,4 +2355,8 @@ function buildArtifactDownloadUrl({
 
 function hashUserId(userId: string) {
   return createHash("sha256").update(userId).digest("hex").slice(0, 64);
+}
+
+function hashOperationInput(value: string) {
+  return createHash("sha256").update(value.trim() || "default").digest("hex").slice(0, 24);
 }

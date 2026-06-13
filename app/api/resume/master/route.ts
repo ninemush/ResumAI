@@ -4,14 +4,9 @@ import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth"
 import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBody } from "@/lib/api/responses";
 import {
   buildCreditsApiError,
-  finalizeCreditReservation,
-  getFinalizedCreditOperationOutput,
   getCreditOperationKey,
-  recordCreditOperationOutput,
-  requireCredits,
-  releaseCreditReservation,
-  reserveCredits,
 } from "@/lib/billing/credits";
+import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
   generateMasterResume,
   generateMasterResumeSchema,
@@ -59,65 +54,34 @@ export async function POST(request: Request) {
       instruction: parsed.data.instruction,
       userId: session.user.id,
     }));
-    const finalizedOutput = await getFinalizedCreditOperationOutput({
-      feature: "masterResumeGenerate",
-      operationKey,
-    });
-
-    if (finalizedOutput) {
-      return apiSuccess({
-        requestId,
+    const paidOperation = await runPaidCreditOperation({
+      buildOutput: (result) => ({
+        ledgerMetadata: {
+          resume_id: result.resumeId,
+        },
+        outputIds: { resumeId: result.resumeId },
+        resourceId: result.resumeId,
+      }),
+      buildReusedResult: async (output) => ({
         overview: await getMasterResumeOverview(session.user.id),
-        resumeId: readStringOutput(finalizedOutput.output_ids.resumeId),
-        reused: true,
+        resumeId: readStringOutput(output.output_ids.resumeId) ?? "stored",
         summary: "Returned the existing master resume draft for this retry-safe operation.",
-      });
-    }
-
-    await requireCredits("masterResumeGenerate");
-    const reservation = await reserveCredits({
+      }),
       feature: "masterResumeGenerate",
       metadata: { instruction: parsed.data.instruction ?? null },
       operationKey,
       resourceId: null,
       resourceType: "master_resume",
-    });
-    let result: Awaited<ReturnType<typeof generateMasterResume>>;
-
-    try {
-      result = await generateMasterResume(parsed.data);
-    } catch (error) {
-      await releaseCreditReservation({
-        reason: error instanceof Error ? error.message : "MASTER_RESUME_GENERATION_FAILED",
-        reservationId: reservation.reservationId,
-      }).catch(() => undefined);
-      throw error;
-    }
-
-    const finalizedReservation = await finalizeCreditReservation({
-      metadata: {
-        output_ids: { resumeId: result.resumeId },
-        resource_id: result.resumeId,
-        resource_type: "master_resume",
-        resume_id: result.resumeId,
-      },
-      reservationId: reservation.reservationId,
-      resourceId: result.resumeId,
-    });
-    await recordCreditOperationOutput({
-      feature: "masterResumeGenerate",
-      ledgerEventId: finalizedReservation.ledgerEventId,
-      metadata: { instruction: parsed.data.instruction ?? null },
-      operationKey,
-      outputIds: { resumeId: result.resumeId },
-      reservationId: reservation.reservationId,
-      resourceId: result.resumeId,
-      resourceType: "master_resume",
+      run: () =>
+        generateMasterResume(parsed.data, {
+          quotaOperationKey: operationKey,
+        }),
     });
 
     return apiSuccess({
       requestId,
-      ...result,
+      ...paidOperation.result,
+      reused: paidOperation.reused,
     });
   } catch (error) {
     if (isBillingError(error)) {
@@ -193,6 +157,24 @@ function toApiError(error: unknown) {
       message:
         "Add a little more career context, skills, and target direction before generating a trustworthy master resume.",
       status: 400,
+    };
+  }
+
+  if (error instanceof Error && error.message === "QUOTA_TIER_REQUIRED") {
+    return {
+      category: "permission",
+      code: "quota.tier_required",
+      message: "Choose an active tier before generating more materials.",
+      status: 402,
+    };
+  }
+
+  if (error instanceof Error && error.message === "QUOTA_LIMIT_REACHED") {
+    return {
+      category: "quota",
+      code: "quota.limit_reached",
+      message: "This tier has reached its generation limit for the current period.",
+      status: 429,
     };
   }
 

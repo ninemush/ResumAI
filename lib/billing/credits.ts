@@ -99,6 +99,16 @@ export type CreditReservationResult = z.infer<typeof creditReservationResultSche
   summary: CreditSummary;
 };
 
+const staleCreditReservationCleanupSchema = z.object({
+  affectedFeatureTotals: z.record(z.string(), z.number().int().nonnegative()).default({}),
+  expiredCount: z.number().int().nonnegative(),
+  releasedCount: z.number().int().nonnegative(),
+});
+
+export type StaleCreditReservationCleanup = z.infer<
+  typeof staleCreditReservationCleanupSchema
+>;
+
 const creditOperationOutputSchema = z.object({
   feature: z.string(),
   ledger_event_id: z.string().uuid().nullable(),
@@ -239,6 +249,22 @@ export async function releaseCreditReservation({
   }
 
   return normalizeReservationResult(data);
+}
+
+export async function cleanupStaleCreditReservations(): Promise<StaleCreditReservationCleanup> {
+  const supabase = await createClient();
+  await requireAdminUser(supabase);
+  const { data, error } = await supabase.rpc("cleanup_stale_credit_reservations");
+
+  if (error || !data) {
+    throw new Error(
+      error?.message?.includes("ADMIN_REQUIRED")
+        ? "ADMIN_REQUIRED"
+        : "CREDIT_RESERVATION_CLEANUP_FAILED",
+    );
+  }
+
+  return staleCreditReservationCleanupSchema.parse(data);
 }
 
 export function getCreditOperationKey(request: Request, fallback: string) {

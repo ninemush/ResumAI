@@ -7,6 +7,21 @@ export type ClaimEvidenceInput = {
   userConfirmed?: boolean | null;
 };
 
+export type CoverLetterClaimRisk = {
+  category:
+    | "credential"
+    | "education"
+    | "employer"
+    | "location"
+    | "numeric_achievement"
+    | "salary"
+    | "seniority"
+    | "title"
+    | "work_eligibility";
+  severity: "high";
+  text: string;
+};
+
 const supportedStatuses = new Set(["user_confirmed", "source_supported"]);
 
 export function buildSupportedEvidenceCorpus(inputs: ClaimEvidenceInput[]) {
@@ -79,6 +94,25 @@ export function reviewResumeClaimProvenance({
   return reviewed;
 }
 
+export function reviewCoverLetterClaimProvenance({
+  coverLetter,
+  evidenceCorpus,
+}: {
+  coverLetter: string;
+  evidenceCorpus: string;
+}) {
+  const risks = dedupeCoverLetterRisks(
+    splitCoverLetterClaims(coverLetter).flatMap((claim) =>
+      classifyUnsupportedCoverLetterClaim(claim, evidenceCorpus),
+    ),
+  );
+
+  return {
+    claimRisks: risks,
+    reviewerNotes: risks.map((risk) => `Verify ${formatRiskCategory(risk.category)} before export: ${risk.text}`),
+  };
+}
+
 function retainNullableClaim(
   value: string | null,
   evidenceCorpus: string,
@@ -120,6 +154,66 @@ function requiresEvidence(value: string) {
   return /\b(\d+[%\w]*|managed|led|owned|launched|built|delivered|reduced|increased|improved|saved|grew|certified|degree|mba|bachelor|master|phd|sql|python|salesforce|sap|aws|azure|gcp)\b/i.test(
     value,
   );
+}
+
+function splitCoverLetterClaims(coverLetter: string) {
+  return coverLetter
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((claim) => claim.trim())
+    .filter((claim) => claim.length >= 12)
+    .slice(0, 60);
+}
+
+function classifyUnsupportedCoverLetterClaim(
+  claim: string,
+  evidenceCorpus: string,
+): CoverLetterClaimRisk[] {
+  if (isSupportedClaim(claim, evidenceCorpus)) {
+    return [];
+  }
+
+  const risks: CoverLetterClaimRisk[] = [];
+  const riskPatterns: Array<[CoverLetterClaimRisk["category"], RegExp]> = [
+    ["work_eligibility", /\b(work authorization|work authori[sz]ed|eligible to work|visa|citizenship|clearance|sponsorship)\b/i],
+    ["salary", /\b(salary|compensation|pay range|remuneration|bonus|commission)\b/i],
+    ["numeric_achievement", /\b\d+(?:[%.,]|\b)|\b(?:million|billion|thousand|k|m)\b/i],
+    ["credential", /\b(certified|certification|credential|license|licensed|aws|azure|gcp|salesforce|pmp|cpa|cfa)\b/i],
+    ["education", /\b(mba|bachelor|master'?s|phd|degree|university|college|school)\b/i],
+    ["seniority", /\b(senior|lead|principal|director|head of|chief|vp|vice president|manager|executive)\b/i],
+    ["title", /\b(?:as|role as|title of|served as|worked as|position as)\s+(?:an?\s+)?[A-Z]?[a-z]+(?:\s+[A-Z]?[a-z]+){0,5}\b/i],
+    ["employer", /\b(?:at|for|with)\s+[A-Z][A-Za-z0-9&.,' -]{2,80}\b/],
+    ["location", /\b(?:based in|located in|relocated to|across)\s+[A-Z][A-Za-z ,'-]{2,80}\b/],
+  ];
+
+  for (const [category, pattern] of riskPatterns) {
+    if (pattern.test(claim)) {
+      risks.push({
+        category,
+        severity: "high",
+        text: claim.slice(0, 220),
+      });
+    }
+  }
+
+  return risks;
+}
+
+function dedupeCoverLetterRisks(risks: CoverLetterClaimRisk[]) {
+  const seen = new Set<string>();
+  return risks.filter((risk) => {
+    const key = `${risk.category}:${risk.text}`;
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function formatRiskCategory(category: CoverLetterClaimRisk["category"]) {
+  return category.replace(/_/g, " ");
 }
 
 function isSupportedClaim(value: string, evidenceCorpus: string) {

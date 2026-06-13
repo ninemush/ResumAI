@@ -149,4 +149,58 @@ test.describe("RevenueCat webhook maturity", () => {
       await cleanRowsByIds(admin, "revenuecat_events", eventRows.map((event) => event.id));
     }
   });
+
+  test("records refund and reversal metadata without granting credits", async ({ request }) => {
+    loadLocalEnv();
+
+    const admin = createServiceRoleClient();
+    const userId = await readUserIdByEmail(process.env.QA_DEMO_USER_A_EMAIL ?? "");
+    const eventId = `launch-refund-${crypto.randomUUID()}`;
+    const authorization: Record<string, string> | undefined = process.env.REVENUECAT_WEBHOOK_SECRET
+      ? { authorization: `Bearer ${process.env.REVENUECAT_WEBHOOK_SECRET}` }
+      : undefined;
+
+    try {
+      const response = await request.post("/api/revenuecat/webhook", {
+        data: {
+          event: {
+            app_user_id: userId,
+            id: eventId,
+            product_id: "pramania_credits_25",
+            type: "REFUND",
+          },
+        },
+        headers: authorization,
+      });
+      const payload = await response.json();
+
+      expect(response.ok()).toBe(true);
+      expect(payload).toMatchObject({
+        ignored: true,
+        reason: "recorded_reversal_metadata",
+      });
+      expect(payload.creditsGranted).toBeUndefined();
+
+      const { data: reversals, error: reversalError } = await admin
+        .from("credit_reversals")
+        .select("id, provider_reference, reason, metadata")
+        .eq("provider_reference", eventId)
+        .returns<Array<{ id: string; metadata: Record<string, unknown>; provider_reference: string; reason: string }>>();
+
+      expect(reversalError).toBeNull();
+      expect(reversals).toHaveLength(1);
+      expect(reversals?.[0]?.reason).toBe("REFUND");
+      expect((reversals?.[0]?.metadata as { product_id?: string } | null)?.product_id).toBe(
+        "pramania_credits_25",
+      );
+    } finally {
+      const { data: reversals } = await admin
+        .from("credit_reversals")
+        .select("id")
+        .eq("provider_reference", eventId);
+      const reversalRows = (reversals ?? []) as Array<{ id: string }>;
+
+      await cleanRowsByIds(admin, "credit_reversals", reversalRows.map((event) => event.id));
+    }
+  });
 });

@@ -3,14 +3,9 @@ import { apiError, apiSuccess, createRequestId, readOptionalJsonBody } from "@/l
 import { ClaimReviewRequiredError } from "@/lib/applications/export-gates";
 import {
   buildCreditsApiError,
-  finalizeCreditReservation,
-  getFinalizedCreditOperationOutput,
   getCreditOperationKey,
-  recordCreditOperationOutput,
-  requireCredits,
-  releaseCreditReservation,
-  reserveCredits,
 } from "@/lib/billing/credits";
+import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
   exportMasterResumeArtifacts,
   getMasterResumeOverview,
@@ -59,70 +54,31 @@ export async function POST(request: Request) {
       });
     }
 
-    const finalizedOutput = await getFinalizedCreditOperationOutput({
-      feature: "masterResumeExport",
-      operationKey,
-    });
-
-    if (finalizedOutput) {
-      return apiSuccess({
-        requestId,
-        operationOutput: finalizedOutput.output_ids,
+    const paidOperation = await runPaidCreditOperation({
+      buildOutput: (result) => ({
+        finalize: result.didExport,
+        outputIds: { resumeId: result.overview.latestResume?.id ?? null },
+        resourceId: result.overview.latestResume?.id ?? null,
+      }),
+      buildReusedResult: async (output) => ({
+        didExport: false,
         overview: await getMasterResumeOverview(session.user.id),
-        reused: true,
-      });
-    }
-
-    await requireCredits("masterResumeExport");
-    const reservation = await reserveCredits({
+        operationOutput: output.output_ids,
+      } as Awaited<ReturnType<typeof exportMasterResumeArtifacts>> & {
+        operationOutput: Record<string, unknown>;
+      }),
       feature: "masterResumeExport",
       operationKey,
       resourceId: null,
       resourceType: "master_resume_export",
+      run: () => exportMasterResumeArtifacts({ acknowledgeClaimReview }),
     });
-    let result: Awaited<ReturnType<typeof exportMasterResumeArtifacts>>;
-
-    try {
-      result = await exportMasterResumeArtifacts({ acknowledgeClaimReview });
-    } catch (error) {
-      await releaseCreditReservation({
-        reason: error instanceof Error ? error.message : "MASTER_RESUME_EXPORT_FAILED",
-        reservationId: reservation.reservationId,
-      }).catch(() => undefined);
-      throw error;
-    }
-
-    if (result.didExport) {
-      const finalizedReservation = await finalizeCreditReservation({
-        metadata: {
-          output_ids: { resumeId: result.overview.latestResume?.id ?? null },
-          resource_id: result.overview.latestResume?.id ?? null,
-          resource_type: "master_resume_export",
-          resume_id: result.overview.latestResume?.id ?? null,
-        },
-        reservationId: reservation.reservationId,
-        resourceId: result.overview.latestResume?.id,
-      });
-      await recordCreditOperationOutput({
-        feature: "masterResumeExport",
-        ledgerEventId: finalizedReservation.ledgerEventId,
-        operationKey,
-        outputIds: { resumeId: result.overview.latestResume?.id ?? null },
-        reservationId: reservation.reservationId,
-        resourceId: result.overview.latestResume?.id,
-        resourceType: "master_resume_export",
-      });
-    } else {
-      await releaseCreditReservation({
-        reason: "MASTER_RESUME_EXPORT_REUSED",
-        reservationId: reservation.reservationId,
-      }).catch(() => undefined);
-    }
 
     return apiSuccess({
       requestId,
-      overview: result.overview,
-      reused: !result.didExport,
+      operationOutput: "operationOutput" in paidOperation.result ? paidOperation.result.operationOutput : undefined,
+      overview: paidOperation.result.overview,
+      reused: paidOperation.reused || !paidOperation.result.didExport,
     });
   } catch (error) {
     if (isBillingError(error)) {

@@ -36,7 +36,7 @@ test.describe("accessibility smoke", () => {
     });
   }
 
-  test("signed-in workspace has no critical accessibility violations", async ({ context, page, request }, testInfo) => {
+  test("signed-in workspace has no serious or critical accessibility violations", async ({ context, page, request }, testInfo) => {
     test.skip(!hasDemoAuthEnv(), "Demo auth env is required for signed-in accessibility smoke.");
 
     await authenticateDemoUser({ context, request });
@@ -46,13 +46,15 @@ test.describe("accessibility smoke", () => {
       .exclude("nextjs-portal")
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();
-    const criticalViolations = results.violations.filter((violation) => violation.impact === "critical");
+    const seriousViolations = results.violations.filter((violation) =>
+      ["critical", "serious"].includes(violation.impact ?? ""),
+    );
 
     await testInfo.attach("workspace-axe-results.json", {
       body: JSON.stringify(results.violations, null, 2),
       contentType: "application/json",
     });
 
-    expect(criticalViolations).toEqual([]);
+    expect(seriousViolations).toEqual([]);
   });
 });

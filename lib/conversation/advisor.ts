@@ -206,6 +206,15 @@ export async function runConversationAdvisor(
     });
   }
 
+  if (isExternalSubmissionRequest(input.message)) {
+    return normalizeAdvisorPayload({
+      isOwner,
+      message: input.message,
+      payload: buildExternalSubmissionBoundaryResponse(),
+      surface: input.surface,
+    });
+  }
+
   const instructions = buildAdvisorInstructions();
   const inputPayload = buildAdvisorInput({
     facts: factsError ? [] : ((facts ?? []) as ConversationFact[]),
@@ -1633,6 +1642,51 @@ function formatListForSentence(items: string[], fallback: string) {
   if (cleanItems.length === 2) return `${cleanItems[0]} and ${cleanItems[1]}`;
 
   return `${cleanItems.slice(0, -1).join(", ")}, and ${cleanItems[cleanItems.length - 1]}`;
+}
+
+function isExternalSubmissionRequest(message: string) {
+  const normalized = message.toLowerCase().replace(/\s+/g, " ").trim();
+
+  return (
+    /\b(apply for me|submit (it|this|the application)|send (it|this|the application)|auto-apply|auto apply)\b/.test(
+      normalized,
+    ) ||
+    /\b(go ahead|please|can you|will you)\b.*\b(apply|submit|send)\b.*\b(job|role|application|employer|company)\b/.test(
+      normalized,
+    )
+  );
+}
+
+function buildExternalSubmissionBoundaryResponse() {
+  return {
+    assistantMessage:
+      "I can prepare the resume, cover letter, fit notes, and application log, but V1 never submits anything externally or applies on your behalf. You stay in control of where and when materials are sent.",
+    suggestedActions: [
+      {
+        creditCost: null,
+        id: "review-applications",
+        kind: "review" as const,
+        label: "Review applications",
+        reason: "Check logged applications and decide which role needs materials next.",
+        view: "applications" as const,
+      },
+      {
+        creditCost: null,
+        id: "open-jobs",
+        kind: "review" as const,
+        label: "Review jobs",
+        reason: "Review fit, gaps, and the next human-controlled application step.",
+        view: "jobs" as const,
+      },
+    ],
+    suggestedLinks: [
+      {
+        label: "Open resume",
+        reason: "Prepare materials you can review before sending yourself.",
+        view: "resume" as const,
+      },
+    ],
+  };
 }
 
 function normalizeAdvisorMessage(message: string) {
