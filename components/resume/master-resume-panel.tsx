@@ -32,9 +32,11 @@ import {
   type ResumeContent,
 } from "@/lib/resumes/resume-content";
 import {
+  defaultResumeExportSectionVisibility,
   buildResumeExportChecklist,
   getResumeOptionalSectionStates,
   type ResumeExportChecklistItem,
+  type ResumeExportSectionVisibility,
   type ResumeOptionalSectionId,
 } from "@/lib/resumes/export-readiness";
 import type { MasterResumeOverview } from "@/lib/resumes/master-resume";
@@ -56,14 +58,6 @@ type ResumeReviewItem = {
 
 type ResumeViewMode = "ats" | "focused";
 
-const DEFAULT_OPTIONAL_SECTION_VISIBILITY: Record<ResumeOptionalSectionId, boolean> = {
-  certifications: true,
-  education: true,
-  highlights: true,
-  languages: true,
-  specialProjects: true,
-};
-
 export function MasterResumePanel({
   onDirtyChange,
   overview,
@@ -72,6 +66,9 @@ export function MasterResumePanel({
   const router = useRouter();
   const resumePreviewRef = useRef<HTMLDivElement | null>(null);
   const [currentOverview, setCurrentOverview] = useState(overview);
+  const initialReviewStorageKey = overview.latestResume?.id
+    ? `pramania:resume-review-answered:${overview.latestResume.id}`
+    : null;
   const [draft, setDraft] = useState<ResumeContent | null>(
     overview.latestResume?.content ?? null,
   );
@@ -88,13 +85,24 @@ export function MasterResumePanel({
   const [isEditing, setIsEditing] = useState(false);
   const [resumeViewMode, setResumeViewMode] = useState<ResumeViewMode>("ats");
   const [visibleOptionalSections, setVisibleOptionalSections] = useState<
-    Record<ResumeOptionalSectionId, boolean>
-  >(DEFAULT_OPTIONAL_SECTION_VISIBILITY);
+    ResumeExportSectionVisibility
+  >(defaultResumeExportSectionVisibility);
+  const [answeredReviewState, setAnsweredReviewState] = useState(() => ({
+    ids: readAnsweredReviewItemIds(initialReviewStorageKey),
+    storageKey: initialReviewStorageKey,
+  }));
   const isDirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(savedDraft),
     [draft, savedDraft],
   );
-  const reviewItems = useMemo<ResumeReviewItem[]>(() => {
+  const reviewStorageKey = currentOverview.latestResume?.id
+    ? `pramania:resume-review-answered:${currentOverview.latestResume.id}`
+    : null;
+  const answeredReviewItemIds = useMemo(
+    () => (answeredReviewState.storageKey === reviewStorageKey ? answeredReviewState.ids : []),
+    [answeredReviewState.ids, answeredReviewState.storageKey, reviewStorageKey],
+  );
+  const rawReviewItems = useMemo<ResumeReviewItem[]>(() => {
     return [
       ...currentOverview.missingEvidence.map((text, index) => ({
         id: `missing-${index}-${text}`,
@@ -116,6 +124,32 @@ export function MasterResumePanel({
       })),
     ];
   }, [currentOverview.missingEvidence, draft?.keywordGaps, draft?.reviewerNotes]);
+  const reviewItems = useMemo(
+    () => rawReviewItems.filter((item) => !answeredReviewItemIds.includes(item.id)),
+    [answeredReviewItemIds, rawReviewItems],
+  );
+  const unresolvedMissingEvidence = useMemo(
+    () =>
+      currentOverview.missingEvidence.filter(
+        (text, index) => !answeredReviewItemIds.includes(`missing-${index}-${text}`),
+      ),
+    [answeredReviewItemIds, currentOverview.missingEvidence],
+  );
+  const unresolvedDraftForChecklist = useMemo<ResumeContent | null>(() => {
+    if (!draft) {
+      return null;
+    }
+
+    return {
+      ...draft,
+      keywordGaps: draft.keywordGaps.filter(
+        (text, index) => !answeredReviewItemIds.includes(`gap-${index}-${text}`),
+      ),
+      reviewerNotes: draft.reviewerNotes.filter(
+        (text, index) => !answeredReviewItemIds.includes(`note-${index}-${text}`),
+      ),
+    };
+  }, [answeredReviewItemIds, draft]);
   const sourceProof = useMemo(
     () => buildResumeSourceProof({ overview: currentOverview, profileOverview }),
     [currentOverview, profileOverview],
@@ -127,10 +161,10 @@ export function MasterResumePanel({
   const exportChecklist = useMemo(
     () =>
       buildResumeExportChecklist({
-        missingEvidence: currentOverview.missingEvidence,
-        resume: draft,
+        missingEvidence: unresolvedMissingEvidence,
+        resume: unresolvedDraftForChecklist,
       }),
-    [currentOverview.missingEvidence, draft],
+    [unresolvedDraftForChecklist, unresolvedMissingEvidence],
   );
   const optionalSectionStates = useMemo(
     () => getResumeOptionalSectionStates(draft),
@@ -177,6 +211,18 @@ export function MasterResumePanel({
         },
       }),
     );
+    const nextAnsweredIds = Array.from(new Set([...answeredReviewItemIds, item.id]));
+    setAnsweredReviewState({
+      ids: nextAnsweredIds,
+      storageKey: reviewStorageKey,
+    });
+    if (reviewStorageKey) {
+      try {
+        window.localStorage.setItem(reviewStorageKey, JSON.stringify(nextAnsweredIds));
+      } catch {
+        // The prompt is still hidden for the current session when storage is unavailable.
+      }
+    }
     setMessage(
       `I moved that refinement into ${brand.name} chat. Add the missing detail there, and ${brand.name} will use it against that exact gap.`,
     );
@@ -377,6 +423,7 @@ export function MasterResumePanel({
       const response = await fetch("/api/resume/master/export", {
         body: JSON.stringify({
           acknowledgeClaimReview: blockingExportRisks.length > 0 && claimReviewAcknowledged,
+          sectionVisibility: visibleOptionalSections,
         }),
         headers: {
           ...createIdempotencyHeaders("masterResumeExport:resume-panel"),
@@ -1895,6 +1942,20 @@ function ResumeReviewSection({
       </div>
     </section>
   );
+}
+
+function readAnsweredReviewItemIds(storageKey: string | null) {
+  if (!storageKey || typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const saved = window.localStorage.getItem(storageKey);
+    const parsed = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 function ReviewItem({

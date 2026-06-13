@@ -332,6 +332,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
               <span className="record-meta">
                 {job.company ?? formatJobUrl(job.resolved_url ?? job.job_url)} · Added{" "}
                 <time dateTime={job.created_at}>{formatShortDate(job.created_at)}</time>
+                {job.archived_at ? " · Archived" : ""}
               </span>
               <span className="record-summary">
                 {job.fitSnapshot.score !== null
@@ -512,11 +513,11 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       </div>
 
       {hasRecentJobs ? (
-        <details className="job-add-panel job-add-panel-compact" aria-label="Add a job for review">
-          <summary>
+        <section className="job-add-panel job-add-panel-compact" aria-label="Add a job for review">
+          <div className="job-add-panel-compact-header">
             <span>Add another role</span>
             <strong>URL or pasted job text</strong>
-          </summary>
+          </div>
           <JobAddPanelContent
             ingestJobFromText={ingestJobFromText}
             ingestJobFromUrl={ingestJobFromUrl}
@@ -526,7 +527,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
             setJobText={setJobText}
             setJobUrl={setJobUrl}
           />
-        </details>
+        </section>
       ) : null}
     </section>
   );

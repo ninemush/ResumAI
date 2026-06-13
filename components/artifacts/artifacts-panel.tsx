@@ -119,7 +119,7 @@ export function ArtifactsPanel({ embedded = false, overview }: ArtifactsPanelPro
                     {artifact.roleTitle ? ` · ${artifact.roleTitle}` : ""}
                   </span>
                   <span className="record-summary">
-                    Created {formatDate(artifact.createdAt)} · Updated {formatDate(artifact.updatedAt)}
+                    {formatArtifactRelationship(artifact)} · Updated {formatDate(artifact.updatedAt)}
                   </span>
                 </button>
                 <span className={`source-pill ${artifact.status}`}>{formatArtifactStatus(artifact.status)}</span>
@@ -231,6 +231,22 @@ function formatArtifactStatus(status: string) {
   return status.replaceAll("_", " ");
 }
 
+function formatArtifactRelationship(artifact: ArtifactOverview["artifacts"][number]) {
+  if (artifact.companyName && artifact.roleTitle) {
+    return `Application packet for ${artifact.roleTitle} at ${artifact.companyName}`;
+  }
+
+  if (artifact.companyName) {
+    return `Application packet for ${artifact.companyName}`;
+  }
+
+  if (artifact.roleTitle) {
+    return `Role-focused material for ${artifact.roleTitle}`;
+  }
+
+  return artifact.kind === "resume" ? "Master resume library item" : "General cover letter draft";
+}
+
 function artifactMatchesSearch(
   artifact: ArtifactOverview["artifacts"][number],
   query: string,
@@ -324,6 +340,10 @@ function ArtifactViewer({
               </dd>
             </div>
             <div>
+              <dt>Used in</dt>
+              <dd>{formatArtifactRelationship(artifact)}</dd>
+            </div>
+            <div>
               <dt>Created</dt>
               <dd>{formatDate(artifact.createdAt)}</dd>
             </div>
@@ -352,8 +372,9 @@ function ArtifactViewer({
             ) : null}
             {!artifact.pdfDownloadUrl && !artifact.docxDownloadUrl ? (
               <p>
-                Open the related resume or application material, review it, then export
-                PDF and DOCX files from there.
+                {artifact.companyName || artifact.roleTitle
+                  ? "Open the related application packet, review the material, then prepare its PDF and DOCX files."
+                  : "Open Profile & Resume, review the master resume, then prepare PDF and DOCX files from the export checklist."}
               </p>
             ) : null}
           </div>

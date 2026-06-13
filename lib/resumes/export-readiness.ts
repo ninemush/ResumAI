@@ -23,6 +23,56 @@ export type ResumeOptionalSectionState = {
   label: string;
 };
 
+export type ResumeExportSectionVisibility = Record<ResumeOptionalSectionId, boolean>;
+
+export const defaultResumeExportSectionVisibility: ResumeExportSectionVisibility = {
+  certifications: true,
+  education: true,
+  highlights: true,
+  languages: true,
+  specialProjects: true,
+};
+
+export function normalizeResumeExportSectionVisibility(
+  value: unknown,
+): ResumeExportSectionVisibility {
+  if (!value || typeof value !== "object") {
+    return defaultResumeExportSectionVisibility;
+  }
+
+  const input = value as Partial<Record<ResumeOptionalSectionId, unknown>>;
+
+  return {
+    certifications: input.certifications !== false,
+    education: input.education !== false,
+    highlights: input.highlights !== false,
+    languages: input.languages !== false,
+    specialProjects: input.specialProjects !== false,
+  };
+}
+
+export function isDefaultResumeExportSectionVisibility(
+  value: ResumeExportSectionVisibility,
+) {
+  return (Object.keys(defaultResumeExportSectionVisibility) as ResumeOptionalSectionId[]).every(
+    (key) => value[key] === defaultResumeExportSectionVisibility[key],
+  );
+}
+
+export function applyResumeExportSectionVisibility(
+  resume: ResumeContent,
+  visibility: ResumeExportSectionVisibility,
+): ResumeContent {
+  return {
+    ...resume,
+    certifications: visibility.certifications ? resume.certifications : [],
+    education: visibility.education ? resume.education : [],
+    experienceBullets: visibility.highlights ? resume.experienceBullets : [],
+    languages: visibility.languages ? resume.languages : [],
+    specialProjects: visibility.specialProjects ? resume.specialProjects : [],
+  };
+}
+
 export function buildResumeExportChecklist({
   missingEvidence,
   resume,

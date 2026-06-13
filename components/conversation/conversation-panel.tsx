@@ -23,6 +23,7 @@ import type {
   AdvisorSuggestedAction,
   AdvisorSuggestedLink,
 } from "@/lib/conversation/app-capabilities";
+import { isPreferenceSaveRequest } from "@/lib/conversation/advisor-contextual-replies";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 import { createClient } from "@/lib/supabase/browser";
@@ -486,6 +487,12 @@ export function ConversationPanel({
 
       if (existingSourceAction) {
         appendAssistantMessage(existingSourceAction, true);
+        router.refresh();
+        return;
+      }
+
+      if (isPreferenceSaveRequest(text)) {
+        appendAssistantMessage(await processProfileText(text), true);
         router.refresh();
         return;
       }

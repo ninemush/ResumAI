@@ -300,8 +300,16 @@ export function SettingsPanel({
         </p>
       </div>
 
+      <nav className="settings-section-index" aria-label="Settings sections">
+        <a href="#account-settings">Account</a>
+        <a href="#security-settings">Security</a>
+        <a href="#credits-billing">Credits & Billing</a>
+        <a href="#privacy-data">Privacy & Data</a>
+        <a href="#support-settings">Support</a>
+      </nav>
+
       <section className="settings-overview-grid" aria-label="Account overview">
-        <article className="settings-section-card">
+        <article className="settings-section-card" id="account-settings">
           <UserRound size={18} aria-hidden="true" />
           <div>
             <span>Account</span>
@@ -314,7 +322,7 @@ export function SettingsPanel({
           </div>
         </article>
 
-        <article className="settings-section-card">
+        <article className="settings-section-card" id="credits-balance">
           <WalletCards size={18} aria-hidden="true" />
           <div>
             <span>Credit balance</span>
@@ -328,7 +336,7 @@ export function SettingsPanel({
           </div>
         </article>
 
-        <article className="settings-section-card">
+        <article className="settings-section-card" id="security-settings">
           <KeyRound size={18} aria-hidden="true" />
           <div>
             <span>Security</span>
@@ -390,7 +398,7 @@ export function SettingsPanel({
 
       {creditSummary.isExhausted ? <CreditExhaustedNotice /> : null}
 
-      <section className="settings-panel-section" aria-labelledby="data-rights-title">
+      <section className="settings-panel-section" id="privacy-data" aria-labelledby="data-rights-title">
         <div className="settings-section-heading">
           <ShieldCheck size={18} aria-hidden="true" />
           <div>
@@ -523,12 +531,12 @@ export function SettingsPanel({
         </div>
       </section>
 
-      <section className="settings-panel-section" aria-labelledby="usage-title">
+      <section className="settings-panel-section" id="credits-billing" aria-labelledby="usage-title">
         <div className="settings-section-heading">
           <CreditCard size={18} aria-hidden="true" />
           <div>
-            <p className="eyebrow">Usage</p>
-            <h2 id="usage-title">Credit usage</h2>
+            <p className="eyebrow">Credits & Billing</p>
+            <h2 id="usage-title">Credit usage and history</h2>
             <p>
               Credits are consumed only by high-cost actions such as source
               reading, job analysis, generation, and export.
@@ -725,7 +733,7 @@ export function SettingsPanel({
           </div>
         </article>
 
-        <article className="settings-section-card">
+        <article className="settings-section-card" id="support-settings">
           <HelpCircle size={18} aria-hidden="true" />
           <div>
             <span>Support</span>

@@ -29,6 +29,12 @@ import {
   type ProfileIntelligence,
 } from "@/lib/profile/profile-intelligence";
 import {
+  applyResumeExportSectionVisibility,
+  defaultResumeExportSectionVisibility,
+  isDefaultResumeExportSectionVisibility,
+  type ResumeExportSectionVisibility,
+} from "@/lib/resumes/export-readiness";
+import {
   MAX_RESUME_CERTIFICATION_ITEMS,
   MAX_RESUME_EDUCATION_ITEMS,
   MAX_RESUME_EXPERIENCE_SECTIONS,
@@ -1418,9 +1424,14 @@ export async function getReusableMasterResumeExport(): Promise<MasterResumeOverv
 }
 
 export async function exportMasterResumeArtifacts(
-  options: { acknowledgeClaimReview?: boolean } = {},
+  options: {
+    acknowledgeClaimReview?: boolean;
+    sectionVisibility?: ResumeExportSectionVisibility;
+  } = {},
 ): Promise<MasterResumeArtifactExportResult> {
   const { supabase, userId } = await getAuthenticatedContext();
+  const sectionVisibility =
+    options.sectionVisibility ?? defaultResumeExportSectionVisibility;
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("id, display_name, target_direction, target_level")
@@ -1452,7 +1463,10 @@ export async function exportMasterResumeArtifacts(
     throw new Error("MASTER_RESUME_NOT_FOUND");
   }
 
-  if (isResumeExportReady(latestResume)) {
+  if (
+    isDefaultResumeExportSectionVisibility(sectionVisibility) &&
+    isResumeExportReady(latestResume)
+  ) {
     return {
       didExport: false,
       overview: await getMasterResumeOverview(userId),
@@ -1525,10 +1539,21 @@ export async function exportMasterResumeArtifacts(
     userId,
   });
 
+  const exportResume = applyResumeExportSectionVisibility(normalizedResume, sectionVisibility);
+  const requiredSections = [
+    "Skills",
+    "Experience",
+    exportResume.experienceBullets.length > 0 ? "Selected Highlights" : null,
+    exportResume.specialProjects.length > 0 ? "Special Projects" : null,
+    exportResume.languages.length > 0 ? "Languages" : null,
+    exportResume.education.length > 0 ? "Education" : null,
+    exportResume.certifications.length > 0 ? "Certifications" : null,
+  ].filter((item): item is string => Boolean(item));
+
   const templateInput = {
     contextLine: [profile.target_direction, profile.target_level].filter(Boolean).join(" | "),
     displayName: profile.display_name,
-    resume: normalizedResume,
+    resume: exportResume,
   };
   const [pdfBytes, docxBytes] = await Promise.all([
     buildAtsResumePdf(templateInput),
@@ -1538,12 +1563,12 @@ export async function exportMasterResumeArtifacts(
     validateGeneratedPdf({
       bytes: pdfBytes,
       maxPages: 4,
-      requiredPhrases: [normalizedResume.headline, normalizedResume.summary],
-      requiredSections: ["Skills", "Experience"],
+      requiredPhrases: [exportResume.headline, exportResume.summary],
+      requiredSections,
     }),
     validateGeneratedDocx({
       bytes: docxBytes,
-      requiredPhrases: [normalizedResume.headline, normalizedResume.summary],
+      requiredPhrases: [exportResume.headline, exportResume.summary],
     }),
   ]);
 
@@ -1583,6 +1608,7 @@ export async function exportMasterResumeArtifacts(
         export_validation: {
           docx: docxValidation,
           pdf: pdfValidation,
+          sectionVisibility,
         },
         export_validated_at: new Date().toISOString(),
         pdf_storage_path: pdfPath,

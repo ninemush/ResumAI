@@ -12,6 +12,10 @@ import {
   getReusableMasterResumeExport,
 } from "@/lib/resumes/master-resume";
 import {
+  isDefaultResumeExportSectionVisibility,
+  normalizeResumeExportSectionVisibility,
+} from "@/lib/resumes/export-readiness";
+import {
   checkRateLimit,
   getClientRateLimitKey,
   rateLimitResponse,
@@ -40,11 +44,18 @@ export async function POST(request: Request) {
       typeof body === "object" &&
       body !== null &&
       (body as { acknowledgeClaimReview?: unknown }).acknowledgeClaimReview === true;
+    const sectionVisibility = normalizeResumeExportSectionVisibility(
+      typeof body === "object" && body !== null
+        ? (body as { sectionVisibility?: unknown }).sectionVisibility
+        : null,
+    );
     const operationKey = getCreditOperationKey(
       request,
-      "masterResumeExport:latest",
+      `masterResumeExport:latest:${JSON.stringify(sectionVisibility)}`,
     );
-    const reusableOverview = await getReusableMasterResumeExport();
+    const reusableOverview = isDefaultResumeExportSectionVisibility(sectionVisibility)
+      ? await getReusableMasterResumeExport()
+      : null;
 
     if (reusableOverview) {
       return apiSuccess({
@@ -71,7 +82,7 @@ export async function POST(request: Request) {
       operationKey,
       resourceId: null,
       resourceType: "master_resume_export",
-      run: () => exportMasterResumeArtifacts({ acknowledgeClaimReview }),
+      run: () => exportMasterResumeArtifacts({ acknowledgeClaimReview, sectionVisibility }),
     });
 
     return apiSuccess({

@@ -39,6 +39,7 @@ import {
   buildResumeDiagnosticEvidencePack,
   buildSourceEvidencePack,
 } from "@/lib/conversation/advisor-evidence";
+import { buildDeterministicContextualAdvisorReply } from "@/lib/conversation/advisor-contextual-replies";
 import { runAdvisorScopeClassifier } from "@/lib/conversation/advisor-scope";
 import {
   buildAdvisorScopeRedirect,
@@ -196,6 +197,30 @@ export async function runConversationAdvisor(
     surface: input.surface,
     userId: user.id,
   });
+  const recentConversation = conversationError ? [] : (conversation ?? []).reverse();
+  const deterministicReply = buildDeterministicContextualAdvisorReply({
+    facts: factsError ? [] : ((facts ?? []) as ConversationFact[]),
+    message: input.message,
+    profile,
+    recentConversation,
+  });
+
+  if (deterministicReply) {
+    return normalizeAdvisorPayload({
+      isOwner,
+      message: input.message,
+      payload: {
+        assistantMessage: deterministicReply,
+        suggestedActions: [],
+        suggestedLinks: inferSuggestedLinksFromMessage({
+          isOwner,
+          message: input.message,
+          surface: input.surface,
+        }),
+      },
+      surface: input.surface,
+    });
+  }
 
   if (!shouldRunFullAdvisor(scopeDecision)) {
     return normalizeAdvisorPayload({
@@ -221,7 +246,7 @@ export async function runConversationAdvisor(
     latestResume: resumeError ? null : latestResume,
     message: input.message,
     profile,
-    recentConversation: conversationError ? [] : (conversation ?? []).reverse(),
+    recentConversation,
     scopeDecision,
     surface: input.surface,
     workspace,

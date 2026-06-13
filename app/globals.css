@@ -6794,30 +6794,28 @@ input:focus {
   padding: 0;
 }
 
-.job-add-panel-compact summary {
+.job-add-panel-compact-header {
   align-items: center;
-  cursor: pointer;
   display: flex;
   gap: 8px;
   justify-content: space-between;
-  list-style-position: inside;
   min-height: 42px;
   padding: 0 12px;
 }
 
-.job-add-panel-compact summary span {
+.job-add-panel-compact-header span {
   color: var(--sage-strong);
   font-size: 0.82rem;
   font-weight: 900;
 }
 
-.job-add-panel-compact summary strong {
+.job-add-panel-compact-header strong {
   color: var(--muted);
   font-size: 0.76rem;
   font-weight: 850;
 }
 
-.job-add-panel-compact[open] summary {
+.job-add-panel-compact-header {
   border-bottom: 1px solid var(--line);
 }
 
@@ -6954,6 +6952,38 @@ input:focus {
 
 .settings-pane {
   gap: 18px;
+}
+
+.settings-section-index {
+  align-items: center;
+  background: rgba(255, 250, 243, 0.68);
+  border: var(--pr-border-subtle);
+  border-radius: var(--pr-radius-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+}
+
+.settings-section-index a {
+  align-items: center;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  color: var(--foreground);
+  display: inline-flex;
+  font-size: 0.84rem;
+  font-weight: 850;
+  min-height: 38px;
+  padding: 8px 11px;
+  text-decoration: none;
+}
+
+.settings-section-index a:hover,
+.settings-section-index a:focus-visible {
+  border-color: rgba(185, 155, 103, 0.42);
+  box-shadow: 0 8px 22px rgba(60, 47, 37, 0.08);
+  outline: none;
 }
 
 .settings-overview-grid,

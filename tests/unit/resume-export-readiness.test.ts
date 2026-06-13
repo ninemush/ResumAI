@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  applyResumeExportSectionVisibility,
   buildResumeExportChecklist,
   getResumeOptionalSectionStates,
+  isDefaultResumeExportSectionVisibility,
+  normalizeResumeExportSectionVisibility,
 } from "@/lib/resumes/export-readiness";
 import type { ResumeContent } from "@/lib/resumes/resume-content";
 
@@ -83,6 +86,33 @@ describe("resume export readiness", () => {
       expect.objectContaining({ count: 0, id: "education" }),
       expect.objectContaining({ count: 0, id: "certifications" }),
     ]);
+  });
+
+  test("normalizes and applies export section visibility", () => {
+    const visibility = normalizeResumeExportSectionVisibility({
+      certifications: false,
+      education: true,
+      highlights: false,
+      languages: false,
+      specialProjects: true,
+    });
+    const resume = buildResume({
+      certifications: [{ date: "2025", issuer: "Example", name: "Launch Certification" }],
+      education: [{ credential: "MBA", dates: "2020", institution: "Example University", location: "Dubai" }],
+      languages: [{ name: "Arabic", proficiency: "Conversational" }],
+      specialProjects: [{ bullets: ["Led launch program."], context: "Example Co", dates: "2024", name: "Launch OS" }],
+    });
+
+    expect(isDefaultResumeExportSectionVisibility(visibility)).toBe(false);
+    expect(applyResumeExportSectionVisibility(resume, visibility)).toEqual(
+      expect.objectContaining({
+        certifications: [],
+        education: resume.education,
+        experienceBullets: [],
+        languages: [],
+        specialProjects: resume.specialProjects,
+      }),
+    );
   });
 });
 
