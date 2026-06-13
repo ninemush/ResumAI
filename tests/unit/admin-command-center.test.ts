@@ -1,12 +1,20 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  countActionableComplianceItems,
+  countAvailabilityPlatformIssues,
+  countCleanupPlatformItems,
   computePromoCodeState,
+  formatAdminRootCauseLabel,
   groupPrivacyRequestsById,
+  promoNeedsOwnerAction,
   summarizeOutcomePatternWithSample,
+  supportTicketNeedsOwnerAction,
   userMatchesAdminQuickFilter,
 } from "@/lib/admin/command-center";
+import { summarizeOverallStatus } from "@/lib/admin/platform-health";
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
+import type { PlatformStatusOverview } from "@/lib/admin/platform-status";
 
 const now = new Date("2026-06-13T12:00:00.000Z");
 
@@ -104,6 +112,84 @@ describe("admin command center helpers", () => {
     expect(userMatchesAdminQuickFilter(healthyUser, "needs_attention", metrics, now)).toBe(false);
   });
 
+  test("formats noisy root-cause payloads into owner-readable labels", () => {
+    expect(
+      formatAdminRootCauseLabel(
+        'Input Limit ([ { "Origin": "String", "Code": "Too Big", "Path": [ "AssistantMessage" ] } ])',
+      ),
+    ).toBe("Input too long: assistant message");
+    expect(
+      formatAdminRootCauseLabel(
+        'Input Limit ([ { "Origin": "String", "Code": "Too Big", "Path": [ "ProfileDraft", "Summary" ] } ])',
+      ),
+    ).toBe("Input too long: profile summary");
+    expect(formatAdminRootCauseLabel("Client Runtime", "ReferenceError")).toBe("Client reference error");
+  });
+
+  test("counts only actionable badges and ignores historical inactive promos", () => {
+    expect(
+      promoNeedsOwnerAction({
+        expiresAt: "2026-06-12T00:00:00.000Z",
+        isActive: true,
+        maxRedemptions: 0,
+        redeemedCount: 0,
+      }, now),
+    ).toBe(true);
+    expect(
+      promoNeedsOwnerAction({
+        expiresAt: null,
+        isActive: false,
+        maxRedemptions: 0,
+        redeemedCount: 0,
+      }, now),
+    ).toBe(false);
+    expect(supportTicketNeedsOwnerAction({ status: "waiting_on_user" } as OwnerMetrics["supportTickets"][number])).toBe(false);
+    expect(supportTicketNeedsOwnerAction({ status: "open" } as OwnerMetrics["supportTickets"][number])).toBe(true);
+  });
+
+  test("counts grouped actionable compliance rows once", () => {
+    expect(
+      countActionableComplianceItems({
+        incidents: {
+          open: 1,
+          overdueNotificationReview: 1,
+        },
+        privacyRequests: {
+          open: 2,
+          overdue: 1,
+          recentOpen: [
+            {
+              createdAt: "2026-06-10T00:00:00.000Z",
+              dueAt: "2026-06-20T00:00:00.000Z",
+              id: "request-1",
+              requestType: "export",
+              status: "open",
+              subject: "Export my data",
+              userId: "user-1",
+            },
+            {
+              createdAt: "2026-06-10T00:00:00.000Z",
+              dueAt: "2026-06-20T00:00:00.000Z",
+              id: "request-1",
+              requestType: "export",
+              status: "open",
+              subject: "Export my data",
+              userId: "user-1",
+            },
+          ],
+        },
+      } as Parameters<typeof countActionableComplianceItems>[0]),
+    ).toBe(4);
+  });
+
+  test("keeps cleanup-only platform checks out of overall degraded status", () => {
+    const status = buildPlatformStatusFixture();
+
+    expect(summarizeOverallStatus(status.checks)).toBe("healthy");
+    expect(countAvailabilityPlatformIssues(status)).toBe(0);
+    expect(countCleanupPlatformItems(status)).toBe(1);
+  });
+
   test("outcome summaries include sample size and caution for tiny samples", () => {
     expect(
       summarizeOutcomePatternWithSample({
@@ -125,6 +211,38 @@ describe("admin command center helpers", () => {
     ).toContain("directional only");
   });
 });
+
+function buildPlatformStatusFixture(): PlatformStatusOverview {
+  return {
+    checks: [
+      {
+        details: "Supabase database accepted a read query.",
+        impact: "availability",
+        label: "Supabase DB",
+        lastFailureAt: null,
+        lastSuccessAt: now.toISOString(),
+        state: "healthy",
+      },
+      {
+        details: "0 ready exports, 1 stale ready records need cleanup.",
+        impact: "cleanup",
+        label: "PDF/DOCX Generation",
+        lastFailureAt: "2026-06-13T10:00:00.000Z",
+        lastSuccessAt: null,
+        state: "degraded",
+      },
+    ],
+    generatedAt: now.toISOString(),
+    overallStatus: "healthy",
+    recentSignals: {
+      activeErrors24h: 0,
+      applicationExportsReady: 0,
+      jobFailures24h: 0,
+      sourceFailures24h: 0,
+      telemetryEvents24h: 0,
+    },
+  };
+}
 
 function buildMetricsFixture(): OwnerMetrics {
   return {

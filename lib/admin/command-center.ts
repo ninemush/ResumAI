@@ -1,4 +1,5 @@
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
+import type { PlatformStatusOverview } from "@/lib/admin/platform-status";
 import type { ComplianceDashboard } from "@/lib/privacy/compliance-dashboard";
 
 export type PromoCodeState = "Active" | "Expired" | "Fully redeemed" | "Inactive" | "Scheduled";
@@ -20,6 +21,7 @@ type PromoLike = {
 };
 
 type AdminUserLike = OwnerMetrics["usersList"][number];
+type SupportTicketLike = OwnerMetrics["supportTickets"][number];
 
 export function computePromoCodeState(promo: PromoLike, now = new Date()): PromoCodeState {
   if (!promo.isActive) {
@@ -35,6 +37,88 @@ export function computePromoCodeState(promo: PromoLike, now = new Date()): Promo
   }
 
   return "Active";
+}
+
+export function promoNeedsOwnerAction(promo: PromoLike, now = new Date()) {
+  if (!promo.isActive) {
+    return false;
+  }
+
+  return computePromoCodeState(promo, now) !== "Active";
+}
+
+export function supportTicketNeedsOwnerAction(ticket: SupportTicketLike) {
+  if (["resolved", "closed", "waiting_on_user"].includes(ticket.status)) {
+    return false;
+  }
+
+  return true;
+}
+
+export function formatAdminRootCauseLabel(displayName: string, code?: string | null) {
+  const source = [displayName, code].filter(Boolean).join(" ");
+  const normalized = source.toLowerCase();
+  const pathMatch = source.match(/"Path"\s*:\s*\[\s*"([^"]+)"(?:\s*,\s*"([^"]+)")?/i);
+  const path = pathMatch
+    ? [pathMatch[1], pathMatch[2]].filter(Boolean).join(" ")
+    : "";
+
+  if (normalized.includes("too big") || normalized.includes("input limit")) {
+    if (/assistantmessage/i.test(path)) {
+      return "Input too long: assistant message";
+    }
+
+    if (/profiledraft/i.test(path) && /summary/i.test(path)) {
+      return "Input too long: profile summary";
+    }
+
+    return "Input too long";
+  }
+
+  if (normalized.includes("credits exhausted")) {
+    return "Credits exhausted";
+  }
+
+  if (normalized.includes("unhandled promise rejection")) {
+    return "Unhandled client error";
+  }
+
+  if (normalized.includes("referenceerror")) {
+    return "Client reference error";
+  }
+
+  return formatAdminLabel(displayName);
+}
+
+export function countActionableComplianceItems(compliance: ComplianceDashboard | null) {
+  if (!compliance) {
+    return 0;
+  }
+
+  return (
+    groupPrivacyRequestsById(compliance.privacyRequests.recentOpen).filter((request) =>
+      ["open", "reviewing"].includes(request.status),
+    ).length +
+    compliance.privacyRequests.overdue +
+    compliance.incidents.open +
+    compliance.incidents.overdueNotificationReview
+  );
+}
+
+export function countAvailabilityPlatformIssues(platformStatus: PlatformStatusOverview | null) {
+  return (
+    platformStatus?.checks.filter(
+      (check) => check.impact === "availability" && (check.state === "down" || check.state === "degraded"),
+    ).length ?? 0
+  );
+}
+
+export function countCleanupPlatformItems(platformStatus: PlatformStatusOverview | null) {
+  return (
+    platformStatus?.checks.filter(
+      (check) => check.impact === "cleanup" && (check.state === "down" || check.state === "degraded"),
+    ).length ?? 0
+  );
 }
 
 export function groupPrivacyRequestsById(
@@ -118,6 +202,15 @@ export function getUserAttentionSignals(
 
 export function getOutcomeSampleSize(values: Record<string, Record<string, number>>) {
   return Object.values(values).reduce((total, metrics) => total + readOutcomeVolume(metrics), 0);
+}
+
+function formatAdminLabel(value: string) {
+  return value
+    .replace(/[_./-]+/g, " ")
+    .replace(/[{}[\]":,]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 export function summarizeOutcomePatternWithSample(

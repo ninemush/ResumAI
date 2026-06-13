@@ -9,12 +9,14 @@ import {
   Download,
   Edit3,
   ExternalLink,
+  Eye,
   FileUp,
   FileText,
   Link2,
   Plus,
   RotateCcw,
   Save,
+  SlidersHorizontal,
   Trash2,
   WandSparkles,
 } from "lucide-react";
@@ -29,6 +31,12 @@ import {
   normalizeResumeContent,
   type ResumeContent,
 } from "@/lib/resumes/resume-content";
+import {
+  buildResumeExportChecklist,
+  getResumeOptionalSectionStates,
+  type ResumeExportChecklistItem,
+  type ResumeOptionalSectionId,
+} from "@/lib/resumes/export-readiness";
 import type { MasterResumeOverview } from "@/lib/resumes/master-resume";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
@@ -44,6 +52,16 @@ type ResumeReviewItem = {
   severity: "critical" | "important" | "informational";
   source: "Missing evidence" | "Keyword gap" | "Reviewer note";
   text: string;
+};
+
+type ResumeViewMode = "ats" | "focused";
+
+const DEFAULT_OPTIONAL_SECTION_VISIBILITY: Record<ResumeOptionalSectionId, boolean> = {
+  certifications: true,
+  education: true,
+  highlights: true,
+  languages: true,
+  specialProjects: true,
 };
 
 export function MasterResumePanel({
@@ -68,6 +86,10 @@ export function MasterResumePanel({
   const [variantFocus, setVariantFocus] = useState("");
   const [isGeneratingVariant, setIsGeneratingVariant] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [resumeViewMode, setResumeViewMode] = useState<ResumeViewMode>("ats");
+  const [visibleOptionalSections, setVisibleOptionalSections] = useState<
+    Record<ResumeOptionalSectionId, boolean>
+  >(DEFAULT_OPTIONAL_SECTION_VISIBILITY);
   const isDirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(savedDraft),
     [draft, savedDraft],
@@ -101,6 +123,26 @@ export function MasterResumePanel({
   const blockingExportRisks = useMemo(
     () => (draft ? getBlockingExportRisks(draft) : []),
     [draft],
+  );
+  const exportChecklist = useMemo(
+    () =>
+      buildResumeExportChecklist({
+        missingEvidence: currentOverview.missingEvidence,
+        resume: draft,
+      }),
+    [currentOverview.missingEvidence, draft],
+  );
+  const optionalSectionStates = useMemo(
+    () => getResumeOptionalSectionStates(draft),
+    [draft],
+  );
+  const savedPreferences = useMemo(
+    () => readSavedPreferenceFacts(profileOverview),
+    [profileOverview],
+  );
+  const hasNonClaimExportBlockers = useMemo(
+    () => exportChecklist.some((item) => item.status === "blocked" && item.id !== "claim-review"),
+    [exportChecklist],
   );
 
   useEffect(() => {
@@ -138,6 +180,26 @@ export function MasterResumePanel({
     setMessage(
       `I moved that refinement into ${brand.name} chat. Add the missing detail there, and ${brand.name} will use it against that exact gap.`,
     );
+  }
+
+  function startPreferenceInChat(prompt: string) {
+    window.dispatchEvent(
+      new CustomEvent("pramania:conversation-draft", {
+        detail: {
+          focus: true,
+          source: "resume-preference",
+          text: prompt,
+        },
+      }),
+    );
+    window.dispatchEvent(
+      new CustomEvent("pramania:focus-chat", {
+        detail: {
+          reason: "resume-preference",
+        },
+      }),
+    );
+    setMessage(`${brand.name} chat is ready for that preference. Send it there and it will stay with your profile context.`);
   }
 
   useEffect(() => {
@@ -406,6 +468,11 @@ export function MasterResumePanel({
         </div>
       </section>
 
+      <ResumePreferencePanel
+        onDraftPreference={startPreferenceInChat}
+        preferences={savedPreferences}
+      />
+
       <section className="resume-proof-panel" aria-label="Resume source proof">
         <div>
           <span>Sources used</span>
@@ -480,6 +547,60 @@ export function MasterResumePanel({
               </div>
             </div>
           ) : null}
+
+          <section className="resume-view-controls" aria-label="Resume view controls">
+            <div className="resume-view-mode-card">
+              <div className="resume-view-control-heading">
+                <Eye size={15} aria-hidden="true" />
+                <span>Review mode</span>
+              </div>
+              <div className="segmented-control compact resume-mode-toggle">
+                <button
+                  className={resumeViewMode === "ats" ? "active" : ""}
+                  onClick={() => setResumeViewMode("ats")}
+                  type="button"
+                >
+                  ATS export
+                </button>
+                <button
+                  className={resumeViewMode === "focused" ? "active" : ""}
+                  onClick={() => setResumeViewMode("focused")}
+                  type="button"
+                >
+                  Focus preview
+                </button>
+              </div>
+              <p>
+                ATS export shows every saved section with content. Focus preview lets you temporarily hide optional
+                sections while reviewing a target lane.
+              </p>
+            </div>
+            <div className="resume-optional-section-card">
+              <div className="resume-view-control-heading">
+                <SlidersHorizontal size={15} aria-hidden="true" />
+                <span>Optional sections</span>
+              </div>
+              <div className="resume-optional-section-list">
+                {optionalSectionStates.map((section) => (
+                  <label key={section.id}>
+                    <input
+                      checked={visibleOptionalSections[section.id]}
+                      disabled={resumeViewMode === "ats" || section.count === 0}
+                      onChange={(event) =>
+                        setVisibleOptionalSections({
+                          ...visibleOptionalSections,
+                          [section.id]: event.target.checked,
+                        })
+                      }
+                      type="checkbox"
+                    />
+                    <span>{section.label}</span>
+                    <em>{section.count} item{section.count === 1 ? "" : "s"}</em>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </section>
 
           <div
             className={`resume-document-preview ${isEditing ? "edit-mode" : "preview-mode"}`}
@@ -577,6 +698,13 @@ export function MasterResumePanel({
                 <p className="resume-static-paragraph">{draft.skills.join(", ")}</p>
               )}
             </section>
+            {(isEditing ||
+              shouldShowOptionalSection({
+                count: draft.experienceBullets.length,
+                id: "highlights",
+                mode: resumeViewMode,
+                visibleSections: visibleOptionalSections,
+              })) ? (
             <section className="resume-highlight-section">
               <div className="resume-section-heading-row">
                 <h3>Selected Highlights</h3>
@@ -636,6 +764,7 @@ export function MasterResumePanel({
                 </ul>
               )}
             </section>
+            ) : null}
             <section>
               <div className="resume-section-heading-row">
                 <h3>Professional Experience</h3>
@@ -837,7 +966,13 @@ export function MasterResumePanel({
                 </p>
               )}
             </section>
-            {(isEditing || draft.specialProjects.length > 0) ? (
+            {(isEditing ||
+              shouldShowOptionalSection({
+                count: draft.specialProjects.length,
+                id: "specialProjects",
+                mode: resumeViewMode,
+                visibleSections: visibleOptionalSections,
+              })) ? (
               <section>
                 <div className="resume-section-heading-row">
                   <h3>Special Projects</h3>
@@ -965,7 +1100,13 @@ export function MasterResumePanel({
                 )}
               </section>
             ) : null}
-            {(isEditing || draft.languages.length > 0) ? (
+            {(isEditing ||
+              shouldShowOptionalSection({
+                count: draft.languages.length,
+                id: "languages",
+                mode: resumeViewMode,
+                visibleSections: visibleOptionalSections,
+              })) ? (
               <section>
                 <div className="resume-section-heading-row">
                   <h3>Languages</h3>
@@ -1042,7 +1183,13 @@ export function MasterResumePanel({
                 )}
               </section>
             ) : null}
-            {(isEditing || draft.education.length > 0) ? (
+            {(isEditing ||
+              shouldShowOptionalSection({
+                count: draft.education.length,
+                id: "education",
+                mode: resumeViewMode,
+                visibleSections: visibleOptionalSections,
+              })) ? (
               <section>
                 <div className="resume-section-heading-row">
                   <h3>Education</h3>
@@ -1137,7 +1284,13 @@ export function MasterResumePanel({
                 )}
               </section>
             ) : null}
-            {(isEditing || draft.certifications.length > 0) ? (
+            {(isEditing ||
+              shouldShowOptionalSection({
+                count: draft.certifications.length,
+                id: "certifications",
+                mode: resumeViewMode,
+                visibleSections: visibleOptionalSections,
+              })) ? (
               <section>
                 <div className="resume-section-heading-row">
                   <h3>Certifications</h3>
@@ -1278,6 +1431,8 @@ export function MasterResumePanel({
         </>
       )}
 
+      <ResumeExportChecklistSection checklist={exportChecklist} />
+
       <section className="resume-readiness-panel" aria-label="Master resume readiness">
         <div>
           <span>{currentOverview.canGenerate ? "Ready" : "Needs work"}</span>
@@ -1336,6 +1491,7 @@ export function MasterResumePanel({
             disabled={
               !draft ||
               isExporting ||
+              hasNonClaimExportBlockers ||
               (blockingExportRisks.length > 0 && !claimReviewAcknowledged)
             }
             onClick={exportResumeFiles}
@@ -1446,6 +1602,154 @@ function draftResumeIntakePrompt(text: string) {
       },
     }),
   );
+}
+
+function ResumePreferencePanel({
+  onDraftPreference,
+  preferences,
+}: {
+  onDraftPreference: (prompt: string) => void;
+  preferences: Array<{ evidenceStatus: string; id: string; value: string }>;
+}) {
+  const quickPrompts = [
+    {
+      label: "Resume tone",
+      prompt: "Save this resume preference: I want the resume tone to be ",
+    },
+    {
+      label: "Target geography",
+      prompt: "Save this resume preference: I prefer roles in ",
+    },
+    {
+      label: "Section priority",
+      prompt: "Save this resume preference: prioritize these resume sections or topics: ",
+    },
+  ];
+
+  return (
+    <section className="resume-preference-panel" aria-label="Saved resume preferences">
+      <div className="section-heading">
+        <p className="eyebrow">Saved preferences</p>
+        <h2>Keep resume choices from getting stale</h2>
+        <p>
+          Preferences saved in chat stay attached to the profile context, so later drafts can reuse the same
+          direction instead of asking the same setup questions again.
+        </p>
+      </div>
+      {preferences.length > 0 ? (
+        <div className="resume-preference-list" role="list">
+          {preferences.slice(0, 5).map((preference) => (
+            <article key={preference.id} role="listitem">
+              <span>{preference.evidenceStatus}</span>
+              <p>{preference.value}</p>
+              <button
+                className="resume-inline-action"
+                onClick={() =>
+                  onDraftPreference(`Update this saved resume preference:\n\n"${preference.value}"\n\nNew direction: `)
+                }
+                type="button"
+              >
+                <Edit3 size={14} aria-hidden="true" />
+                Update
+              </button>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="resume-preference-empty">
+          <p>No saved resume preferences yet.</p>
+          <div>
+            {quickPrompts.map((item) => (
+              <button
+                className="secondary-action compact-action"
+                key={item.label}
+                onClick={() => onDraftPreference(item.prompt)}
+                type="button"
+              >
+                <Plus size={14} aria-hidden="true" />
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ResumeExportChecklistSection({
+  checklist,
+}: {
+  checklist: ResumeExportChecklistItem[];
+}) {
+  return (
+    <section className="resume-export-checklist-panel" aria-label="Resume export checklist">
+      <div className="resume-review-header">
+        <div className="section-heading">
+          <p className="eyebrow">Export checklist</p>
+          <h2>What will happen before download</h2>
+        </div>
+        <span className="resume-review-count">
+          {checklist.filter((item) => item.status === "blocked").length} blocked
+        </span>
+      </div>
+      <div className="resume-export-checklist-grid" role="list">
+        {checklist.map((item) => (
+          <article className={`resume-export-checklist-item ${item.status}`} key={item.id} role="listitem">
+            <span className="resume-export-checklist-status">
+              {item.status === "ready" ? (
+                <CheckCircle2 size={15} aria-hidden="true" />
+              ) : (
+                <AlertCircle size={15} aria-hidden="true" />
+              )}
+              {formatChecklistStatus(item.status)}
+            </span>
+            <strong>{item.label}</strong>
+            <p>{item.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function formatChecklistStatus(status: ResumeExportChecklistItem["status"]) {
+  if (status === "blocked") return "Blocked";
+  if (status === "warning") return "Review";
+  return "Ready";
+}
+
+function readSavedPreferenceFacts(profileOverview: ProfileOverview) {
+  return Object.values(profileOverview.factsByType)
+    .flat()
+    .filter((fact) => fact.fact_type === "preference")
+    .map((fact) => ({
+      evidenceStatus: fact.user_confirmed ? "Confirmed" : formatPreferenceEvidenceStatus(fact.evidence_status),
+      id: fact.id,
+      value: fact.fact_value,
+    }));
+}
+
+function formatPreferenceEvidenceStatus(status: string) {
+  return status.replaceAll("_", " ");
+}
+
+function shouldShowOptionalSection({
+  count,
+  id,
+  mode,
+  visibleSections,
+}: {
+  count: number;
+  id: ResumeOptionalSectionId;
+  mode: ResumeViewMode;
+  visibleSections: Record<ResumeOptionalSectionId, boolean>;
+}) {
+  if (count <= 0) {
+    return false;
+  }
+
+  return mode === "ats" || visibleSections[id];
 }
 
 function buildResumeSourceProof({

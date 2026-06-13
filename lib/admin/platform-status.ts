@@ -1,12 +1,12 @@
 import "server-only";
 
 import { getMaterialsModel, getProfileIntakeModel } from "@/lib/ai/openai";
+import { summarizeOverallStatus, type PlatformHealthState } from "@/lib/admin/platform-health";
 import { createClient } from "@/lib/supabase/server";
-
-export type PlatformHealthState = "healthy" | "degraded" | "down" | "unknown";
 
 export type PlatformStatusCheck = {
   details: string;
+  impact: "availability" | "cleanup";
   label: string;
   lastFailureAt: string | null;
   lastSuccessAt: string | null;
@@ -92,6 +92,7 @@ async function readDatabaseCheck(supabase: Awaited<ReturnType<typeof createClien
 
   return {
     details: error ? "Supabase database query failed." : "Supabase database accepted a read query.",
+    impact: "availability",
     label: "Supabase DB",
     lastFailureAt: error ? new Date().toISOString() : null,
     lastSuccessAt: error ? null : new Date().toISOString(),
@@ -106,6 +107,7 @@ async function readStorageCheck(supabase: Awaited<ReturnType<typeof createClient
     details: error
       ? "Generated artifact bucket could not be listed with current owner session."
       : `Generated artifact bucket responded with ${data?.length ?? 0} visible item(s).`,
+    impact: "availability",
     label: "Supabase Storage",
     lastFailureAt: error ? new Date().toISOString() : null,
     lastSuccessAt: error ? null : new Date().toISOString(),
@@ -144,6 +146,7 @@ async function readAiCheck(
     details: configured
       ? `OpenAI is configured. ${modelDetails}`
       : "OpenAI API key is not configured.",
+    impact: "availability",
     label: "OpenAI Configuration",
     lastFailureAt,
     lastSuccessAt,
@@ -167,6 +170,7 @@ async function readSourceExtractionCheck(
     details: error
       ? "Source extraction records could not be read."
       : `${successes} successes, ${failures} failures in the last 24 hours.`,
+    impact: "availability",
     label: "Source Extraction",
     lastFailureAt: failures > 0 ? latestDate(data, "failed") : null,
     lastSuccessAt: successes > 0 ? latestDate(data, "succeeded") : null,
@@ -190,6 +194,7 @@ async function readJobIngestionCheck(
     details: error
       ? "Job ingestion records could not be read."
       : `${successes} successes, ${failures} failures in the last 24 hours.`,
+    impact: "availability",
     label: "Job Ingestion",
     lastFailureAt: failures > 0 ? latestDate(data, "failed") : null,
     lastSuccessAt: successes > 0 ? latestDate(data, "succeeded") : null,
@@ -205,13 +210,20 @@ async function readArtifactGenerationCheck(supabase: Awaited<ReturnType<typeof c
     .limit(500);
   const ready = data?.filter((row) => row.status === "ready" && row.pdf_storage_path && row.docx_storage_path).length ?? 0;
   const staleReady = data?.filter((row) => row.status === "ready" && (!row.pdf_storage_path || !row.docx_storage_path)).length ?? 0;
+  const latestStaleReadyAt =
+    data
+      ?.filter((row) => row.status === "ready" && (!row.pdf_storage_path || !row.docx_storage_path))
+      .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))[0]?.updated_at ?? null;
 
   return {
     details: error
       ? "Generated resume artifact metadata could not be read."
-      : `${ready} ready exports, ${staleReady} stale ready records.`,
+      : staleReady > 0
+        ? `${ready} ready exports, ${staleReady} stale ready records need cleanup.`
+        : `${ready} ready exports, 0 stale ready records.`,
+    impact: "cleanup",
     label: "PDF/DOCX Generation",
-    lastFailureAt: staleReady > 0 ? new Date().toISOString() : null,
+    lastFailureAt: staleReady > 0 ? latestStaleReadyAt : null,
     lastSuccessAt: ready > 0 ? data?.find((row) => row.status === "ready")?.updated_at ?? null : null,
     state: error ? "down" : staleReady > 0 ? "degraded" : "healthy",
   } satisfies PlatformStatusCheck;
@@ -235,18 +247,12 @@ async function readTelemetryCheck(
       events.error || errors.error
         ? "Telemetry or error capture records could not be read."
         : `${events.count ?? 0} events, ${errors.count ?? 0} active errors in the last 24 hours.`,
+    impact: "availability",
     label: "Telemetry/Error Capture",
     lastFailureAt: events.error || errors.error ? new Date().toISOString() : null,
     lastSuccessAt: events.error || errors.error ? null : new Date().toISOString(),
     state: events.error || errors.error ? "down" : (errors.count ?? 0) > 0 ? "degraded" : "healthy",
   } satisfies PlatformStatusCheck;
-}
-
-function summarizeOverallStatus(checks: PlatformStatusCheck[]): PlatformHealthState {
-  if (checks.some((check) => check.state === "down")) return "down";
-  if (checks.some((check) => check.state === "degraded")) return "degraded";
-  if (checks.some((check) => check.state === "unknown")) return "unknown";
-  return "healthy";
 }
 
 function safeModelName(value: string) {

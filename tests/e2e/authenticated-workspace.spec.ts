@@ -37,7 +37,7 @@ test.describe("authenticated workspace", () => {
     } else {
       await expect(page.getByRole("button", { name: /^Home$/i })).toBeVisible();
       await expect(page.getByRole("button", { name: /Profile & Resume/i })).toBeVisible();
-      await expect(page.getByRole("region", { name: "Since your last visit" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Recommended next step" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "What needs attention now" })).toBeVisible();
     }
     await expect(page.getByText("Career advisor")).toBeVisible();
@@ -437,6 +437,15 @@ test.describe("authenticated workspace", () => {
     await expect(proofPanel.getByText("Chronology", { exact: true })).toBeVisible();
     await expect(proofPanel.getByText(/Claims to verify/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /Rebuild resume - 2 credits|Create resume - 2 credits/i })).toBeVisible();
+    await expect(page.getByRole("region", { name: /Saved resume preferences/i })).toBeVisible();
+    await expect(page.getByRole("region", { name: /Resume view controls/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^ATS export$/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Focus preview$/i })).toBeVisible();
+    const exportChecklist = page.getByRole("region", { name: /Resume export checklist/i });
+    await expect(exportChecklist).toBeVisible();
+    await expect(exportChecklist.getByText("Core content", { exact: true })).toBeVisible();
+    await expect(exportChecklist.getByText("Evidence review", { exact: true })).toBeVisible();
+    await expect(exportChecklist.getByText("Optional sections", { exact: true })).toBeVisible();
 
     const preview = page.locator(".resume-document-preview").first();
     await expect(preview).toBeVisible();
@@ -488,7 +497,7 @@ test.describe("authenticated workspace", () => {
     expect(ownerHeaderBox?.width ?? 0).toBeGreaterThan(560);
     await expect(page.getByRole("button", { name: /Today/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /30 days/i })).toBeVisible();
-    await expect(page.getByRole("region", { name: /Operating metrics/i })).toBeVisible();
+    await expect(page.getByRole("region", { name: /Operating pulse/i })).toBeVisible();
 
     await expect(page.getByRole("button", { name: /^Users$/i })).toBeVisible();
     const ownerTabs = page.getByLabel("Owner console sections");
@@ -497,16 +506,16 @@ test.describe("authenticated workspace", () => {
     await expect(page.getByRole("heading", { name: /User operating list/i })).toBeVisible();
     await expect(page.getByPlaceholder(/Search users/i)).toBeVisible();
 
-    await ownerTabs.getByRole("button", { name: /^Errors$/i }).click();
+    await ownerTabs.getByRole("button", { name: /^Operate$/i }).click();
     await expect(page.getByRole("heading", { name: /Errors and root-cause review/i })).toBeVisible();
 
     await ownerTabs.getByRole("button", { name: /^Support$/i }).click();
     await expect(page.getByRole("heading", { name: /Support queue/i })).toBeVisible();
 
-    await ownerTabs.getByRole("button", { name: /^Outcomes$/i }).click();
+    await ownerTabs.getByRole("button", { name: /^Reports$/i }).click();
     await expect(page.getByRole("heading", { name: /Outcome by tier/i })).toBeVisible();
 
-    await ownerTabs.getByRole("button", { name: /^Promo codes$/i }).click();
+    await ownerTabs.getByRole("button", { name: /^Billing & Credits$/i }).click();
     await expect(page.getByRole("heading", { name: /Promo code management/i })).toBeVisible();
 
     const creditCards = page.locator(".owner-credit-actions .owner-credit-card");

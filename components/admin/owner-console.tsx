@@ -26,10 +26,16 @@ import type { FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import {
+  countActionableComplianceItems,
+  countAvailabilityPlatformIssues,
+  countCleanupPlatformItems,
   computePromoCodeState,
+  formatAdminRootCauseLabel,
   getUserAttentionSignals,
   groupPrivacyRequestsById,
+  promoNeedsOwnerAction,
   summarizeOutcomePatternWithSample,
+  supportTicketNeedsOwnerAction,
   userMatchesAdminQuickFilter,
   type AdminUserQuickFilter,
 } from "@/lib/admin/command-center";
@@ -120,6 +126,24 @@ type SupportAutopilotPreview = {
   ticketsWaitingOnUser: number;
 };
 
+type ArtifactCleanupReport = {
+  createdAt: string;
+  id: string;
+  missingArtifacts: ("pdf" | "docx")[];
+  resumeType: string;
+  statusBefore: string;
+  updatedAt: string;
+  userId: string;
+};
+
+type ArtifactCleanupResult = {
+  appliedCount: number;
+  auditEventId: string | null;
+  dryRun: boolean;
+  reports: ArtifactCleanupReport[];
+  staleCount: number;
+};
+
 const periodOptions = [
   { label: "Today", value: 1 },
   { label: "7 days", value: 7 },
@@ -181,6 +205,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [platformStatus, setPlatformStatus] = useState<PlatformStatusOverview | null>(null);
   const [platformStatusMessage, setPlatformStatusMessage] = useState<string | null>(null);
   const [platformStatusLoading, setPlatformStatusLoading] = useState(false);
+  const [artifactCleanupLoading, setArtifactCleanupLoading] = useState(false);
+  const [artifactCleanupResult, setArtifactCleanupResult] = useState<ArtifactCleanupResult | null>(null);
   const [userQuickFilter, setUserQuickFilter] = useState<AdminUserQuickFilter>("needs_attention");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -248,6 +274,18 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         rootCauseLabels: rootCauseDisplayLabels,
       }),
     [compliance, metrics, platformStatus, promoCodes, rootCauseDisplayLabels, rootCauseGroups],
+  );
+  const badgeCounts = useMemo(
+    () => ({
+      billing:
+        promoCodes.filter((promo) => promoNeedsOwnerAction(promo)).length +
+        metrics.profitability.consumptionEvidence.filter((event) => event.credits >= 100).length,
+      compliance: countActionableComplianceItems(compliance),
+      operate: needsAttentionCards.filter((card) => card.count > 0).length,
+      support: metrics.supportTickets.filter(supportTicketNeedsOwnerAction).length,
+      users: metrics.usersList.filter((user) => getUserAttentionSignals(user, metrics).length > 0).length,
+    }),
+    [compliance, metrics, needsAttentionCards, promoCodes],
   );
   const filteredErrors = useMemo(() => {
     return metrics.errorDetails.filter((error) => {
@@ -410,6 +448,59 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       setPlatformStatus(payload.status);
     } finally {
       setPlatformStatusLoading(false);
+    }
+  }
+
+  async function runArtifactCleanup(dryRun: boolean) {
+    const resumeIds = artifactCleanupResult?.reports.map((report) => report.id) ?? [];
+
+    if (!dryRun && resumeIds.length === 0) {
+      setPlatformStatusMessage("Preview stale artifacts before applying cleanup.");
+      return;
+    }
+
+    if (
+      !dryRun &&
+      !window.confirm(
+        `Reset ${resumeIds.length.toLocaleString()} stale resume artifact record${resumeIds.length === 1 ? "" : "s"} to draft so exports can be regenerated?`,
+      )
+    ) {
+      return;
+    }
+
+    setArtifactCleanupLoading(true);
+    setPlatformStatusMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/artifact-cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dryRun ? { dryRun } : { dryRun, resumeIds }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        error?: { message?: string };
+        result?: ArtifactCleanupResult;
+      } | null;
+
+      if (!response.ok || !payload?.result) {
+        setPlatformStatusMessage(
+          payload?.error?.message ?? "Artifact cleanup could not be completed.",
+        );
+        return;
+      }
+
+      setArtifactCleanupResult(payload.result);
+      setPlatformStatusMessage(
+        dryRun
+          ? `${payload.result.staleCount.toLocaleString()} stale artifact record${payload.result.staleCount === 1 ? "" : "s"} found.`
+          : `${payload.result.appliedCount.toLocaleString()} stale artifact record${payload.result.appliedCount === 1 ? "" : "s"} reset for regeneration.`,
+      );
+
+      if (!dryRun) {
+        await loadPlatformStatus();
+      }
+    } finally {
+      setArtifactCleanupLoading(false);
     }
   }
 
@@ -911,14 +1002,14 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
 
       <nav className="owner-tab-list" aria-label="Owner console sections">
         {[
-          ["operate", "Operate", needsAttentionCards.filter((card) => card.count > 0).length],
-          ["users", "Users", metrics.usersList.filter((user) => getUserAttentionSignals(user, metrics).length > 0).length],
-          ["support", "Support", metrics.support.ticketsOpen],
-          ["billing", "Billing & Credits", promoCodes.filter((promo) => computePromoCodeState(promo) !== "Active").length],
-          ["compliance", "Compliance", compliance?.privacyRequests.open ?? undefined],
-          ["configuration", "Configuration"],
-          ["reports", "Reports"],
-        ].map(([key, label, count]) => (
+          ["operate", "Operate", badgeCounts.operate, "actionable operating items"],
+          ["users", "Users", badgeCounts.users, "users needing attention"],
+          ["support", "Support", badgeCounts.support, "support tickets needing owner action"],
+          ["billing", "Billing & Credits", badgeCounts.billing, "billing or credit records needing review"],
+          ["compliance", "Compliance", badgeCounts.compliance, "privacy or compliance items needing action"],
+          ["configuration", "Configuration", undefined, ""],
+          ["reports", "Reports", undefined, ""],
+        ].map(([key, label, count, countLabel]) => (
           <button
             className={activeTab === key ? "active" : ""}
             key={key}
@@ -941,7 +1032,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           >
             {label}
             {typeof count === "number" && count > 0 ? (
-              <span className="owner-tab-badge" aria-hidden="true" title={`${count} open support tickets`}>
+              <span className="owner-tab-badge" aria-hidden="true" title={`${count} ${countLabel}`}>
                 {count}
               </span>
             ) : null}
@@ -1031,7 +1122,15 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             </button>
           </div>
           {platformStatusMessage ? <p className="system-note error">{platformStatusMessage}</p> : null}
-          {platformStatus ? <PlatformStatusPanel status={platformStatus} /> : null}
+          {platformStatus ? (
+            <PlatformStatusPanel
+              cleanupLoading={artifactCleanupLoading}
+              cleanupResult={artifactCleanupResult}
+              onApplyCleanup={() => runArtifactCleanup(false)}
+              onPreviewCleanup={() => runArtifactCleanup(true)}
+              status={platformStatus}
+            />
+          ) : null}
         </section>
       ) : null}
 
@@ -1044,13 +1143,14 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           />
           <QueueModeControl queueMode={queueMode} setQueueMode={setQueueMode} />
           {rootCauseGroups.length > 0 ? (
-            <div className="root-cause-filter" aria-label="Root-cause filters">
+            <div className="root-cause-filter" aria-label="Root-cause queue">
               <button
                 className={!selectedRootCause ? "active" : ""}
                 onClick={() => setSelectedRootCause(null)}
                 type="button"
               >
-                All root causes
+                <span>All root causes</span>
+                <small>{rootCauseGroups.length.toLocaleString()}</small>
               </button>
               {rootCauseGroups
                 .filter((group) => queueMode === "all" || readRootCauseQueueStatus(group) === queueMode)
@@ -1059,11 +1159,15 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                   className={selectedRootCause === group.key ? "active" : ""}
                   key={group.key}
                   onClick={() => setSelectedRootCause(group.key)}
+                  title={rootCauseDisplayLabels[group.key] ?? formatLabel(group.displayName)}
                   type="button"
                 >
-                  {rootCauseDisplayLabels[group.key] ?? formatLabel(group.displayName)}
-                  <strong>{group.activeErrors + group.activeTickets || group.resolvedSignals}</strong>
-                  <small>{group.impactedUsers || "Unknown"} affected</small>
+                  <span>{rootCauseDisplayLabels[group.key] ?? formatLabel(group.displayName)}</span>
+                  <strong>{(group.activeErrors + group.activeTickets || group.resolvedSignals).toLocaleString()}</strong>
+                  <small>
+                    {group.impactedUsers || "Unknown"} affected ·{" "}
+                    {readRootCauseQueueStatus(group) === "open" ? "Needs action" : "Retained"}
+                  </small>
                 </button>
                 ))}
             </div>
@@ -1073,6 +1177,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               group={selectedRootCauseGroup}
               errors={filteredErrors}
               onOpenSupport={() => setActiveTab("support")}
+              queueMode={queueMode}
               tickets={filteredSupportTickets}
               updateIssue={updateIssue}
             />
@@ -1260,6 +1365,12 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               {filteredSupportTickets.map((ticket) => {
                 const pendingPatch = pendingIssuePatches[ticket.id] ?? {};
                 const hasPendingPatch = Object.keys(pendingPatch).length > 0;
+                const verificationNote = readIssueVerificationNote(issueVerificationNotes, ticket, "");
+                const userVisibleUpdate = readIssueResolutionNote(
+                  issueResolutionNotes,
+                  ticket,
+                  "This has been addressed. Please retry the workflow and reopen the issue if it still behaves unexpectedly.",
+                );
 
                 return (
                 <article className="support-issue-card" key={ticket.id}>
@@ -1452,6 +1563,16 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                         Discard staged
                       </button>
                     ) : null}
+                    <div className="support-user-preview">
+                      <span>User-visible update preview</span>
+                      <p>{userVisibleUpdate}</p>
+                      <small>Resolving or asking the user posts this in the in-app support thread.</small>
+                    </div>
+                    <p className={verificationNote ? "owner-safety-note" : "owner-safety-note warning"}>
+                      {verificationNote
+                        ? "Ready to mark fixed. The verification note will be retained in the audit trail."
+                        : "Add verification before Mark fixed becomes available."}
+                    </p>
                     <div className="support-issue-quick-actions" aria-label={`Quick actions for ${ticket.subject}`}>
                       <button
                         className="secondary-action"
@@ -1474,28 +1595,18 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       </button>
                       <button
                         className="secondary-action"
-                        disabled={issueUpdatingId === ticket.id || !readIssueVerificationNote(issueVerificationNotes, ticket, "")}
+                        disabled={issueUpdatingId === ticket.id || !verificationNote}
                         onClick={() =>
                           updateIssue(ticket.id, {
                             ownerNotes: readIssueNote(issueNotes, ticket, "Marked fixed after owner review."),
-                            resolutionVerification: readIssueVerificationNote(
-                              issueVerificationNotes,
-                              ticket,
-                              "",
-                            ),
-                            userVisibleResolution: readIssueResolutionNote(
-                              issueResolutionNotes,
-                              ticket,
-                              "This has been addressed. Please retry the workflow and reopen the issue if it still behaves unexpectedly.",
-                            ),
+                            resolutionVerification: verificationNote,
+                            userVisibleResolution: userVisibleUpdate,
                             status: "resolved",
                             fixStatus: "fixed",
                           })
                         }
                         title={
-                          readIssueVerificationNote(issueVerificationNotes, ticket, "")
-                            ? "Mark this issue fixed"
-                            : "Add verification notes before marking fixed"
+                          verificationNote ? "Mark this issue fixed" : "Add verification notes before marking fixed"
                         }
                         type="button"
                       >
@@ -2624,7 +2735,21 @@ function TrendPanel({ title, values }: { title: string; values: OwnerMetrics["tr
   );
 }
 
-function PlatformStatusPanel({ status }: { status: PlatformStatusOverview }) {
+function PlatformStatusPanel({
+  cleanupLoading,
+  cleanupResult,
+  onApplyCleanup,
+  onPreviewCleanup,
+  status,
+}: {
+  cleanupLoading: boolean;
+  cleanupResult: ArtifactCleanupResult | null;
+  onApplyCleanup: () => void;
+  onPreviewCleanup: () => void;
+  status: PlatformStatusOverview;
+}) {
+  const cleanupChecks = status.checks.filter((check) => check.impact === "cleanup");
+
   return (
     <div className="platform-status-grid">
       <article className={`platform-status-summary ${status.overallStatus}`}>
@@ -2633,24 +2758,71 @@ function PlatformStatusPanel({ status }: { status: PlatformStatusOverview }) {
         <strong>{formatLabel(status.overallStatus)}</strong>
         <p>
           {status.recentSignals.activeErrors24h} active errors, {status.recentSignals.sourceFailures24h} source failures,
-          and {status.recentSignals.jobFailures24h} job failures in the last 24 hours.
+          and {status.recentSignals.jobFailures24h} job failures in the last 24 hours. Cleanup items do not mark
+          availability degraded.
         </p>
       </article>
       {status.checks.map((check) => (
         <article className={`platform-status-check ${check.state}`} key={check.label}>
           <div>
             <span>{check.label}</span>
-            <strong>{formatLabel(check.state)}</strong>
+            <strong>{formatPlatformCheckState(check)}</strong>
           </div>
           <p>{check.details}</p>
           <small>
             Last success {check.lastSuccessAt ? formatDateTime(check.lastSuccessAt) : "not recorded"} · Last failure{" "}
             {check.lastFailureAt ? formatDateTime(check.lastFailureAt) : "not recorded"}
           </small>
+          {check.impact === "cleanup" ? <small>Clears when stale records are reset or regenerated.</small> : null}
         </article>
       ))}
+      {cleanupChecks.some((check) => check.state === "degraded" || check.state === "down") ? (
+        <article className="platform-status-cleanup">
+          <div>
+            <span>Artifact cleanup</span>
+            <strong>{cleanupResult ? `${cleanupResult.staleCount.toLocaleString()} found` : "Preview first"}</strong>
+          </div>
+          <p>
+            Preview stale ready records, then reset them to draft so the export workflow can regenerate clean PDF/DOCX
+            artifacts.
+          </p>
+          {cleanupResult?.reports.length ? (
+            <ul>
+              {cleanupResult.reports.slice(0, 5).map((report) => (
+                <li key={report.id}>
+                  <strong>{report.resumeType}</strong>
+                  <span>
+                    {report.missingArtifacts.join(" + ").toUpperCase()} missing · {formatDateTime(report.updatedAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="platform-cleanup-actions">
+            <button className="secondary-action" disabled={cleanupLoading} onClick={onPreviewCleanup} type="button">
+              Preview cleanup
+            </button>
+            <button
+              className="secondary-action"
+              disabled={cleanupLoading || !cleanupResult?.reports.length || !cleanupResult.dryRun}
+              onClick={onApplyCleanup}
+              type="button"
+            >
+              Apply cleanup
+            </button>
+          </div>
+        </article>
+      ) : null}
     </div>
   );
+}
+
+function formatPlatformCheckState(check: PlatformStatusOverview["checks"][number]) {
+  if (check.impact === "cleanup" && check.state === "degraded") {
+    return "Cleanup needed";
+  }
+
+  return formatLabel(check.state);
 }
 
 function PageUsagePanel({ values }: { values: OwnerMetrics["trends"]["pageUsage"] }) {
@@ -2729,12 +2901,14 @@ function RootCauseDrilldown({
   errors,
   group,
   onOpenSupport,
+  queueMode,
   tickets,
   updateIssue,
 }: {
   errors: OwnerMetrics["errorDetails"];
   group: RootCauseGroup;
   onOpenSupport: () => void;
+  queueMode: "open" | "history" | "all";
   tickets: OwnerMetrics["supportTickets"];
   updateIssue: (
     issueId: string,
@@ -2752,6 +2926,12 @@ function RootCauseDrilldown({
   const newest = errors[0];
   const suggestedFix = newest ? suggestErrorFix(newest) : "Review linked support tickets and recent user context.";
   const openTickets = tickets.filter((ticket) => !["resolved", "closed"].includes(ticket.status));
+  const retainedOnly = queueMode === "history" || readRootCauseQueueStatus(group) === "history";
+  const ownerAction = retainedOnly
+    ? "This is retained evidence. Reopen only if a new active error or support ticket appears for the same cause."
+    : openTickets.length > 0
+      ? "Open the linked tickets, review supporting logs, apply the product or guidance fix, verify the workflow, then mark fixed with a user-visible note."
+      : "No linked support ticket is open. Use the retained signals to fix the product path or improve recovery copy, then verify the workflow and watch for recurrence.";
 
   return (
     <section className="root-cause-drilldown" aria-label={`${formatLabel(group.displayName)} root-cause drilldown`}>
@@ -2778,39 +2958,44 @@ function RootCauseDrilldown({
         </article>
         <article>
           <span>Owner action</span>
-          <p>
-            Open the linked tickets, review supporting logs, apply the product or guidance fix,
-            verify the workflow or regression coverage, then mark fixed with a user-visible note.
-          </p>
+          <p>{ownerAction}</p>
         </article>
       </div>
       <div className="root-cause-actions">
-        <button className="secondary-action" onClick={onOpenSupport} type="button">
-          <ExternalLink size={15} aria-hidden="true" />
-          Open linked tickets
-        </button>
-        {openTickets.slice(0, 3).map((ticket) => (
-          <button
-            className="secondary-action"
-            key={ticket.id}
-            onClick={() =>
-              updateIssue(ticket.id, {
-                fixStatus: "investigating",
-                ownerNotes:
-                  ticket.ownerNotes ||
-                  `Owner triage started for ${formatLabel(group.displayName)}. Reviewing supporting logs and applying the appropriate product or guidance fix.`,
-                userVisibleResolution:
-                  ticket.userVisibleResolution ||
-                  "I am reviewing the linked details and will update this issue when the fix path is clear.",
-                status: "in_progress",
-              })
-            }
-            type="button"
-          >
-            <Wrench size={15} aria-hidden="true" />
-            Start {ticket.id.slice(0, 8).toUpperCase()}
-          </button>
-        ))}
+        {openTickets.length > 0 ? (
+          <>
+            <button className="secondary-action" onClick={onOpenSupport} type="button">
+              <ExternalLink size={15} aria-hidden="true" />
+              Open linked tickets
+            </button>
+            {openTickets.slice(0, 3).map((ticket) => (
+              <button
+                className="secondary-action"
+                key={ticket.id}
+                onClick={() =>
+                  updateIssue(ticket.id, {
+                    fixStatus: "investigating",
+                    ownerNotes:
+                      ticket.ownerNotes ||
+                      `Owner triage started for ${formatLabel(group.displayName)}. Reviewing supporting logs and applying the appropriate product or guidance fix.`,
+                    userVisibleResolution:
+                      ticket.userVisibleResolution ||
+                      "I am reviewing the linked details and will update this issue when the fix path is clear.",
+                    status: "in_progress",
+                  })
+                }
+                type="button"
+              >
+                <Wrench size={15} aria-hidden="true" />
+                Start {ticket.id.slice(0, 8).toUpperCase()}
+              </button>
+            ))}
+          </>
+        ) : (
+          <span className="root-cause-empty-action">
+            {retainedOnly ? "No current owner action required." : "No linked support ticket. Fix and verify the workflow."}
+          </span>
+        )}
       </div>
     </section>
   );
@@ -3053,28 +3238,30 @@ function buildNeedsAttentionCards({
   rootCauseLabels: Record<string, string>;
 }): CommandCenterCardModel[] {
   const topRootCause = rootCauseGroups.find((group) => group.activeErrors + group.activeTickets > 0);
+  const availabilityIssueCount = countAvailabilityPlatformIssues(platformStatus);
+  const cleanupItemCount = countCleanupPlatformItems(platformStatus);
   const criticalIssueCount =
     metrics.systemHealth.fixRequired +
     metrics.systemHealth.profileExtractionFailures +
     metrics.systemHealth.jobIngestionFailures +
-    (platformStatus?.checks.filter((check) => check.state === "down" || check.state === "degraded").length ?? 0);
+    availabilityIssueCount +
+    cleanupItemCount;
   const urgentSupport = metrics.supportTickets.filter((ticket) => {
-    const isOpen = !["resolved", "closed"].includes(ticket.status);
     const trustCritical = ticketMatchesSupportRiskFilter(ticket, "billing_refund") ||
       ticketMatchesSupportRiskFilter(ticket, "privacy") ||
       ticketMatchesSupportRiskFilter(ticket, "account_access") ||
       ticketMatchesSupportRiskFilter(ticket, "inaccurate_ai_output");
 
-    return isOpen && (ticket.escalatedToL2 || ticket.priority === "urgent" || ticket.priority === "high" || trustCritical);
+    return (
+      supportTicketNeedsOwnerAction(ticket) &&
+      (ticket.escalatedToL2 || ticket.priority === "urgent" || ticket.priority === "high" || trustCritical)
+    );
   }).length;
   const userRisk = metrics.usersList.filter((user) =>
     userMatchesAdminQuickFilter(user, "needs_attention", metrics),
   ).length;
-  const privacyCount =
-    (compliance?.privacyRequests.overdue ?? 0) +
-    (compliance?.incidents.open ?? 0) +
-    (compliance?.incidents.overdueNotificationReview ?? 0);
-  const promoAnomalies = promoCodes.filter((promo) => computePromoCodeState(promo) !== "Active").length;
+  const privacyCount = countActionableComplianceItems(compliance);
+  const promoAnomalies = promoCodes.filter((promo) => promoNeedsOwnerAction(promo)).length;
   const largeGrantCount = metrics.profitability.consumptionEvidence.filter((event) => event.credits >= 100).length;
 
   return [
@@ -3082,7 +3269,7 @@ function buildNeedsAttentionCards({
       actionLabel: "Open health details",
       body:
         criticalIssueCount > 0
-          ? `${metrics.systemHealth.fixRequired} fix-required errors, ${metrics.systemHealth.profileExtractionFailures} source failures, and ${metrics.systemHealth.jobIngestionFailures} job ingestion failures. Top queue: ${topRootCause ? rootCauseLabels[topRootCause.key] ?? formatLabel(topRootCause.displayName) : "none"}.`
+          ? `${metrics.systemHealth.fixRequired} fix-required errors, ${metrics.systemHealth.profileExtractionFailures} source failures, ${metrics.systemHealth.jobIngestionFailures} job ingestion failures, ${availabilityIssueCount} availability checks, and ${cleanupItemCount} cleanup items. Top queue: ${topRootCause ? rootCauseLabels[topRootCause.key] ?? formatLabel(topRootCause.displayName) : "none"}. Clears when the listed errors are resolved and cleanup items are repaired.`
           : "No critical platform issues are currently flagged in this period.",
       count: criticalIssueCount,
       icon: Gauge,
@@ -3096,7 +3283,7 @@ function buildNeedsAttentionCards({
       actionLabel: "Open support ticket",
       body:
         urgentSupport > 0
-          ? "Escalated, urgent, high-priority, billing, privacy, account-access, or inaccurate-output tickets need human review."
+          ? "Escalated, urgent, high-priority, billing, privacy, account-access, or inaccurate-output tickets need human review. Clears when tickets are resolved, closed, or waiting on the user."
           : "No trust-critical support tickets are waiting in the selected period.",
       count: urgentSupport,
       icon: HeartHandshake,
@@ -3109,7 +3296,7 @@ function buildNeedsAttentionCards({
       actionLabel: "Open user",
       body:
         userRisk > 0
-          ? "Users are flagged for stalled profiles, no credits after recent activity, open support, or repeated failures."
+          ? "Users are flagged for stalled profiles, no credits after recent activity, open support, or repeated failures. Clears when those signals are resolved."
           : "No users are currently flagged by the quick-risk filters.",
       count: userRisk,
       icon: UsersRound,
@@ -3137,7 +3324,7 @@ function buildNeedsAttentionCards({
       actionLabel: "Open billing record",
       body:
         promoAnomalies + largeGrantCount > 0
-          ? `${promoAnomalies} promo states need review and ${largeGrantCount} large credit grants appear in ledger evidence.`
+          ? `${promoAnomalies} active promo states need review and ${largeGrantCount} large credit grants appear in ledger evidence. Clears when active anomalies are fixed or reviewed.`
           : "No expired, fully redeemed, inactive promo, or large grant anomaly is currently flagged.",
       count: promoAnomalies + largeGrantCount,
       icon: CircleDollarSign,
@@ -3156,12 +3343,12 @@ function buildRootCauseDisplayLabels(groups: RootCauseGroup[]) {
   }, {});
 
   return groups.reduce<Record<string, string>>((labels, group) => {
-    const base = formatLabel(group.displayName);
+    const base = formatAdminRootCauseLabel(group.displayName);
     const firstCode = group.signals.find((signal) => signal.code)?.code;
 
     labels[group.key] =
       displayCounts[group.displayName] > 1 && firstCode
-        ? `${base} (${formatLabel(firstCode)})`
+        ? `${base} (${formatAdminRootCauseLabel(firstCode)})`
         : base;
 
     return labels;

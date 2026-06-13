@@ -404,6 +404,7 @@ export function ProfileExplorer({
         <div className="return-brief-grid">
           {returnBrief.map((item) => (
             <button
+              aria-label={`Open home task: ${item.label}, ${item.value}`}
               className={`return-brief-item ${item.priority ? "priority" : ""}`}
               key={item.label}
               onClick={() => onNavigate(item.target)}

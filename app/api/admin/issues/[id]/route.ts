@@ -218,13 +218,19 @@ function toSupportTicketPatch(input: z.infer<typeof supportIssueUpdateSchema>) {
 }
 
 function buildUserVisibleAdminMessage(input: z.infer<typeof supportIssueUpdateSchema>) {
-  const parts = [
-    input.status ? `status=${input.status}` : null,
-    input.priority ? `priority=${input.priority}` : null,
-    input.userVisibleResolution ? `resolution=${input.userVisibleResolution}` : null,
-  ].filter(Boolean);
+  if (input.userVisibleResolution?.trim()) {
+    return input.userVisibleResolution.trim();
+  }
 
-  return parts.length > 0 ? `Support updated this issue: ${parts.join("; ")}` : "Support updated this issue.";
+  if (input.status === "resolved" || input.fixStatus === "fixed") {
+    return "Support marked this issue resolved after review.";
+  }
+
+  if (input.status === "waiting_on_user") {
+    return "Support needs a little more information to continue.";
+  }
+
+  return "Support updated this issue.";
 }
 
 function readUserVisibleSupportFields(input: z.infer<typeof supportIssueUpdateSchema>) {
