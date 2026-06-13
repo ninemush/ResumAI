@@ -4,22 +4,35 @@ import {
   AlertTriangle,
   BarChart3,
   BriefcaseBusiness,
+  CheckCircle2,
   CircleDollarSign,
   Clock3,
   Activity,
+  ClipboardCheck,
   Download,
   ExternalLink,
   FileText,
+  Gauge,
   HeartHandshake,
   RefreshCcw,
   Search,
+  ShieldCheck,
   Wrench,
   UsersRound,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent, ReactNode } from "react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
+import {
+  computePromoCodeState,
+  getUserAttentionSignals,
+  groupPrivacyRequestsById,
+  summarizeOutcomePatternWithSample,
+  userMatchesAdminQuickFilter,
+  type AdminUserQuickFilter,
+} from "@/lib/admin/command-center";
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
 import type { PlatformStatusOverview } from "@/lib/admin/platform-status";
 import { brand } from "@/lib/brand";
@@ -76,12 +89,35 @@ type TierConfigRow = {
   updatedAt: string;
 };
 
-type OperatingAction = {
-  body: string;
-  label: string;
-  title: string;
-  targetTab?: "errors" | "outcomes" | "users";
-  targetRootCause?: string | null;
+type AdminSection =
+  | "operate"
+  | "users"
+  | "support"
+  | "billing"
+  | "compliance"
+  | "configuration"
+  | "reports";
+
+type PendingIssuePatch = {
+  closedReason?: string;
+  fixStatus?: string;
+  ownerNotes?: string;
+  resolutionVerification?: string;
+  status?: string;
+  userVisibleResolution?: string;
+};
+
+type SupportAutopilotPreview = {
+  dryRun: boolean;
+  errorsQueued: number;
+  errorsResolved: number;
+  mode: string;
+  reviewed: number;
+  skipped: number;
+  ticketsEscalated: number;
+  ticketsQueued: number;
+  ticketsResolved: number;
+  ticketsWaitingOnUser: number;
 };
 
 const periodOptions = [
@@ -102,15 +138,26 @@ const supportRiskFilters = [
 
 type SupportRiskFilter = (typeof supportRiskFilters)[number];
 
+const userQuickFilters: { label: string; value: AdminUserQuickFilter }[] = [
+  { label: "Needs attention", value: "needs_attention" },
+  { label: "Open support", value: "open_support" },
+  { label: "No credits", value: "no_credits" },
+  { label: "Recent failure", value: "recent_failure" },
+  { label: "No profile", value: "no_profile" },
+  { label: "Active this week", value: "active_week" },
+  { label: "All users", value: "all" },
+];
+
 export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const router = useRouter();
   const [metrics, setMetrics] = useState(initialMetrics);
   const [periodDays, setPeriodDays] = useState(initialMetrics.period.days);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<AdminSection>("operate");
   const [selectedRootCause, setSelectedRootCause] = useState<string | null>(null);
   const [issueNotes, setIssueNotes] = useState<Record<string, string>>({});
   const [issueResolutionNotes, setIssueResolutionNotes] = useState<Record<string, string>>({});
   const [issueVerificationNotes, setIssueVerificationNotes] = useState<Record<string, string>>({});
+  const [pendingIssuePatches, setPendingIssuePatches] = useState<Record<string, PendingIssuePatch>>({});
   const [issueUpdatingId, setIssueUpdatingId] = useState<string | null>(null);
   const [queueMode, setQueueMode] = useState<"open" | "history" | "all">("open");
   const [supportRiskFilter, setSupportRiskFilter] = useState<SupportRiskFilter>("all");
@@ -125,6 +172,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [query, setQuery] = useState("");
   const [issueUpdateMessage, setIssueUpdateMessage] = useState<string | null>(null);
   const [autopilotLoading, setAutopilotLoading] = useState(false);
+  const [autopilotPreview, setAutopilotPreview] = useState<SupportAutopilotPreview | null>(null);
   const [grantTargetQuery, setGrantTargetQuery] = useState("");
   const [selectedGrantTargets, setSelectedGrantTargets] = useState<CreditGrantTarget[]>([]);
   const [compliance, setCompliance] = useState<ComplianceDashboard | null>(null);
@@ -133,21 +181,28 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [platformStatus, setPlatformStatus] = useState<PlatformStatusOverview | null>(null);
   const [platformStatusMessage, setPlatformStatusMessage] = useState<string | null>(null);
   const [platformStatusLoading, setPlatformStatusLoading] = useState(false);
+  const [userQuickFilter, setUserQuickFilter] = useState<AdminUserQuickFilter>("needs_attention");
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    if (!normalizedQuery) {
-      return metrics.usersList;
-    }
-
-    return metrics.usersList.filter((user) =>
-      [user.email, user.displayName, user.tier, user.profileStatus]
+    return metrics.usersList
+      .filter((user) => userMatchesAdminQuickFilter(user, userQuickFilter, metrics))
+      .filter((user) =>
+        !normalizedQuery
+          ? true
+          : [user.email, user.displayName, user.tier, user.profileStatus]
         .filter(Boolean)
         .some((value) => value?.toLowerCase().includes(normalizedQuery)),
-    );
-  }, [metrics.usersList, query]);
+      );
+  }, [metrics, query, userQuickFilter]);
+
+  const selectedUser = useMemo(
+    () => metrics.usersList.find((user) => user.userId === selectedUserId) ?? null,
+    [metrics.usersList, selectedUserId],
+  );
 
   const rootCauseGroups = useMemo(() => {
     return buildRootCauseGroups([
@@ -179,14 +234,21 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       })),
     ]);
   }, [metrics.errorDetails, metrics.supportTickets]);
-  const rootCauseCounts = useMemo(() => {
-    return rootCauseGroups.reduce<Record<string, number>>((counts, group) => {
-      counts[group.displayName] = group.activeErrors + group.activeTickets;
-      return counts;
-    }, {});
-  }, [rootCauseGroups]);
+  const rootCauseDisplayLabels = useMemo(() => buildRootCauseDisplayLabels(rootCauseGroups), [rootCauseGroups]);
   const selectedRootCauseGroup = rootCauseGroups.find((group) => group.key === selectedRootCause) ?? null;
   const openRootCauseGroups = rootCauseGroups.filter((group) => readRootCauseQueueStatus(group) === "open");
+  const needsAttentionCards = useMemo(
+    () =>
+      buildNeedsAttentionCards({
+        compliance,
+        metrics,
+        platformStatus,
+        promoCodes,
+        rootCauseGroups,
+        rootCauseLabels: rootCauseDisplayLabels,
+      }),
+    [compliance, metrics, platformStatus, promoCodes, rootCauseDisplayLabels, rootCauseGroups],
+  );
   const filteredErrors = useMemo(() => {
     return metrics.errorDetails.filter((error) => {
       const matchesRootCause =
@@ -255,16 +317,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     const group = rootCauseGroups.find((item) => item.key === rootCause || item.displayName === rootCause);
 
     setSelectedRootCause(group?.key ?? rootCause);
-    setActiveTab("errors");
-  }
-
-  function openOperatingAction(action: OperatingAction) {
-    if (!action.targetTab) {
-      return;
-    }
-
-    setSelectedRootCause(action.targetTab === "errors" ? action.targetRootCause ?? null : null);
-    setActiveTab(action.targetTab);
+    setActiveTab("operate");
   }
 
   function addGrantTarget(target: CreditGrantTarget) {
@@ -305,6 +358,14 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   }
 
   function downloadMetricsExport() {
+    if (
+      !window.confirm(
+        "Export CSV includes owner operating metadata and may include support-safe user identifiers. Continue only if you need this file for owner review.",
+      )
+    ) {
+      return;
+    }
+
     window.location.href = `/api/admin/metrics/export?periodDays=${periodDays}`;
   }
 
@@ -382,13 +443,90 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       }
 
       await loadPeriod(periodDays);
+      setPendingIssuePatches((current) => {
+        const next = { ...current };
+        delete next[issueId];
+        return next;
+      });
       setIssueUpdateMessage("Support issue updated.");
     } finally {
       setIssueUpdatingId(null);
     }
   }
 
-  async function runSupportAutopilot() {
+  function stageIssuePatch(issueId: string, patch: PendingIssuePatch) {
+    setPendingIssuePatches((current) => ({
+      ...current,
+      [issueId]: {
+        ...(current[issueId] ?? {}),
+        ...patch,
+      },
+    }));
+    setIssueUpdateMessage("Support changes are staged. Use Save changes to write the audit event.");
+  }
+
+  async function saveIssueChanges(ticket: OwnerMetrics["supportTickets"][number]) {
+    const patch = {
+      ...(pendingIssuePatches[ticket.id] ?? {}),
+      ownerNotes: issueNotes[ticket.id] ?? ticket.ownerNotes,
+      resolutionVerification: issueVerificationNotes[ticket.id] ?? ticket.resolutionVerification,
+      userVisibleResolution: issueResolutionNotes[ticket.id] ?? ticket.userVisibleResolution,
+    };
+
+    await updateIssue(ticket.id, patch);
+  }
+
+  async function previewSupportAutopilot() {
+    setAutopilotLoading(true);
+    setIssueUpdateMessage(null);
+    setAutopilotPreview(null);
+
+    try {
+      const response = await fetch("/api/admin/support/autopilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun: true, limit: 120, mode: "backlog" }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        error?: { message?: string };
+        result?: SupportAutopilotPreview;
+      } | null;
+
+      if (!response.ok || !payload?.result) {
+        setIssueUpdateMessage(
+          payload?.error?.message ?? "Support autopilot preview could not review the queue.",
+        );
+        return;
+      }
+
+      setAutopilotPreview(payload.result);
+      setIssueUpdateMessage(
+        [
+          `Previewed ${payload.result.reviewed.toLocaleString()} item${payload.result.reviewed === 1 ? "" : "s"}.`,
+          `${payload.result.ticketsResolved.toLocaleString()} ticket${payload.result.ticketsResolved === 1 ? "" : "s"} would resolve.`,
+          `${payload.result.ticketsEscalated.toLocaleString()} would escalate.`,
+          `${payload.result.errorsResolved.toLocaleString()} error${payload.result.errorsResolved === 1 ? "" : "s"} would clear.`,
+        ].join(" "),
+      );
+    } finally {
+      setAutopilotLoading(false);
+    }
+  }
+
+  async function applySupportAutopilot() {
+    if (!autopilotPreview) {
+      setIssueUpdateMessage("Preview the L1 review before applying changes.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Apply the previewed L1 review to ${autopilotPreview.reviewed.toLocaleString()} queue item${autopilotPreview.reviewed === 1 ? "" : "s"}? This writes ticket/error updates and audit messages.`,
+      )
+    ) {
+      return;
+    }
+
     setAutopilotLoading(true);
     setIssueUpdateMessage(null);
 
@@ -396,36 +534,22 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
       const response = await fetch("/api/admin/support/autopilot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ limit: 120, mode: "backlog" }),
+        body: JSON.stringify({ dryRun: false, limit: 120, mode: "backlog" }),
       });
       const payload = (await response.json().catch(() => null)) as {
         error?: { message?: string };
-        result?: {
-          errorsQueued: number;
-          errorsResolved: number;
-          reviewed: number;
-          ticketsEscalated: number;
-          ticketsQueued: number;
-          ticketsResolved: number;
-          ticketsWaitingOnUser: number;
-        };
+        result?: SupportAutopilotPreview;
       } | null;
 
       if (!response.ok || !payload?.result) {
-        setIssueUpdateMessage(
-          payload?.error?.message ?? "Support autopilot could not review the queue.",
-        );
+        setIssueUpdateMessage(payload?.error?.message ?? "Support autopilot could not apply changes.");
         return;
       }
 
+      setAutopilotPreview(null);
       await loadPeriod(periodDays);
       setIssueUpdateMessage(
-        [
-          `L1 reviewed ${payload.result.reviewed.toLocaleString()} item${payload.result.reviewed === 1 ? "" : "s"}.`,
-          `${payload.result.ticketsResolved.toLocaleString()} ticket${payload.result.ticketsResolved === 1 ? "" : "s"} resolved.`,
-          `${payload.result.ticketsEscalated.toLocaleString()} escalated.`,
-          `${payload.result.errorsResolved.toLocaleString()} error${payload.result.errorsResolved === 1 ? "" : "s"} cleared.`,
-        ].join(" "),
+        `Applied L1 review: ${payload.result.ticketsResolved.toLocaleString()} resolved, ${payload.result.ticketsEscalated.toLocaleString()} escalated, ${payload.result.errorsResolved.toLocaleString()} errors cleared.`,
       );
     } finally {
       setAutopilotLoading(false);
@@ -492,9 +616,23 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     const generationLimit = Number(formData.get("generationLimit") ?? 0);
     const tierPeriodDays = Number(formData.get("periodDays") ?? 30);
     const isActive = formData.get("isActive") === "on";
+    const sandboxQaComplete = formData.get("sandboxQaComplete") === "on";
 
     if (description.length < 12) {
       setTierMessage("Add a clear owner note in the description before saving a tier.");
+      return;
+    }
+
+    if (!sandboxQaComplete) {
+      setTierMessage("Confirm sandbox QA for tier updates before saving.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Save ${name || key}? Tier changes affect quota enforcement and write an admin audit event.`,
+      )
+    ) {
       return;
     }
 
@@ -551,16 +689,21 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   async function createPromoCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    setPromoLoading(true);
     setPromoMessage(null);
     const formData = new FormData(event.currentTarget);
     const expiresAt = formData.get("expiresAt")?.toString() ?? "";
     const creditAmount = Number(formData.get("creditAmount") ?? 0);
     const maxRedemptions = Number(formData.get("maxRedemptions") ?? 1);
     const description = formData.get("description")?.toString().trim() ?? "";
+    const sandboxQaComplete = formData.get("sandboxQaComplete") === "on";
 
     if (description.length < 8) {
       setPromoMessage("Add an owner reason before creating a promo code.");
+      return;
+    }
+
+    if (!sandboxQaComplete) {
+      setPromoMessage("Confirm sandbox QA for promo creation, redemption, and expiry before creating this code.");
       return;
     }
 
@@ -572,6 +715,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     ) {
       return;
     }
+
+    setPromoLoading(true);
 
     try {
       const response = await fetch("/api/admin/promo-codes", {
@@ -611,6 +756,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     const formData = new FormData(form);
     const creditAmount = Number(formData.get("creditAmount") ?? 0);
     const description = formData.get("description")?.toString().trim() ?? "";
+    const sandboxQaComplete = formData.get("sandboxQaComplete") === "on";
     const manualTarget = grantTargetQuery.trim();
     const targets = selectedGrantTargets.map((target) => ({
       label: formatGrantTargetLabel(target),
@@ -633,6 +779,19 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
 
     if (description.length < 8) {
       setGrantMessage("Add an owner note before granting credits.");
+      return;
+    }
+
+    if (!sandboxQaComplete) {
+      setGrantMessage("Confirm sandbox QA for credit grants before writing ledger events.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Add ${creditAmount} credits to ${targets.length} user${targets.length === 1 ? "" : "s"}? This writes credit ledger and admin audit records.`,
+      )
+    ) {
       return;
     }
 
@@ -703,6 +862,16 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
 
   const shouldShowGrantTargetSuggestions = grantTargetQuery.trim().length > 0;
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadCompliance();
+      void loadPlatformStatus();
+      void loadPromoCodes({ preserveMessage: true });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <main className="owner-console" aria-labelledby="owner-console-title">
       <div className="owner-console-header">
@@ -740,109 +909,31 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         </div>
       </div>
 
-      <section className="owner-metric-grid" aria-label="Operating metrics">
-        <MetricCard
-          icon={UsersRound}
-          label="Users"
-          onClick={() => setActiveTab("users")}
-          value={metrics.users.totalSignedUp}
-          detail={`${metrics.users.newInPeriod} new, ${metrics.users.activeInPeriod} active in selected period`}
-        />
-        <MetricCard
-          icon={FileText}
-          label="Profiles"
-          onClick={() => setActiveTab("users")}
-          value={metrics.profiles.created}
-          detail={`${metrics.profiles.ready} ready, ${metrics.profiles.needsReview} need review`}
-        />
-        <MetricCard
-          icon={BriefcaseBusiness}
-          label="Applications"
-          onClick={() => setActiveTab("outcomes")}
-          value={metrics.applications.logged}
-          detail={`${formatRate(metrics.outcomes.interviewRate)} interview, ${formatRate(metrics.outcomes.selectionRate)} selected`}
-        />
-        <MetricCard
-          icon={AlertTriangle}
-          label="Fix required"
-          onClick={() => {
-            setSelectedRootCause(null);
-            setActiveTab("errors");
-          }}
-          value={metrics.systemHealth.fixRequired}
-          detail={`${openRootCauseGroups.length} active root-cause groups, ${metrics.errorDetails.length} retained signals`}
-          tone={metrics.systemHealth.fixRequired > 0 ? "warning" : "normal"}
-        />
-        <MetricCard
-          icon={HeartHandshake}
-          label="Support"
-          onClick={() => setActiveTab("support")}
-          value={metrics.support.ticketsOpen}
-          detail={`${metrics.support.ticketsEscalated} escalated, ${metrics.support.l1Resolved} L1 resolved`}
-        />
-        <MetricCard
-          icon={CircleDollarSign}
-          label="Profitability"
-          onClick={() => setActiveTab("profitability")}
-          value={formatMoney(metrics.profitability.grossProfitUsd)}
-          detail={`${formatMoney(metrics.profitability.revenueUsd)} revenue · ${metrics.profitability.grossMarginPercent.toFixed(1)}% margin`}
-          tone={metrics.profitability.grossProfitUsd < 0 ? "warning" : "normal"}
-        />
-      </section>
-
-      <section className="owner-action-strip" aria-label="Recommended operating actions">
-        {buildOperatingActions(metrics, rootCauseCounts).map((action) =>
-          action.targetTab ? (
-            <button
-              aria-label={`${action.label}: ${action.title}. Open details.`}
-              className="owner-operating-action"
-              key={action.title}
-              onClick={() => openOperatingAction(action)}
-              type="button"
-            >
-              <span>{action.label}</span>
-              <strong>{action.title}</strong>
-              <p>{action.body}</p>
-              <small>Open details</small>
-            </button>
-          ) : (
-            <article className="owner-operating-action" key={action.title}>
-              <span>{action.label}</span>
-              <strong>{action.title}</strong>
-              <p>{action.body}</p>
-            </article>
-          ),
-        )}
-      </section>
-
       <nav className="owner-tab-list" aria-label="Owner console sections">
         {[
-          ["overview", "Overview"],
-          ["platform", "Platform Status"],
-          ["users", "Users"],
-          ["errors", "Errors"],
+          ["operate", "Operate", needsAttentionCards.filter((card) => card.count > 0).length],
+          ["users", "Users", metrics.usersList.filter((user) => getUserAttentionSignals(user, metrics).length > 0).length],
           ["support", "Support", metrics.support.ticketsOpen],
-          ["outcomes", "Outcomes"],
-          ["profitability", "Profitability"],
+          ["billing", "Billing & Credits", promoCodes.filter((promo) => computePromoCodeState(promo) !== "Active").length],
           ["compliance", "Compliance", compliance?.privacyRequests.open ?? undefined],
-          ["tiers", "Tiers"],
-          ["promos", "Promo codes"],
+          ["configuration", "Configuration"],
+          ["reports", "Reports"],
         ].map(([key, label, count]) => (
           <button
             className={activeTab === key ? "active" : ""}
             key={key}
             onClick={() => {
-              setActiveTab(String(key));
-              if (key === "promos" && promoCodes.length === 0) {
+              setActiveTab(key as AdminSection);
+              if (key === "billing" && promoCodes.length === 0) {
                 void loadPromoCodes();
               }
-              if (key === "tiers" && tiers.length === 0) {
+              if (key === "configuration" && tiers.length === 0) {
                 void loadTiers();
               }
               if (key === "compliance" && !compliance && !complianceLoading) {
                 void loadCompliance();
               }
-              if (key === "platform" && !platformStatus && !platformStatusLoading) {
+              if (key === "operate" && !platformStatus && !platformStatusLoading) {
                 void loadPlatformStatus();
               }
             }}
@@ -858,28 +949,68 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         ))}
       </nav>
 
-      {activeTab === "overview" ? (
-        <section className="owner-detail-grid" aria-label="Operating overview">
-          <TrendPanel title="Daily operating trend" values={metrics.trends.daily} />
-          <PageUsagePanel values={metrics.trends.pageUsage} />
-          <MetricBreakdown title="Feature usage" values={metrics.featureUsage} />
-          <MetricBreakdown title="Profile sources" values={metrics.sources} />
-          <MetricBreakdown title="Application statuses" values={metrics.applications.byStatus} />
-          <MetricBreakdown
-            actionLabel="Drill down"
-            onSelect={openRootCause}
-            title="Root causes"
-            values={Object.fromEntries(
-              rootCauseGroups.map((group) => [
-                group.displayName,
-                group.activeErrors + group.activeTickets || group.resolvedSignals,
-              ]),
-            )}
-          />
-        </section>
+      {activeTab === "operate" ? (
+        <>
+          <section className="owner-command-center" aria-label="Needs attention now">
+            <SectionHeading
+              eyebrow="Operate"
+              title="Needs attention now"
+              body="Ranked by operational risk so an owner can see reliability, support, user success, compliance, and credit anomalies before broad analytics."
+            />
+            <div className="owner-command-grid">
+              {needsAttentionCards.map((card) => (
+                <CommandCenterCard
+                  card={card}
+                  key={card.title}
+                  onAction={() => {
+                    if (card.targetRootCause) {
+                      setSelectedRootCause(card.targetRootCause);
+                    }
+                    setActiveTab(card.targetTab);
+                  }}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="owner-metric-grid owner-pulse-grid" aria-label="Operating pulse">
+            <MetricCard
+              icon={UsersRound}
+              label="Users"
+              onClick={() => setActiveTab("users")}
+              value={metrics.users.totalSignedUp}
+              detail={`${metrics.users.newInPeriod} new, ${metrics.users.activeInPeriod} active in selected period`}
+            />
+            <MetricCard
+              icon={FileText}
+              label="Profiles"
+              onClick={() => setActiveTab("users")}
+              value={metrics.profiles.created}
+              detail={`${metrics.profiles.ready} ready, ${metrics.profiles.needsReview} need review`}
+            />
+            <MetricCard
+              icon={AlertTriangle}
+              label="Fix required"
+              onClick={() => {
+                setSelectedRootCause(null);
+                setActiveTab("operate");
+              }}
+              value={metrics.systemHealth.fixRequired}
+              detail={`${openRootCauseGroups.length} active root-cause groups, ${metrics.errorDetails.length} retained signals`}
+              tone={metrics.systemHealth.fixRequired > 0 ? "warning" : "normal"}
+            />
+            <MetricCard
+              icon={HeartHandshake}
+              label="Support"
+              onClick={() => setActiveTab("support")}
+              value={metrics.support.ticketsOpen}
+              detail={`${metrics.support.ticketsEscalated} escalated, ${metrics.support.l1Resolved} L1 resolved`}
+            />
+          </section>
+        </>
       ) : null}
 
-      {activeTab === "platform" ? (
+      {activeTab === "operate" ? (
         <section className="owner-detail-panel owner-wide-panel" aria-label="Platform status">
           <SectionHeading
             eyebrow="Platform status"
@@ -904,66 +1035,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         </section>
       ) : null}
 
-      {activeTab === "users" ? (
-        <section className="owner-detail-panel owner-wide-panel" aria-label="Users">
-          <SectionHeading
-            eyebrow="Users"
-            title="User operating list"
-            body="Use this to spot stalled onboarding, credit constraints, users with repeated failures, and high-intent users who may need support."
-          />
-          <label className="owner-search">
-            <Search size={16} aria-hidden="true" />
-            <input
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search users by email, name, tier, or status"
-              value={query}
-            />
-          </label>
-          <div className="owner-table" role="table" aria-label="User list">
-            <div className="owner-table-row owner-table-head" role="row">
-              <span>User</span>
-              <span>Activity</span>
-              <span>Profile</span>
-              <span>Credits</span>
-              <span>Workspace</span>
-              <span>Support</span>
-            </div>
-            {filteredUsers.map((user) => (
-              <div className="owner-table-row" key={user.userId} role="row">
-                <span>
-                  <strong>{user.displayName || "Unnamed user"}</strong>
-                  <small>{user.email || "No email"}</small>
-                </span>
-                <span>
-                  <strong>{formatRelativeTime(user.lastActivityAt ?? user.lastSignInAt ?? user.createdAt)}</strong>
-                  <small>Joined {formatDate(user.createdAt)}</small>
-                </span>
-                <span>
-                  <strong>{formatLabel(user.profileStatus ?? "missing")}</strong>
-                  <small>{user.sources} sources</small>
-                </span>
-                <span>
-                  <strong>{user.creditsAvailable} available</strong>
-                  <small>
-                    {user.creditsUsed} used {periodDays === 0 ? "all time" : `in ${periodDays}d`} ·{" "}
-                    {user.creditsUsedAllTime} lifetime
-                  </small>
-                </span>
-                <span>
-                  <strong>{user.applications} applications</strong>
-                  <small>{user.resumes} resumes · {user.tier}</small>
-                </span>
-                <span>
-                  <strong>{user.openTickets} open</strong>
-                  <small>tickets</small>
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {activeTab === "errors" ? (
+      {activeTab === "operate" ? (
         <section className="owner-detail-panel owner-wide-panel" aria-label="Error details">
           <SectionHeading
             eyebrow="System health"
@@ -989,7 +1061,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                   onClick={() => setSelectedRootCause(group.key)}
                   type="button"
                 >
-                  {formatLabel(group.displayName)}
+                  {rootCauseDisplayLabels[group.key] ?? formatLabel(group.displayName)}
                   <strong>{group.activeErrors + group.activeTickets || group.resolvedSignals}</strong>
                   <small>{group.impactedUsers || "Unknown"} affected</small>
                 </button>
@@ -1044,6 +1116,95 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         </section>
       ) : null}
 
+      {activeTab === "users" ? (
+        <section className="owner-detail-panel owner-wide-panel" aria-label="Users">
+          <SectionHeading
+            eyebrow="Users"
+            title="User operating list"
+            body="Use this to spot stalled onboarding, credit constraints, users with repeated failures, and high-intent users who may need support."
+          />
+          <div className="record-filter-strip owner-user-filter-strip" aria-label="User quick filters">
+            {userQuickFilters.map((filter) => (
+              <button
+                aria-pressed={userQuickFilter === filter.value}
+                className={`record-filter-chip ${userQuickFilter === filter.value ? "active" : ""}`}
+                key={filter.value}
+                onClick={() => setUserQuickFilter(filter.value)}
+                type="button"
+              >
+                <span>{filter.label}</span>
+              </button>
+            ))}
+          </div>
+          <label className="owner-search">
+            <Search size={16} aria-hidden="true" />
+            <input
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search users by email, name, tier, or status"
+              value={query}
+            />
+          </label>
+          <div className="owner-table" role="table" aria-label="User list">
+            <div className="owner-table-row owner-table-head" role="row">
+              <span>User</span>
+              <span>Activity</span>
+              <span>Profile</span>
+              <span>Credits</span>
+              <span>Workspace</span>
+              <span>Support</span>
+            </div>
+            {filteredUsers.map((user) => (
+              <div className="owner-table-row" key={user.userId} role="row">
+                <span>
+                  <strong>{user.displayName || "Unnamed user"}</strong>
+                  <small>{user.email || "No email"}</small>
+                </span>
+                <span>
+                  <strong>{formatRelativeTime(user.lastActivityAt ?? user.lastSignInAt ?? user.createdAt)}</strong>
+                  <small>Joined {formatDate(user.createdAt)}</small>
+                </span>
+                <span>
+                  <strong>{formatLabel(user.profileStatus ?? "missing")}</strong>
+                  <small>{user.sources} sources</small>
+                </span>
+                <span>
+                  <strong>{user.creditsAvailable} available</strong>
+                  <small>
+                    {user.creditsUsed} used {periodDays === 0 ? "all time" : `in ${periodDays}d`} ·{" "}
+                    {user.creditsUsedAllTime} lifetime
+                  </small>
+                </span>
+                <span>
+                  <strong>{user.applications} applications</strong>
+                  <small>{user.resumes} resumes · {user.tier}</small>
+                </span>
+                <span>
+                  <strong>{user.openTickets} open</strong>
+                  <small>
+                    {getUserAttentionSignals(user, metrics).join(" · ") || "No flagged risk"}
+                  </small>
+                  <button
+                    className="owner-inline-action"
+                    onClick={() => setSelectedUserId(user.userId)}
+                    type="button"
+                  >
+                    Open user
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+          {selectedUser ? (
+            <UserDetailDrawer
+              metrics={metrics}
+              onClose={() => setSelectedUserId(null)}
+              periodDays={periodDays}
+              user={selectedUser}
+            />
+          ) : null}
+        </section>
+      ) : null}
+
       {activeTab === "support" ? (
         <section className="owner-detail-panel owner-wide-panel" aria-label="Support tickets">
           <SectionHeading
@@ -1055,12 +1216,29 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             <button
               className="secondary-action compact-action"
               disabled={autopilotLoading}
-              onClick={runSupportAutopilot}
+              onClick={previewSupportAutopilot}
               type="button"
             >
-              <RefreshCcw aria-hidden="true" size={16} />
-              <span>{autopilotLoading ? "Reviewing..." : "Run L1 review"}</span>
+              <ClipboardCheck aria-hidden="true" size={16} />
+              <span>{autopilotLoading ? "Previewing..." : "Preview L1 review"}</span>
             </button>
+            <button
+              className="secondary-action compact-action"
+              disabled={autopilotLoading || !autopilotPreview}
+              onClick={applySupportAutopilot}
+              type="button"
+            >
+              <CheckCircle2 aria-hidden="true" size={16} />
+              <span>Apply previewed changes</span>
+            </button>
+            {autopilotPreview ? (
+              <p className="owner-safety-note">
+                Preview: {autopilotPreview.reviewed.toLocaleString()} reviewed,{" "}
+                {autopilotPreview.ticketsResolved.toLocaleString()} ticket resolutions,{" "}
+                {autopilotPreview.ticketsEscalated.toLocaleString()} escalations,{" "}
+                {autopilotPreview.errorsResolved.toLocaleString()} error clears. Nothing has been changed yet.
+              </p>
+            ) : null}
           </div>
           <QueueModeControl queueMode={queueMode} setQueueMode={setQueueMode} />
           <div className="record-filter-strip" aria-label="Trust-critical support filters">
@@ -1079,7 +1257,11 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
           {issueUpdateMessage ? <p className="owner-generated-note">{issueUpdateMessage}</p> : null}
           {filteredSupportTickets.length > 0 ? (
             <div className="support-issue-list" aria-label="Support issues">
-              {filteredSupportTickets.map((ticket) => (
+              {filteredSupportTickets.map((ticket) => {
+                const pendingPatch = pendingIssuePatches[ticket.id] ?? {};
+                const hasPendingPatch = Object.keys(pendingPatch).length > 0;
+
+                return (
                 <article className="support-issue-card" key={ticket.id}>
                   <div className="support-issue-header">
                     <div>
@@ -1178,8 +1360,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       Status
                       <select
                         disabled={issueUpdatingId === ticket.id}
-                        onChange={(event) => updateIssue(ticket.id, { status: event.target.value })}
-                        value={ticket.status}
+                        onChange={(event) => stageIssuePatch(ticket.id, { status: event.target.value })}
+                        value={pendingPatch.status ?? ticket.status}
                       >
                         <option value="open">Open</option>
                         <option value="in_progress">Investigating</option>
@@ -1193,8 +1375,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       Fix disposition
                       <select
                         disabled={issueUpdatingId === ticket.id}
-                        onChange={(event) => updateIssue(ticket.id, { fixStatus: event.target.value })}
-                        value={ticket.fixStatus}
+                        onChange={(event) => stageIssuePatch(ticket.id, { fixStatus: event.target.value })}
+                        value={pendingPatch.fixStatus ?? ticket.fixStatus}
                       >
                         <option value="not_started">Not started</option>
                         <option value="investigating">Investigating</option>
@@ -1249,17 +1431,27 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                     <button
                       className="secondary-action"
                       disabled={issueUpdatingId === ticket.id}
-                      onClick={() =>
-                        updateIssue(ticket.id, {
-                          ownerNotes: issueNotes[ticket.id] ?? ticket.ownerNotes,
-                          userVisibleResolution:
-                            issueResolutionNotes[ticket.id] ?? ticket.userVisibleResolution,
-                        })
-                      }
+                      onClick={() => saveIssueChanges(ticket)}
                       type="button"
                     >
-                      Save notes
+                      Save changes
                     </button>
+                    {hasPendingPatch ? (
+                      <button
+                        className="secondary-action"
+                        disabled={issueUpdatingId === ticket.id}
+                        onClick={() =>
+                          setPendingIssuePatches((current) => {
+                            const next = { ...current };
+                            delete next[ticket.id];
+                            return next;
+                          })
+                        }
+                        type="button"
+                      >
+                        Discard staged
+                      </button>
+                    ) : null}
                     <div className="support-issue-quick-actions" aria-label={`Quick actions for ${ticket.subject}`}>
                       <button
                         className="secondary-action"
@@ -1312,8 +1504,16 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       <button
                         className="secondary-action danger-action"
                         disabled={issueUpdatingId === ticket.id}
-                        onClick={() =>
-                          updateIssue(ticket.id, {
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              "Close this support issue with no fix? This writes an audit trail and a user-visible resolution.",
+                            )
+                          ) {
+                            return;
+                          }
+
+                          void updateIssue(ticket.id, {
                             closedReason: "not_planned",
                             ownerNotes: readIssueNote(issueNotes, ticket, "Closed after owner review. No product change planned."),
                             userVisibleResolution: readIssueResolutionNote(
@@ -1323,8 +1523,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                             ),
                             status: "closed",
                             fixStatus: "wont_fix",
-                          })
-                        }
+                          });
+                        }}
                         type="button"
                       >
                         Close no fix
@@ -1332,7 +1532,8 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                     </div>
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="empty-state">
@@ -1344,7 +1545,26 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         </section>
       ) : null}
 
-      {activeTab === "outcomes" ? (
+      {activeTab === "reports" ? (
+        <>
+        <section className="owner-detail-grid" aria-label="Operating reports">
+          <TrendPanel title="Daily operating trend" values={metrics.trends.daily} />
+          <PageUsagePanel values={metrics.trends.pageUsage} />
+          <MetricBreakdown title="Feature usage" values={metrics.featureUsage} />
+          <MetricBreakdown title="Profile sources" values={metrics.sources} />
+          <MetricBreakdown title="Application statuses" values={metrics.applications.byStatus} />
+          <MetricBreakdown
+            actionLabel="Drill down"
+            onSelect={openRootCause}
+            title="Root causes"
+            values={Object.fromEntries(
+              rootCauseGroups.map((group) => [
+                rootCauseDisplayLabels[group.key] ?? formatLabel(group.displayName),
+                group.activeErrors + group.activeTickets || group.resolvedSignals,
+              ]),
+            )}
+          />
+        </section>
         <section className="owner-detail-grid" aria-label="Outcome analytics">
           <OutcomeBreakdown title="Outcome by tier" values={metrics.outcomes.byTier} />
           <OutcomeBreakdown title="Outcome by role family" values={metrics.outcomes.byRoleFamily} />
@@ -1361,9 +1581,10 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
             </strong>
           </div>
         </section>
+        </>
       ) : null}
 
-      {activeTab === "profitability" ? (
+      {activeTab === "billing" ? (
         <section className="owner-detail-panel owner-wide-panel" aria-label="Profitability">
           <SectionHeading
             eyebrow="Economics"
@@ -1583,11 +1804,14 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                     ))}
                   </dl>
                   <div className="owner-table compact-owner-table" role="table" aria-label="Open privacy requests">
-                    {compliance.privacyRequests.recentOpen.map((request) => (
+                    {groupPrivacyRequestsById(compliance.privacyRequests.recentOpen).map((request) => (
                       <div className="owner-table-row" key={request.id} role="row">
                         <span>
                           <strong>{request.subject ?? formatLabel(request.requestType)}</strong>
-                          <small>{formatLabel(request.status)} · due {request.dueAt ? formatDate(request.dueAt) : "not set"}</small>
+                          <small>
+                            {formatLabel(request.status)} · due {request.dueAt ? formatDate(request.dueAt) : "not set"}
+                            {request.count > 1 ? ` · ${request.count} grouped rows` : ""}
+                          </small>
                         </span>
                         <span>
                           <strong>{formatLabel(request.requestType)}</strong>
@@ -1676,7 +1900,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         </section>
       ) : null}
 
-      {activeTab === "tiers" ? (
+      {activeTab === "configuration" ? (
         <section className="owner-detail-panel owner-wide-panel" aria-label="Tier configuration">
           <SectionHeading
             eyebrow="Tiers"
@@ -1750,7 +1974,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
         </section>
       ) : null}
 
-      {activeTab === "promos" ? (
+      {activeTab === "billing" ? (
         <section className="owner-detail-panel owner-wide-panel" aria-label="Promo codes">
           <SectionHeading
             eyebrow="Credits"
@@ -1794,6 +2018,10 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                 <p className="owner-credit-guardrail">
                   Owner reason is required. High-total codes ask for confirmation before creation.
                 </p>
+                <label className="owner-safety-checkbox">
+                  <input name="sandboxQaComplete" type="checkbox" />
+                  <span>Sandbox QA completed for creation, redemption, and expiry behavior.</span>
+                </label>
                 <div className="owner-form-actions">
                   <button className="owner-action-button primary" disabled={promoLoading} type="submit">
                     Create code
@@ -1902,6 +2130,10 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                 <p className="owner-credit-guardrail">
                   Each recipient receives a separate ledger event. High-total grants ask for confirmation.
                 </p>
+                <label className="owner-safety-checkbox">
+                  <input name="sandboxQaComplete" type="checkbox" />
+                  <span>Sandbox QA completed for credit grant ledger and admin audit behavior.</span>
+                </label>
                 <div className="owner-form-actions">
                   <button className="owner-action-button primary" disabled={grantLoading} type="submit">
                     Add credits
@@ -1919,26 +2151,30 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
               <span>Redemptions</span>
             </div>
             {promoCodes.length > 0 ? (
-              promoCodes.map((promo) => (
-                <div className="owner-table-row" key={promo.id} role="row">
-                  <span>
-                    <strong>{promo.code}</strong>
-                    <small>{promo.description || "No description"}</small>
-                  </span>
-                  <span>
-                    <strong>{promo.creditAmount}</strong>
-                    <small>{promo.isActive ? "Active" : "Inactive"}</small>
-                  </span>
-                  <span>
-                    <strong>{promo.assignedUserEmail ?? "General"}</strong>
-                    <small>{promo.expiresAt ? `Expires ${formatDateTime(promo.expiresAt)}` : "No expiry"}</small>
-                  </span>
-                  <span>
-                    <strong>{promo.redeemedCount} / {promo.maxRedemptions}</strong>
-                    <small>created {formatDate(promo.createdAt)}</small>
-                  </span>
-                </div>
-              ))
+              promoCodes.map((promo) => {
+                const promoState = computePromoCodeState(promo);
+
+                return (
+                  <div className="owner-table-row" key={promo.id} role="row">
+                    <span>
+                      <strong>{promo.code}</strong>
+                      <small>{promo.description || "No description"}</small>
+                    </span>
+                    <span>
+                      <strong>{promo.creditAmount}</strong>
+                      <small>{promoState}</small>
+                    </span>
+                    <span>
+                      <strong>{promo.assignedUserEmail ?? "General"}</strong>
+                      <small>{promo.expiresAt ? `Expires ${formatDateTime(promo.expiresAt)}` : "No expiry"}</small>
+                    </span>
+                    <span>
+                      <strong>{promo.redeemedCount} / {promo.maxRedemptions}</strong>
+                      <small>created {formatDate(promo.createdAt)}</small>
+                    </span>
+                  </div>
+                );
+              })
             ) : (
               <p className="empty-state">No promo codes loaded yet.</p>
             )}
@@ -2038,6 +2274,10 @@ function TierForm({
       <p className="owner-credit-guardrail">
         Saving writes an audit event. Disable a tier instead of deleting it when active users or quota history may rely on it.
       </p>
+      <label className="owner-safety-checkbox">
+        <input name="sandboxQaComplete" type="checkbox" />
+        <span>Sandbox QA completed for tier update, quota refresh, and audit behavior.</span>
+      </label>
       <div className="owner-form-actions">
         <button className="owner-action-button primary" disabled={disabled} type="submit">
           {submitLabel}
@@ -2109,6 +2349,204 @@ function FinancialTile({
       <span>{label}</span>
       <strong>{typeof value === "number" ? value.toLocaleString() : value}</strong>
     </article>
+  );
+}
+
+type CommandCenterCardModel = {
+  actionLabel: string;
+  body: string;
+  count: number;
+  icon: typeof UsersRound;
+  meta: string;
+  targetRootCause?: string | null;
+  targetTab: AdminSection;
+  title: string;
+  tone: "critical" | "normal" | "warning";
+};
+
+function CommandCenterCard({
+  card,
+  onAction,
+}: {
+  card: CommandCenterCardModel;
+  onAction: () => void;
+}) {
+  const Icon = card.icon;
+
+  return (
+    <article className={`owner-command-card ${card.tone}`}>
+      <div className="owner-command-card-header">
+        <Icon aria-hidden="true" size={19} />
+        <div>
+          <span>{card.meta}</span>
+          <h3>{card.title}</h3>
+        </div>
+        <strong>{card.count.toLocaleString()}</strong>
+      </div>
+      <p>{card.body}</p>
+      <button className="secondary-action compact-action" onClick={onAction} type="button">
+        {card.actionLabel}
+      </button>
+    </article>
+  );
+}
+
+function UserDetailDrawer({
+  metrics,
+  onClose,
+  periodDays,
+  user,
+}: {
+  metrics: OwnerMetrics;
+  onClose: () => void;
+  periodDays: number;
+  user: OwnerMetrics["usersList"][number];
+}) {
+  const userEmail = user.email?.toLowerCase();
+  const recentErrors = metrics.errorDetails
+    .filter((error) => userEmail && error.userEmail?.toLowerCase() === userEmail)
+    .slice(0, 5);
+  const openTickets = metrics.supportTickets
+    .filter((ticket) => userEmail && ticket.userEmail?.toLowerCase() === userEmail)
+    .filter((ticket) => !["resolved", "closed"].includes(ticket.status))
+    .slice(0, 5);
+  const ledgerEvents = metrics.profitability.consumptionEvidence
+    .filter((event) => event.userId === user.userId)
+    .slice(0, 5);
+  const signals = getUserAttentionSignals(user, metrics);
+
+  return (
+    <aside className="owner-user-drawer" aria-label="User detail drawer">
+      <div className="owner-user-drawer-header">
+        <div>
+          <p className="eyebrow">User workbench</p>
+          <h3>{user.displayName || user.email || "Unnamed user"}</h3>
+          <p>{user.email || user.userId}</p>
+        </div>
+        <button aria-label="Close user detail" className="owner-icon-button" onClick={onClose} type="button">
+          <X aria-hidden="true" size={18} />
+        </button>
+      </div>
+
+      <div className="owner-user-drawer-grid">
+        <UserDrawerPanel title="Account and profile">
+          <dl className="metric-list compact-metric-list">
+            <div>
+              <dt>Status</dt>
+              <dd><span>{formatLabel(user.profileStatus ?? "missing")}</span></dd>
+            </div>
+            <div>
+              <dt>Tier</dt>
+              <dd><span>{user.tier}</span></dd>
+            </div>
+            <div>
+              <dt>Last activity</dt>
+              <dd><span>{formatRelativeTime(user.lastActivityAt ?? user.lastSignInAt ?? user.createdAt)}</span></dd>
+            </div>
+            <div>
+              <dt>Attention</dt>
+              <dd><span>{signals.length > 0 ? signals.join(", ") : "No current risk signal"}</span></dd>
+            </div>
+          </dl>
+        </UserDrawerPanel>
+
+        <UserDrawerPanel title="Credits and ledger">
+          <p className="owner-drawer-summary">
+            {user.creditsAvailable} available, {user.creditsUsed} used {periodDays === 0 ? "all time" : `in ${periodDays}d`}, {user.creditsUsedAllTime} lifetime.
+          </p>
+          <MiniRecordList
+            empty="No recent credit ledger evidence in this period."
+            items={ledgerEvents.map((event) => ({
+              detail: `${event.credits > 0 ? "+" : ""}${event.credits} credits · ${formatMoney(event.estimatedCostUsd)} est. cost`,
+              label: formatLabel(event.eventType),
+              meta: formatDateTime(event.createdAt),
+            }))}
+          />
+        </UserDrawerPanel>
+
+        <UserDrawerPanel title="Open support">
+          <MiniRecordList
+            empty="No open support tickets."
+            items={openTickets.map((ticket) => ({
+              detail: `${formatLabel(ticket.priority)} · ${formatLabel(ticket.fixStatus)}`,
+              label: ticket.subject,
+              meta: formatAge(ticket.createdAt),
+            }))}
+          />
+        </UserDrawerPanel>
+
+        <UserDrawerPanel title="Recent errors">
+          <MiniRecordList
+            empty="No recent linked errors."
+            items={recentErrors.map((error) => ({
+              detail: `${formatLabel(error.area)} · ${formatLabel(error.rootCause)}`,
+              label: error.summary,
+              meta: formatAge(error.createdAt),
+            }))}
+          />
+        </UserDrawerPanel>
+
+        <UserDrawerPanel title="Workspace counts">
+          <dl className="metric-list compact-metric-list">
+            <div>
+              <dt>Sources</dt>
+              <dd><span>{user.sources}</span></dd>
+            </div>
+            <div>
+              <dt>Resumes</dt>
+              <dd><span>{user.resumes}</span></dd>
+            </div>
+            <div>
+              <dt>Applications</dt>
+              <dd><span>{user.applications}</span></dd>
+            </div>
+            <div>
+              <dt>Materials</dt>
+              <dd><span>{user.resumes + user.applications}</span></dd>
+            </div>
+          </dl>
+        </UserDrawerPanel>
+
+        <UserDrawerPanel title="Admin access audit reason">
+          <p className="owner-drawer-summary">
+            owner_support_triage: support-safe review of account status, aggregate activity, credits, linked support tickets, and recent error metadata.
+          </p>
+        </UserDrawerPanel>
+      </div>
+    </aside>
+  );
+}
+
+function UserDrawerPanel({ children, title }: { children: ReactNode; title: string }) {
+  return (
+    <section className="owner-user-drawer-panel">
+      <h4>{title}</h4>
+      {children}
+    </section>
+  );
+}
+
+function MiniRecordList({
+  empty,
+  items,
+}: {
+  empty: string;
+  items: { detail: string; label: string; meta: string }[];
+}) {
+  if (items.length === 0) {
+    return <p className="empty-state compact-empty">{empty}</p>;
+  }
+
+  return (
+    <ol className="owner-mini-record-list">
+      {items.map((item) => (
+        <li key={`${item.label}-${item.meta}`}>
+          <strong>{item.label}</strong>
+          <span>{item.detail}</span>
+          <small>{item.meta}</small>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -2481,9 +2919,10 @@ function formatOutcomeVolume(metrics: Record<string, number>) {
 
 function summarizeOutcomePattern(values: Record<string, Record<string, number>>) {
   const entries = Object.entries(values);
+  const sampleRead = summarizeOutcomePatternWithSample(values, "outcome segment");
 
   if (entries.length === 0) {
-    return "No outcome data yet. This will become useful after users log applications and update stages.";
+    return sampleRead;
   }
 
   const ranked = entries
@@ -2499,14 +2938,14 @@ function summarizeOutcomePattern(values: Record<string, Record<string, number>>)
   const weakest = [...ranked].sort((a, b) => a.interviewRate + a.selectionRate - (b.interviewRate + b.selectionRate))[0];
 
   if (!best || best.interviewRate + best.selectionRate === 0) {
-    return "Pattern read: activity exists, but no interview or selection outcomes are showing yet.";
+    return `${sampleRead} Activity exists, but no interview or selection outcomes are showing yet.`;
   }
 
   if (weakest && weakest.label !== best.label) {
-    return `Pattern read: ${formatLabel(best.label)} is currently strongest; ${formatLabel(weakest.label)} may need targeting, resume quality, or follow-up review.`;
+    return `${sampleRead} Current directional read: ${formatLabel(best.label)} is ahead of ${formatLabel(weakest.label)}; review the underlying records before changing guidance.`;
   }
 
-  return `Pattern read: ${formatLabel(best.label)} is currently the strongest signal.`;
+  return `${sampleRead} Current directional read: ${formatLabel(best.label)} is ahead in this slice; verify with more records before treating it as a product conclusion.`;
 }
 
 function suggestErrorFix(error: OwnerMetrics["errorDetails"][number]) {
@@ -2598,53 +3037,135 @@ function Pill({ children, tone }: { children: ReactNode; tone: "danger" | "neutr
   return <span className={tone === "danger" ? "owner-pill danger" : "owner-pill"}>{children}</span>;
 }
 
-function buildOperatingActions(metrics: OwnerMetrics, rootCauseCounts: Record<string, number>): OperatingAction[] {
-  const actions: OperatingAction[] = [];
-  const topRootCause = Object.entries(rootCauseCounts).sort(([, left], [, right]) => right - left)[0]?.[0] ?? null;
-  const latestFixRequired = metrics.errorDetails.find((error) => error.fixRequired);
+function buildNeedsAttentionCards({
+  compliance,
+  metrics,
+  platformStatus,
+  promoCodes,
+  rootCauseGroups,
+  rootCauseLabels,
+}: {
+  compliance: ComplianceDashboard | null;
+  metrics: OwnerMetrics;
+  platformStatus: PlatformStatusOverview | null;
+  promoCodes: PromoCodeRow[];
+  rootCauseGroups: RootCauseGroup[];
+  rootCauseLabels: Record<string, string>;
+}): CommandCenterCardModel[] {
+  const topRootCause = rootCauseGroups.find((group) => group.activeErrors + group.activeTickets > 0);
+  const criticalIssueCount =
+    metrics.systemHealth.fixRequired +
+    metrics.systemHealth.profileExtractionFailures +
+    metrics.systemHealth.jobIngestionFailures +
+    (platformStatus?.checks.filter((check) => check.state === "down" || check.state === "degraded").length ?? 0);
+  const urgentSupport = metrics.supportTickets.filter((ticket) => {
+    const isOpen = !["resolved", "closed"].includes(ticket.status);
+    const trustCritical = ticketMatchesSupportRiskFilter(ticket, "billing_refund") ||
+      ticketMatchesSupportRiskFilter(ticket, "privacy") ||
+      ticketMatchesSupportRiskFilter(ticket, "account_access") ||
+      ticketMatchesSupportRiskFilter(ticket, "inaccurate_ai_output");
 
-  if (metrics.systemHealth.fixRequired > 0) {
-    const fixCount = metrics.systemHealth.fixRequired;
-    const latestDetail = latestFixRequired
-      ? ` Latest: ${formatLabel(latestFixRequired.rootCause)} in ${formatLabel(latestFixRequired.area)}.`
-      : "";
+    return isOpen && (ticket.escalatedToL2 || ticket.priority === "urgent" || ticket.priority === "high" || trustCritical);
+  }).length;
+  const userRisk = metrics.usersList.filter((user) =>
+    userMatchesAdminQuickFilter(user, "needs_attention", metrics),
+  ).length;
+  const privacyCount =
+    (compliance?.privacyRequests.overdue ?? 0) +
+    (compliance?.incidents.open ?? 0) +
+    (compliance?.incidents.overdueNotificationReview ?? 0);
+  const promoAnomalies = promoCodes.filter((promo) => computePromoCodeState(promo) !== "Active").length;
+  const largeGrantCount = metrics.profitability.consumptionEvidence.filter((event) => event.credits >= 100).length;
 
-    actions.push({
-      body: `Counts unresolved app errors that were marked as needing a product or code fix.${latestDetail} Open the error detail to see suggested fixes, linked support context, and owner status.`,
-      label: "Reliability",
-      targetRootCause: topRootCause,
-      targetTab: "errors",
-      title: `${fixCount} unresolved ${fixCount === 1 ? "fix needs" : "fixes need"} owner review`,
-    });
-  }
-
-  if (metrics.users.activeInPeriod < metrics.users.newInPeriod && metrics.users.newInPeriod > 0) {
-    actions.push({
-      body: "New signups are not all returning or generating meaningful activity. Check onboarding and first profile flow.",
-      label: "Activation",
+  return [
+    {
+      actionLabel: "Open health details",
+      body:
+        criticalIssueCount > 0
+          ? `${metrics.systemHealth.fixRequired} fix-required errors, ${metrics.systemHealth.profileExtractionFailures} source failures, and ${metrics.systemHealth.jobIngestionFailures} job ingestion failures. Top queue: ${topRootCause ? rootCauseLabels[topRootCause.key] ?? formatLabel(topRootCause.displayName) : "none"}.`
+          : "No critical platform issues are currently flagged in this period.",
+      count: criticalIssueCount,
+      icon: Gauge,
+      meta: "Critical platform issues",
+      targetRootCause: topRootCause?.key ?? null,
+      targetTab: "operate",
+      title: criticalIssueCount > 0 ? "Reliability needs review" : "Platform stable",
+      tone: criticalIssueCount > 0 ? "critical" : "normal",
+    },
+    {
+      actionLabel: "Open support ticket",
+      body:
+        urgentSupport > 0
+          ? "Escalated, urgent, high-priority, billing, privacy, account-access, or inaccurate-output tickets need human review."
+          : "No trust-critical support tickets are waiting in the selected period.",
+      count: urgentSupport,
+      icon: HeartHandshake,
+      meta: "Human support needed",
+      targetTab: "support",
+      title: urgentSupport > 0 ? "Human support queue is active" : "Support clear",
+      tone: urgentSupport > 0 ? "warning" : "normal",
+    },
+    {
+      actionLabel: "Open user",
+      body:
+        userRisk > 0
+          ? "Users are flagged for stalled profiles, no credits after recent activity, open support, or repeated failures."
+          : "No users are currently flagged by the quick-risk filters.",
+      count: userRisk,
+      icon: UsersRound,
+      meta: "User risk",
       targetTab: "users",
-      title: "Signup-to-activation needs attention",
-    });
-  }
+      title: userRisk > 0 ? "Users may be blocked" : "No user risk spike",
+      tone: userRisk > 0 ? "warning" : "normal",
+    },
+    {
+      actionLabel: "Review",
+      body:
+        compliance && privacyCount > 0
+          ? `${compliance.privacyRequests.overdue} overdue privacy requests, ${compliance.incidents.open} open incidents, and ${compliance.incidents.overdueNotificationReview} notification reviews need attention.`
+          : compliance
+            ? "No overdue privacy requests or open incident deadlines are currently flagged."
+            : "Compliance queue is loading. Open the section if you need the latest privacy and incident detail.",
+      count: privacyCount,
+      icon: ShieldCheck,
+      meta: "Privacy & compliance",
+      targetTab: "compliance",
+      title: privacyCount > 0 ? "Privacy or incident review due" : "Compliance queue clear",
+      tone: privacyCount > 0 ? "critical" : "normal",
+    },
+    {
+      actionLabel: "Open billing record",
+      body:
+        promoAnomalies + largeGrantCount > 0
+          ? `${promoAnomalies} promo states need review and ${largeGrantCount} large credit grants appear in ledger evidence.`
+          : "No expired, fully redeemed, inactive promo, or large grant anomaly is currently flagged.",
+      count: promoAnomalies + largeGrantCount,
+      icon: CircleDollarSign,
+      meta: "Billing & credit anomalies",
+      targetTab: "billing",
+      title: promoAnomalies + largeGrantCount > 0 ? "Credit records need review" : "Credits reconciled",
+      tone: promoAnomalies + largeGrantCount > 0 ? "warning" : "normal",
+    },
+  ];
+}
 
-  if (metrics.applications.logged > 0 && metrics.outcomes.interviewRate < 0.15) {
-    actions.push({
-      body: "Low interview conversion means targeting, resume quality, or follow-up tracking may need tightening.",
-      label: "Outcomes",
-      targetTab: "outcomes",
-      title: "Interview rate is below launch target",
-    });
-  }
+function buildRootCauseDisplayLabels(groups: RootCauseGroup[]) {
+  const displayCounts = groups.reduce<Record<string, number>>((counts, group) => {
+    counts[group.displayName] = (counts[group.displayName] ?? 0) + 1;
+    return counts;
+  }, {});
 
-  if (actions.length === 0) {
-    actions.push({
-      body: "No urgent reliability or activation signal in this period. Keep watching profile intake quality and application outcomes.",
-      label: "Operating read",
-      title: "No immediate red flags",
-    });
-  }
+  return groups.reduce<Record<string, string>>((labels, group) => {
+    const base = formatLabel(group.displayName);
+    const firstCode = group.signals.find((signal) => signal.code)?.code;
 
-  return actions.slice(0, 3);
+    labels[group.key] =
+      displayCounts[group.displayName] > 1 && firstCode
+        ? `${base} (${formatLabel(firstCode)})`
+        : base;
+
+    return labels;
+  }, {});
 }
 
 function formatTicketDiagnosticContext(metadata: Record<string, unknown>) {
