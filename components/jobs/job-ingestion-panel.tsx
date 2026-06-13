@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import { brand } from "@/lib/brand";
+import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
 import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
 
 type JobIngestionPanelProps = {
@@ -60,6 +61,10 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       return;
     }
 
+    if (!confirmJobIngestionCredit()) {
+      return;
+    }
+
     setIsIngestingJob(true);
     setMessage(null);
 
@@ -96,6 +101,10 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
 
     if (!text) {
       setMessage("Paste the job description text first, then save it for review.");
+      return;
+    }
+
+    if (!confirmJobIngestionCredit()) {
       return;
     }
 
@@ -476,6 +485,12 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
         </details>
       ) : null}
     </section>
+  );
+}
+
+function confirmJobIngestionCredit() {
+  return window.confirm(
+    `This paid action costs ${formatCreditCost(CREDIT_COSTS.jobIngest)}.\n\nIt will produce a parsed job post and fit review.\n\nIf this job has already been analyzed, the server reuses the saved result where possible.\n\nContinue?`,
   );
 }
 

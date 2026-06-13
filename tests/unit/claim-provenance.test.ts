@@ -76,4 +76,52 @@ describe("claim provenance review", () => {
     );
     expect(review.reviewerNotes.join(" ")).toContain("Verify numeric achievement before export");
   });
+
+  test("does not trust high-impact imported facts without strong evidence metadata", () => {
+    const evidenceCorpus = buildSupportedEvidenceCorpus([
+      {
+        confidence: 0.52,
+        label: "role_title",
+        sourceIds: ["source-1"],
+        status: "source_supported",
+        text: "Chief Revenue Officer at Invented Employer",
+        userConfirmed: false,
+      },
+      {
+        confidence: 0.54,
+        label: "metric",
+        sourceIds: ["source-1"],
+        status: "source_supported",
+        text: "Increased revenue 45%",
+        userConfirmed: false,
+      },
+    ]);
+    const resume = normalizeResumeContent({
+      certifications: [],
+      contact: {},
+      education: [],
+      experienceBullets: ["Increased revenue 45%."],
+      experienceSections: [
+        {
+          bullets: ["Increased revenue 45%."],
+          company: "Invented Employer",
+          dates: null,
+          location: null,
+          roleTitle: "Chief Revenue Officer",
+        },
+      ],
+      headline: "Revenue executive",
+      keywordGaps: [],
+      languages: [],
+      reviewerNotes: [],
+      skills: ["Revenue"],
+      specialProjects: [],
+      summary: "Revenue executive.",
+    });
+
+    const reviewed = reviewResumeClaimProvenance({ evidenceCorpus, resume });
+
+    expect(reviewed.experienceSections).toHaveLength(0);
+    expect(reviewed.reviewerNotes.join(" ")).toContain("Chief Revenue Officer");
+  });
 });

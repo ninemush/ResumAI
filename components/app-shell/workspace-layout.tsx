@@ -598,7 +598,7 @@ function MobileWorkspaceNav({
             : "more" in item
               ? isMoreOpen ||
                 (mobileSurface === "workspace" &&
-                  ["library", "settings", "support", "owner"].includes(activeView))
+                  ["resume", "library", "settings", "support", "owner"].includes(activeView))
               : mobileSurface === "workspace" && activeView === item.target;
 
           return (

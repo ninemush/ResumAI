@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import type { AppView } from "@/components/app-shell/side-nav";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import { CREDIT_COSTS, formatCreditCost, type CreditFeature } from "@/lib/billing/credit-catalog";
 import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
 import type { CreditSummary } from "@/lib/billing/credits";
 import type {
@@ -580,6 +581,16 @@ export function ConversationPanel({
 
   async function processResumeAction(text: string) {
     if (looksLikeMasterResumeExportRequest(text)) {
+      if (
+        !confirmPaidAction({
+          feature: "masterResumeExport",
+          produced: "validated PDF and DOCX files for the latest master resume",
+          reuse: "If files are already validated, I will reuse them and no new credits should be consumed.",
+        })
+      ) {
+        return "Okay, I paused before preparing paid master resume downloads.";
+      }
+
       const response = await fetch("/api/resume/master/export", {
         headers: createIdempotencyHeaders("masterResumeExport:chat"),
         method: "POST",
@@ -617,6 +628,16 @@ export function ConversationPanel({
 
     if (!looksLikeMasterResumeRequest(text)) {
       return null;
+    }
+
+    if (
+      !confirmPaidAction({
+        feature: "masterResumeGenerate",
+        produced: "a new editable master resume draft from your saved career context",
+        reuse: "This creates a fresh draft for this request; existing prepared files stay untouched until you export again.",
+      })
+    ) {
+      return "Okay, I paused before spending credits on a new master resume draft.";
     }
 
     const response = await fetch("/api/resume/master", {
@@ -718,6 +739,16 @@ export function ConversationPanel({
       }
 
       const application = actionableCandidates[0];
+      if (
+        !confirmPaidAction({
+          feature: "applicationMaterialsGenerate",
+          produced: `a tailored resume and cover letter draft for ${formatApplicationLabel(application)}`,
+          reuse: "If a current packet already exists, I will reuse it and no new credits should be consumed.",
+        })
+      ) {
+        return "Okay, I paused before drafting paid job-specific materials.";
+      }
+
       const response = await fetch(
         `/api/applications/${application.id}/materials`,
         {
@@ -841,6 +872,16 @@ export function ConversationPanel({
   }
 
   async function generateApplicationMaterialsForPreview(applicationId: string) {
+    if (
+      !confirmPaidAction({
+        feature: "applicationMaterialsGenerate",
+        produced: "a tailored resume and cover letter draft for this logged application",
+        reuse: "If a current packet already exists, I will reuse it and no new credits should be consumed.",
+      })
+    ) {
+      return "I logged the application and paused before spending credits on job-specific materials.";
+    }
+
     const response = await fetch(
       `/api/applications/${applicationId}/materials`,
       {
@@ -1042,6 +1083,16 @@ export function ConversationPanel({
 
   async function processUrl(url: string, fullMessage: string) {
     if (looksLikeJobUrl(url, fullMessage)) {
+      if (
+        !confirmPaidAction({
+          feature: "jobIngest",
+          produced: "a parsed job post and fit review from this public link",
+          reuse: "If this exact job has already been analyzed, I will reuse the saved result where the server allows it.",
+        })
+      ) {
+        return "Okay, I saved no paid job analysis for that link.";
+      }
+
       const response = await fetch("/api/jobs/ingest", {
         method: "POST",
         headers: {
@@ -1327,6 +1378,20 @@ export function ConversationPanel({
   async function extractSource(
     sourceId: string,
   ): Promise<SourceExtractionResult> {
+    if (
+      !confirmPaidAction({
+        feature: "profileSourceExtract",
+        produced: "career facts and source evidence from this profile material",
+        reuse: "If this source has already been read, I will reuse the saved context where the server allows it.",
+      })
+    ) {
+      return {
+        ok: false,
+        message: "Paused before spending credits to read that source.",
+        savedFactCount: 0,
+      };
+    }
+
     const response = await fetch(`/api/profile/sources/${sourceId}/extract`, {
       headers: createIdempotencyHeaders(`profileSourceExtract:${sourceId}:chat`),
       method: "POST",
@@ -2845,6 +2910,52 @@ function AttachmentViewer({
   attachment: MessageAttachment;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const restoreTarget = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeButtonRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), iframe, object, [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((element) => !element.hasAttribute("disabled"));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (!first || !last) {
+        return;
+      }
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      restoreTarget?.focus();
+    };
+  }, [onClose]);
+
   return (
     <div
       className="attachment-viewer-backdrop"
@@ -2856,6 +2967,7 @@ function AttachmentViewer({
         aria-modal="true"
         className="attachment-viewer"
         onClick={(event) => event.stopPropagation()}
+        ref={dialogRef}
         role="dialog"
       >
         <header>
@@ -2866,6 +2978,7 @@ function AttachmentViewer({
           <button
             className="secondary-action compact-action"
             onClick={onClose}
+            ref={closeButtonRef}
             type="button"
           >
             Close
@@ -3474,6 +3587,22 @@ function looksLikeMasterResumeExportRequest(text: string) {
     /\b(make|create|generate)\b.*\b(pdf|docx|word file)\b.*\b(master resume|base resume|core resume|resume)\b/.test(
       normalized,
     )
+  );
+}
+
+function confirmPaidAction({
+  feature,
+  produced,
+  reuse,
+}: {
+  feature: CreditFeature;
+  produced: string;
+  reuse: string;
+}) {
+  const cost = CREDIT_COSTS[feature];
+
+  return window.confirm(
+    `This paid action costs ${formatCreditCost(cost)}.\n\nIt will produce ${produced}.\n\n${reuse}\n\nContinue?`,
   );
 }
 

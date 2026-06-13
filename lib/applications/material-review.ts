@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import {
@@ -103,9 +104,9 @@ export async function getMaterialReview(
       ? {
           content: coverLetter.content,
           claimRisks: normalizeCoverLetterClaimRisks(coverLetter.claim_risks),
-          docxDownloadUrl: await createSignedUrl(coverLetter.docx_storage_path),
+          docxDownloadUrl: await createSignedUrl(coverLetter, "docx"),
           id: coverLetter.id,
-          pdfDownloadUrl: await createSignedUrl(coverLetter.pdf_storage_path),
+          pdfDownloadUrl: await createSignedUrl(coverLetter, "pdf"),
           reviewerNotes: normalizeTextArray(coverLetter.reviewer_notes),
           status: coverLetter.status,
           updatedAt: coverLetter.updated_at,
@@ -118,16 +119,31 @@ export async function getMaterialReview(
     resume: resume
       ? {
           content: parseResumeContent(resume.content_json),
-          docxDownloadUrl: await createSignedUrl(resume.docx_storage_path),
+          docxDownloadUrl: await createSignedUrl(resume, "docx"),
           id: resume.id,
-          pdfDownloadUrl: await createSignedUrl(resume.pdf_storage_path),
+          pdfDownloadUrl: await createSignedUrl(resume, "pdf"),
           status: resume.status,
           updatedAt: resume.updated_at,
         }
       : null,
   };
 
-  async function createSignedUrl(path: string | null) {
+  async function createSignedUrl(
+    artifact: {
+      docx_storage_path: string | null;
+      export_status: string | null;
+      export_validated_at: string | null;
+      pdf_storage_path: string | null;
+      status: string;
+    },
+    format: "docx" | "pdf",
+  ) {
+    const path = format === "docx" ? artifact.docx_storage_path : artifact.pdf_storage_path;
+
+    if (!isValidatedExport(artifact)) {
+      return null;
+    }
+
     if (!path) {
       return null;
     }
@@ -270,14 +286,25 @@ export async function exportMaterialArtifacts(
     userId,
   });
 
-  if (blockingRisks.length > 0 && !hasMaterialClaimReviewAcknowledgement({ coverLetter, resume })) {
+  if (
+    blockingRisks.length > 0 &&
+    !hasMaterialClaimReviewAcknowledgement({
+      coverLetter,
+      coverLetterContent: coverLetter.content,
+      resume,
+      resumeContent,
+      risks: blockingRisks,
+    })
+  ) {
     if (!options.acknowledgeClaimReview) {
       throw new ClaimReviewRequiredError("MATERIAL_CLAIM_ACK_REQUIRED", blockingRisks);
     }
 
     await acknowledgeMaterialClaimReview({
       applicationId: parsed.applicationId,
+      coverLetterContent: coverLetter.content,
       coverLetterId: coverLetter.id,
+      resumeContent,
       resumeId: resume.id,
       risks: blockingRisks,
       supabase,
@@ -450,10 +477,26 @@ function isMaterialExportReady({
       coverLetter?.status === "ready" &&
       readExportStatus(resume.export_status) === "export_validated" &&
       readExportStatus(coverLetter.export_status) === "export_validated" &&
+      resume.export_validated_at &&
+      coverLetter.export_validated_at &&
       resume.pdf_storage_path &&
       resume.docx_storage_path &&
       coverLetter.pdf_storage_path &&
       coverLetter.docx_storage_path,
+  );
+}
+
+function isValidatedExport(artifact: {
+  docx_storage_path: string | null;
+  export_status: string | null;
+  export_validated_at: string | null;
+  pdf_storage_path: string | null;
+  status: string;
+}) {
+  return (
+    artifact.status === "ready" &&
+    readExportStatus(artifact.export_status) === "export_validated" &&
+    Boolean(artifact.export_validated_at && artifact.pdf_storage_path && artifact.docx_storage_path)
   );
 }
 
@@ -483,7 +526,13 @@ function buildExportReadiness({
     ...normalizeCoverLetterClaimRisks(coverLetter.claim_risks).map(mapCoverLetterRiskToExportRisk),
   ];
   const blockingRisks = risks.filter((risk) => risk.severity === "high");
-  const claimReviewAcknowledged = hasMaterialClaimReviewAcknowledgement({ coverLetter, resume });
+  const claimReviewAcknowledged = hasMaterialClaimReviewAcknowledgement({
+    coverLetter,
+    coverLetterContent: coverLetter.content,
+    resume,
+    resumeContent,
+    risks: blockingRisks,
+  });
   const resumeExportStatus = readExportStatus(resume.export_status);
   const coverLetterExportStatus = readExportStatus(coverLetter.export_status);
 
@@ -529,6 +578,8 @@ function buildExportReadiness({
       coverLetter.pdf_storage_path &&
       resume.docx_storage_path &&
       coverLetter.docx_storage_path &&
+      resume.export_validated_at &&
+      coverLetter.export_validated_at &&
       resumeExportStatus === "export_validated" &&
       coverLetterExportStatus === "export_validated"
             ? "exported"
@@ -539,14 +590,18 @@ function buildExportReadiness({
 
 async function acknowledgeMaterialClaimReview({
   applicationId,
+  coverLetterContent,
   coverLetterId,
+  resumeContent,
   resumeId,
   risks,
   supabase,
   userId,
 }: {
   applicationId: string;
+  coverLetterContent: string;
   coverLetterId: string;
+  resumeContent: ResumeContent;
   resumeId: string;
   risks: ExportRisk[];
   supabase: Awaited<ReturnType<typeof createClient>>;
@@ -554,9 +609,19 @@ async function acknowledgeMaterialClaimReview({
 }) {
   const acknowledgedAt = new Date().toISOString();
   const acknowledgement = {
+    acknowledgedAt,
     applicationId,
+    artifactId: resumeId,
+    artifactType: "application_packet",
+    contentHash: hashJson({
+      coverLetter: coverLetterContent,
+      resume: resumeContent,
+    }),
     risks,
+    riskHash: hashJson(risks),
     riskCount: risks.length,
+    riskText: risks.map((risk) => risk.text),
+    userId,
   };
   const [{ error: resumeError }, { error: coverLetterError }] = await Promise.all([
     supabase
@@ -633,12 +698,44 @@ function readExportStatus(value: unknown): ExportStatus {
 
 function hasMaterialClaimReviewAcknowledgement({
   coverLetter,
+  coverLetterContent,
   resume,
+  resumeContent,
+  risks,
 }: {
   coverLetter: Awaited<ReturnType<typeof readLatestCoverLetter>>;
+  coverLetterContent: string;
   resume: Awaited<ReturnType<typeof readLatestResume>>;
+  resumeContent: ResumeContent;
+  risks: ExportRisk[];
 }) {
-  return Boolean(resume?.claim_review_acknowledged_at && coverLetter?.claim_review_acknowledged_at);
+  const resumeAcknowledgement = parseAcknowledgement(resume?.claim_review_acknowledgement);
+  const coverLetterAcknowledgement = parseAcknowledgement(coverLetter?.claim_review_acknowledgement);
+  const contentHash = hashJson({
+    coverLetter: coverLetterContent,
+    resume: resumeContent,
+  });
+  const riskHash = hashJson(risks);
+
+  return Boolean(
+    resume?.claim_review_acknowledged_at &&
+      coverLetter?.claim_review_acknowledged_at &&
+      resumeAcknowledgement?.contentHash === contentHash &&
+      coverLetterAcknowledgement?.contentHash === contentHash &&
+      resumeAcknowledgement?.riskHash === riskHash &&
+      coverLetterAcknowledgement?.riskHash === riskHash,
+  );
+}
+
+function parseAcknowledgement(value: unknown) {
+  const parsed = z
+    .object({
+      contentHash: z.string(),
+      riskHash: z.string(),
+    })
+    .safeParse(value);
+
+  return parsed.success ? parsed.data : null;
 }
 
 async function persistCoverLetterClaimReview({
@@ -720,7 +817,7 @@ async function readApplicationEvidenceCorpus(applicationId: string, userId: stri
     await Promise.all([
       supabase
         .from("profile_facts")
-        .select("fact_type, fact_value, evidence_status, user_confirmed")
+        .select("fact_type, fact_value, confidence, evidence_status, user_confirmed")
         .eq("profile_id", application.profile_id)
         .eq("user_id", userId)
         .limit(100),
@@ -746,6 +843,7 @@ async function readApplicationEvidenceCorpus(applicationId: string, userId: stri
 
   return buildSupportedEvidenceCorpus([
     ...(facts ?? []).map((fact) => ({
+      confidence: fact.confidence,
       label: fact.fact_type,
       status: fact.evidence_status,
       text: fact.fact_value,
@@ -863,7 +961,7 @@ async function readLatestResume(applicationId: string, userId: string) {
   const { data, error } = await supabase
     .from("generated_resumes")
     .select(
-      "id, content_json, pdf_storage_path, docx_storage_path, status, export_status, claim_review_acknowledged_at, updated_at",
+      "id, content_json, pdf_storage_path, docx_storage_path, status, export_status, export_validated_at, claim_review_acknowledged_at, claim_review_acknowledgement, updated_at",
     )
     .eq("application_id", applicationId)
     .eq("user_id", userId)
@@ -883,7 +981,7 @@ async function readLatestCoverLetter(applicationId: string, userId: string) {
   const { data, error } = await supabase
     .from("generated_cover_letters")
     .select(
-      "id, content, pdf_storage_path, docx_storage_path, status, export_status, claim_review_acknowledged_at, claim_risks, reviewer_notes, updated_at",
+      "id, content, pdf_storage_path, docx_storage_path, status, export_status, export_validated_at, claim_review_acknowledged_at, claim_review_acknowledgement, claim_risks, reviewer_notes, updated_at",
     )
     .eq("application_id", applicationId)
     .eq("user_id", userId)
@@ -896,4 +994,23 @@ async function readLatestCoverLetter(applicationId: string, userId: string) {
   }
 
   return data;
+}
+
+function hashJson(value: unknown) {
+  return createHash("sha256").update(stableStringify(value)).digest("hex");
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value) ?? "null";
 }

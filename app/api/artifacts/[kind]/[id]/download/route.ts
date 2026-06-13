@@ -176,12 +176,12 @@ async function readArtifact({
   if (kind === "resume") {
     const { data, error } = await supabase
       .from("generated_resumes")
-      .select("id, pdf_storage_path, docx_storage_path, resume_type")
+      .select("id, pdf_storage_path, docx_storage_path, resume_type, status, export_status, export_validated_at")
       .eq("id", id)
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (error || !data) {
+    if (error || !data || !isValidatedExport(data)) {
       return null;
     }
 
@@ -196,12 +196,12 @@ async function readArtifact({
 
   const { data, error } = await supabase
     .from("generated_cover_letters")
-    .select("id, pdf_storage_path, docx_storage_path")
+    .select("id, pdf_storage_path, docx_storage_path, status, export_status, export_validated_at")
     .eq("id", id)
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (error || !data) {
+  if (error || !data || !isValidatedExport(data)) {
     return null;
   }
 
@@ -209,4 +209,18 @@ async function readArtifact({
     filename: `cover-letter-${data.id}.${format}`,
     storagePath: format === "pdf" ? data.pdf_storage_path : data.docx_storage_path,
   };
+}
+
+function isValidatedExport(artifact: {
+  docx_storage_path: string | null;
+  export_status: string | null;
+  export_validated_at: string | null;
+  pdf_storage_path: string | null;
+  status: string;
+}) {
+  return (
+    artifact.status === "ready" &&
+    artifact.export_status === "export_validated" &&
+    Boolean(artifact.export_validated_at && artifact.pdf_storage_path && artifact.docx_storage_path)
+  );
 }

@@ -8943,6 +8943,10 @@ input:focus {
     z-index: 1;
   }
 
+  .workspace-main > :last-child {
+    margin-bottom: calc(28px + env(safe-area-inset-bottom));
+  }
+
   .profile-pane,
   .jobs-panel,
   .applications-panel,

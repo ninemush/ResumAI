@@ -928,6 +928,7 @@ function normalizeGeneratedApplicationResume(resume: ResumeContent, masterResume
 
 function buildApplicationResumeEvidenceCorpus(
   facts: Array<{
+    confidence: number | null;
     evidence_status: string | null;
     fact_type: string;
     fact_value: string;
@@ -937,6 +938,7 @@ function buildApplicationResumeEvidenceCorpus(
 ) {
   return buildSupportedEvidenceCorpus([
     ...facts.map((fact) => ({
+      confidence: fact.confidence,
       label: fact.fact_type,
       status: fact.evidence_status,
       text: fact.fact_value,
@@ -958,6 +960,7 @@ function buildApplicationCoverLetterEvidenceCorpus({
 }: {
   application: ApplicationContext;
   facts: Array<{
+    confidence: number | null;
     evidence_status: string | null;
     fact_type: string;
     fact_value: string;
@@ -967,6 +970,7 @@ function buildApplicationCoverLetterEvidenceCorpus({
 }) {
   return buildSupportedEvidenceCorpus([
     ...facts.map((fact) => ({
+      confidence: fact.confidence,
       label: fact.fact_type,
       status: fact.evidence_status,
       text: fact.fact_value,

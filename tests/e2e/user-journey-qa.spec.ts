@@ -15,7 +15,7 @@ const workspaceViews = [
 ];
 
 const mobileWorkspaceViews = [
-  { marker: /Master profile and resume/i, nav: /^Profile$/i, shot: "02-profile-resume" },
+  { marker: /Profile home/i, nav: /^Profile$/i, shot: "01-profile-home" },
   { marker: /Role decisions/i, nav: /^Jobs$/i, shot: "03-jobs" },
   { marker: /Roles you’re pursuing/i, nav: /^Apps$/i, shot: "04-applications" },
 ];
@@ -70,6 +70,12 @@ test.describe("emulated user journey QA", () => {
     }
 
     if (isMobileProject) {
+      await page.locator(".mobile-workspace-nav").getByRole("button", { name: /^More$/i }).click();
+      await page.getByRole("dialog", { name: "More workspace destinations" }).getByRole("button", { name: /^Resume$/i }).click();
+      await expect(page.locator(".workspace-main").getByText(/Master profile and resume/i).first()).toBeVisible();
+      await screenshot(page, testInfo, "02-profile-resume");
+      await auditSurface(page, "02-profile-resume", findings);
+
       await page.locator(".mobile-workspace-nav").getByRole("button", { name: /^Chat$/i }).click();
       await expect(page.locator(".workspace-main")).toBeHidden();
     } else {

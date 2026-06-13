@@ -170,6 +170,14 @@ export function MasterResumePanel({
       return;
     }
 
+    if (
+      !window.confirm(
+        `This paid action costs ${formatCreditCost(CREDIT_COSTS.masterResumeGenerate)}.\n\nIt will produce a new editable master resume draft from your saved career context.\n\nExisting prepared files stay untouched until you export again.\n\nContinue?`,
+      )
+    ) {
+      return;
+    }
+
     setIsGenerating(true);
     setMessage(null);
 
@@ -204,6 +212,14 @@ export function MasterResumePanel({
     }
 
     if (isDirty && !window.confirm("Creating a focused variant will replace unsaved resume edits. Continue?")) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `This paid action costs ${formatCreditCost(CREDIT_COSTS.masterResumeGenerate)}.\n\nIt will produce a focused editable master resume draft for ${focus}.\n\nExisting prepared files stay untouched until you export again.\n\nContinue?`,
+      )
+    ) {
       return;
     }
 
@@ -281,6 +297,14 @@ export function MasterResumePanel({
   async function exportResumeFiles() {
     if (isDirty) {
       setMessage("Save or discard your resume edits before preparing PDF and DOCX files.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `This paid action costs ${formatCreditCost(CREDIT_COSTS.masterResumeExport)}.\n\nIt will produce validated PDF and DOCX files for the latest master resume.\n\nIf files are already validated, the server reuses them and no new credits should be consumed.\n\nContinue?`,
+      )
+    ) {
       return;
     }
 

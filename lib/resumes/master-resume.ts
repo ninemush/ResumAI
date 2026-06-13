@@ -79,6 +79,7 @@ type ResumeRow = {
   content_json: unknown;
   docx_storage_path: string | null;
   export_status?: string | null;
+  export_validated_at?: string | null;
   claim_review_acknowledged_at?: string | null;
   id: string;
   model: string | null;
@@ -188,7 +189,7 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
         .limit(80),
       supabase
         .from("generated_resumes")
-        .select("id, content_json, pdf_storage_path, docx_storage_path, status, prompt_version, model, updated_at")
+        .select("id, content_json, pdf_storage_path, docx_storage_path, status, export_status, export_validated_at, prompt_version, model, updated_at")
         .eq("profile_id", profile.id)
         .eq("user_id", userId)
         .eq("resume_type", "master")
@@ -567,7 +568,9 @@ function buildMasterResumeEvidenceCorpus(
 ) {
   return buildSupportedEvidenceCorpus([
     ...confirmedFacts.map((fact) => ({
+      confidence: fact.confidence,
       label: fact.fact_type,
+      sourceIds: fact.source_ids,
       status: fact.evidence_status,
       text: fact.fact_value,
       userConfirmed: fact.user_confirmed,
@@ -1390,7 +1393,7 @@ export async function getReusableMasterResumeExport(): Promise<MasterResumeOverv
 
   const { data: latestResume, error: resumeReadError } = await supabase
     .from("generated_resumes")
-    .select("docx_storage_path, pdf_storage_path, status, export_status")
+    .select("docx_storage_path, pdf_storage_path, status, export_status, export_validated_at")
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .eq("resume_type", "master")
@@ -1431,7 +1434,7 @@ export async function exportMasterResumeArtifacts(
   const { data: latestResume, error: resumeReadError } = await supabase
     .from("generated_resumes")
     .select(
-      "id, content_json, docx_storage_path, pdf_storage_path, prompt_version, status, export_status, claim_review_acknowledged_at",
+      "id, content_json, docx_storage_path, pdf_storage_path, prompt_version, status, export_status, claim_review_acknowledged_at, claim_review_acknowledgement",
     )
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
@@ -1494,12 +1497,20 @@ export async function exportMasterResumeArtifacts(
 
   const blockingRisks = getBlockingExportRisks(normalizedResume);
 
-  if (blockingRisks.length > 0 && !latestResume.claim_review_acknowledged_at) {
+  if (
+    blockingRisks.length > 0 &&
+    !hasCurrentClaimReviewAcknowledgement({
+      acknowledgement: latestResume.claim_review_acknowledgement,
+      content: normalizedResume,
+      risks: blockingRisks,
+    })
+  ) {
     if (!options.acknowledgeClaimReview) {
       throw new ClaimReviewRequiredError("MASTER_RESUME_CLAIM_REVIEW_REQUIRED", blockingRisks);
     }
 
     await acknowledgeMasterResumeClaimReview({
+      content: normalizedResume,
       resumeId: latestResume.id,
       risks: blockingRisks,
       supabase,
@@ -1619,35 +1630,52 @@ export async function exportMasterResumeArtifacts(
 function isResumeExportReady(resume: {
   docx_storage_path: string | null;
   export_status?: string | null;
+  export_validated_at?: string | null;
   pdf_storage_path: string | null;
   status: string;
 }) {
   return (
     resume.status === "ready" &&
     readExportStatus(resume.export_status) === "export_validated" &&
+    Boolean(resume.export_validated_at) &&
     Boolean(resume.docx_storage_path && resume.pdf_storage_path)
   );
 }
 
 async function acknowledgeMasterResumeClaimReview({
+  content,
   resumeId,
   risks,
   supabase,
   userId,
 }: {
+  content: ResumeContent;
   resumeId: string;
   risks: ReturnType<typeof getBlockingExportRisks>;
   supabase: Awaited<ReturnType<typeof createClient>>;
   userId: string;
 }) {
+  const acknowledgedAt = new Date().toISOString();
   const { error } = await supabase
     .from("generated_resumes")
     .update({
-      claim_review_acknowledged_at: new Date().toISOString(),
+      claim_review_acknowledged_at: acknowledgedAt,
       claim_review_acknowledged_by: userId,
       claim_review_acknowledgement: {
+        acknowledgedAt,
+        artifactId: resumeId,
+        artifactType: "master_resume",
+        contentHash: hashJson(content),
+        profileVersion: hashJson({
+          headline: content.headline,
+          summary: content.summary,
+          skills: content.skills,
+        }),
         risks,
+        riskHash: hashJson(risks),
         riskCount: risks.length,
+        riskText: risks.map((risk) => risk.text),
+        userId,
       },
     })
     .eq("id", resumeId)
@@ -1656,6 +1684,29 @@ async function acknowledgeMasterResumeClaimReview({
   if (error) {
     throw new Error("MASTER_RESUME_CLAIM_ACK_SAVE_FAILED");
   }
+}
+
+function hasCurrentClaimReviewAcknowledgement({
+  acknowledgement,
+  content,
+  risks,
+}: {
+  acknowledgement: unknown;
+  content: ResumeContent;
+  risks: ReturnType<typeof getBlockingExportRisks>;
+}) {
+  const parsed = z
+    .object({
+      contentHash: z.string(),
+      riskHash: z.string(),
+    })
+    .safeParse(acknowledgement);
+
+  return (
+    parsed.success &&
+    parsed.data.contentHash === hashJson(content) &&
+    parsed.data.riskHash === hashJson(risks)
+  );
 }
 
 async function markMasterResumeExportStatus({
@@ -1836,14 +1887,14 @@ async function buildOverview({
           }),
           docxDownloadUrl: buildArtifactDownloadUrl({
             format: "docx",
-            hasFile: Boolean(latestResume.docx_storage_path),
+            hasFile: isResumeExportReady(latestResume),
             id: latestResume.id,
           }),
           id: latestResume.id,
           model: latestResume.model,
           pdfDownloadUrl: buildArtifactDownloadUrl({
             format: "pdf",
-            hasFile: Boolean(latestResume.pdf_storage_path),
+            hasFile: isResumeExportReady(latestResume),
             id: latestResume.id,
           }),
           promptVersion: latestResume.prompt_version,
@@ -2359,4 +2410,23 @@ function hashUserId(userId: string) {
 
 function hashOperationInput(value: string) {
   return createHash("sha256").update(value.trim() || "default").digest("hex").slice(0, 24);
+}
+
+function hashJson(value: unknown) {
+  return createHash("sha256").update(stableStringify(value)).digest("hex");
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value) ?? "null";
 }

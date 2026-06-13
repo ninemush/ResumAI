@@ -19,6 +19,7 @@ import {
 import { useRouter } from "next/navigation";
 
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
+import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
 import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
 import type { ResumeContent } from "@/lib/resumes/resume-content";
 
@@ -257,6 +258,14 @@ export function ApplicationPanel({
   }
 
   async function generateMaterials(applicationId: string) {
+    if (
+      !window.confirm(
+        `This paid action costs ${formatCreditCost(CREDIT_COSTS.applicationMaterialsGenerate)}.\n\nIt will produce a tailored resume and cover letter draft for this application.\n\nIf a current packet already exists, the server reuses it and no new credits should be consumed.\n\nContinue?`,
+      )
+    ) {
+      return;
+    }
+
     setGeneratingApplicationId(applicationId);
     setMessage(null);
 
@@ -362,6 +371,14 @@ export function ApplicationPanel({
 
   async function exportFiles() {
     if (!activeReview) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `This paid action costs ${formatCreditCost(CREDIT_COSTS.applicationMaterialsExport)}.\n\nIt will produce validated PDF and DOCX files for the tailored resume and cover letter.\n\nIf files are already validated, the server reuses them and no new credits should be consumed.\n\nContinue?`,
+      )
+    ) {
       return;
     }
 

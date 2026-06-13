@@ -23,6 +23,22 @@ const MAX_BUCKETS = 5000;
 const DURABLE_RATE_LIMIT_FAILURE_RETRY_SECONDS = 60;
 
 export async function checkRateLimit(options: RateLimitOptions): Promise<RateLimitResult> {
+  if (process.env.NODE_ENV === "production" && !shouldUseDurableRateLimit()) {
+    console.warn(
+      JSON.stringify({
+        event: "security.rate_limit.backend_missing",
+        scope: options.key.split(":")[0] ?? "unknown",
+      }),
+    );
+
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt: Date.now() + DURABLE_RATE_LIMIT_FAILURE_RETRY_SECONDS * 1000,
+      retryAfterSeconds: DURABLE_RATE_LIMIT_FAILURE_RETRY_SECONDS,
+    };
+  }
+
   if (shouldUseDurableRateLimit()) {
     try {
       return await checkDurableRateLimit(options);

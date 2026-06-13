@@ -51,6 +51,14 @@ export async function safeFetchExternalHtml(
     }
 
     if (!isRedirect(response.status)) {
+      currentUrl = (
+        await assertExternalHttpUrlResolves(response.url || currentUrl, {
+          blockedErrorCode,
+          dnsLookupErrorCode,
+          unsupportedProtocolErrorCode,
+        })
+      ).toString();
+
       return {
         finalUrl: currentUrl,
         response,

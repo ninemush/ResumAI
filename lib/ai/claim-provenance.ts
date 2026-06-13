@@ -1,7 +1,10 @@
 import { normalizeResumeContent, type ResumeContent } from "@/lib/resumes/resume-content";
 
 export type ClaimEvidenceInput = {
+  confidence?: number | null;
+  evidenceText?: string | null;
   label?: string | null;
+  sourceIds?: string[] | null;
   status?: string | null;
   text: string | null | undefined;
   userConfirmed?: boolean | null;
@@ -27,14 +30,29 @@ const supportedStatuses = new Set(["user_confirmed", "source_supported"]);
 export function buildSupportedEvidenceCorpus(inputs: ClaimEvidenceInput[]) {
   return normalizeCorpus(
     inputs
-      .filter(
-        (input) =>
-          input.userConfirmed ||
-          supportedStatuses.has(input.status ?? "") ||
-          input.status === "source_excerpt",
-      )
-      .map((input) => [input.label, input.text].filter(Boolean).join(" ")),
+      .filter(isTrustedEvidenceInput)
+      .map((input) => [input.label, input.evidenceText, input.text].filter(Boolean).join(" ")),
   );
+}
+
+function isTrustedEvidenceInput(input: ClaimEvidenceInput) {
+  if (input.userConfirmed) {
+    return true;
+  }
+
+  if (input.status === "source_excerpt") {
+    return true;
+  }
+
+  if (!supportedStatuses.has(input.status ?? "")) {
+    return false;
+  }
+
+  if (!isHighImpactEvidenceInput(input)) {
+    return true;
+  }
+
+  return hasStrongHighImpactEvidence(input);
 }
 
 export function reviewResumeClaimProvenance({
@@ -154,6 +172,26 @@ function requiresEvidence(value: string) {
   return /\b(\d+[%\w]*|managed|led|owned|launched|built|delivered|reduced|increased|improved|saved|grew|certified|degree|mba|bachelor|master|phd|sql|python|salesforce|sap|aws|azure|gcp)\b/i.test(
     value,
   );
+}
+
+function isHighImpactEvidenceInput(input: ClaimEvidenceInput) {
+  const value = [input.label, input.text].filter(Boolean).join(" ");
+
+  return /\b(title|role|employer|company|date|education|degree|credential|certification|license|location|work authorization|visa|citizenship|seniority|salary|compensation|clearance|director|manager|lead|principal|senior)\b/i.test(
+    value,
+  ) || /\b\d+(?:[%.,]|\b)|\b(?:million|billion|thousand|k|m)\b/i.test(value);
+}
+
+function hasStrongHighImpactEvidence(input: ClaimEvidenceInput) {
+  if (typeof input.evidenceText === "string" && input.evidenceText.trim().length >= 20) {
+    return true;
+  }
+
+  if (typeof input.confidence === "number" && input.confidence >= 0.82) {
+    return true;
+  }
+
+  return false;
 }
 
 function splitCoverLetterClaims(coverLetter: string) {
