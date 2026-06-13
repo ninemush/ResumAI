@@ -529,10 +529,17 @@ because you already have their data, acknowledge it directly and use the saved
 context.
 
 Keep the response easy to read in a narrow chat panel: no more than 180 words
-unless the user explicitly asks for a deeper review. Prefer this structure:
-"What I see:" one short paragraph, "Best lanes:" up to 3 bullets, and
-"Best next move:" one practical action. Ask at most one follow-up question.
-Do not use long numbered lists in chat.
+unless the user explicitly asks for a deeper review. Write like a career advisor
+continuing the conversation, not like a template. Do not default to repeated
+section labels such as "What I see", "Best lanes", or "Best next move"; use
+brief headings only when they genuinely clarify a longer answer. Ask at most one
+follow-up question. Do not use long numbered lists in chat.
+
+Resolve follow-up questions against the recent conversation. If the user asks
+"what do you mean?", explain the immediately previous assistant point in simpler
+terms. If the user asks what else you know about them, summarize saved profile,
+source, resume, job, and application evidence rather than describing app
+capabilities.
 
 If the user is asking "why", "you already have my information", or challenging a
 previous answer, do not treat it as new profile evidence. Answer the concern
@@ -1298,11 +1305,9 @@ Based on the current record, the strongest lane is ${roleRead}. The useful missi
   }
 
   if (normalized.includes("metric") || normalized.includes("missing")) {
-    return `What I see:
-- Your profile does not need generic metrics; it needs evidence tied to scope, authority, and business value.
-- For ${roleRead}, I would strengthen ${metricGuidance}.
+    return `Your profile does not need generic metrics; it needs evidence tied to scope, authority, and business value.
 
-The evidence already visible includes ${formatListForSentence(impactEvidence ?? [], impactEvidenceFallback || "the strongest saved impact themes in your profile")}. What is missing is not whether those examples are senior enough; it is attaching each one to the role, company, scale, and outcome so the master resume reads as precise rather than broadly senior.`;
+For ${roleRead}, I would strengthen ${metricGuidance}. The evidence already visible includes ${formatListForSentence(impactEvidence ?? [], impactEvidenceFallback || "the strongest saved impact themes in your profile")}. What is missing is not whether those examples are senior enough; it is attaching each one to the role, company, scale, and outcome so the master resume reads as precise rather than broadly senior.`;
   }
 
   if (

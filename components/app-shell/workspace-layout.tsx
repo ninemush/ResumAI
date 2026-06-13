@@ -735,6 +735,7 @@ function renderWorkspaceView({
       applicationOverview={applicationOverview}
       artifactOverview={artifactOverview}
       jobOverview={jobOverview}
+      masterResumeOverview={masterResumeOverview}
       onNavigate={onSelectView}
       overview={profileOverview}
     />

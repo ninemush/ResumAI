@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText, RefreshCw, Trash2 } from "lucide-react";
+import { Download, FileText, RefreshCw, Search, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -28,13 +28,14 @@ type SourceFilter = (typeof sourceFilters)[number];
 export function KnowledgebasePanel({ embedded = false, overview }: KnowledgebasePanelProps) {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<SourceFilter>("All");
+  const [sourceQuery, setSourceQuery] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<ProfileOverview["recentSources"][number] | null>(
     null,
   );
   const visibleSources = overview.recentSources.filter((source) =>
-    sourceMatchesFilter(source, activeFilter),
+    sourceMatchesFilter(source, activeFilter) && sourceMatchesSearch(source, sourceQuery),
   );
   const filterCounts = buildSourceFilterCounts(overview.recentSources);
   const sourceHealth = buildSourceHealth(overview.recentSources);
@@ -158,20 +159,32 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
           <h2>Uploaded evidence</h2>
         </div>
         {overview.recentSources.length > 0 ? (
-          <div className="record-filter-strip" aria-label="Source filters">
-            {sourceFilters.map((filter) => (
-              <button
-                aria-pressed={activeFilter === filter}
-                className={`record-filter-chip ${activeFilter === filter ? "active" : ""}`}
-                key={filter}
-                onClick={() => setActiveFilter(filter)}
-                type="button"
-              >
-                <strong>{filterCounts[filter]}</strong>
-                <span>{filter}</span>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="record-search-sort-row" aria-label="Source search">
+              <label className="record-search-field">
+                <Search size={15} aria-hidden="true" />
+                <input
+                  onChange={(event) => setSourceQuery(event.target.value)}
+                  placeholder="Search sources, facts, filenames"
+                  value={sourceQuery}
+                />
+              </label>
+            </div>
+            <div className="record-filter-strip" aria-label="Source filters">
+              {sourceFilters.map((filter) => (
+                <button
+                  aria-pressed={activeFilter === filter}
+                  className={`record-filter-chip ${activeFilter === filter ? "active" : ""}`}
+                  key={filter}
+                  onClick={() => setActiveFilter(filter)}
+                  type="button"
+                >
+                  <strong>{filterCounts[filter]}</strong>
+                  <span>{filter}</span>
+                </button>
+              ))}
+            </div>
+          </>
         ) : null}
         {overview.recentSources.length > 0 ? (
           <div className="source-list">
@@ -704,6 +717,32 @@ function sourceMatchesFilter(
   }
 
   return source.source_type === "image";
+}
+
+function sourceMatchesSearch(
+  source: ProfileOverview["recentSources"][number],
+  query: string,
+) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  return [
+    source.original_filename,
+    source.source_url,
+    source.source_type,
+    source.readinessLabel,
+    source.failure_reason,
+    source.extractedTextPreview,
+    ...source.linkedFactTypes,
+    ...source.valueBadges,
+    ...source.detectedCompanyNames,
+    ...source.detectedRoleTitles,
+  ]
+    .filter(Boolean)
+    .some((value) => value?.toLowerCase().includes(normalizedQuery));
 }
 
 function buildSourceFilterCounts(sources: ProfileOverview["recentSources"]) {

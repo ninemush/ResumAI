@@ -10,6 +10,7 @@ import {
   FileUp,
   Link2,
   Pencil,
+  Send,
   Save,
   Sparkles,
   Trash2,
@@ -23,6 +24,7 @@ import type { WorkspaceNavigationTarget } from "@/components/app-shell/workspace
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import type { JobOverview } from "@/lib/jobs/job-overview";
+import type { MasterResumeOverview } from "@/lib/resumes/master-resume";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 import { createClient } from "@/lib/supabase/browser";
 
@@ -30,6 +32,7 @@ type ProfileExplorerProps = {
   applicationOverview: ApplicationOverview;
   artifactOverview: ArtifactOverview;
   jobOverview: JobOverview;
+  masterResumeOverview: MasterResumeOverview;
   onNavigate: (target: WorkspaceNavigationTarget) => void;
   overview: ProfileOverview;
 };
@@ -41,6 +44,14 @@ type ProfileDraft = {
   summary: string;
   targetDirection: string;
   targetLevel: string;
+};
+
+type HomeNextMove = {
+  actionLabel: string;
+  body: string;
+  prompt?: string;
+  target: WorkspaceNavigationTarget;
+  title: string;
 };
 
 const PROFILE_PHOTO_BUCKET = "profile-photos";
@@ -55,6 +66,7 @@ export function ProfileExplorer({
   applicationOverview,
   artifactOverview,
   jobOverview,
+  masterResumeOverview,
   onNavigate,
   overview,
 }: ProfileExplorerProps) {
@@ -67,6 +79,7 @@ export function ProfileExplorer({
   const nextMove = readNextMove({
     applicationOverview,
     jobOverview,
+    masterResumeOverview,
     overview,
     profileGaps,
   });
@@ -74,6 +87,7 @@ export function ProfileExplorer({
     applicationOverview,
     artifactOverview,
     jobOverview,
+    masterResumeOverview,
     overview,
   });
   const [draft, setDraft] = useState<ProfileDraft>({
@@ -349,6 +363,26 @@ export function ProfileExplorer({
           <p className="eyebrow">Next best move</p>
           <h2>{nextMove.title}</h2>
           <p>{nextMove.body}</p>
+          <div className="next-action-buttons">
+            {nextMove.prompt ? (
+              <button
+                className="secondary-action compact-action compact-action-primary"
+                onClick={() => draftProfileIntakePrompt(nextMove.prompt ?? "")}
+                type="button"
+              >
+                <Send size={14} aria-hidden="true" />
+                {nextMove.actionLabel}
+              </button>
+            ) : (
+              <button
+                className="secondary-action compact-action compact-action-primary"
+                onClick={() => onNavigate(nextMove.target)}
+                type="button"
+              >
+                {nextMove.actionLabel}
+              </button>
+            )}
+          </div>
         </div>
         {profileGaps.length > 0 ? (
           <div className="next-action-support">
@@ -362,11 +396,32 @@ export function ProfileExplorer({
         ) : null}
       </section>
 
+      <section className="return-brief-panel" aria-label="What needs attention now">
+        <div className="section-heading">
+          <p className="eyebrow">Home</p>
+          <h2>What needs attention now</h2>
+        </div>
+        <div className="return-brief-grid">
+          {returnBrief.map((item) => (
+            <button
+              className={`return-brief-item ${item.priority ? "priority" : ""}`}
+              key={item.label}
+              onClick={() => onNavigate(item.target)}
+              type="button"
+            >
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <p>{item.detail}</p>
+            </button>
+          ))}
+        </div>
+      </section>
+
       {learnedFactReceipt.length > 0 ? (
         <section className="profile-editor-panel fact-receipt-panel" aria-label="Learned facts from sources">
           <div className="section-heading">
-            <p className="eyebrow">Latest source receipt</p>
-            <h2>Facts I learned</h2>
+            <p className="eyebrow">Source receipt</p>
+            <h2>Recently learned facts</h2>
           </div>
           <div className="fact-groups fact-receipt-list">
             {learnedFactReceipt.map((fact) => (
@@ -418,27 +473,6 @@ export function ProfileExplorer({
           </div>
         </section>
       ) : null}
-
-      <section className="return-brief-panel" aria-label="Since your last visit">
-        <div className="section-heading">
-          <p className="eyebrow">Since your last visit</p>
-          <h2>What needs attention now</h2>
-        </div>
-        <div className="return-brief-grid">
-          {returnBrief.map((item) => (
-            <button
-              className="return-brief-item"
-              key={item.label}
-              onClick={() => onNavigate(item.target)}
-              type="button"
-            >
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-              <p>{item.detail}</p>
-            </button>
-          ))}
-        </div>
-      </section>
 
       <section className="intake-action-panel" aria-label="Build profile from source material">
         <div className="section-heading">
@@ -701,20 +735,31 @@ export function ProfileExplorer({
                 <span>{gap.severity}</span>
                 <strong>{gap.label}</strong>
                 <p>{gap.prompt}</p>
+                <button
+                  className="secondary-action compact-action"
+                  onClick={() => draftGapAnswerPrompt(gap.label, gap.prompt)}
+                  type="button"
+                >
+                  <Send size={14} aria-hidden="true" />
+                  Answer
+                </button>
               </article>
             ))}
           </div>
         </section>
       ) : null}
 
-      <section
-        className="profile-editor-panel"
+      <details
+        className="profile-editor-panel profile-editor-disclosure"
         aria-label="Profile direction editor"
       >
-        <div className="section-heading">
-          <p className="eyebrow">Working profile</p>
-          <h2>Your profile direction</h2>
-        </div>
+        <summary>
+          <span>
+            <p className="eyebrow">Profile details</p>
+            <strong>Edit profile direction</strong>
+          </span>
+          <Pencil size={16} aria-hidden="true" />
+        </summary>
         <div className="profile-editor-grid">
           <label>
             Name
@@ -777,7 +822,7 @@ export function ProfileExplorer({
           <Save size={15} aria-hidden="true" />
           {pendingId === "profile" ? "Saving..." : "Save profile"}
         </button>
-      </section>
+      </details>
 
       <section className="profile-editor-panel" aria-label="Market and resume format guidance">
         <div className="section-heading">
@@ -893,6 +938,18 @@ function draftMarketPrompt(prompt: string) {
   draftProfileIntakePrompt(`Add this profile guidance: ${prompt}. My answer: `);
 }
 
+function draftGapAnswerPrompt(label: string, prompt: string) {
+  draftProfileIntakePrompt(
+    [
+      "I want to answer this missing resume evidence question:",
+      "",
+      `${label}: ${prompt}`,
+      "",
+      "My answer:",
+    ].join("\n"),
+  );
+}
+
 function draftProfileIntakePrompt(text: string) {
   window.dispatchEvent(
     new CustomEvent("pramania:conversation-draft", {
@@ -969,41 +1026,50 @@ function readReturnBrief({
   applicationOverview,
   artifactOverview,
   jobOverview,
+  masterResumeOverview,
   overview,
 }: {
   applicationOverview: ApplicationOverview;
   artifactOverview: ArtifactOverview;
   jobOverview: JobOverview;
+  masterResumeOverview: MasterResumeOverview;
   overview: ProfileOverview;
 }) {
-  const latestSource = overview.recentSources[0] ?? null;
+  const blockedSourceCount = overview.recentSources.filter((source) =>
+    ["failed", "error", "analysis_failed"].includes(source.extraction_status),
+  ).length;
   const latestArtifact = artifactOverview.artifacts[0] ?? null;
   const followUpCount = applicationOverview.openFollowUpCount;
   const jobsToReview = jobOverview.summary.readyForReview;
+  const latestResume = masterResumeOverview.latestResume;
+  const resumeReady = Boolean(
+    latestResume?.pdfDownloadUrl && latestResume.docxDownloadUrl,
+  );
 
   return [
     {
-      detail: latestSource
-        ? `Newest source: ${latestSource.original_filename ?? formatSourceLabel(latestSource.source_type)}`
-        : "Add a resume, LinkedIn export, portfolio link, screenshot, or rough note.",
-      label: "Sources",
-      target: "library" as const,
-      value: latestSource
-        ? latestSource.detectedRoleCount > 0
-          ? `${latestSource.detectedRoleCount} roles found`
-          : formatSourceStatus(latestSource.extraction_status)
-        : "None yet",
+      detail: latestResume
+        ? resumeReady
+          ? "PDF and DOCX are ready from Profile & Resume."
+          : "Review the draft, resolve any checklist items, then prepare files."
+        : "Create the ATS master resume once the profile has enough evidence.",
+      label: "Master resume",
+      priority: !resumeReady,
+      target: "resume" as const,
+      value: latestResume ? (resumeReady ? "Ready to download" : "Needs export") : "Not created",
     },
     {
-      detail: latestArtifact
-        ? `Latest generated item: ${latestArtifact.label}`
-        : "Generated resumes and letters will appear in Library.",
-      label: "Generated",
-      target: "library" as const,
+      detail:
+        masterResumeOverview.missingEvidence.length > 0
+          ? masterResumeOverview.missingEvidence[0]
+          : "No blocking master-resume issue is currently open.",
+      label: "Resume checklist",
+      priority: masterResumeOverview.missingEvidence.length > 0,
+      target: "resume" as const,
       value:
-        artifactOverview.summary.total > 0
-          ? artifactOverview.summary.total
-          : "None yet",
+        masterResumeOverview.missingEvidence.length > 0
+          ? `${masterResumeOverview.missingEvidence.length} to review`
+          : "Clear",
     },
     {
       detail:
@@ -1011,6 +1077,7 @@ function readReturnBrief({
           ? "Update status, prepare materials, or decide the next move."
           : "No tracked applications currently need follow-up.",
       label: "Follow-ups",
+      priority: followUpCount > 0,
       target: { applicationStageFilter: "Applied", view: "applications" } as const,
       value: followUpCount,
     },
@@ -1020,23 +1087,34 @@ function readReturnBrief({
           ? "Review fit, gaps, risks, and whether each role is worth pursuing."
           : "Paste a role into chat when you want a fit read.",
       label: "Jobs to review",
+      priority: jobsToReview > 0,
       target: "jobs" as const,
       value: jobsToReview,
+    },
+    {
+      detail:
+        blockedSourceCount > 0
+          ? "A saved item needs a clearer copy or another read attempt."
+          : latestArtifact
+            ? `Latest generated item: ${latestArtifact.label}`
+            : "Uploaded sources and generated materials are available here.",
+      label: blockedSourceCount > 0 ? "Sources needing review" : "Library",
+      priority: blockedSourceCount > 0,
+      target: "library" as const,
+      value:
+        blockedSourceCount > 0
+          ? blockedSourceCount
+          : artifactOverview.summary.total > 0
+            ? artifactOverview.summary.total
+            : overview.sourceCount,
     },
   ] satisfies Array<{
     detail: string;
     label: string;
+    priority?: boolean;
     target: WorkspaceNavigationTarget;
     value: number | string;
   }>;
-}
-
-function formatSourceStatus(status: string) {
-  if (["succeeded", "ready"].includes(status)) return "Ready";
-  if (["failed", "error"].includes(status)) return "Needs help";
-  if (status === "processing") return "Reading";
-  if (status === "pending") return "Saved";
-  return status.replaceAll("_", " ");
 }
 
 function formatSourceLabel(sourceType: string) {
@@ -1078,18 +1156,23 @@ function readProfileGaps(overview: ProfileOverview) {
 function readNextMove({
   applicationOverview,
   jobOverview,
+  masterResumeOverview,
   overview,
   profileGaps,
 }: {
   applicationOverview: ApplicationOverview;
   jobOverview: JobOverview;
+  masterResumeOverview: MasterResumeOverview;
   overview: ProfileOverview;
   profileGaps: string[];
-}) {
+}): HomeNextMove {
   if (overview.factCount === 0) {
     return {
-      title: "Start with what you have",
+      actionLabel: "Add evidence",
       body: `Drop a resume, paste LinkedIn or a portfolio, or tell ${brand.name} what you have done. One useful source is enough to begin building your profile.`,
+      prompt: "I want to build my profile. Here is the career evidence I can share: ",
+      target: "profile" as const,
+      title: "Start with what you have",
     };
   }
 
@@ -1099,35 +1182,60 @@ function readNextMove({
     )
   ) {
     return {
-      title: "Choose the working lane",
+      actionLabel: "Review role paths",
       body: `Review the role paths ${brand.name} suggested and choose the direction that feels right. This keeps resume and application work focused.`,
+      target: "profile" as const,
+      title: "Choose the working lane",
     };
   }
 
   if (profileGaps.length > 0) {
     return {
-      title: "Fill the gaps hiring teams notice",
+      actionLabel: "Answer key gap",
       body: `The profile is taking shape. Next, add ${formatList(profileGaps.map((gap) => gap.toLowerCase()))} so ${brand.name} can position you with more confidence.`,
+      prompt: `I want to close these profile gaps for my resume: ${formatList(profileGaps)}. My answer: `,
+      target: "profile" as const,
+      title: "Fill the gaps hiring teams notice",
     };
   }
 
   if (jobOverview.summary.readyForReview > 0) {
     return {
-      title: "Review the role fit",
+      actionLabel: "Review job fit",
       body: "You have a job post ready for review. Review fit, gaps, and tradeoffs before drafting job-specific materials.",
+      target: "jobs" as const,
+      title: "Review the role fit",
     };
   }
 
   if (applicationOverview.summary.needsReview > 0) {
     return {
-      title: "Finish the application record",
+      actionLabel: "Open applications",
       body: "You have an application waiting for a next action. Draft the materials, update status, or decide whether to proceed.",
+      target: { applicationStageFilter: "Review", view: "applications" } as const,
+      title: "Finish the application record",
+    };
+  }
+
+  if (
+    masterResumeOverview.latestResume &&
+    (!masterResumeOverview.latestResume.pdfDownloadUrl ||
+      !masterResumeOverview.latestResume.docxDownloadUrl)
+  ) {
+    return {
+      actionLabel: "Review master resume",
+      body: "Your draft is available, but the final PDF/DOCX files are not ready yet. Review the checklist, then prepare the export from Profile & Resume.",
+      target: "resume" as const,
+      title: "Prepare the master resume export",
     };
   }
 
   return {
-    title: "Ready for a job link",
+    actionLabel: "Add job link",
     body: `Paste a role you are considering into ${brand.name}. It will compare the posting against your profile and help decide whether it is worth pursuing.`,
+    prompt: "I want to review this job against my profile: ",
+    target: "jobs" as const,
+    title: "Ready for a job link",
   };
 }
 

@@ -353,6 +353,41 @@ export function SettingsPanel({
         </article>
       </section>
 
+      <section className="settings-quick-actions" aria-label="Settings quick actions">
+        <button
+          disabled={isSendingReset || !email}
+          onClick={sendPasswordReset}
+          type="button"
+        >
+          <KeyRound size={16} aria-hidden="true" />
+          <span>Password reset</span>
+        </button>
+        <a href="#add-credits">
+          <WalletCards size={16} aria-hidden="true" />
+          <span>Add credits</span>
+        </a>
+        <button
+          disabled={privacyRequestLoading !== null}
+          onClick={() => void createPrivacyRequest("export")}
+          type="button"
+        >
+          <Download size={16} aria-hidden="true" />
+          <span>Export data</span>
+        </button>
+        <button
+          disabled={privacyRequestLoading !== null}
+          onClick={() => void createPrivacyRequest("deletion")}
+          type="button"
+        >
+          <Trash2 size={16} aria-hidden="true" />
+          <span>Delete request</span>
+        </button>
+        <button onClick={() => onNavigate?.("support")} type="button">
+          <HelpCircle size={16} aria-hidden="true" />
+          <span>Support</span>
+        </button>
+      </section>
+
       {creditSummary.isExhausted ? <CreditExhaustedNotice /> : null}
 
       <section className="settings-panel-section" aria-labelledby="data-rights-title">

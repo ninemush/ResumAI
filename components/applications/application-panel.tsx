@@ -94,7 +94,7 @@ const applicationStatuses = [
   { value: "withdrawn", label: "Withdrawn" },
 ];
 
-export type StageFilter = "All" | "Review" | "Applied" | "Interview" | "Selected" | "Closed";
+export type StageFilter = "All" | "Review" | "Draft" | "Applied" | "Interview" | "Selected" | "Closed" | "Archived";
 type ArchiveView = "active" | "archived";
 type MaterialReviewMode = "preview" | "edit";
 type ApplicationSort = "recent" | "oldest" | "needs_action";
@@ -145,16 +145,17 @@ export function ApplicationPanel({
     return null;
   }
 
+  const effectiveArchiveView = activeStageFilter === "Archived" ? "archived" : archiveView;
   const applicationsInArchiveView = overview.recentApplications.filter((application) =>
-    archiveView === "archived" ? Boolean(application.archivedAt) : !application.archivedAt,
+    effectiveArchiveView === "archived" ? Boolean(application.archivedAt) : !application.archivedAt,
   );
   const visibleApplications = sortApplications(
     applicationsInArchiveView
-      .filter((application) => applicationMatchesStage(application.status, activeStageFilter))
+      .filter((application) => applicationMatchesStage(application, activeStageFilter))
       .filter((application) => applicationMatchesSearch(application, applicationQuery)),
     applicationSort,
   );
-  const stageCounts = buildStageFilterCounts(applicationsInArchiveView);
+  const stageCounts = buildStageFilterCounts(overview.recentApplications);
   const activeReviewClaimAckSatisfied = Boolean(
     !activeReview?.exportReadiness.requiresClaimReview ||
       activeReview.exportReadiness.claimReviewAcknowledged ||
@@ -430,20 +431,49 @@ export function ApplicationPanel({
       </div>
 
       {overview.recentApplications.length > 0 ? (
+        <div className="record-search-sort-row application-primary-controls" aria-label="Application search and sort">
+          <label className="record-search-field">
+            <Search size={15} aria-hidden="true" />
+            <input
+              onChange={(event) => setApplicationQuery(event.target.value)}
+              placeholder="Search role, company, stage"
+              value={applicationQuery}
+            />
+          </label>
+          <select
+            aria-label="Sort applications"
+            className="record-sort-select"
+            onChange={(event) => setApplicationSort(event.target.value as ApplicationSort)}
+            value={applicationSort}
+          >
+            <option value="recent">Recently updated</option>
+            <option value="oldest">Oldest first</option>
+            <option value="needs_action">Needs action first</option>
+          </select>
+        </div>
+      ) : null}
+
+      {overview.recentApplications.length > 0 ? (
         <div className="record-list-controls">
           <div className="record-view-toggle" aria-label="Application archive view">
             <button
-              aria-pressed={archiveView === "active"}
-              className={`record-view-button ${archiveView === "active" ? "active" : ""}`}
-              onClick={() => setArchiveView("active")}
+              aria-pressed={effectiveArchiveView === "active"}
+              className={`record-view-button ${effectiveArchiveView === "active" ? "active" : ""}`}
+              onClick={() => {
+                setArchiveView("active");
+                if (activeStageFilter === "Archived") setActiveStageFilter("All");
+              }}
               type="button"
             >
               Active <strong>{overview.summary.active}</strong>
             </button>
             <button
-              aria-pressed={archiveView === "archived"}
-              className={`record-view-button ${archiveView === "archived" ? "active" : ""}`}
-              onClick={() => setArchiveView("archived")}
+              aria-pressed={effectiveArchiveView === "archived"}
+              className={`record-view-button ${effectiveArchiveView === "archived" ? "active" : ""}`}
+              onClick={() => {
+                setArchiveView("archived");
+                setActiveStageFilter("Archived");
+              }}
               type="button"
             >
               Archived <strong>{overview.summary.archived}</strong>
@@ -488,7 +518,7 @@ export function ApplicationPanel({
         ) : null}
         {overview.recentApplications.length > 0 && applicationsInArchiveView.length === 0 ? (
           <p className="empty-state">
-            {archiveView === "archived"
+            {effectiveArchiveView === "archived"
               ? "No archived applications yet."
               : "No active applications right now. Archived applications are still available from the Archived view."}
           </p>
@@ -735,30 +765,6 @@ export function ApplicationPanel({
           </div>
         ))}
       </div>
-
-      {overview.recentApplications.length > 0 ? (
-        <div className="record-search-sort-row application-secondary-controls" aria-label="Application search and sort">
-          <label className="record-search-field">
-            <Search size={15} aria-hidden="true" />
-            <input
-              onChange={(event) => setApplicationQuery(event.target.value)}
-              placeholder="Search role, company, stage"
-              value={applicationQuery}
-            />
-          </label>
-          <select
-            aria-label="Sort applications"
-            className="record-sort-select"
-            onChange={(event) => setApplicationSort(event.target.value as ApplicationSort)}
-            value={applicationSort}
-          >
-            <option value="recent">Recently updated</option>
-            <option value="oldest">Oldest first</option>
-            <option value="needs_action">Needs action first</option>
-          </select>
-        </div>
-      ) : null}
-
       {activeReview ? (
         <section className="materials-review" aria-label="Application materials review">
           <div className="materials-review-header">
@@ -1379,10 +1385,10 @@ function formatShortDate(value: string) {
 }
 
 function buildStageFilterCounts(applications: ApplicationOverview["recentApplications"]) {
-  const byStage = (["Review", "Applied", "Interview", "Selected", "Closed"] as const).map(
+  const byStage = (["Review", "Draft", "Applied", "Interview", "Selected", "Closed", "Archived"] as const).map(
     (stage) => ({
       label: stage,
-      value: applications.filter((application) => applicationMatchesStage(application.status, stage)).length,
+      value: applications.filter((application) => applicationMatchesStage(application, stage)).length,
     }),
   );
 
@@ -1423,22 +1429,33 @@ function readResumeExperienceDraft(resume: ResumeContent) {
   return resume.experienceBullets.map((bullet) => `- ${bullet}`).join("\n");
 }
 
-function applicationMatchesStage(status: string, stage: StageFilter) {
+function applicationMatchesStage(
+  application: ApplicationOverview["recentApplications"][number],
+  stage: StageFilter,
+) {
   if (stage === "All") {
     return true;
   }
 
-  const stageStatuses: Record<Exclude<StageFilter, "All">, Set<string>> = {
+  if (stage === "Archived") {
+    return Boolean(application.archivedAt);
+  }
+
+  if (stage === "Review") {
+    return !application.archivedAt && isNeedsActionApplication(application);
+  }
+
+  const stageStatuses: Record<Exclude<StageFilter, "All" | "Archived" | "Review">, Set<string>> = {
     Applied: new Set(["applied", "no_reply"]),
     Closed: new Set(["rejected", "interviewed_not_selected", "withdrawn"]),
+    Draft: new Set(["draft"]),
     Interview: new Set([
       "interview_in_progress",
       "interviewed_not_selected",
       "interviewed_selected",
     ]),
-    Review: new Set(["draft"]),
     Selected: new Set(["interviewed_selected"]),
   };
 
-  return stageStatuses[stage].has(status);
+  return stageStatuses[stage].has(application.status);
 }

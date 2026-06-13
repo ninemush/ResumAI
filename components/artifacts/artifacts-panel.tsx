@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, ExternalLink, FileText, Layers3, X } from "lucide-react";
+import { Download, ExternalLink, FileText, Layers3, Search, X } from "lucide-react";
 
 import { brand } from "@/lib/brand";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
@@ -12,21 +12,29 @@ type ArtifactsPanelProps = {
 };
 
 type ArtifactFilter = "all" | "resume" | "cover_letter" | "pdf" | "docx";
+type ArtifactSort = "recent" | "oldest" | "ready";
 
 export function ArtifactsPanel({ embedded = false, overview }: ArtifactsPanelProps) {
   const [activeArtifact, setActiveArtifact] = useState<ArtifactOverview["artifacts"][number] | null>(
     null,
   );
   const [filter, setFilter] = useState<ArtifactFilter>("all");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ArtifactSort>("recent");
+  const [compact, setCompact] = useState(false);
   const filteredArtifacts = useMemo(
     () =>
-      overview.artifacts.filter((artifact) => {
-        if (filter === "all") return true;
-        if (filter === "pdf") return Boolean(artifact.pdfDownloadUrl);
-        if (filter === "docx") return Boolean(artifact.docxDownloadUrl);
-        return artifact.kind === filter;
-      }),
-    [filter, overview.artifacts],
+      sortArtifacts(
+        overview.artifacts.filter((artifact) => {
+          if (!artifactMatchesSearch(artifact, query)) return false;
+          if (filter === "all") return true;
+          if (filter === "pdf") return Boolean(artifact.pdfDownloadUrl);
+          if (filter === "docx") return Boolean(artifact.docxDownloadUrl);
+          return artifact.kind === filter;
+        }),
+        sort,
+      ),
+    [filter, overview.artifacts, query, sort],
   );
 
   const content = (
@@ -42,15 +50,45 @@ export function ArtifactsPanel({ embedded = false, overview }: ArtifactsPanelPro
         </div>
       )}
 
-      <section className="artifact-filter-strip" aria-label="Generated material filters">
-        <ArtifactFilterButton active={filter === "all"} count={overview.summary.total} label="All" onClick={() => setFilter("all")} />
-        <ArtifactFilterButton active={filter === "resume"} count={overview.summary.resumes} label="Resumes" onClick={() => setFilter("resume")} />
-        <ArtifactFilterButton active={filter === "cover_letter"} count={overview.summary.coverLetters} label="Cover letters" onClick={() => setFilter("cover_letter")} />
-        <ArtifactFilterButton active={filter === "pdf"} count={overview.summary.exportedPdfs} label="PDFs" onClick={() => setFilter("pdf")} />
-        <ArtifactFilterButton active={filter === "docx"} count={overview.summary.exportedDocx} label="DOCX" onClick={() => setFilter("docx")} />
+      <section className="library-controls" aria-label="Generated material controls">
+        <div className="record-search-sort-row">
+          <label className="record-search-field">
+            <Search size={15} aria-hidden="true" />
+            <input
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search material, company, role"
+              value={query}
+            />
+          </label>
+          <select
+            aria-label="Sort generated materials"
+            className="record-sort-select"
+            onChange={(event) => setSort(event.target.value as ArtifactSort)}
+            value={sort}
+          >
+            <option value="recent">Recently updated</option>
+            <option value="oldest">Oldest first</option>
+            <option value="ready">Downloads ready first</option>
+          </select>
+          <button
+            aria-pressed={compact}
+            className="secondary-action compact-action"
+            onClick={() => setCompact((value) => !value)}
+            type="button"
+          >
+            {compact ? "Comfortable" : "Compact"}
+          </button>
+        </div>
+        <div className="artifact-filter-strip" aria-label="Generated material filters">
+          <ArtifactFilterButton active={filter === "all"} count={overview.summary.total} label="All" onClick={() => setFilter("all")} />
+          <ArtifactFilterButton active={filter === "resume"} count={overview.summary.resumes} label="Resumes" onClick={() => setFilter("resume")} />
+          <ArtifactFilterButton active={filter === "cover_letter"} count={overview.summary.coverLetters} label="Cover letters" onClick={() => setFilter("cover_letter")} />
+          <ArtifactFilterButton active={filter === "pdf"} count={overview.summary.exportedPdfs} label="PDFs" onClick={() => setFilter("pdf")} />
+          <ArtifactFilterButton active={filter === "docx"} count={overview.summary.exportedDocx} label="DOCX" onClick={() => setFilter("docx")} />
+        </div>
       </section>
 
-      <section className="record-list artifact-record-list" aria-label="Generated materials list">
+      <section className={`record-list artifact-record-list ${compact ? "compact-density" : ""}`} aria-label="Generated materials list">
         {filteredArtifacts.length > 0 ? (
           <>
             <div className="record-table-header artifact-record-header" aria-hidden="true">
@@ -191,6 +229,47 @@ function formatArtifactStatus(status: string) {
   if (status === "failed") return "Needs review";
 
   return status.replaceAll("_", " ");
+}
+
+function artifactMatchesSearch(
+  artifact: ArtifactOverview["artifacts"][number],
+  query: string,
+) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  return [
+    artifact.label,
+    artifact.companyName,
+    artifact.roleTitle,
+    artifact.status,
+    formatArtifactKind(artifact.kind),
+  ]
+    .filter(Boolean)
+    .some((value) => value?.toLowerCase().includes(normalizedQuery));
+}
+
+function sortArtifacts(
+  artifacts: ArtifactOverview["artifacts"],
+  sort: ArtifactSort,
+) {
+  return [...artifacts].sort((left, right) => {
+    if (sort === "ready") {
+      return Number(hasDownload(right)) - Number(hasDownload(left));
+    }
+
+    const leftTime = new Date(left.updatedAt).getTime();
+    const rightTime = new Date(right.updatedAt).getTime();
+
+    return sort === "oldest" ? leftTime - rightTime : rightTime - leftTime;
+  });
+}
+
+function hasDownload(artifact: ArtifactOverview["artifacts"][number]) {
+  return Boolean(artifact.pdfDownloadUrl || artifact.docxDownloadUrl);
 }
 
 function formatDate(value: string) {

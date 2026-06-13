@@ -36,6 +36,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
   const [archiveView, setArchiveView] = useState<ArchiveView>("active");
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [ignoredQuestions, setIgnoredQuestions] = useState<Set<string>>(() => new Set());
   const [jobUrl, setJobUrl] = useState("");
   const [jobText, setJobText] = useState("");
   const [isIngestingJob, setIsIngestingJob] = useState(false);
@@ -393,11 +394,54 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                   />
                   <FitBucket
                     icon="question"
-                    items={job.fitAnalysis.questions}
+                    items={job.fitAnalysis.questions.filter(
+                      (question) => !ignoredQuestions.has(buildQuestionKey(job.id, question)),
+                    )}
                     label="Decision Questions"
                     placeholder="No follow-up questions yet."
                   />
                 </div>
+                {job.fitAnalysis.questions.length > 0 ? (
+                  <div className="decision-question-list" aria-label="Decision question actions">
+                    {job.fitAnalysis.questions
+                      .filter((question) => !ignoredQuestions.has(buildQuestionKey(job.id, question)))
+                      .map((question) => (
+                        <article key={question}>
+                          <p>{question}</p>
+                          <div>
+                            <button
+                              className="secondary-action compact-action"
+                              onClick={() => draftJobQuestionAnswer(job, question)}
+                              type="button"
+                            >
+                              <Send size={14} aria-hidden="true" />
+                              Answer
+                            </button>
+                            <button
+                              className="secondary-action compact-action"
+                              onClick={() => draftJobQuestionTailoring(job, question)}
+                              type="button"
+                            >
+                              Use in tailoring
+                            </button>
+                            <button
+                              className="secondary-action compact-action"
+                              onClick={() =>
+                                setIgnoredQuestions((current) => {
+                                  const next = new Set(current);
+                                  next.add(buildQuestionKey(job.id, question));
+                                  return next;
+                                })
+                              }
+                              type="button"
+                            >
+                              Ignore
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                  </div>
+                ) : null}
                 <div className="record-action-strip">
                   {job.resolved_url || job.job_url ? (
                     <a
@@ -459,7 +503,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
                 ) : null}
                 <div className="job-description-preview">
                   <strong>Job-post excerpt</strong>
-                  <p>{job.extracted_text?.slice(0, 1400) ?? "No job-post detail is available yet."}</p>
+                  <p>{cleanJobExcerpt(job.extracted_text) ?? "No job-post detail is available yet."}</p>
                 </div>
               </div>
             ) : null}
@@ -492,6 +536,64 @@ function confirmJobIngestionCredit() {
   return window.confirm(
     `This paid action costs ${formatCreditCost(CREDIT_COSTS.jobIngest)}.\n\nIt will produce a parsed job post and fit review.\n\nIf this job has already been analyzed, the server reuses the saved result where possible.\n\nContinue?`,
   );
+}
+
+function buildQuestionKey(jobId: string, question: string) {
+  return `${jobId}:${question}`;
+}
+
+function draftJobQuestionAnswer(
+  job: JobOverview["recentJobs"][number],
+  question: string,
+) {
+  draftJobPrompt(
+    [
+      `I want to answer this decision question for ${formatJobLabel(job)}:`,
+      "",
+      question,
+      "",
+      "My answer:",
+    ].join("\n"),
+  );
+}
+
+function draftJobQuestionTailoring(
+  job: JobOverview["recentJobs"][number],
+  question: string,
+) {
+  draftJobPrompt(
+    [
+      `Use this job-fit decision point when tailoring materials for ${formatJobLabel(job)}:`,
+      "",
+      question,
+      "",
+      "Relevant evidence from me:",
+    ].join("\n"),
+  );
+}
+
+function draftJobPrompt(text: string) {
+  window.dispatchEvent(
+    new CustomEvent("pramania:conversation-draft", {
+      detail: {
+        focus: true,
+        source: "job-decision-question",
+        text,
+      },
+    }),
+  );
+  window.dispatchEvent(
+    new CustomEvent("pramania:focus-chat", {
+      detail: {
+        reason: "job-decision-question",
+      },
+    }),
+  );
+}
+
+function formatJobLabel(job: JobOverview["recentJobs"][number]) {
+  const title = job.title ?? "this role";
+  return job.company ? `${title} at ${job.company}` : title;
 }
 
 function JobAddPanelContent({
@@ -644,6 +746,27 @@ function formatJobUrl(jobUrl: string | null) {
   } catch {
     return "Job post";
   }
+}
+
+function cleanJobExcerpt(text: string | null) {
+  if (!text) {
+    return null;
+  }
+
+  const clutterPatterns = [
+    /sign in|join now|log in|cookie|cookies|privacy policy|terms of service|skip to main content|linkedin/i,
+    /forgot password|remember me|new to linkedin|authwall|captcha/i,
+    /people also viewed|recommended jobs|show more jobs|similar jobs/i,
+  ];
+  const cleanedLines = text
+    .replace(/\s+/g, " ")
+    .split(/[.!?]\s+|\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 24)
+    .filter((line) => !clutterPatterns.some((pattern) => pattern.test(line)));
+  const excerpt = cleanedLines.join(" ").slice(0, 1400).trim();
+
+  return excerpt || text.replace(/\s+/g, " ").slice(0, 900).trim();
 }
 
 function formatShortDate(value: string) {
