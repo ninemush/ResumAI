@@ -1,5 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const baseURL =
+  process.env.PLAYWRIGHT_BASE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const targetHost = new URL(baseURL).hostname;
+const shouldStartLocalServer =
+  targetHost === "localhost" || targetHost === "127.0.0.1" || targetHost === "::1";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 30_000,
@@ -9,7 +15,7 @@ export default defineConfig({
   fullyParallel: true,
   reporter: [["list"]],
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL,
     trace: "retain-on-failure",
   },
   projects: [
@@ -38,10 +44,12 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: "npm run dev",
-    reuseExistingServer: true,
-    timeout: 120_000,
-    url: "http://localhost:3000",
-  },
+  webServer: shouldStartLocalServer
+    ? {
+        command: "npm run dev",
+        reuseExistingServer: true,
+        timeout: 120_000,
+        url: baseURL,
+      }
+    : undefined,
 });

@@ -110,6 +110,8 @@ export async function authenticateDemoUser({
   const cookieName = `sb-${projectRef}-auth-token`;
   const cookieValue = `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`;
   const chunks = createChunks(cookieName, cookieValue);
+  const targetUrl = getQaTargetUrl();
+  const secure = targetUrl.protocol === "https:";
   const mfaCookieValue = signMfaCookie({
     email,
     userId: session.user.id,
@@ -118,21 +120,21 @@ export async function authenticateDemoUser({
   await context.addCookies(
     [
       ...chunks.map(({ name, value }) => ({
-        domain: "localhost",
+        domain: targetUrl.hostname,
         httpOnly: false,
         name,
         path: "/",
         sameSite: "Lax" as const,
-        secure: false,
+        secure,
         value,
       })),
       {
-        domain: "localhost",
+        domain: targetUrl.hostname,
         httpOnly: true,
         name: "pramania_email_mfa",
         path: "/",
         sameSite: "Lax" as const,
-        secure: false,
+        secure,
         value: mfaCookieValue,
       },
     ],
@@ -211,6 +213,13 @@ function signMfaCookie({ email, userId }: { email: string; userId: string }) {
   const signature = createHmac("sha256", secret).update(encodedPayload).digest("base64url");
 
   return `${encodedPayload}.${signature}`;
+}
+
+function getQaTargetUrl() {
+  const rawUrl =
+    process.env.PLAYWRIGHT_BASE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  return new URL(rawUrl);
 }
 
 function requireEnv(key: string) {

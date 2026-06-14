@@ -9605,9 +9605,9 @@ input:focus {
   }
 
   .workspace-shell.workspace-first .conversation-panel-shell,
-  .conversation-pane-controls,
-  .conversation-collapsed-rail,
-  .conversation-resize-handle {
+  .workspace-shell .conversation-pane-controls,
+  .workspace-shell .conversation-collapsed-rail,
+  .workspace-shell .conversation-resize-handle {
     display: none;
   }
 
