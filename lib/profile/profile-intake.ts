@@ -293,13 +293,79 @@ export async function extractProfileFactsFromText({
     userId: user.id,
   });
 
+  const sourceReceipt = buildSourceProofReceipt({
+    factRows,
+    followUpQuestions: parsed.followUpQuestions,
+    inputLabel,
+    normalizedText,
+  });
+
   return {
     ...parsed,
+    assistantMessage: sourceReceipt
+      ? `${parsed.assistantMessage}\n\n${sourceReceipt}`
+      : parsed.assistantMessage,
     inScope: true,
     savedFactCount: factRows.length,
     promptVersion: PROFILE_INTAKE_PROMPT_VERSION,
     model,
   };
+}
+
+function buildSourceProofReceipt({
+  factRows,
+  followUpQuestions,
+  inputLabel,
+  normalizedText,
+}: {
+  factRows: Array<{ fact_type: string; fact_value: string }>;
+  followUpQuestions: string[];
+  inputLabel: string;
+  normalizedText: string;
+}) {
+  const sourceLabel = inputLabel || "this source";
+  const factsAdded = factRows.slice(0, 4).map((fact) => fact.fact_value);
+  const affectedSections = Array.from(
+    new Set(
+      factRows
+        .map((fact) => mapFactTypeToResumeSection(fact.fact_type))
+        .filter(
+          (section): section is NonNullable<ReturnType<typeof mapFactTypeToResumeSection>> =>
+            Boolean(section),
+        ),
+    ),
+  ).slice(0, 4);
+  const missingDetails = followUpQuestions
+    .map((question) => question.replace(/\?+$/g, "").trim())
+    .filter(Boolean)
+    .slice(0, 2);
+
+  return [
+    `Source receipt: I read ${sourceLabel} (${normalizedText.length.toLocaleString()} characters).`,
+    factsAdded.length > 0
+      ? `Facts added: ${factsAdded.join("; ")}.`
+      : "Facts added: none yet; I need clearer career evidence before saving new claims.",
+    affectedSections.length > 0
+      ? `Resume areas affected: ${affectedSections.join(", ")}.`
+      : "Resume areas affected: profile evidence review.",
+    missingDetails.length > 0
+      ? `Missing details: ${missingDetails.join("; ")}.`
+      : "Missing details: exact scope, dates, metrics, and source-backed outcomes if available.",
+    "Next best action: add one concrete role, project, metric, credential, or correction that proves the strongest claim.",
+  ].join("\n");
+}
+
+function mapFactTypeToResumeSection(factType: string) {
+  const normalized = factType.toLowerCase();
+
+  if (normalized === "experience") return "Experience";
+  if (normalized === "project" || normalized === "accolade") return "Selected Highlights";
+  if (normalized === "education") return "Education";
+  if (normalized === "credential") return "Certifications";
+  if (normalized === "skill" || normalized === "industry") return "Skills";
+  if (normalized === "preference") return "Resume preferences";
+
+  return null;
 }
 
 function buildProfileIntakeInput({

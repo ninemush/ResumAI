@@ -228,6 +228,38 @@ export async function finalizeCreditReservation({
   return normalizeReservationResult(data);
 }
 
+export async function finalizeCreditReservationWithOutput({
+  ledgerMetadata = {},
+  outputIds,
+  recordMetadata = {},
+  reservationId,
+  resourceId,
+  resourceType,
+}: {
+  ledgerMetadata?: Record<string, unknown>;
+  outputIds: Record<string, unknown>;
+  recordMetadata?: Record<string, unknown>;
+  reservationId: string;
+  resourceId?: string | null;
+  resourceType?: string | null;
+}): Promise<CreditReservationResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("finalize_credit_reservation_with_output", {
+    p_ledger_metadata: ledgerMetadata,
+    p_output_ids: outputIds,
+    p_record_metadata: recordMetadata,
+    p_reservation_id: reservationId,
+    p_resource_id: resourceId ?? null,
+    p_resource_type: resourceType ?? null,
+  });
+
+  if (error || !data) {
+    throw mapCreditError(error?.message);
+  }
+
+  return normalizeReservationResult(data);
+}
+
 export async function releaseCreditReservation({
   metadata = {},
   reason,
@@ -486,6 +518,23 @@ export async function createPromoCode(
     throw new Error(
       error?.code === "42501" ? "ADMIN_REQUIRED" : "PROMO_CREATE_FAILED",
     );
+  }
+
+  const { error: auditError } = await supabase.from("audit_events").insert({
+    actor_user_id: user.id,
+    event_type: "admin.promo_code.created",
+    metadata: {
+      assignedUserEmail: data.assigned_user_email ? "present" : "none",
+      creditAmount: data.credit_amount,
+      expiresAt: data.expires_at,
+      maxRedemptions: data.max_redemptions,
+    },
+    resource_id: data.id,
+    resource_type: "promo_code",
+  });
+
+  if (auditError) {
+    throw new Error("PROMO_AUDIT_FAILED");
   }
 
   return {
@@ -754,6 +803,16 @@ export function buildCreditsApiError(error: unknown) {
       };
     }
 
+    if (error.message === "CREDIT_IDEMPOTENCY_MISMATCH") {
+      return {
+        category: "validation",
+        code: "billing.idempotency_mismatch",
+        message:
+          "This retry key was already used for a different paid action. Start the action again before using credits.",
+        status: 409,
+      };
+    }
+
     if (
       error.message === "CREDIT_RESERVATION_NOT_FOUND" ||
       error.message === "CREDIT_RESERVATION_NOT_FINALIZABLE"
@@ -863,6 +922,10 @@ function mapCreditError(message: string | undefined) {
 
   if (normalizedMessage.includes("IDEMPOTENCY_KEY_REQUIRED")) {
     return new Error("IDEMPOTENCY_KEY_REQUIRED");
+  }
+
+  if (normalizedMessage.includes("CREDIT_IDEMPOTENCY_MISMATCH")) {
+    return new Error("CREDIT_IDEMPOTENCY_MISMATCH");
   }
 
   if (normalizedMessage.includes("CREDIT_RESERVATION_NOT_FOUND")) {

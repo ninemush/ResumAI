@@ -93,7 +93,24 @@ export async function createSecurityIncident(input: z.input<typeof securityIncid
     throw new Error("SECURITY_INCIDENT_CREATE_FAILED");
   }
 
-  return mapIncidentRow(data as unknown as Record<string, unknown>);
+  const incidentRow = data as unknown as Record<string, unknown>;
+  const { error: auditError } = await supabase.from("audit_events").insert({
+    actor_user_id: user.id,
+    event_type: "admin.security_incident.created",
+    metadata: {
+      severity: incidentRow.severity,
+      status: incidentRow.status,
+      title: incidentRow.title,
+    },
+    resource_id: incidentRow.id,
+    resource_type: "security_incident",
+  });
+
+  if (auditError) {
+    throw new Error("SECURITY_INCIDENT_AUDIT_FAILED");
+  }
+
+  return mapIncidentRow(incidentRow);
 }
 
 export async function updateSecurityIncident({
@@ -105,7 +122,7 @@ export async function updateSecurityIncident({
 }) {
   const parsed = securityIncidentUpdateSchema.parse(input);
   const supabase = await createClient();
-  await requireAdmin(supabase);
+  const adminUser = await requireAdmin(supabase);
   const patch: Record<string, unknown> = {};
 
   if (parsed.affectedDataCategories !== undefined) patch.affected_data_categories = parsed.affectedDataCategories;
@@ -142,7 +159,24 @@ export async function updateSecurityIncident({
     throw new Error("SECURITY_INCIDENT_UPDATE_FAILED");
   }
 
-  return mapIncidentRow(data as unknown as Record<string, unknown>);
+  const incidentRow = data as unknown as Record<string, unknown>;
+  const { error: auditError } = await supabase.from("audit_events").insert({
+    actor_user_id: adminUser.id,
+    event_type: "admin.security_incident.updated",
+    metadata: {
+      changedFields: Object.keys(patch),
+      severity: incidentRow.severity,
+      status: incidentRow.status,
+    },
+    resource_id: incidentRow.id,
+    resource_type: "security_incident",
+  });
+
+  if (auditError) {
+    throw new Error("SECURITY_INCIDENT_AUDIT_FAILED");
+  }
+
+  return mapIncidentRow(incidentRow);
 }
 
 function shouldSetDeadline(input: {

@@ -5,6 +5,7 @@ import {
   createSecurityIncident,
   listSecurityIncidents,
 } from "@/lib/privacy/incidents";
+import { requireProtectedApiSession } from "@/lib/api/auth";
 import { securityIncidentCreateSchema } from "@/lib/privacy/schemas";
 import {
   checkRateLimit,
@@ -25,6 +26,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession({ requireAdmin: true });
     const incidents = await listSecurityIncidents();
 
     return NextResponse.json({ ok: true, incidents, requestId });
@@ -50,6 +52,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireProtectedApiSession({ requireAdmin: true });
     const input = securityIncidentCreateSchema.parse(await request.json());
     const incident = await createSecurityIncident(input);
 

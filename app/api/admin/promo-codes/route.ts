@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireProtectedApiSession } from "@/lib/api/auth";
 import {
   buildCreditsApiError,
   createPromoCode,
@@ -12,10 +13,24 @@ import {
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
 
-export async function GET() {
+export async function GET(request: Request) {
   const requestId = crypto.randomUUID();
+  const rateLimit = await checkRateLimit({
+    key: getClientRateLimitKey(request, "admin_promo_read"),
+    limit: 60,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Promo codes are being requested too quickly. Pause briefly before refreshing.",
+      requestId,
+      result: rateLimit,
+    });
+  }
 
   try {
+    await requireProtectedApiSession({ requireAdmin: true });
     const promoCodes = await listPromoCodes();
 
     return NextResponse.json({
@@ -53,6 +68,21 @@ export async function POST(request: Request) {
     });
   }
   let body: unknown;
+
+  try {
+    await requireProtectedApiSession({ requireAdmin: true });
+  } catch (error) {
+    const apiError = buildCreditsApiError(error);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: apiError,
+      },
+      { status: apiError.status },
+    );
+  }
 
   try {
     body = await request.json();

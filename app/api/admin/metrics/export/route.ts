@@ -1,23 +1,69 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 
 import { apiAuthErrorDetails, requireProtectedApiSession } from "@/lib/api/auth";
 import { getOwnerMetrics, type OwnerMetrics } from "@/lib/admin/owner-metrics";
+import {
+  checkRateLimit,
+  getClientRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const requestId = crypto.randomUUID();
   const url = new URL(request.url);
   const periodDays = parsePeriodDays(url.searchParams.get("periodDays"));
+  const includeSensitive = url.searchParams.get("includeSensitive") === "true";
+  const sensitiveReason = url.searchParams.get("reason")?.trim() ?? "";
+  const rateLimit = await checkRateLimit({
+    key: getClientRateLimitKey(request, "admin_metrics_export"),
+    limit: 10,
+    windowMs: 60_000,
+  });
+
+  if (!rateLimit.allowed) {
+    return rateLimitResponse({
+      message: "Owner metrics exports are being requested too quickly. Pause briefly before exporting again.",
+      requestId,
+      result: rateLimit,
+    });
+  }
+
+  if (includeSensitive && sensitiveReason.length < 10) {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "validation",
+          code: "admin.metrics_export_reason_required",
+          message: "Add a reason of at least 10 characters before exporting sensitive owner metrics.",
+        },
+      },
+      { status: 400 },
+    );
+  }
 
   try {
-    await requireProtectedApiSession({ requireAdmin: true });
+    const session = await requireProtectedApiSession({ requireAdmin: true });
     const metrics = await getOwnerMetrics(periodDays);
-    const csv = buildOwnerMetricsCsv(metrics);
+    await logOwnerMetricsExport({
+      actorUserId: session.user.id,
+      includeSensitive,
+      periodDays,
+      reason: includeSensitive ? sensitiveReason : null,
+      requestId,
+      userCount: metrics.usersList.length,
+    });
+    const csv = buildOwnerMetricsCsv(metrics, { includeSensitive });
     const filePeriod = periodDays === 0 ? "all-time" : `${periodDays}d`;
+    const sensitivity = includeSensitive ? "sensitive" : "sanitized";
 
     return new NextResponse(csv, {
       headers: {
         "Cache-Control": "no-store",
-        "Content-Disposition": `attachment; filename="pramania-owner-metrics-${filePeriod}.csv"`,
+        "Content-Disposition": `attachment; filename="pramania-owner-metrics-${filePeriod}-${sensitivity}.csv"`,
         "Content-Type": "text/csv; charset=utf-8",
         "X-Request-Id": requestId,
       },
@@ -37,7 +83,10 @@ export async function GET(request: Request) {
   }
 }
 
-function buildOwnerMetricsCsv(metrics: OwnerMetrics) {
+function buildOwnerMetricsCsv(
+  metrics: OwnerMetrics,
+  { includeSensitive }: { includeSensitive: boolean },
+) {
   return [
     csvSection("summary", [
       ["generated_at", metrics.generatedAt],
@@ -57,8 +106,8 @@ function buildOwnerMetricsCsv(metrics: OwnerMetrics) {
       ["fix_required", metrics.systemHealth.fixRequired],
     ]),
     csvTable("user_economics", [
-      "user_id",
-      "email",
+      "user_ref",
+      ...(includeSensitive ? ["user_id", "email"] : []),
       "credits_available",
       "credits_used",
       "paid_usd",
@@ -66,8 +115,8 @@ function buildOwnerMetricsCsv(metrics: OwnerMetrics) {
       "gross_profit_usd",
       "margin_percent",
     ], metrics.profitability.userEconomics.map((user) => [
-      user.userId,
-      user.email ?? "",
+      userRef(user.userId),
+      ...(includeSensitive ? [user.userId, user.email ?? ""] : []),
       user.creditsAvailable,
       user.creditsUsed,
       user.paidUsd,
@@ -77,8 +126,8 @@ function buildOwnerMetricsCsv(metrics: OwnerMetrics) {
     ])),
     csvTable("credit_consumption_evidence", [
       "created_at",
-      "user_id",
-      "email",
+      "user_ref",
+      ...(includeSensitive ? ["user_id", "email"] : []),
       "event_type",
       "credits",
       "paid_usd",
@@ -87,8 +136,8 @@ function buildOwnerMetricsCsv(metrics: OwnerMetrics) {
       "resource_id",
     ], metrics.profitability.consumptionEvidence.map((event) => [
       event.createdAt,
-      event.userId,
-      event.email ?? "",
+      userRef(event.userId),
+      ...(includeSensitive ? [event.userId, event.email ?? ""] : []),
       event.eventType,
       event.credits,
       event.paidUsd,
@@ -103,9 +152,9 @@ function buildOwnerMetricsCsv(metrics: OwnerMetrics) {
       "status",
       "priority",
       "area",
-      "user_email",
+      ...(includeSensitive ? ["user_email"] : []),
       "subject",
-      "owner_notes",
+      ...(includeSensitive ? ["owner_notes"] : []),
       "escalated_to_l2",
       "escalation_reason",
     ], metrics.supportTickets.map((ticket) => [
@@ -115,9 +164,9 @@ function buildOwnerMetricsCsv(metrics: OwnerMetrics) {
       ticket.status,
       ticket.priority,
       ticket.area,
-      ticket.userEmail ?? "",
+      ...(includeSensitive ? [ticket.userEmail ?? ""] : []),
       ticket.subject,
-      ticket.ownerNotes,
+      ...(includeSensitive ? [ticket.ownerNotes] : []),
       ticket.escalatedToL2,
       ticket.escalationReason ?? "",
     ])),
@@ -133,7 +182,7 @@ function buildOwnerMetricsCsv(metrics: OwnerMetrics) {
       "fix_required",
       "summary",
       "rationale",
-      "user_email",
+      ...(includeSensitive ? ["user_email"] : []),
     ], metrics.errorDetails.map((error) => [
       error.id,
       error.createdAt,
@@ -146,9 +195,45 @@ function buildOwnerMetricsCsv(metrics: OwnerMetrics) {
       error.fixRequired,
       error.summary,
       error.rationale,
-      error.userEmail ?? "",
+      ...(includeSensitive ? [error.userEmail ?? ""] : []),
     ])),
   ].join("\n\n");
+}
+
+async function logOwnerMetricsExport({
+  actorUserId,
+  includeSensitive,
+  periodDays,
+  reason,
+  requestId,
+  userCount,
+}: {
+  actorUserId: string;
+  includeSensitive: boolean;
+  periodDays: number;
+  reason: string | null;
+  requestId: string;
+  userCount: number;
+}) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("audit_events").insert({
+    actor_user_id: actorUserId,
+    event_type: includeSensitive
+      ? "admin.metrics_export.sensitive"
+      : "admin.metrics_export.sanitized",
+    metadata: {
+      includeSensitive,
+      periodDays,
+      reason,
+      userCount,
+    },
+    request_id: requestId,
+    resource_type: "owner_metrics_export",
+  });
+
+  if (error) {
+    throw new Error("ADMIN_METRICS_EXPORT_AUDIT_FAILED");
+  }
 }
 
 function csvSection(name: string, rows: Array<[string, string | number | boolean]>) {
@@ -173,14 +258,24 @@ function csvCell(value: string | number | boolean) {
   return `"${text.replace(/"/g, "\"\"")}"`;
 }
 
+function userRef(userId: string) {
+  return createHash("sha256").update(userId).digest("hex").slice(0, 12);
+}
+
 function toApiError(error: unknown) {
   const authError = apiAuthErrorDetails(error, "Sign in is required.");
   if (authError) return authError;
 
   return {
     category: "server",
-    code: "admin.metrics_export_failed",
-    message: "Unable to export owner metrics right now.",
+    code:
+      error instanceof Error && error.message === "ADMIN_METRICS_EXPORT_AUDIT_FAILED"
+        ? "admin.metrics_export_audit_failed"
+        : "admin.metrics_export_failed",
+    message:
+      error instanceof Error && error.message === "ADMIN_METRICS_EXPORT_AUDIT_FAILED"
+        ? "Owner metrics export was blocked because the audit event could not be recorded."
+        : "Unable to export owner metrics right now.",
     status: 500,
   };
 }

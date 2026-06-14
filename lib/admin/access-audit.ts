@@ -93,7 +93,11 @@ export async function logAdminUserAccesses({
       }),
     );
 
-    if (visibilityLevel === "owner_override" || visibilityLevel === "sensitive_source_review") {
+    if (
+      visibilityLevel === "owner_override" ||
+      visibilityLevel === "sensitive_source_review" ||
+      visibilityLevel === "user_support_context"
+    ) {
       throw new Error("ADMIN_ACCESS_AUDIT_FAILED");
     }
   }

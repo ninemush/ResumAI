@@ -124,4 +124,42 @@ describe("claim provenance review", () => {
     expect(reviewed.experienceSections).toHaveLength(0);
     expect(reviewed.reviewerNotes.join(" ")).toContain("Chief Revenue Officer");
   });
+
+  test("rejects near-match high-impact title and employer claims", () => {
+    const evidenceCorpus = buildSupportedEvidenceCorpus([
+      {
+        status: "user_confirmed",
+        text: "Product Manager at Northstar Logistics. Led launch operations.",
+        userConfirmed: true,
+      },
+    ]);
+    const resume = normalizeResumeContent({
+      certifications: [],
+      contact: {},
+      education: [],
+      experienceBullets: [],
+      experienceSections: [
+        {
+          bullets: ["Led launch operations."],
+          company: "Northstar Logistics International",
+          dates: null,
+          location: null,
+          roleTitle: "Senior Product Manager",
+        },
+      ],
+      headline: "Product leader",
+      keywordGaps: [],
+      languages: [],
+      reviewerNotes: [],
+      skills: ["Launch operations"],
+      specialProjects: [],
+      summary: "Product leader.",
+    });
+
+    const reviewed = reviewResumeClaimProvenance({ evidenceCorpus, resume });
+
+    expect(reviewed.experienceSections).toHaveLength(0);
+    expect(reviewed.reviewerNotes.join(" ")).toContain("Senior Product Manager");
+    expect(reviewed.reviewerNotes.join(" ")).toContain("Northstar Logistics International");
+  });
 });

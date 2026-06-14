@@ -195,7 +195,7 @@ export async function getMasterResumeOverview(userId: string): Promise<MasterRes
         .limit(80),
       supabase
         .from("generated_resumes")
-        .select("id, content_json, pdf_storage_path, docx_storage_path, status, export_status, export_validated_at, prompt_version, model, updated_at")
+        .select("id, content_json, pdf_storage_path, docx_storage_path, status, export_status, export_validation, export_validated_at, prompt_version, model, updated_at")
         .eq("profile_id", profile.id)
         .eq("user_id", userId)
         .eq("resume_type", "master")
@@ -1399,7 +1399,7 @@ export async function getReusableMasterResumeExport(): Promise<MasterResumeOverv
 
   const { data: latestResume, error: resumeReadError } = await supabase
     .from("generated_resumes")
-    .select("docx_storage_path, pdf_storage_path, status, export_status, export_validated_at")
+    .select("docx_storage_path, pdf_storage_path, status, export_status, export_validation, export_validated_at")
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
     .eq("resume_type", "master")
@@ -1445,7 +1445,7 @@ export async function exportMasterResumeArtifacts(
   const { data: latestResume, error: resumeReadError } = await supabase
     .from("generated_resumes")
     .select(
-      "id, content_json, docx_storage_path, pdf_storage_path, prompt_version, status, export_status, claim_review_acknowledged_at, claim_review_acknowledgement",
+      "id, content_json, docx_storage_path, pdf_storage_path, prompt_version, status, export_status, export_validation, export_validated_at, claim_review_acknowledged_at, claim_review_acknowledgement",
     )
     .eq("profile_id", profile.id)
     .eq("user_id", userId)
@@ -1461,16 +1461,6 @@ export async function exportMasterResumeArtifacts(
 
   if (!latestResume) {
     throw new Error("MASTER_RESUME_NOT_FOUND");
-  }
-
-  if (
-    isDefaultResumeExportSectionVisibility(sectionVisibility) &&
-    isResumeExportReady(latestResume)
-  ) {
-    return {
-      didExport: false,
-      overview: await getMasterResumeOverview(userId),
-    };
   }
 
   const { data: sourceEvidence, error: sourceError } = await supabase
@@ -1530,6 +1520,16 @@ export async function exportMasterResumeArtifacts(
       supabase,
       userId,
     });
+  }
+
+  if (
+    isDefaultResumeExportSectionVisibility(sectionVisibility) &&
+    isResumeExportReady(latestResume)
+  ) {
+    return {
+      didExport: false,
+      overview: await getMasterResumeOverview(userId),
+    };
   }
 
   await markMasterResumeExportStatus({
@@ -1656,6 +1656,7 @@ export async function exportMasterResumeArtifacts(
 function isResumeExportReady(resume: {
   docx_storage_path: string | null;
   export_status?: string | null;
+  export_validation?: unknown;
   export_validated_at?: string | null;
   pdf_storage_path: string | null;
   status: string;
@@ -1663,8 +1664,17 @@ function isResumeExportReady(resume: {
   return (
     resume.status === "ready" &&
     readExportStatus(resume.export_status) === "export_validated" &&
+    !isLegacyBackfilledExport(resume.export_validation) &&
     Boolean(resume.export_validated_at) &&
     Boolean(resume.docx_storage_path && resume.pdf_storage_path)
+  );
+}
+
+function isLegacyBackfilledExport(exportValidation: unknown) {
+  return Boolean(
+    exportValidation &&
+      typeof exportValidation === "object" &&
+      (exportValidation as { legacyBackfill?: unknown }).legacyBackfill === true,
   );
 }
 

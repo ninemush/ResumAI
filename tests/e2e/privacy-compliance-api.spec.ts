@@ -129,7 +129,7 @@ test("requires owner or admin access before creating security incidents", async 
   expect(payload.error.code).toBe("auth.required");
 });
 
-test("validates security incident payloads", async ({ request }) => {
+test("requires auth before validating security incident payloads", async ({ request }) => {
   const response = await request.post("/api/admin/security/incidents", {
     data: {
       severity: "urgent",
@@ -138,8 +138,8 @@ test("validates security incident payloads", async ({ request }) => {
   });
   const payload = await response.json();
 
-  expect(response.status()).toBe(400);
-  expect(payload.error.code).toBe("security_incident.invalid_input");
+  expect(response.status()).toBe(401);
+  expect(payload.error.code).toBe("auth.required");
 });
 
 test("requires owner or admin access before updating security incidents", async ({ request }) => {

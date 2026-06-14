@@ -265,6 +265,10 @@ function isSupportedClaim(value: string, evidenceCorpus: string) {
     return true;
   }
 
+  if (isHighImpactClaimText(normalized)) {
+    return false;
+  }
+
   const tokens = normalized.split(" ").filter((token) => token.length > 2);
   if (tokens.length <= 2) {
     return tokens.every((token) => evidenceCorpus.includes(token));
@@ -272,6 +276,27 @@ function isSupportedClaim(value: string, evidenceCorpus: string) {
 
   const supportedTokenCount = tokens.filter((token) => evidenceCorpus.includes(token)).length;
   return supportedTokenCount / tokens.length >= 0.72;
+}
+
+function isHighImpactClaimText(normalized: string) {
+  return (
+    /\b\d+(?:[%.,]|\b)|\b(?:million|billion|thousand|k|m)\b/i.test(normalized) ||
+    /\b(?:salary|compensation|pay range|bonus|commission|work authorization|eligible to work|visa|citizenship|clearance|sponsorship)\b/i.test(
+      normalized,
+    ) ||
+    /\b(?:senior|lead|principal|director|head of|chief|vp|vice president|manager|executive)\b/i.test(
+      normalized,
+    ) ||
+    /\b(?:certified|certification|credential|license|licensed|mba|bachelor|master|phd|degree|university|college)\b/i.test(
+      normalized,
+    ) ||
+    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|20\d{2}|19\d{2})\b/i.test(
+      normalized,
+    ) ||
+    /\b(?:based in|located in|relocated to|across|at|for|with|as|role as|title of|served as|worked as|position as)\b/i.test(
+      normalized,
+    )
+  );
 }
 
 function normalizeCorpus(values: string[]) {

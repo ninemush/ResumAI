@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { requireProtectedApiSession } from "@/lib/api/auth";
 import { updateSecurityIncident } from "@/lib/privacy/incidents";
 import { securityIncidentUpdateSchema } from "@/lib/privacy/schemas";
 import {
@@ -30,6 +31,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   try {
+    await requireProtectedApiSession({ requireAdmin: true });
     const { id } = await context.params;
     const input = securityIncidentUpdateSchema.parse(await request.json());
     const incident = await updateSecurityIncident({ id, input });

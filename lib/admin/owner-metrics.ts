@@ -300,7 +300,7 @@ export async function getOwnerMetrics(periodDays = 30): Promise<OwnerMetrics> {
     resourceType: "owner_metrics",
     supabase,
     targetUserIds: finalMetrics.usersList.map((item) => item.userId),
-    visibilityLevel: "support_metadata",
+    visibilityLevel: "user_support_context",
   });
 
   return finalMetrics;

@@ -1,9 +1,8 @@
 import "server-only";
 
 import {
-  finalizeCreditReservation,
+  finalizeCreditReservationWithOutput,
   getFinalizedCreditOperationOutput,
-  recordCreditOperationOutput,
   releaseCreditReservation,
   requireCredits,
   reserveCredits,
@@ -82,26 +81,17 @@ export async function runPaidCreditOperation<T>({
       return { operationKey, result, reused: true };
     }
 
-    const finalizedReservation = await finalizeCreditReservation({
-      metadata: {
+    await finalizeCreditReservationWithOutput({
+      ledgerMetadata: {
         ...output.ledgerMetadata,
-        output_ids: output.outputIds,
         resource_id: output.resourceId ?? resourceId,
         resource_type: output.resourceType ?? resourceType,
       },
-      reservationId: reservation.reservationId,
-      resourceId: output.resourceId ?? resourceId,
-    });
-
-    await recordCreditOperationOutput({
-      feature,
-      ledgerEventId: finalizedReservation.ledgerEventId,
-      metadata: {
+      outputIds: output.outputIds,
+      recordMetadata: {
         ...metadata,
         ...output.recordMetadata,
       },
-      operationKey,
-      outputIds: output.outputIds,
       reservationId: reservation.reservationId,
       resourceId: output.resourceId ?? resourceId,
       resourceType: output.resourceType ?? resourceType,

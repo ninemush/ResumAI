@@ -44,6 +44,23 @@ describe("advisor contextual replies", () => {
     expect(reply).toContain("one missing detail");
   });
 
+  test("uses the immediate prior assistant point for clarification follow-ups", () => {
+    const reply = buildDeterministicContextualAdvisorReply({
+      facts: [],
+      message: "what does that mean?",
+      profile: null,
+      recentConversation: [
+        { speaker: "assistant", message_text: "Older point: rewrite the summary." },
+        { speaker: "user", message_text: "What about my source file?" },
+        { speaker: "assistant", message_text: "Best next move: verify the employer and exact dates from the uploaded PDF." },
+        { speaker: "user", message_text: "what does that mean?" },
+      ],
+    });
+
+    expect(reply).toContain("verify the employer and exact dates");
+    expect(reply).not.toContain("rewrite the summary");
+  });
+
   test("recognizes resume preference save requests", () => {
     expect(isPreferenceSaveRequest("Please remember my resume format preference: no long summary.")).toBe(true);
     expect(isPreferenceSaveRequest("What roles should I target next?")).toBe(false);

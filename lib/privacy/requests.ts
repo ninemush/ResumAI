@@ -135,7 +135,7 @@ export async function updateAdminPrivacyRequest({
 }) {
   const parsed = adminPrivacyRequestUpdateSchema.parse(input);
   const supabase = await createClient();
-  await requireAdmin(supabase);
+  const adminUser = await requireAdmin(supabase);
 
   const patch: Record<string, unknown> = {};
 
@@ -163,7 +163,25 @@ export async function updateAdminPrivacyRequest({
     throw new Error("PRIVACY_REQUEST_UPDATE_FAILED");
   }
 
-  return mapPrivacyRequestRow(data as unknown as PrivacyRequestRow, true);
+  const requestRow = data as unknown as PrivacyRequestRow;
+  const { error: auditError } = await supabase.from("audit_events").insert({
+    actor_user_id: adminUser.id,
+    event_type: "admin.privacy_request.updated",
+    metadata: {
+      changedFields: Object.keys(patch),
+      requestType: requestRow.request_type,
+      status: requestRow.status,
+    },
+    resource_id: requestRow.id,
+    resource_type: "privacy_request",
+    user_id: requestRow.user_id,
+  });
+
+  if (auditError) {
+    throw new Error("PRIVACY_REQUEST_AUDIT_FAILED");
+  }
+
+  return mapPrivacyRequestRow(requestRow, true);
 }
 
 export function defaultSubject(requestType: PrivacyRequestType) {

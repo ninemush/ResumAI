@@ -132,6 +132,7 @@ export async function getMaterialReview(
     artifact: {
       docx_storage_path: string | null;
       export_status: string | null;
+      export_validation?: unknown;
       export_validated_at: string | null;
       pdf_storage_path: string | null;
       status: string;
@@ -263,13 +264,6 @@ export async function exportMaterialArtifacts(
     throw new Error("MATERIALS_NOT_FOUND");
   }
 
-  if (isMaterialExportReady({ coverLetter, resume })) {
-    return {
-      didExport: false,
-      review: await getMaterialReview({ applicationId: parsed.applicationId }),
-    };
-  }
-
   const resumeContent = parseResumeContent(resume.content_json);
   const coverLetterReview = reviewCoverLetterClaimProvenance({
     coverLetter: coverLetter.content,
@@ -310,6 +304,13 @@ export async function exportMaterialArtifacts(
       supabase,
       userId,
     });
+  }
+
+  if (isMaterialExportReady({ coverLetter, resume })) {
+    return {
+      didExport: false,
+      review: await getMaterialReview({ applicationId: parsed.applicationId }),
+    };
   }
 
   await markMaterialExportStatus({
@@ -477,6 +478,8 @@ function isMaterialExportReady({
       coverLetter?.status === "ready" &&
       readExportStatus(resume.export_status) === "export_validated" &&
       readExportStatus(coverLetter.export_status) === "export_validated" &&
+      !isLegacyBackfilledExport(resume.export_validation) &&
+      !isLegacyBackfilledExport(coverLetter.export_validation) &&
       resume.export_validated_at &&
       coverLetter.export_validated_at &&
       resume.pdf_storage_path &&
@@ -489,6 +492,7 @@ function isMaterialExportReady({
 function isValidatedExport(artifact: {
   docx_storage_path: string | null;
   export_status: string | null;
+  export_validation?: unknown;
   export_validated_at: string | null;
   pdf_storage_path: string | null;
   status: string;
@@ -496,7 +500,16 @@ function isValidatedExport(artifact: {
   return (
     artifact.status === "ready" &&
     readExportStatus(artifact.export_status) === "export_validated" &&
+    !isLegacyBackfilledExport(artifact.export_validation) &&
     Boolean(artifact.export_validated_at && artifact.pdf_storage_path && artifact.docx_storage_path)
+  );
+}
+
+function isLegacyBackfilledExport(exportValidation: unknown) {
+  return Boolean(
+    exportValidation &&
+      typeof exportValidation === "object" &&
+      (exportValidation as { legacyBackfill?: unknown }).legacyBackfill === true,
   );
 }
 
@@ -575,13 +588,15 @@ function buildExportReadiness({
         : resumeExportStatus === "export_pending" || coverLetterExportStatus === "export_pending"
           ? "export_pending"
           : resume.pdf_storage_path &&
-      coverLetter.pdf_storage_path &&
-      resume.docx_storage_path &&
-      coverLetter.docx_storage_path &&
-      resume.export_validated_at &&
-      coverLetter.export_validated_at &&
-      resumeExportStatus === "export_validated" &&
-      coverLetterExportStatus === "export_validated"
+              coverLetter.pdf_storage_path &&
+              resume.docx_storage_path &&
+              coverLetter.docx_storage_path &&
+              resume.export_validated_at &&
+              coverLetter.export_validated_at &&
+              resumeExportStatus === "export_validated" &&
+              coverLetterExportStatus === "export_validated" &&
+              !isLegacyBackfilledExport(resume.export_validation) &&
+              !isLegacyBackfilledExport(coverLetter.export_validation)
             ? "exported"
             : "ready_to_export",
     warnings,
@@ -961,7 +976,7 @@ async function readLatestResume(applicationId: string, userId: string) {
   const { data, error } = await supabase
     .from("generated_resumes")
     .select(
-      "id, content_json, pdf_storage_path, docx_storage_path, status, export_status, export_validated_at, claim_review_acknowledged_at, claim_review_acknowledgement, updated_at",
+      "id, content_json, pdf_storage_path, docx_storage_path, status, export_status, export_validation, export_validated_at, claim_review_acknowledged_at, claim_review_acknowledgement, updated_at",
     )
     .eq("application_id", applicationId)
     .eq("user_id", userId)
@@ -981,7 +996,7 @@ async function readLatestCoverLetter(applicationId: string, userId: string) {
   const { data, error } = await supabase
     .from("generated_cover_letters")
     .select(
-      "id, content, pdf_storage_path, docx_storage_path, status, export_status, export_validated_at, claim_review_acknowledged_at, claim_review_acknowledgement, claim_risks, reviewer_notes, updated_at",
+      "id, content, pdf_storage_path, docx_storage_path, status, export_status, export_validation, export_validated_at, claim_review_acknowledged_at, claim_review_acknowledgement, claim_risks, reviewer_notes, updated_at",
     )
     .eq("application_id", applicationId)
     .eq("user_id", userId)
