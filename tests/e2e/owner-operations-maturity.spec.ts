@@ -50,6 +50,43 @@ test.describe("owner operations maturity", () => {
     });
   });
 
+  test("includes release provenance in owner-only platform status", async ({ request }) => {
+    loadLocalEnv();
+
+    const adminCookie = await buildAdminAuthCookieHeader({ request });
+    const response = await request.get("/api/admin/platform-status", {
+      headers: { cookie: adminCookie },
+    });
+    const payload = await response.json();
+
+    expect(response.ok()).toBe(true);
+    expect(payload.status.release).toMatchObject({
+      capturedAt: expect.any(String),
+      provenanceAvailable: expect.any(Boolean),
+      targetEnvironment: expect.any(String),
+    });
+    expect(Object.keys(payload.status.release).sort()).toEqual([
+      "branchUrl",
+      "capturedAt",
+      "deploymentUrl",
+      "gitCommitRef",
+      "gitCommitSha",
+      "provenanceAvailable",
+      "targetEnvironment",
+    ]);
+    expect(payload.status.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          impact: "availability",
+          label: "Release Provenance",
+        }),
+      ]),
+    );
+    expect(JSON.stringify(payload.status.release)).not.toMatch(
+      /authorization|bearer|cookie|password|secret|service_role/i,
+    );
+  });
+
   test("denies non-admin metrics CSV export", async ({ request }) => {
     loadLocalEnv();
 

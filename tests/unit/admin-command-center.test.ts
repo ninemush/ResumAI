@@ -190,6 +190,21 @@ describe("admin command center helpers", () => {
     expect(countCleanupPlatformItems(status)).toBe(1);
   });
 
+  test("counts missing release provenance as an availability issue", () => {
+    const status = buildPlatformStatusFixture();
+    status.checks.push({
+      details: "Production release provenance is incomplete. Missing: Git SHA.",
+      impact: "availability",
+      label: "Release Provenance",
+      lastFailureAt: now.toISOString(),
+      lastSuccessAt: null,
+      state: "degraded",
+    });
+
+    expect(summarizeOverallStatus(status.checks)).toBe("degraded");
+    expect(countAvailabilityPlatformIssues(status)).toBe(1);
+  });
+
   test("outcome summaries include sample size and caution for tiny samples", () => {
     expect(
       summarizeOutcomePatternWithSample({
@@ -234,6 +249,15 @@ function buildPlatformStatusFixture(): PlatformStatusOverview {
     ],
     generatedAt: now.toISOString(),
     overallStatus: "healthy",
+    release: {
+      branchUrl: "https://ai-resume-app-git-main-resum-ai.vercel.app",
+      capturedAt: now.toISOString(),
+      deploymentUrl: "https://ai-resume-7e74sw96u-resum-ai.vercel.app",
+      gitCommitRef: "main",
+      gitCommitSha: "d2ae26bd4efc9a853c5c4970a15d83ce3dc38758",
+      provenanceAvailable: true,
+      targetEnvironment: "production",
+    },
     recentSignals: {
       activeErrors24h: 0,
       applicationExportsReady: 0,

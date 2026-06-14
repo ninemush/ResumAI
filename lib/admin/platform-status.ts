@@ -2,6 +2,7 @@ import "server-only";
 
 import { getMaterialsModel, getProfileIntakeModel } from "@/lib/ai/openai";
 import { summarizeOverallStatus, type PlatformHealthState } from "@/lib/admin/platform-health";
+import { readReleaseMetadata, type ReleaseMetadata } from "@/lib/admin/release-metadata";
 import { createClient } from "@/lib/supabase/server";
 
 export type PlatformStatusCheck = {
@@ -17,6 +18,7 @@ export type PlatformStatusOverview = {
   checks: PlatformStatusCheck[];
   generatedAt: string;
   overallStatus: PlatformHealthState;
+  release: ReleaseMetadata;
   recentSignals: {
     activeErrors24h: number;
     applicationExportsReady: number;
@@ -45,10 +47,12 @@ export async function getPlatformStatus(): Promise<PlatformStatusOverview> {
   }
 
   const since = new Date(Date.now() - dayMs).toISOString();
+  const release = readReleaseMetadata();
   const [
     dbCheck,
     storageCheck,
     aiCheck,
+    releaseCheck,
     sourceCheck,
     jobCheck,
     artifactCheck,
@@ -57,6 +61,7 @@ export async function getPlatformStatus(): Promise<PlatformStatusOverview> {
     readDatabaseCheck(supabase),
     readStorageCheck(supabase),
     readAiCheck(supabase, since),
+    readReleaseProvenanceCheck(release),
     readSourceExtractionCheck(supabase, since),
     readJobIngestionCheck(supabase, since),
     readArtifactGenerationCheck(supabase),
@@ -66,6 +71,7 @@ export async function getPlatformStatus(): Promise<PlatformStatusOverview> {
     dbCheck,
     storageCheck,
     aiCheck,
+    releaseCheck,
     sourceCheck,
     jobCheck,
     artifactCheck,
@@ -83,8 +89,32 @@ export async function getPlatformStatus(): Promise<PlatformStatusOverview> {
     checks,
     generatedAt: new Date().toISOString(),
     overallStatus: summarizeOverallStatus(checks),
+    release,
     recentSignals,
   };
+}
+
+async function readReleaseProvenanceCheck(release: ReleaseMetadata) {
+  const missing = [
+    release.gitCommitSha ? null : "Git SHA",
+    release.gitCommitRef ? null : "Git branch",
+    release.deploymentUrl ? null : "deployment URL",
+  ].filter((item): item is string => Boolean(item));
+  const isProduction = release.targetEnvironment === "production";
+  const degraded = isProduction && !release.provenanceAvailable;
+
+  return {
+    details: degraded
+      ? `Production release provenance is incomplete. Missing: ${missing.join(", ")}.`
+      : release.provenanceAvailable
+        ? `Deployment ${shortSha(release.gitCommitSha)} from ${release.gitCommitRef} is traceable.`
+        : "Release provenance is not required for this non-production runtime.",
+    impact: "availability",
+    label: "Release Provenance",
+    lastFailureAt: degraded ? release.capturedAt : null,
+    lastSuccessAt: release.provenanceAvailable ? release.capturedAt : null,
+    state: degraded ? "degraded" : "healthy",
+  } satisfies PlatformStatusCheck;
 }
 
 async function readDatabaseCheck(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -257,6 +287,10 @@ async function readTelemetryCheck(
 
 function safeModelName(value: string) {
   return value.replace(/[^a-zA-Z0-9._:-]/g, "");
+}
+
+function shortSha(value: string | null) {
+  return value ? value.slice(0, 7) : "unknown";
 }
 
 function latestDate<T extends { created_at: string; extraction_status?: string; ingestion_status?: string }>(

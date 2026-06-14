@@ -2762,6 +2762,19 @@ function PlatformStatusPanel({
           availability degraded.
         </p>
       </article>
+      <article className={`platform-status-check ${status.release.provenanceAvailable ? "healthy" : "degraded"}`}>
+        <div>
+          <span>Release</span>
+          <strong>{status.release.provenanceAvailable ? shortReleaseSha(status.release.gitCommitSha) : "Incomplete"}</strong>
+        </div>
+        <p>
+          {status.release.gitCommitRef ?? "Unknown branch"} · {formatLabel(status.release.targetEnvironment)}
+        </p>
+        <small>
+          Deployment {formatReleaseUrl(status.release.deploymentUrl)} · Captured {formatDateTime(status.release.capturedAt)}
+        </small>
+        {status.release.branchUrl ? <small>Branch URL {formatReleaseUrl(status.release.branchUrl)}</small> : null}
+      </article>
       {status.checks.map((check) => (
         <article className={`platform-status-check ${check.state}`} key={check.label}>
           <div>
@@ -2823,6 +2836,14 @@ function formatPlatformCheckState(check: PlatformStatusOverview["checks"][number
   }
 
   return formatLabel(check.state);
+}
+
+function shortReleaseSha(value: string | null) {
+  return value ? value.slice(0, 7) : "Unknown";
+}
+
+function formatReleaseUrl(value: string | null) {
+  return value ? value.replace(/^https?:\/\//, "") : "not exposed";
 }
 
 function PageUsagePanel({ values }: { values: OwnerMetrics["trends"]["pageUsage"] }) {
