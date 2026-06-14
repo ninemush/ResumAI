@@ -8518,6 +8518,25 @@ input:focus {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.fact-receipt-list.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fact-receipt-list.compact .fact-group {
+  border-radius: var(--pr-radius-sm);
+  padding: 12px;
+}
+
+.fact-receipt-list.compact .fact-group h3 {
+  font-size: 0.78rem;
+  text-transform: capitalize;
+}
+
+.fact-receipt-list.compact .fact-receipt-card p {
+  font-size: 0.9rem;
+  line-height: 1.42;
+}
+
 .fact-receipt-card p {
   color: var(--ink-soft);
   line-height: 1.45;

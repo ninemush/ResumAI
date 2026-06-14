@@ -418,63 +418,6 @@ export function ProfileExplorer({
         </div>
       </section>
 
-      {learnedFactReceipt.length > 0 ? (
-        <section className="profile-editor-panel fact-receipt-panel" aria-label="Learned facts from sources">
-          <div className="section-heading">
-            <p className="eyebrow">Source receipt</p>
-            <h2>Recently learned facts</h2>
-          </div>
-          <div className="fact-groups fact-receipt-list">
-            {learnedFactReceipt.map((fact) => (
-              <article className="fact-group fact-receipt-card" key={fact.id}>
-                <h3>{fact.type}</h3>
-                <p>{fact.value}</p>
-                <div className="fact-receipt-meta">
-                  <span>{fact.sourceLabel}</span>
-                  <span>{formatEvidenceStatus(fact.evidenceStatus)}</span>
-                </div>
-                <div className="fact-review-actions" aria-label={`Review ${fact.type} fact`}>
-                  {fact.userConfirmed ? (
-                    <span className="fact-confirmed-label">
-                      <CheckCircle2 size={13} aria-hidden="true" />
-                      Confirmed
-                    </span>
-                  ) : (
-                    <button
-                      className="fact-confirm-button"
-                      disabled={pendingId === fact.id}
-                      onClick={() => confirmFact(fact.id)}
-                      type="button"
-                    >
-                      <CheckCircle2 size={13} aria-hidden="true" />
-                      Confirm
-                    </button>
-                  )}
-                  <button
-                    className="fact-confirm-button"
-                    disabled={pendingId === fact.id}
-                    onClick={() => editFact(fact.id, fact.value)}
-                    type="button"
-                  >
-                    <Pencil size={13} aria-hidden="true" />
-                    Edit
-                  </button>
-                  <button
-                    className="fact-delete-button"
-                    disabled={pendingId === fact.id}
-                    onClick={() => deleteFact(fact.id)}
-                    type="button"
-                  >
-                    <Trash2 size={13} aria-hidden="true" />
-                    Delete
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       <section className="intake-action-panel" aria-label="Build profile from source material">
         <div className="section-heading">
           <p className="eyebrow">Build my profile</p>
@@ -852,6 +795,69 @@ export function ProfileExplorer({
           ))}
         </div>
       </section>
+
+      {learnedFactReceipt.length > 0 ? (
+        <details
+          className="profile-editor-panel profile-editor-disclosure fact-receipt-panel"
+          aria-label="Review recently learned facts"
+        >
+          <summary>
+            <span>
+              <p className="eyebrow">Evidence history</p>
+              <strong>{learnedFactReceipt.length} recent source fact{learnedFactReceipt.length === 1 ? "" : "s"}</strong>
+            </span>
+            <Pencil size={16} aria-hidden="true" />
+          </summary>
+          <div className="fact-groups fact-receipt-list compact">
+            {learnedFactReceipt.map((fact) => (
+              <article className="fact-group fact-receipt-card" key={fact.id}>
+                <h3>{fact.type}</h3>
+                <p>{fact.value}</p>
+                <div className="fact-receipt-meta">
+                  <span>{fact.sourceLabel}</span>
+                  <span>{formatEvidenceStatus(fact.evidenceStatus)}</span>
+                </div>
+                <div className="fact-review-actions" aria-label={`Review ${fact.type} fact`}>
+                  {fact.userConfirmed ? (
+                    <span className="fact-confirmed-label">
+                      <CheckCircle2 size={13} aria-hidden="true" />
+                      Confirmed
+                    </span>
+                  ) : (
+                    <button
+                      className="fact-confirm-button"
+                      disabled={pendingId === fact.id}
+                      onClick={() => confirmFact(fact.id)}
+                      type="button"
+                    >
+                      <CheckCircle2 size={13} aria-hidden="true" />
+                      Confirm
+                    </button>
+                  )}
+                  <button
+                    className="fact-confirm-button"
+                    disabled={pendingId === fact.id}
+                    onClick={() => editFact(fact.id, fact.value)}
+                    type="button"
+                  >
+                    <Pencil size={13} aria-hidden="true" />
+                    Edit
+                  </button>
+                  <button
+                    className="fact-delete-button"
+                    disabled={pendingId === fact.id}
+                    onClick={() => deleteFact(fact.id)}
+                    type="button"
+                  >
+                    <Trash2 size={13} aria-hidden="true" />
+                    Delete
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </details>
+      ) : null}
 
       {overview.roleRecommendations.length > 0 ? (
         <section className="roles-panel" aria-label="Role recommendations">
