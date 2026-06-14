@@ -25,7 +25,9 @@ test.describe("owner operations maturity", () => {
 
     expect(response.ok()).toBe(true);
     expect(response.headers()["content-type"]).toContain("text/csv");
-    expect(response.headers()["content-disposition"]).toContain("pramania-owner-metrics-30d.csv");
+    expect(response.headers()["content-disposition"]).toContain(
+      "pramania-owner-metrics-30d-sanitized.csv",
+    );
     expect(csv).toContain("# summary");
     expect(csv).toContain("credits_used");
     expect(csv).toContain("# user_economics");
@@ -44,7 +46,7 @@ test.describe("owner operations maturity", () => {
     expect(auditRows?.[0]).toMatchObject({
       access_reason: "owner_metrics_read",
       resource_type: "owner_metrics",
-      visibility_level: "support_metadata",
+      visibility_level: "user_support_context",
     });
   });
 
