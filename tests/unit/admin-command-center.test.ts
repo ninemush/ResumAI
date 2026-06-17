@@ -251,7 +251,9 @@ function buildPlatformStatusFixture(): PlatformStatusOverview {
     overallStatus: "healthy",
     release: {
       branchUrl: "https://ai-resume-app-git-main-resum-ai.vercel.app",
+      buildTime: now.toISOString(),
       capturedAt: now.toISOString(),
+      deploymentId: "dpl_123",
       deploymentUrl: "https://ai-resume-7e74sw96u-resum-ai.vercel.app",
       gitCommitRef: "main",
       gitCommitSha: "d2ae26bd4efc9a853c5c4970a15d83ce3dc38758",

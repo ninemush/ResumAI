@@ -2771,8 +2771,12 @@ function PlatformStatusPanel({
           {status.release.gitCommitRef ?? "Unknown branch"} · {formatLabel(status.release.targetEnvironment)}
         </p>
         <small>
-          Deployment {formatReleaseUrl(status.release.deploymentUrl)} · Captured {formatDateTime(status.release.capturedAt)}
+          Deployment {status.release.deploymentId ?? formatReleaseUrl(status.release.deploymentUrl)} · Built{" "}
+          {formatDateTime(status.release.buildTime)}
         </small>
+        {status.release.deploymentId ? (
+          <small>Deployment URL {formatReleaseUrl(status.release.deploymentUrl)}</small>
+        ) : null}
         {status.release.branchUrl ? <small>Branch URL {formatReleaseUrl(status.release.branchUrl)}</small> : null}
       </article>
       {status.checks.map((check) => (

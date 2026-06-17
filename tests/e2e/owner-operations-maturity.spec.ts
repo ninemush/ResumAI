@@ -61,13 +61,16 @@ test.describe("owner operations maturity", () => {
 
     expect(response.ok()).toBe(true);
     expect(payload.status.release).toMatchObject({
+      buildTime: expect.any(String),
       capturedAt: expect.any(String),
       provenanceAvailable: expect.any(Boolean),
       targetEnvironment: expect.any(String),
     });
     expect(Object.keys(payload.status.release).sort()).toEqual([
       "branchUrl",
+      "buildTime",
       "capturedAt",
+      "deploymentId",
       "deploymentUrl",
       "gitCommitRef",
       "gitCommitSha",

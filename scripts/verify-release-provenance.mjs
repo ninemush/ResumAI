@@ -15,24 +15,24 @@ const targetUrl = normalizeBaseUrl(
     "https://pramania.com",
 );
 const expectedSha = process.env.RELEASE_EXPECTED_SHA ?? readGitSha();
-const bearer = process.env.RELEASE_PROVENANCE_BEARER?.trim();
-const cookie = process.env.RELEASE_PROVENANCE_COOKIE?.trim();
+const expectedDeploymentId = process.env.RELEASE_EXPECTED_DEPLOYMENT_ID?.trim() || null;
 const expectProduction = process.env.RELEASE_PROVENANCE_EXPECT_PRODUCTION !== "false";
 
 mkdirSync(outputDir, { recursive: true });
 
-if (!bearer && !cookie) {
+if (!expectedSha) {
   const evidence = {
     capturedAt,
-    expectedSha,
+    expectedDeploymentId,
+    expectedSha: null,
     ok: false,
-    reason: "missing_release_provenance_auth",
+    reason: "missing_expected_sha",
     status: "blocked",
     targetUrl,
   };
   writeEvidence(evidence);
   console.error(
-    "Release provenance verification blocked: set RELEASE_PROVENANCE_BEARER or RELEASE_PROVENANCE_COOKIE.",
+    "Release provenance verification blocked: Git CLI could not resolve origin/main. Set RELEASE_EXPECTED_SHA explicitly.",
   );
   process.exit(allowBlocked ? 0 : 2);
 }
@@ -41,23 +41,20 @@ const headers = {
   Accept: "application/json",
 };
 
-if (bearer) headers.Authorization = `Bearer ${bearer}`;
-if (cookie) headers.Cookie = cookie;
-
 try {
-  const response = await fetch(new URL("/api/admin/platform-status", targetUrl), {
+  const response = await fetch(new URL("/api/release", targetUrl), {
     headers,
   });
   const payload = await response.json().catch(() => null);
-  const release = payload?.status?.release ?? null;
+  const release = payload?.release ?? null;
   const failures = [];
 
   if (!response.ok) {
-    failures.push(`platform status returned HTTP ${response.status}`);
+    failures.push(`release endpoint returned HTTP ${response.status}`);
   }
 
   if (!release) {
-    failures.push("platform status response did not include release metadata");
+    failures.push("release endpoint response did not include release metadata");
   } else {
     if (release.gitCommitSha !== expectedSha) {
       failures.push(`deployed SHA ${release.gitCommitSha ?? "missing"} did not match ${expectedSha}`);
@@ -70,10 +67,21 @@ try {
     if (!release.provenanceAvailable) {
       failures.push("release provenance was marked unavailable by the app");
     }
+
+    if (expectProduction && !release.deploymentId) {
+      failures.push("production release did not report a deployment ID");
+    }
+
+    if (expectedDeploymentId && release.deploymentId !== expectedDeploymentId) {
+      failures.push(
+        `deployment ID ${release.deploymentId ?? "missing"} did not match ${expectedDeploymentId}`,
+      );
+    }
   }
 
   const evidence = {
     capturedAt,
+    expectedDeploymentId,
     expectedSha,
     failures,
     ok: failures.length === 0,
@@ -119,10 +127,13 @@ function renderMarkdown(evidence) {
     `- Captured at: ${evidence.capturedAt}`,
     `- Target URL: ${evidence.targetUrl}`,
     `- Expected SHA: ${evidence.expectedSha ?? "unknown"}`,
+    `- Expected deployment ID: ${evidence.expectedDeploymentId ?? "not required"}`,
     `- Deployed SHA: ${release.gitCommitSha ?? "not available"}`,
     `- Branch: ${release.gitCommitRef ?? "not available"}`,
     `- Target environment: ${release.targetEnvironment ?? "not available"}`,
+    `- Deployment ID: ${release.deploymentId ?? "not available"}`,
     `- Deployment URL: ${release.deploymentUrl ?? "not available"}`,
+    `- Build time: ${release.buildTime ?? "not available"}`,
     `- Provenance available: ${String(Boolean(release.provenanceAvailable))}`,
     evidence.failures?.length ? `- Failures: ${evidence.failures.join("; ")}` : null,
     evidence.reason ? `- Reason: ${evidence.reason}` : null,

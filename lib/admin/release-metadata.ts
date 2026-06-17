@@ -7,6 +7,8 @@ import {
 
 export type { ReleaseMetadata } from "@/lib/admin/release-metadata-core";
 
+const releaseBuildTime = new Date();
+
 export function readReleaseMetadata(): ReleaseMetadata {
-  return readReleaseMetadataFromEnv(process.env);
+  return readReleaseMetadataFromEnv(process.env, new Date(), releaseBuildTime);
 }

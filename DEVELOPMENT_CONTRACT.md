@@ -489,6 +489,27 @@ Before deploying production:
 - Rollback path is known.
 - Change is traceable to a commit.
 
+## 15.1 Release And Production Provenance Controls
+
+Production must be traceable, main-driven, and evidence-backed.
+
+Controls:
+
+- `main` is the only normal production deployment source.
+- Vercel production deployments must come from the Git-connected `main` branch.
+- `main` must not lag production. A production claim is not valid unless `origin/main` contains the deployed commit.
+- Production release validation requires Git CLI access, Vercel CLI or equivalent Vercel API access, GitHub CLI/GitHub app or equivalent repository access, and Vercel production environment access for release metadata configuration.
+- Schema-affecting releases require Supabase CLI or equivalent migration-state access before validation. If migration state cannot be read, database migration evidence is missing and launch-readiness claims are blocked.
+- Signed-in UX or admin claims require signed-in QA/admin evidence. Bundle inspection, screenshots of signed-out pages, or code review alone cannot be reported as a signed-in pass.
+- Every production validation claim must include the expected Git SHA, the live Git SHA reported by the app, the production deployment ID, and the deployment URL.
+- `GET /api/release` must remain public and return only non-secret release metadata suitable for deployment provenance checks.
+- Production provenance is unavailable unless the app reports a Git commit SHA, Git commit ref, and deployment URL.
+- Manual archive deploys are allowed only for owner-approved emergency rollback or hotfix use. They require an explicit reason and release metadata fallback variables before validation: `RELEASE_COMMIT_SHA`, `RELEASE_COMMIT_REF`, `RELEASE_DEPLOYMENT_ID`, and `RELEASE_DEPLOYMENT_URL`.
+- Missing release tools, repository access, Vercel access, Supabase migration-state access, or signed-in QA access must be reported as blocked or missing evidence, not passed.
+- `npm run release:preflight` must pass before normal production release validation.
+- `npm run release:verify` must verify `https://pramania.com/api/release` against the expected SHA before production is called release-current.
+- `npm run release:state` must collect deployment ID, expected SHA, live SHA, migration-state evidence, tool availability, and route smoke evidence into `qa-artifacts/` for production-readiness records.
+
 ## 16. Stop Conditions
 
 Stop and ask before proceeding if:
