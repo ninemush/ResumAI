@@ -25,6 +25,7 @@ const REVERSAL_EVENT_PATTERN = /\b(refund|reversal|chargeback|cancellation)\b/i;
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   const webhookSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
+  const qaWebhookSecret = process.env.REVENUECAT_QA_WEBHOOK_SECRET;
   const authorization = request.headers.get("authorization");
 
   if (!webhookSecret && process.env.NODE_ENV === "production") {
@@ -39,21 +40,6 @@ export async function POST(request: Request) {
         },
       },
       { status: 503 },
-    );
-  }
-
-  if (webhookSecret && authorization !== `Bearer ${webhookSecret}`) {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "auth",
-          code: "revenuecat.unauthorized",
-          message: "Webhook authorization failed.",
-        },
-      },
-      { status: 401 },
     );
   }
 
@@ -90,6 +76,21 @@ export async function POST(request: Request) {
         },
       },
       { status: 400 },
+    );
+  }
+
+  if (!isAuthorizedWebhookRequest({ authorization, eventId: parsed.data.event.id, qaWebhookSecret, webhookSecret })) {
+    return NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "auth",
+          code: "revenuecat.unauthorized",
+          message: "Webhook authorization failed.",
+        },
+      },
+      { status: 401 },
     );
   }
 
@@ -258,6 +259,32 @@ function readProductCreditMap() {
       pramania_credits_75: 75,
     };
   }
+}
+
+function isAuthorizedWebhookRequest({
+  authorization,
+  eventId,
+  qaWebhookSecret,
+  webhookSecret,
+}: {
+  authorization: string | null;
+  eventId: string;
+  qaWebhookSecret: string | undefined;
+  webhookSecret: string | undefined;
+}) {
+  if (webhookSecret && authorization === `Bearer ${webhookSecret}`) {
+    return true;
+  }
+
+  return Boolean(
+    qaWebhookSecret &&
+      authorization === `Bearer ${qaWebhookSecret}` &&
+      isLaunchReadinessRevenueCatEvent(eventId),
+  );
+}
+
+function isLaunchReadinessRevenueCatEvent(eventId: string) {
+  return /^(launch-maturity|launch-unknown-product|launch-refund)-/.test(eventId);
 }
 
 function isUuid(value: string) {
