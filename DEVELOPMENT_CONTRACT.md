@@ -125,7 +125,14 @@ This contract does not replace legal counsel, formal audit scoping, or a complia
 All changes must follow:
 
 - Branch-based development.
-- Pull request review before merge once collaboration begins.
+- Pull Request (PR) based review before merge once collaboration begins.
+- A PR means a GitHub Pull Request: a reviewed package of proposed commits, checks, discussion, and merge evidence.
+- Direct pushes to `main` are prohibited.
+- Feature and working branches may receive multiple pushes while work is active; those pushes update the same PR when the work is production-bound.
+- Any branch that is intended to change production must have an open PR targeting `main` before it is considered release-bound.
+- `main` changes must land by PR merge only.
+- Merge commits are the default merge method for PRs into `main`.
+- Admin bypass of `main` protection is not allowed under normal operation.
 - Clear commit messages.
 - No direct production changes outside version control.
 - Dependency review for new packages.
@@ -480,6 +487,12 @@ Self-healing must not become self-mutating production behavior. Code, schema, se
 
 Before deploying production:
 
+- Production-bound work must enter `main` through a PR merge.
+- Direct pushes, force pushes, and branch deletion on `main` are prohibited.
+- Required status checks must pass before merging into `main`; the baseline gate is `Quality / Public launch quality gates`.
+- Vercel deployment/check status must pass before merge when GitHub exposes it for the PR.
+- The PR branch must be up to date with `main` before merge.
+- Human approval is not required by default for every PR, but security-sensitive changes still require explicit human approval.
 - Build passes.
 - Lint passes.
 - Environment variables are present.
@@ -496,6 +509,7 @@ Production must be traceable, main-driven, and evidence-backed.
 Controls:
 
 - `main` is the only normal production deployment source.
+- `main` must be protected so all production changes arrive through a PR merge, with administrators included in protection.
 - Vercel production deployments must come from the Git-connected `main` branch.
 - `main` must not lag production. A production claim is not valid unless `origin/main` contains the deployed commit.
 - Production release validation requires Git CLI access, Vercel CLI or equivalent Vercel API access, GitHub CLI/GitHub app or equivalent repository access, and Vercel production environment access for release metadata configuration.
