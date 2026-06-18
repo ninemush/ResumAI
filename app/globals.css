@@ -4895,6 +4895,13 @@ input:focus {
   font-style: normal;
 }
 
+.resume-optional-section-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
 .resume-experience-section-list {
   display: grid;
   gap: 18px;
@@ -4907,6 +4914,11 @@ input:focus {
   display: grid;
   gap: 10px;
   padding: 14px 0 0;
+}
+
+.resume-experience-section:first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .resume-experience-section:focus-within {
@@ -4958,6 +4970,10 @@ input:focus {
   line-height: 1.38;
   margin: 7px 0 0;
   overflow-wrap: anywhere;
+}
+
+.resume-role-static-header p.resume-role-meta-warning {
+  color: var(--danger);
 }
 
 .resume-role-static-header strong,

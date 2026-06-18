@@ -45,6 +45,54 @@ Workflow scoring system for enterprise operations
 
     expect(parsed.publications).toContain("Workflow scoring system for enterprise operations");
   });
+
+  test("extracts explicit LinkedIn projects as standalone project evidence", () => {
+    const parsed = parseProfileSourceText({
+      sourceId: "00000000-0000-4000-8000-000000000003",
+      sourceLabel: "LinkedIn profile",
+      sourceType: "linkedin",
+      text: `
+Sumeet Sangawar
+
+About
+I am also interested in board advisory opportunities with emerging technology companies.
+
+Projects
+Emerging AI Company Advisory: GTM, Product Strategy & Customer Engagement
+2020 – 2023
+Associated with UiPath
+Worked closely with senior leadership at an emerging AI company, including CEO, COO, and product leadership, on GTM strategy, product direction, customer engagement, and presales execution.
+Go-to-Market Strategy, Customer Success and +2 skills
+
+Experience
+Global Vice President of Professional Services, GTM & Operations at UiPath 2022 - Present
+Led Services GTM operations.
+      `,
+    });
+
+    expect(parsed.projects).toEqual([
+      "Emerging AI Company Advisory: GTM, Product Strategy & Customer Engagement | 2020 - 2023 | UiPath | Worked closely with senior leadership at an emerging AI company, including CEO, COO, and product leadership, on GTM strategy, product direction, customer engagement, and presales execution.",
+    ]);
+    expect(parsed.projects.join(" ")).not.toContain("interested in board advisory");
+  });
+
+  test("does not turn board advisory interest into a project", () => {
+    const parsed = parseProfileSourceText({
+      sourceId: "00000000-0000-4000-8000-000000000004",
+      sourceLabel: "LinkedIn profile",
+      sourceType: "linkedin",
+      text: `
+About
+I am also interested in board advisory opportunities with emerging technology companies.
+
+Projects
+Board advisory interests
+AI, automation, enterprise adoption, GTM scale, customer value, responsible execution, and risk governance.
+      `,
+    });
+
+    expect(parsed.projects).toEqual([]);
+  });
 });
 
 describe("evidence based fit mapping", () => {

@@ -666,11 +666,11 @@ export function MasterResumePanel({
                 <span>Optional sections</span>
               </div>
               <div className="resume-optional-section-list">
-                {optionalSectionStates.map((section) => (
+                {optionalSectionStates.filter((section) => section.count > 0).map((section) => (
                   <label key={section.id}>
                     <input
                       checked={visibleOptionalSections[section.id]}
-                      disabled={resumeViewMode === "ats" || section.count === 0}
+                      disabled={resumeViewMode === "ats"}
                       onChange={(event) =>
                         setVisibleOptionalSections({
                           ...visibleOptionalSections,
@@ -684,6 +684,11 @@ export function MasterResumePanel({
                   </label>
                 ))}
               </div>
+              {optionalSectionStates.some((section) => section.id === "specialProjects" && section.count === 0) ? (
+                <p className="resume-optional-section-note">
+                  No standalone special projects found in the saved sources yet.
+                </p>
+              ) : null}
             </div>
           </section>
 
@@ -883,6 +888,7 @@ export function MasterResumePanel({
                   {draft.experienceSections.map((section, index) => {
                     const displayCompany = readDisplayCompany(section.company);
                     const companyBrand = readCompanyBrand(displayCompany);
+                    const roleMeta = formatExperienceRoleMeta(section);
 
                     return (
                       <article className="resume-experience-section" key={`${section.roleTitle}-${index}`}>
@@ -1013,9 +1019,11 @@ export function MasterResumePanel({
                             <div className="resume-role-static-header">
                               <div>
                                 <h4>{section.roleTitle}</h4>
-                                <p>
-                                  {[section.dates, section.location].filter(Boolean).join(" · ")}
-                                </p>
+                                {roleMeta ? (
+                                  <p className={roleMeta.needsDate ? "resume-role-meta-warning" : undefined}>
+                                    {roleMeta.label}
+                                  </p>
+                                ) : null}
                               </div>
                               {displayCompany ? (
                                 companyBrand ? (
@@ -2109,6 +2117,21 @@ function readDisplayCompany(company: string | null) {
   }
 
   return company;
+}
+
+function formatExperienceRoleMeta(section: ResumeContent["experienceSections"][number]) {
+  const dates = section.dates?.trim();
+  const location = section.location?.trim();
+  const parts = [dates || "Date range needed", location].filter(Boolean);
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return {
+    label: parts.join(" · "),
+    needsDate: !dates,
+  };
 }
 
 function escapeRegExp(value: string) {

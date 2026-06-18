@@ -168,7 +168,7 @@ export function parseProfileSourceText({
     languages: readSection(sections, ["languages"]).slice(0, 20),
     metrics: collectMetricLines(lines).slice(0, 20),
     openQuestions: buildOpenQuestions({ experienceLines, lines, recommendationLines }),
-    projects: readSection(sections, ["projects", "selected projects"]).slice(0, 20),
+    projects: readProjectEntries(sections).slice(0, 20),
     publications: readSection(sections, ["publications", "patents", "courses"]).slice(0, 20),
     recommendations: recommendationLines,
     roles: readRolesFromExperience(experienceLines, [evidence]),
@@ -257,7 +257,10 @@ function normalizeHeading(line: string) {
     "patents",
     "professional experience",
     "profile",
+    "key projects",
     "projects",
+    "projects and publications",
+    "projects/publications",
     "publications",
     "recommendation",
     "recommendations",
@@ -280,8 +283,165 @@ function readSection(sections: Map<string, string[]>, names: string[]) {
   return names.flatMap((name) => sections.get(name) ?? []).map(cleanListLine).filter(Boolean);
 }
 
+function readProjectEntries(sections: Map<string, string[]>) {
+  const projectLines = readRawSectionLines(sections, [
+    "projects",
+    "selected projects",
+    "key projects",
+    "projects/publications",
+    "projects and publications",
+  ]);
+  const publicationLines = readRawSectionLines(sections, ["publications", "patents"]);
+
+  return dedupe([
+    ...parseLinkedInProjectLines(projectLines),
+    ...publicationLines.filter((line) => !looksLikeRecommendation(line)),
+  ]);
+}
+
+function readRawSectionLines(sections: Map<string, string[]>, names: string[]) {
+  return names
+    .flatMap((name) => sections.get(name) ?? [])
+    .map((line) => line.replace(/^[-*•.)\s]+/, "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+function parseLinkedInProjectLines(lines: string[]) {
+  const projects: string[] = [];
+  let current: {
+    context: string | null;
+    dates: string | null;
+    description: string[];
+    name: string;
+  } | null = null;
+
+  const flush = () => {
+    if (!current) {
+      return;
+    }
+
+    const description = current.description
+      .filter((line) => !looksLikeProjectSkillSummary(line))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const parts = [
+      current.name,
+      current.dates,
+      current.context,
+      description,
+    ].filter((part): part is string => Boolean(part?.trim()));
+
+    if (parts.length >= 2 && looksLikeStandaloneProjectEvidence(parts.join(" "))) {
+      projects.push(parts.join(" | "));
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = cleanListLine(rawLine);
+
+    if (!line || looksLikeRecommendation(line) || /^show all\b/i.test(line)) {
+      continue;
+    }
+
+    if (looksLikeProjectDateLine(line)) {
+      if (current) {
+        current.dates = normalizeProjectDateLine(line);
+      }
+      continue;
+    }
+
+    if (/^associated with\b/i.test(line)) {
+      if (current) {
+        current.context = line.replace(/^associated with\s*/i, "").trim() || line;
+      }
+      continue;
+    }
+
+    if (
+      current &&
+      current.description.length > 0 &&
+      !looksLikeProjectSkillSummary(line) &&
+      looksLikeProjectTitle(line)
+    ) {
+      flush();
+      current = {
+        context: null,
+        dates: null,
+        description: [],
+        name: line,
+      };
+      continue;
+    }
+
+    if (!current) {
+      current = {
+        context: null,
+        dates: null,
+        description: [],
+        name: line,
+      };
+      continue;
+    }
+
+    current.description.push(line);
+  }
+
+  flush();
+
+  return projects;
+}
+
+function looksLikeProjectDateLine(value: string) {
+  return /^(?:19|20)\d{2}\s*[-–—]\s*(?:(?:19|20)\d{2}|present|current)$/i.test(
+    value.trim(),
+  );
+}
+
+function normalizeProjectDateLine(value: string) {
+  return value.replace(/\s*[–—]\s*/g, " - ").replace(/\s+/g, " ").trim();
+}
+
+function looksLikeProjectSkillSummary(value: string) {
+  return /\bskills?\b/i.test(value) || /^[A-Z][A-Za-z -]+(?:,\s*[A-Z][A-Za-z -]+)+(?:\s+and\s+\+\d+\s+skills?)?$/i.test(value.trim());
+}
+
+function looksLikeProjectTitle(value: string) {
+  return (
+    value.length >= 8 &&
+    value.length <= 180 &&
+    !looksLikeProjectDateLine(value) &&
+    !/^associated with\b/i.test(value) &&
+    !looksLikeProjectSkillSummary(value)
+  );
+}
+
+function looksLikeStandaloneProjectEvidence(value: string) {
+  const hasActualWork =
+    /\b(?:advisory|advisor|advised|worked closely|patent|publication|published|research|incubat(?:ed|ion)|pilot|task force|policy|framework|application|hub|program|project|initiative|strategy|product direction|customer engagement|presales|operating model|automation)\b/i.test(
+      value,
+    );
+  const hasAction =
+    /\b(?:worked closely|advised|delivered|built|created|established|incubated|implemented|led|published|patent)\b/i.test(
+      value,
+    );
+  const isOnlyInterest =
+    /\b(?:interested in|interests?|seeking|looking for|focused on)\b/i.test(value) &&
+    !/\b(?:worked closely|advised|delivered|built|created|established|incubated|implemented|led)\b/i.test(
+      value,
+    );
+
+  return hasActualWork && hasAction && !isOnlyInterest;
+}
+
 function cleanListLine(line: string) {
-  return line.replace(/^[-*•\d.)\s]+/, "").trim();
+  const trimmed = line.trim();
+
+  if (/^(?:19|20)\d{2}\s*[-–—]/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return trimmed.replace(/^[-*•\d.)\s]+/, "").trim();
 }
 
 function readEmail(text: string) {
@@ -547,7 +707,10 @@ function readExtraSections(
     "patents",
     "professional experience",
     "profile",
+    "key projects",
     "projects",
+    "projects and publications",
+    "projects/publications",
     "publications",
     "recommendation",
     "recommendations",
