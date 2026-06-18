@@ -30,6 +30,7 @@ export async function runPaidCreditOperation<T>({
   buildReusedResult,
   feature,
   metadata = {},
+  operationFingerprint,
   operationKey,
   releaseReason = "PAID_OPERATION_REUSED",
   resourceId = null,
@@ -40,6 +41,7 @@ export async function runPaidCreditOperation<T>({
   buildReusedResult?: (output: CreditOperationOutput) => Promise<T> | T;
   feature: CreditFeature;
   metadata?: Record<string, unknown>;
+  operationFingerprint?: string | null;
   operationKey: string;
   releaseReason?: string;
   resourceId?: string | null;
@@ -48,6 +50,7 @@ export async function runPaidCreditOperation<T>({
 }): Promise<{ operationKey: string; result: T; reused: boolean }> {
   const finalizedOutput = await getFinalizedCreditOperationOutput({
     feature,
+    operationFingerprint,
     operationKey,
   });
 
@@ -63,6 +66,7 @@ export async function runPaidCreditOperation<T>({
   const reservation = await reserveCredits({
     feature,
     metadata,
+    operationFingerprint,
     operationKey,
     resourceId,
     resourceType,
@@ -92,6 +96,7 @@ export async function runPaidCreditOperation<T>({
         ...metadata,
         ...output.recordMetadata,
       },
+      operationFingerprint,
       reservationId: reservation.reservationId,
       resourceId: output.resourceId ?? resourceId,
       resourceType: output.resourceType ?? resourceType,

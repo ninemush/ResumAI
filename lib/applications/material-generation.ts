@@ -24,6 +24,7 @@ import {
   reserveQuotaEvent,
   type QuotaReservationResult,
 } from "@/lib/quota/quota-events";
+import { buildOperationFingerprint } from "@/lib/security/operation-fingerprint";
 import {
   MAX_RESUME_CERTIFICATION_ITEMS,
   MAX_RESUME_EDUCATION_ITEMS,
@@ -212,6 +213,9 @@ export async function generateApplicationMaterials(
     profile,
   });
   const model = getMaterialsModel();
+  const quotaOperationKey =
+    options.quotaOperationKey ??
+    `applicationMaterialsGenerate:${context.id}:${parsed.mode}:${hashOperationInput(parsed.reason ?? "default")}`;
   const quotaReservation = await reserveQuotaEvent({
     eventType: "generation_created",
     metadata: {
@@ -219,9 +223,24 @@ export async function generateApplicationMaterials(
       model,
       prompt_version: APPLICATION_MATERIALS_PROMPT_VERSION,
     },
-    operationKey:
-      options.quotaOperationKey ??
-      `applicationMaterialsGenerate:${context.id}:${parsed.mode}:${hashOperationInput(parsed.reason ?? "default")}`,
+    operationFingerprint: buildOperationFingerprint({
+      basis: {
+        applicationId: context.id,
+        jobIngestionId: context.job_ingestions.id,
+        masterResumeIncluded: Boolean(masterResume),
+        mode: parsed.mode,
+        model,
+        promptVersion: APPLICATION_MATERIALS_PROMPT_VERSION,
+        reason: parsed.reason ?? null,
+      },
+      feature: "generation_created",
+      mode: parsed.mode,
+      operationKey: quotaOperationKey,
+      resourceId: context.id,
+      resourceType: "application_materials",
+      userId: user.id,
+    }),
+    operationKey: quotaOperationKey,
     resourceId: context.id,
     resourceType: "application_materials",
   });

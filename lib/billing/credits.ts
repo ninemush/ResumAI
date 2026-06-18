@@ -113,6 +113,7 @@ const creditOperationOutputSchema = z.object({
   feature: z.string(),
   ledger_event_id: z.string().uuid().nullable(),
   metadata: z.record(z.string(), z.unknown()),
+  operation_fingerprint: z.string().nullable().optional(),
   operation_key: z.string(),
   output_ids: z.record(z.string(), z.unknown()),
   reservation_id: z.string().uuid().nullable(),
@@ -178,12 +179,14 @@ export async function consumeCredits({
 export async function reserveCredits({
   feature,
   metadata = {},
+  operationFingerprint,
   operationKey,
   resourceId,
   resourceType,
 }: {
   feature: CreditFeature;
   metadata?: Record<string, unknown>;
+  operationFingerprint?: string | null;
   operationKey: string;
   resourceId?: string | null;
   resourceType: string;
@@ -194,6 +197,7 @@ export async function reserveCredits({
     p_feature: feature,
     p_idempotency_key: operationKey,
     p_metadata: metadata,
+    p_operation_fingerprint: operationFingerprint ?? null,
     p_resource_id: resourceId ?? null,
     p_resource_type: resourceType,
   });
@@ -232,6 +236,7 @@ export async function finalizeCreditReservationWithOutput({
   ledgerMetadata = {},
   outputIds,
   recordMetadata = {},
+  operationFingerprint,
   reservationId,
   resourceId,
   resourceType,
@@ -239,6 +244,7 @@ export async function finalizeCreditReservationWithOutput({
   ledgerMetadata?: Record<string, unknown>;
   outputIds: Record<string, unknown>;
   recordMetadata?: Record<string, unknown>;
+  operationFingerprint?: string | null;
   reservationId: string;
   resourceId?: string | null;
   resourceType?: string | null;
@@ -246,6 +252,7 @@ export async function finalizeCreditReservationWithOutput({
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("finalize_credit_reservation_with_output", {
     p_ledger_metadata: ledgerMetadata,
+    p_operation_fingerprint: operationFingerprint ?? null,
     p_output_ids: outputIds,
     p_record_metadata: recordMetadata,
     p_reservation_id: reservationId,
@@ -313,16 +320,18 @@ export function getCreditOperationKey(request: Request, fallback: string) {
 
 export async function getFinalizedCreditOperationOutput({
   feature,
+  operationFingerprint,
   operationKey,
 }: {
   feature: CreditFeature;
+  operationFingerprint?: string | null;
   operationKey: string;
 }): Promise<CreditOperationOutput | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("credit_operation_outputs")
     .select(
-      "feature, operation_key, reservation_id, ledger_event_id, resource_type, resource_id, output_ids, status, metadata",
+      "feature, operation_key, operation_fingerprint, reservation_id, ledger_event_id, resource_type, resource_id, output_ids, status, metadata",
     )
     .eq("feature", feature)
     .eq("operation_key", operationKey)
@@ -333,13 +342,28 @@ export async function getFinalizedCreditOperationOutput({
     return null;
   }
 
-  return data ? creditOperationOutputSchema.parse(data) : null;
+  if (!data) {
+    return null;
+  }
+
+  const output = creditOperationOutputSchema.parse(data);
+
+  if (
+    operationFingerprint &&
+    output.operation_fingerprint &&
+    output.operation_fingerprint !== operationFingerprint
+  ) {
+    throw new Error("CREDIT_IDEMPOTENCY_MISMATCH");
+  }
+
+  return output;
 }
 
 export async function recordCreditOperationOutput({
   feature,
   ledgerEventId,
   metadata = {},
+  operationFingerprint,
   operationKey,
   outputIds,
   reservationId,
@@ -350,6 +374,7 @@ export async function recordCreditOperationOutput({
   feature: CreditFeature;
   ledgerEventId?: string | null;
   metadata?: Record<string, unknown>;
+  operationFingerprint?: string | null;
   operationKey: string;
   outputIds: Record<string, unknown>;
   reservationId?: string | null;
@@ -371,6 +396,7 @@ export async function recordCreditOperationOutput({
       feature,
       ledger_event_id: ledgerEventId ?? null,
       metadata,
+      operation_fingerprint: operationFingerprint ?? null,
       operation_key: operationKey,
       output_ids: outputIds,
       reservation_id: reservationId ?? null,
@@ -904,6 +930,13 @@ export function buildCreditsApiError(error: unknown) {
     message: "Unable to update credits right now.",
     status: 500,
   };
+}
+
+export function isCreditOperationError(error: unknown) {
+  return (
+    error instanceof Error &&
+    (error.message.startsWith("CREDIT_") || error.message.startsWith("CREDITS_"))
+  );
 }
 
 function mapCreditError(message: string | undefined) {

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   buildJobIngestionOperationKey,
@@ -46,5 +48,20 @@ describe("quota operation keys", () => {
     expect(first).toMatch(/^jobIngest:[a-f0-9]{64}$/);
     expect(first).not.toContain("Senior Product Lead");
     expect(different).not.toBe(first);
+  });
+
+  test("launch migration rejects same quota key for different operation fingerprints", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "supabase/migrations/20260617120000_add_operation_fingerprint_guards.sql",
+      ),
+      "utf8",
+    );
+
+    expect(migration).toContain("operation_fingerprint");
+    expect(migration).toContain("QUOTA_IDEMPOTENCY_MISMATCH");
+    expect(migration).toContain("CREDIT_IDEMPOTENCY_MISMATCH");
+    expect(migration).toContain("p_operation_fingerprint");
   });
 });

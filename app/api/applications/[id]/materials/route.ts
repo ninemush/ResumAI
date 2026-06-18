@@ -3,6 +3,7 @@ import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBo
 import {
   buildCreditsApiError,
   getCreditOperationKey,
+  isCreditOperationError,
 } from "@/lib/billing/credits";
 import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
@@ -20,6 +21,7 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { buildOperationFingerprint } from "@/lib/security/operation-fingerprint";
 
 type RouteContext = {
   params: Promise<{
@@ -78,7 +80,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
-    await requireProtectedApiSession();
+    const session = await requireProtectedApiSession();
     const reusableMaterials =
       parsed.data.mode === "reuse"
         ? await getReusableApplicationMaterials(parsed.data)
@@ -126,6 +128,19 @@ export async function POST(request: Request, context: RouteContext) {
         mode: parsed.data.mode,
         reason: parsed.data.reason ?? null,
       },
+      operationFingerprint: buildOperationFingerprint({
+        basis: {
+          applicationId: params.id,
+          mode: parsed.data.mode,
+          reason: parsed.data.reason ?? null,
+        },
+        feature: "applicationMaterialsGenerate",
+        mode: parsed.data.mode,
+        operationKey,
+        resourceId: params.id,
+        resourceType: "application_materials",
+        userId: session.user.id,
+      }),
       operationKey,
       resourceId: params.id,
       resourceType: "application_materials",
@@ -141,7 +156,7 @@ export async function POST(request: Request, context: RouteContext) {
       reused: paidOperation.reused || !paidOperation.result.didGenerate,
     });
   } catch (error) {
-    if (isBillingError(error)) {
+    if (isCreditOperationError(error)) {
       const billingError = buildCreditsApiError(error);
 
       return apiError(requestId, billingError);
@@ -149,10 +164,6 @@ export async function POST(request: Request, context: RouteContext) {
 
     return apiError(requestId, toApiError(error));
   }
-}
-
-function isBillingError(error: unknown) {
-  return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
 function hashOperationInput(value: string) {
@@ -256,6 +267,16 @@ function toApiError(error: unknown) {
         code: "quota.limit_reached",
         message: "This tier has reached its generation limit for the current period.",
         status: 429,
+      };
+    }
+
+    if (error.message === "QUOTA_IDEMPOTENCY_MISMATCH") {
+      return {
+        category: "validation",
+        code: "quota.idempotency_mismatch",
+        message:
+          "This retry key was already used for a different generation. Start the action again before using quota.",
+        status: 409,
       };
     }
 

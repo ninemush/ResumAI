@@ -151,6 +151,16 @@ function toApiError(error: unknown) {
       };
     }
 
+    if (error.message === "QUOTA_IDEMPOTENCY_MISMATCH") {
+      return {
+        category: "validation",
+        code: "quota.idempotency_mismatch",
+        message:
+          "This retry key was already used for a different application. Start the action again before using quota.",
+        status: 409,
+      };
+    }
+
     if (
       error.message === "QUOTA_EVENT_RECORD_FAILED" ||
       error.message === "APPLICATION_QUOTA_LINK_FAILED"
