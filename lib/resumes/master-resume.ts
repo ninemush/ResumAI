@@ -1130,7 +1130,15 @@ function extractResumeSpecialProjectsFromSources(sourceEvidence: SourceEvidence[
       .filter((value): value is string => Boolean(value?.trim()))
       .join("\n"),
   );
-  const sectionText = extractNamedSectionText(text, ["projects", "special projects", "key projects"], [
+  const sectionText = extractNamedSectionText(text, [
+    "projects",
+    "special projects",
+    "key projects",
+    "projects/publications",
+    "projects and publications",
+    "publications",
+    "patents",
+  ], [
     "languages",
     "education",
     "licenses",
@@ -1146,11 +1154,15 @@ function extractResumeSpecialProjectsFromSources(sourceEvidence: SourceEvidence[
     "publications",
     "honors",
     "awards",
+    "volunteering",
+    "volunteer",
   ]);
+  const projectLines = [
+    ...extractCareerProfileProjectLines(sourceEvidence),
+    ...parseProjectSectionEntries(sectionText),
+  ];
 
-  return sectionText
-    .split(/\n+/)
-    .map((line) => line.replace(/\s+/g, " ").trim())
+  return projectLines
     .filter((line) => line.length >= 8)
     .filter((line) => !/^\d+$/.test(line))
     .filter(
@@ -1178,6 +1190,119 @@ function extractResumeSpecialProjectsFromSources(sourceEvidence: SourceEvidence[
         summary: "Project evidence.",
       }).specialProjects.length > 0,
     );
+}
+
+function extractCareerProfileProjectLines(sourceEvidence: SourceEvidence[]) {
+  return sourceEvidence
+    .filter((source) => source.source_type === "career_profile")
+    .flatMap((source) => {
+      if (!source.extracted_text) {
+        return [];
+      }
+
+      try {
+        const parsed = JSON.parse(source.extracted_text) as { projects?: unknown };
+
+        if (!Array.isArray(parsed.projects)) {
+          return [];
+        }
+
+        return parsed.projects
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.replace(/\s+/g, " ").trim())
+          .filter(Boolean);
+      } catch {
+        return [];
+      }
+    });
+}
+
+function parseProjectSectionEntries(sectionText: string) {
+  const entries: string[] = [];
+  const lines = sectionText
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  let current: {
+    context: string | null;
+    dates: string | null;
+    description: string[];
+    name: string;
+  } | null = null;
+
+  const flush = () => {
+    if (!current) {
+      return;
+    }
+
+    const description = current.description
+      .filter((line) => !looksLikeProjectSkillSummary(line))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const parts = [
+      current.name,
+      current.dates,
+      current.context,
+      description,
+    ].filter((part): part is string => Boolean(part?.trim()));
+
+    if (parts.length >= 2) {
+      entries.push(parts.join(" | "));
+    }
+  };
+
+  for (const line of lines) {
+    if (/^show all\b/i.test(line) || /\b(recommendation|testimonial|endorsement)\b/i.test(line)) {
+      continue;
+    }
+
+    if (looksLikeProjectDateLine(line)) {
+      if (current) {
+        current.dates = normalizeProjectDateLine(line);
+      }
+      continue;
+    }
+
+    if (/^associated with\b/i.test(line)) {
+      if (current) {
+        current.context = line.replace(/^associated with\s*/i, "").trim() || line;
+      }
+      continue;
+    }
+
+    if (
+      current &&
+      current.description.length > 0 &&
+      !looksLikeProjectSkillSummary(line) &&
+      looksLikeProjectTitle(line)
+    ) {
+      flush();
+      current = {
+        context: null,
+        dates: null,
+        description: [],
+        name: line,
+      };
+      continue;
+    }
+
+    if (!current) {
+      current = {
+        context: null,
+        dates: null,
+        description: [],
+        name: line,
+      };
+      continue;
+    }
+
+    current.description.push(line);
+  }
+
+  flush();
+
+  return entries;
 }
 
 function extractResumeSpecialProjectsFromFacts(confirmedFacts: ConfirmedFact[]) {
@@ -1224,6 +1349,33 @@ function extractResumeSpecialProjectsFromFacts(confirmedFacts: ConfirmedFact[]) 
 }
 
 function parseSpecialProjectLine(value: string): ResumeContent["specialProjects"][number] {
+  const pipeParts = value.split(/\s+\|\s+/).map(cleanCredentialLine).filter(Boolean);
+
+  if (pipeParts.length >= 2) {
+    const dates = pipeParts.find((part) => extractYearRange(part)) ?? null;
+    const contextPart = pipeParts.find((part) => /^associated with\b/i.test(part));
+    const context = contextPart
+      ? contextPart.replace(/^associated with\s*/i, "").trim()
+      : pipeParts.find(
+          (part, index) =>
+            index > 0 &&
+            part !== dates &&
+            !looksLikeProjectSkillSummary(part) &&
+            !/\b(?:worked|led|built|created|implemented|delivered|improved|reduced|increased|advised)\b/i.test(part),
+        ) ?? null;
+    const bullets = pipeParts
+      .slice(1)
+      .filter((part) => part !== dates && part !== contextPart && part !== context)
+      .filter((part) => !looksLikeProjectSkillSummary(part));
+
+    return {
+      bullets: bullets.length > 0 ? bullets : [pipeParts[0]],
+      context,
+      dates,
+      name: pipeParts[0],
+    };
+  }
+
   const dates = extractYearRange(value);
   const cleanLine = cleanCredentialLine(value.replace(dates ?? "", ""));
   const [name, ...rest] = cleanLine.split(/\s+(?:-|–|—|:|•)\s+/).filter(Boolean);
@@ -1235,6 +1387,30 @@ function parseSpecialProjectLine(value: string): ResumeContent["specialProjects"
     dates,
     name: cleanName,
   };
+}
+
+function looksLikeProjectDateLine(value: string) {
+  return /^(?:19|20)\d{2}\s*[-–—]\s*(?:(?:19|20)\d{2}|present|current)$/i.test(
+    value.trim(),
+  );
+}
+
+function normalizeProjectDateLine(value: string) {
+  return value.replace(/\s*[–—]\s*/g, " - ").replace(/\s+/g, " ").trim();
+}
+
+function looksLikeProjectSkillSummary(value: string) {
+  return /\bskills?\b/i.test(value) || /^[A-Z][A-Za-z -]+(?:,\s*[A-Z][A-Za-z -]+)+(?:\s+and\s+\+\d+\s+skills?)?$/i.test(value.trim());
+}
+
+function looksLikeProjectTitle(value: string) {
+  return (
+    value.length >= 8 &&
+    value.length <= 180 &&
+    !looksLikeProjectDateLine(value) &&
+    !/^associated with\b/i.test(value) &&
+    !looksLikeProjectSkillSummary(value)
+  );
 }
 
 function extractNamedSectionText(text: string, starts: string[], stops: string[]) {

@@ -160,6 +160,7 @@ export function normalizeResumeContent(value: z.input<typeof resumeContentSchema
             (bullet) =>
               bullet &&
               !looksLikeDuplicateProjectTitle(item.name, bullet) &&
+              !looksLikeDuplicateExperienceProjectBullet(bullet, experienceSections) &&
               !looksLikeGeneratedPlaceholderBullet(bullet) &&
               !looksLikeRecommendationOrTestimonial(bullet) &&
               !looksLikeVaguePraiseOrUnsupportedClaim(bullet),
@@ -611,7 +612,7 @@ function looksLikeSupportedSpecialProject(
     );
   const hasProvenance = Boolean(project.context || project.dates || project.bullets.length > 1);
   const hasActionBullet = project.bullets.some((bullet) =>
-    /\b(?:built|created|launched|led|delivered|implemented|migrated|integrated|designed|redesigned|automated|optimized|improved|reduced|increased|published|awarded|won|shipped|deployed|transformed|coordinated|managed)\b/i.test(
+    /\b(?:advised|worked closely|built|created|launched|led|delivered|implemented|migrated|integrated|designed|redesigned|automated|optimized|improved|reduced|increased|published|awarded|won|shipped|deployed|transformed|coordinated|managed)\b/i.test(
       bullet,
     ),
   );
@@ -643,6 +644,31 @@ function looksLikeDuplicateProjectTitle(name: string, bullet: string) {
     normalizedName === normalizedBullet ||
     normalizedBullet === `${normalizedName} project` ||
     normalizedBullet.startsWith(`${normalizedName} `) && normalizedBullet.length <= normalizedName.length + 24
+  );
+}
+
+function looksLikeDuplicateExperienceProjectBullet(
+  bullet: string,
+  experienceSections: ResumeContent["experienceSections"],
+) {
+  const normalizedBullet = normalizeComparableText(bullet);
+
+  if (normalizedBullet.length < 28) {
+    return false;
+  }
+
+  return experienceSections.some((section) =>
+    section.bullets.some((experienceBullet) => {
+      const normalizedExperience = normalizeComparableText(experienceBullet);
+
+      return (
+        normalizedExperience.length >= 28 &&
+        (normalizedExperience === normalizedBullet ||
+          normalizedExperience.includes(normalizedBullet) ||
+          normalizedBullet.includes(normalizedExperience) ||
+          tokenSimilarity(normalizedExperience, normalizedBullet) >= 0.82)
+      );
+    }),
   );
 }
 

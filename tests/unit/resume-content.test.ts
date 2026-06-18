@@ -198,6 +198,43 @@ describe("resume content normalization", () => {
     ]);
   });
 
+  test("removes special project bullets that duplicate experience bullets", () => {
+    const normalized = normalizeResumeContent({
+      certifications: [],
+      contact: {},
+      education: [],
+      experienceBullets: [],
+      experienceSections: [
+        {
+          bullets: [
+            "Worked closely with senior leadership at an emerging AI company on GTM strategy, product direction, customer engagement, and presales execution.",
+          ],
+          company: "UiPath",
+          dates: "2020 - 2023",
+          location: null,
+          roleTitle: "Global Services GTM Leader",
+        },
+      ],
+      headline: "Transformation Executive",
+      keywordGaps: [],
+      reviewerNotes: [],
+      skills: ["GTM"],
+      specialProjects: [
+        {
+          bullets: [
+            "Worked closely with senior leadership at an emerging AI company on GTM strategy, product direction, customer engagement, and presales execution.",
+          ],
+          context: "UiPath",
+          dates: "2020 - 2023",
+          name: "Emerging AI Company Advisory: GTM, Product Strategy & Customer Engagement",
+        },
+      ],
+      summary: "Technology-led transformation executive.",
+    });
+
+    expect(normalized.specialProjects).toEqual([]);
+  });
+
   test("rejects broad project-like labels without action and provenance", () => {
     const normalized = normalizeResumeContent({
       certifications: [],
