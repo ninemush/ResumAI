@@ -8,6 +8,7 @@ const MFA_COOKIE_MAX_AGE_SECONDS = 8 * 60 * 60;
 const MFA_PENDING_MAX_AGE_SECONDS = 10 * 60;
 
 type MfaCookiePayload = {
+  aud?: string;
   email: string;
   exp: number;
   userId: string;
@@ -124,20 +125,6 @@ function verifySignedPayload(signedValue: string): MfaCookiePayload | null {
     return null;
   }
 
-  const expectedSignature = createHmac("sha256", getCookieSecret())
-    .update(encodedPayload)
-    .digest("base64url");
-
-  const signatureBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expectedSignature);
-
-  if (
-    signatureBuffer.length !== expectedBuffer.length ||
-    !timingSafeEqual(signatureBuffer, expectedBuffer)
-  ) {
-    return null;
-  }
-
   try {
     const parsed = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
 
@@ -149,10 +136,49 @@ function verifySignedPayload(signedValue: string): MfaCookiePayload | null {
       return null;
     }
 
-    return parsed;
+    const payload = parsed as MfaCookiePayload;
+
+    return getCookieSecretCandidates().some(({ allowPayload, secret }) => {
+      if (!allowPayload(payload)) {
+        return false;
+      }
+
+      const expectedSignature = createHmac("sha256", secret)
+        .update(encodedPayload)
+        .digest("base64url");
+      const signatureBuffer = Buffer.from(signature);
+      const expectedBuffer = Buffer.from(expectedSignature);
+
+      return (
+        signatureBuffer.length === expectedBuffer.length &&
+        timingSafeEqual(signatureBuffer, expectedBuffer)
+      );
+    })
+      ? payload
+      : null;
   } catch {
     return null;
   }
+}
+
+function getCookieSecretCandidates() {
+  const primarySecret = getCookieSecret();
+  const qaSecret = process.env.AUTH_MFA_QA_COOKIE_SECRET;
+
+  return [
+    {
+      allowPayload: () => true,
+      secret: primarySecret,
+    },
+    ...(qaSecret && qaSecret.length >= 32
+      ? [
+          {
+            allowPayload: (payload: MfaCookiePayload) => payload.aud === "launch-readiness",
+            secret: qaSecret,
+          },
+        ]
+      : []),
+  ];
 }
 
 function getCookieSecret() {

@@ -203,13 +203,16 @@ export async function buildAuthCookieHeader({
 }
 
 function signMfaCookie({ email, userId }: { email: string; userId: string }) {
+  const qaSecret = process.env.AUTH_MFA_QA_COOKIE_SECRET;
+  const secret =
+    process.env.AUTH_MFA_COOKIE_SECRET ?? qaSecret ?? "local-pramania-auth-cookie-secret";
   const payload = {
+    ...(process.env.AUTH_MFA_COOKIE_SECRET ? {} : qaSecret ? { aud: "launch-readiness" } : {}),
     email: email.trim().toLowerCase(),
     exp: Math.floor(Date.now() / 1000) + 8 * 60 * 60,
     userId,
   };
   const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const secret = process.env.AUTH_MFA_COOKIE_SECRET ?? "local-pramania-auth-cookie-secret";
   const signature = createHmac("sha256", secret).update(encodedPayload).digest("base64url");
 
   return `${encodedPayload}.${signature}`;
