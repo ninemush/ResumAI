@@ -326,7 +326,7 @@ async function persistRevenueCatReversalEvent({
     .eq("app_user_id", appUserId)
     .eq("product_id", productId)
     .not("credit_ledger_id", "is", null)
-    .order("processed_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 

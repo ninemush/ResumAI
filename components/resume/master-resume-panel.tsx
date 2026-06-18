@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import { getBlockingExportRisks } from "@/lib/applications/export-gates";
 import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
+import { useTrustDialog } from "@/components/ui/trust-dialog";
 import {
   looksLikeEmploymentTypeLabel,
   normalizeResumeContent,
@@ -64,6 +65,7 @@ export function MasterResumePanel({
   profileOverview,
 }: MasterResumePanelProps) {
   const router = useRouter();
+  const { confirm, TrustDialog } = useTrustDialog();
   const resumePreviewRef = useRef<HTMLDivElement | null>(null);
   const [currentOverview, setCurrentOverview] = useState(overview);
   const initialReviewStorageKey = overview.latestResume?.id
@@ -274,14 +276,29 @@ export function MasterResumePanel({
   }, [draft]);
 
   async function generateResume() {
-    if (isDirty && !window.confirm("Regenerating will replace unsaved resume edits. Continue?")) {
-      return;
+    if (isDirty) {
+      const confirmed = await confirm({
+        confirmLabel: "Replace edits",
+        consequence: "Regenerating will replace unsaved resume edits.",
+        description: "You have unsaved resume edits.",
+        intent: "danger",
+        title: "Replace unsaved edits?",
+      });
+
+      if (!confirmed) {
+        return;
+      }
     }
 
     if (
-      !window.confirm(
-        `This paid action costs ${formatCreditCost(CREDIT_COSTS.masterResumeGenerate)}.\n\nIt will produce a new editable master resume draft from your saved career context.\n\nExisting prepared files stay untouched until you export again.\n\nContinue?`,
-      )
+      !(await confirm({
+        confirmLabel: "Use credits",
+        consequence: "Existing prepared files stay untouched until you export again.",
+        description: "This will produce a new editable master resume draft from your saved career context.",
+        impact: `Credit impact: ${formatCreditCost(CREDIT_COSTS.masterResumeGenerate)}.`,
+        intent: "paid",
+        title: "Generate master resume?",
+      }))
     ) {
       return;
     }
@@ -319,14 +336,29 @@ export function MasterResumePanel({
       return;
     }
 
-    if (isDirty && !window.confirm("Creating a focused variant will replace unsaved resume edits. Continue?")) {
-      return;
+    if (isDirty) {
+      const confirmed = await confirm({
+        confirmLabel: "Replace edits",
+        consequence: "Creating a focused variant will replace unsaved resume edits.",
+        description: "You have unsaved resume edits.",
+        intent: "danger",
+        title: "Replace unsaved edits?",
+      });
+
+      if (!confirmed) {
+        return;
+      }
     }
 
     if (
-      !window.confirm(
-        `This paid action costs ${formatCreditCost(CREDIT_COSTS.masterResumeGenerate)}.\n\nIt will produce a focused editable master resume draft for ${focus}.\n\nExisting prepared files stay untouched until you export again.\n\nContinue?`,
-      )
+      !(await confirm({
+        confirmLabel: "Use credits",
+        consequence: "Existing prepared files stay untouched until you export again.",
+        description: `This will produce a focused editable master resume draft for ${focus}.`,
+        impact: `Credit impact: ${formatCreditCost(CREDIT_COSTS.masterResumeGenerate)}.`,
+        intent: "paid",
+        title: "Create focused variant?",
+      }))
     ) {
       return;
     }
@@ -409,9 +441,14 @@ export function MasterResumePanel({
     }
 
     if (
-      !window.confirm(
-        `This paid action costs ${formatCreditCost(CREDIT_COSTS.masterResumeExport)}.\n\nIt will produce validated PDF and DOCX files for the latest master resume.\n\nIf files are already validated, the server reuses them and no new credits should be consumed.\n\nContinue?`,
-      )
+      !(await confirm({
+        confirmLabel: "Use credits",
+        consequence: "If files are already validated, the server reuses them and no new credits should be consumed.",
+        description: "This will produce validated PDF and DOCX files for the latest master resume.",
+        impact: `Credit impact: ${formatCreditCost(CREDIT_COSTS.masterResumeExport)}.`,
+        intent: "paid",
+        title: "Prepare resume files?",
+      }))
     ) {
       return;
     }
@@ -451,6 +488,7 @@ export function MasterResumePanel({
 
   return (
     <main className="profile-pane" aria-labelledby="resume-studio-title">
+      <TrustDialog />
       <div className="pane-heading">
         <p className="eyebrow">Profile & resume studio</p>
         <h1 id="resume-studio-title">Master profile and resume</h1>

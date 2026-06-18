@@ -15,6 +15,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import type { AppView } from "@/components/app-shell/side-nav";
+import { useTrustDialog, type TrustDialogConfirm } from "@/components/ui/trust-dialog";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import { CREDIT_COSTS, formatCreditCost, type CreditFeature } from "@/lib/billing/credit-catalog";
 import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
@@ -294,6 +295,7 @@ export function ConversationPanel({
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const { confirm, TrustDialog } = useTrustDialog();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ConversationMessage[]>(
     buildInitialMessages(
@@ -589,11 +591,11 @@ export function ConversationPanel({
   async function processResumeAction(text: string) {
     if (looksLikeMasterResumeExportRequest(text)) {
       if (
-        !confirmPaidAction({
+        !(await confirmPaidAction(confirm, {
           feature: "masterResumeExport",
           produced: "validated PDF and DOCX files for the latest master resume",
           reuse: "If files are already validated, I will reuse them and no new credits should be consumed.",
-        })
+        }))
       ) {
         return "Okay, I paused before preparing paid master resume downloads.";
       }
@@ -638,11 +640,11 @@ export function ConversationPanel({
     }
 
     if (
-      !confirmPaidAction({
+      !(await confirmPaidAction(confirm, {
         feature: "masterResumeGenerate",
         produced: "a new editable master resume draft from your saved career context",
         reuse: "This creates a fresh draft for this request; existing prepared files stay untouched until you export again.",
-      })
+      }))
     ) {
       return "Okay, I paused before spending credits on a new master resume draft.";
     }
@@ -747,11 +749,11 @@ export function ConversationPanel({
 
       const application = actionableCandidates[0];
       if (
-        !confirmPaidAction({
+        !(await confirmPaidAction(confirm, {
           feature: "applicationMaterialsGenerate",
           produced: `a tailored resume and cover letter draft for ${formatApplicationLabel(application)}`,
           reuse: "If a current packet already exists, I will reuse it and no new credits should be consumed.",
-        })
+        }))
       ) {
         return "Okay, I paused before drafting paid job-specific materials.";
       }
@@ -880,11 +882,11 @@ export function ConversationPanel({
 
   async function generateApplicationMaterialsForPreview(applicationId: string) {
     if (
-      !confirmPaidAction({
+      !(await confirmPaidAction(confirm, {
         feature: "applicationMaterialsGenerate",
         produced: "a tailored resume and cover letter draft for this logged application",
         reuse: "If a current packet already exists, I will reuse it and no new credits should be consumed.",
-      })
+      }))
     ) {
       return "I logged the application and paused before spending credits on job-specific materials.";
     }
@@ -1091,11 +1093,11 @@ export function ConversationPanel({
   async function processUrl(url: string, fullMessage: string) {
     if (looksLikeJobUrl(url, fullMessage)) {
       if (
-        !confirmPaidAction({
+        !(await confirmPaidAction(confirm, {
           feature: "jobIngest",
           produced: "a parsed job post and fit review from this public link",
           reuse: "If this exact job has already been analyzed, I will reuse the saved result where the server allows it.",
-        })
+        }))
       ) {
         return "Okay, I saved no paid job analysis for that link.";
       }
@@ -1386,11 +1388,11 @@ export function ConversationPanel({
     sourceId: string,
   ): Promise<SourceExtractionResult> {
     if (
-      !confirmPaidAction({
+      !(await confirmPaidAction(confirm, {
         feature: "profileSourceExtract",
         produced: "career facts and source evidence from this profile material",
         reuse: "If this source has already been read, I will reuse the saved context where the server allows it.",
-      })
+      }))
     ) {
       return {
         ok: false,
@@ -1628,6 +1630,7 @@ export function ConversationPanel({
         handleFiles(event.dataTransfer.files);
       }}
     >
+      <TrustDialog />
       <div className="conversation-header">
         <div>
           <p className="eyebrow">Career advisor</p>
@@ -3597,7 +3600,9 @@ function looksLikeMasterResumeExportRequest(text: string) {
   );
 }
 
-function confirmPaidAction({
+function confirmPaidAction(
+  confirm: TrustDialogConfirm,
+  {
   feature,
   produced,
   reuse,
@@ -3605,12 +3610,18 @@ function confirmPaidAction({
   feature: CreditFeature;
   produced: string;
   reuse: string;
-}) {
+  },
+) {
   const cost = CREDIT_COSTS[feature];
 
-  return window.confirm(
-    `This paid action costs ${formatCreditCost(cost)}.\n\nIt will produce ${produced}.\n\n${reuse}\n\nContinue?`,
-  );
+  return confirm({
+    confirmLabel: "Use credits",
+    consequence: reuse,
+    description: `This will produce ${produced}.`,
+    impact: `Credit impact: ${formatCreditCost(cost)}.`,
+    intent: "paid",
+    title: "Use credits for this action?",
+  });
 }
 
 function looksLikeReflectiveQuestion(normalized: string) {

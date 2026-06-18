@@ -15,6 +15,7 @@ import {
   Send,
   Sparkles,
 } from "lucide-react";
+import { useTrustDialog, type TrustDialogConfirm } from "@/components/ui/trust-dialog";
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import { brand } from "@/lib/brand";
 import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
@@ -41,6 +42,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
   const [jobText, setJobText] = useState("");
   const [isIngestingJob, setIsIngestingJob] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const { confirm, TrustDialog } = useTrustDialog();
 
   if (overview.recentJobs.length === 0 && !showEmptyState) {
     return null;
@@ -62,7 +64,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       return;
     }
 
-    if (!confirmJobIngestionCredit()) {
+    if (!(await confirmJobIngestionCredit(confirm))) {
       return;
     }
 
@@ -105,7 +107,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       return;
     }
 
-    if (!confirmJobIngestionCredit()) {
+    if (!(await confirmJobIngestionCredit(confirm))) {
       return;
     }
 
@@ -239,6 +241,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
 
   return (
     <section className="jobs-panel" aria-label="Recent job posts">
+      <TrustDialog />
       <div className="section-heading">
         <p className="eyebrow">Jobs</p>
         <h2>Role decisions</h2>
@@ -533,10 +536,15 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
   );
 }
 
-function confirmJobIngestionCredit() {
-  return window.confirm(
-    `This paid action costs ${formatCreditCost(CREDIT_COSTS.jobIngest)}.\n\nIt will produce a parsed job post and fit review.\n\nIf this job has already been analyzed, the server reuses the saved result where possible.\n\nContinue?`,
-  );
+function confirmJobIngestionCredit(confirm: TrustDialogConfirm) {
+  return confirm({
+    confirmLabel: "Use credits",
+    consequence: "If this job has already been analyzed, the server reuses the saved result where possible.",
+    description: "This will produce a parsed job post and fit review.",
+    impact: `Credit impact: ${formatCreditCost(CREDIT_COSTS.jobIngest)}.`,
+    intent: "paid",
+    title: "Analyze this job?",
+  });
 }
 
 function buildQuestionKey(jobId: string, question: string) {

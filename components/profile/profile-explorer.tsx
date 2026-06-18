@@ -19,6 +19,7 @@ import {
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
+import { useTrustDialog } from "@/components/ui/trust-dialog";
 import { brand } from "@/lib/brand";
 import type { WorkspaceNavigationTarget } from "@/components/app-shell/workspace-layout";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
@@ -100,6 +101,7 @@ export function ProfileExplorer({
   });
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const { prompt, TrustDialog } = useTrustDialog();
   const activeDirection =
     overview.profile?.targetDirection?.trim().toLowerCase() ?? "";
 
@@ -254,7 +256,18 @@ export function ProfileExplorer({
   }
 
   async function editFact(factId: string, currentValue: string) {
-    const value = window.prompt("Edit profile fact", currentValue)?.trim();
+    const value = (
+      await prompt({
+        confirmLabel: "Save fact",
+        description: "Update this profile fact and mark it confirmed.",
+        input: {
+          initialValue: currentValue,
+          label: "Profile fact",
+          required: true,
+        },
+        title: "Edit profile fact",
+      })
+    )?.trim();
 
     if (!value || value === currentValue) {
       return;
@@ -309,6 +322,7 @@ export function ProfileExplorer({
 
   return (
     <main className="profile-pane" aria-labelledby="profile-title">
+      <TrustDialog />
       <div className="profile-heading">
         <div className="pane-heading">
           <p className="eyebrow">Profile home</p>

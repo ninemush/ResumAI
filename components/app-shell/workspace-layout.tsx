@@ -31,6 +31,7 @@ import { ProfileExplorer } from "@/components/profile/profile-explorer";
 import { MasterResumePanel } from "@/components/resume/master-resume-panel";
 import { SettingsPanel } from "@/components/settings/settings-panel";
 import { SupportPanel } from "@/components/support/support-panel";
+import { useTrustDialog } from "@/components/ui/trust-dialog";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import type { ArtifactOverview } from "@/lib/artifacts/artifact-overview";
 import type { OwnerMetrics } from "@/lib/admin/owner-metrics";
@@ -103,6 +104,7 @@ export function WorkspaceLayout({
     "chat",
   );
   const [hasUnsavedResumeChanges, setHasUnsavedResumeChanges] = useState(false);
+  const { confirm, TrustDialog } = useTrustDialog();
 
   const isOwnerConsoleActive = layout.activeView === "owner";
   const shellStyle = useMemo(
@@ -181,7 +183,7 @@ export function WorkspaceLayout({
       window.removeEventListener("pramania:focus-chat", handleFocusChat);
   }, []);
 
-  function selectView(target: WorkspaceNavigationTarget) {
+  async function selectView(target: WorkspaceNavigationTarget) {
     const activeView = typeof target === "string" ? target : target.view;
     const applicationStageFilter =
       typeof target === "string" ? undefined : target.applicationStageFilter;
@@ -189,10 +191,19 @@ export function WorkspaceLayout({
     if (
       hasUnsavedResumeChanges &&
       layout.activeView === "resume" &&
-      activeView !== "resume" &&
-      !window.confirm("You have unsaved resume edits. Leave without saving?")
+      activeView !== "resume"
     ) {
-      return;
+      const confirmed = await confirm({
+        confirmLabel: "Leave without saving",
+        consequence: "Unsaved resume edits will stay only in this browser view and may be lost.",
+        description: "You have unsaved resume edits.",
+        intent: "danger",
+        title: "Leave Profile & Resume?",
+      });
+
+      if (!confirmed) {
+        return;
+      }
     }
 
     setLayout((currentLayout) => ({
@@ -211,6 +222,7 @@ export function WorkspaceLayout({
       className={`workspace-shell ${mobileFocusClass} ${isOwnerConsoleActive ? "owner-focus-mode" : ""} ${layout.conversationCollapsed ? "conversation-collapsed" : ""}`}
       style={shellStyle}
     >
+      <TrustDialog />
       <WorkspaceTelemetry activeView={layout.activeView} />
       <SideNav
         activeView={layout.activeView}
