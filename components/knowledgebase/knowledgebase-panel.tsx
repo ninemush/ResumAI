@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 
 import { brand } from "@/lib/brand";
 import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
+import { useTrustDialog } from "@/components/ui/trust-dialog";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
 type KnowledgebasePanelProps = {
@@ -34,6 +35,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
   const [activeSource, setActiveSource] = useState<ProfileOverview["recentSources"][number] | null>(
     null,
   );
+  const { confirm, TrustDialog } = useTrustDialog();
   const visibleSources = overview.recentSources.filter((source) =>
     sourceMatchesFilter(source, activeFilter) && sourceMatchesSearch(source, sourceQuery),
   );
@@ -72,9 +74,14 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
 
   async function removeSource(source: ProfileOverview["recentSources"][number]) {
     const label = source.original_filename ?? formatSourceUrl(source.source_url);
-    const confirmed = window.confirm(
-      `Remove ${label} from your Library? The original saved file or link record will be removed. Profile text already saved from it may still appear in your editable profile until you revise it.`,
-    );
+    const confirmed = await confirm({
+      confirmLabel: "Remove source",
+      consequence:
+        "The original saved file or link record will be removed. Profile text already saved from it may still appear in your editable profile until you revise it.",
+      description: `Remove ${label} from your Library?`,
+      intent: "danger",
+      title: "Remove this source?",
+    });
 
     if (!confirmed) {
       return;
@@ -103,6 +110,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
 
   const content = (
     <>
+      <TrustDialog />
       {embedded ? null : (
         <div className="pane-heading">
           <p className="eyebrow">Library</p>

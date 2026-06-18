@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { useTrustDialog } from "@/components/ui/trust-dialog";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
 import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
@@ -140,6 +141,7 @@ export function ApplicationPanel({
   const [savingApplicationId, setSavingApplicationId] = useState<string | null>(null);
   const [planDraft, setPlanDraft] = useState<ApplicationPlanDraft>(emptyPlanDraft);
   const [message, setMessage] = useState<string | null>(null);
+  const { confirm, TrustDialog } = useTrustDialog();
 
   if (overview.recentApplications.length === 0 && !showEmptyState) {
     return null;
@@ -260,9 +262,14 @@ export function ApplicationPanel({
 
   async function generateMaterials(applicationId: string) {
     if (
-      !window.confirm(
-        `This paid action costs ${formatCreditCost(CREDIT_COSTS.applicationMaterialsGenerate)}.\n\nIt will produce a tailored resume and cover letter draft for this application.\n\nIf a current packet already exists, the server reuses it and no new credits should be consumed.\n\nContinue?`,
-      )
+      !(await confirm({
+        confirmLabel: "Use credits",
+        consequence: "If a current packet already exists, the server reuses it and no new credits should be consumed.",
+        description: "This will produce a tailored resume and cover letter draft for this application.",
+        impact: `Credit impact: ${formatCreditCost(CREDIT_COSTS.applicationMaterialsGenerate)}.`,
+        intent: "paid",
+        title: "Generate application materials?",
+      }))
     ) {
       return;
     }
@@ -376,9 +383,14 @@ export function ApplicationPanel({
     }
 
     if (
-      !window.confirm(
-        `This paid action costs ${formatCreditCost(CREDIT_COSTS.applicationMaterialsExport)}.\n\nIt will produce validated PDF and DOCX files for the tailored resume and cover letter.\n\nIf files are already validated, the server reuses them and no new credits should be consumed.\n\nContinue?`,
-      )
+      !(await confirm({
+        confirmLabel: "Use credits",
+        consequence: "If files are already validated, the server reuses them and no new credits should be consumed.",
+        description: "This will produce validated PDF and DOCX files for the tailored resume and cover letter.",
+        impact: `Credit impact: ${formatCreditCost(CREDIT_COSTS.applicationMaterialsExport)}.`,
+        intent: "paid",
+        title: "Prepare application files?",
+      }))
     ) {
       return;
     }
@@ -421,6 +433,7 @@ export function ApplicationPanel({
 
   return (
     <section className="applications-panel" aria-label="Tracked applications">
+      <TrustDialog />
       <div className="section-heading">
         <p className="eyebrow">Applications</p>
         <h2>Roles you’re pursuing</h2>

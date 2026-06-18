@@ -49,6 +49,7 @@ import {
   readRootCauseQueueStatus,
   type RootCauseGroup,
 } from "@/lib/support/root-cause-groups";
+import { useTrustDialog } from "@/components/ui/trust-dialog";
 
 type OwnerConsoleProps = {
   metrics: OwnerMetrics;
@@ -210,6 +211,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
   const [userQuickFilter, setUserQuickFilter] = useState<AdminUserQuickFilter>("needs_attention");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { confirm, TrustDialog } = useTrustDialog();
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -395,11 +397,16 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     });
   }
 
-  function downloadMetricsExport() {
+  async function downloadMetricsExport() {
     if (
-      !window.confirm(
-        "Export CSV includes owner operating metadata and may include support-safe user identifiers. Continue only if you need this file for owner review.",
-      )
+      !(await confirm({
+        confirmLabel: "Export CSV",
+        consequence:
+          "The file may include support-safe user identifiers. Keep it only for owner review and do not share it outside the approved support or operations context.",
+        description: "Export CSV includes owner operating metadata.",
+        intent: "admin",
+        title: "Export owner data?",
+      }))
     ) {
       return;
     }
@@ -461,9 +468,14 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
 
     if (
       !dryRun &&
-      !window.confirm(
-        `Reset ${resumeIds.length.toLocaleString()} stale resume artifact record${resumeIds.length === 1 ? "" : "s"} to draft so exports can be regenerated?`,
-      )
+      !(await confirm({
+        confirmLabel: "Reset artifacts",
+        consequence:
+          "Affected exports will need to be regenerated before users can download current files.",
+        description: `Reset ${resumeIds.length.toLocaleString()} stale resume artifact record${resumeIds.length === 1 ? "" : "s"} to draft so exports can be regenerated?`,
+        intent: "admin",
+        title: "Apply artifact cleanup?",
+      }))
     ) {
       return;
     }
@@ -611,9 +623,13 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     }
 
     if (
-      !window.confirm(
-        `Apply the previewed L1 review to ${autopilotPreview.reviewed.toLocaleString()} queue item${autopilotPreview.reviewed === 1 ? "" : "s"}? This writes ticket/error updates and audit messages.`,
-      )
+      !(await confirm({
+        confirmLabel: "Apply preview",
+        consequence: "This writes ticket/error updates and audit messages.",
+        description: `Apply the previewed L1 review to ${autopilotPreview.reviewed.toLocaleString()} queue item${autopilotPreview.reviewed === 1 ? "" : "s"}?`,
+        intent: "admin",
+        title: "Apply L1 review?",
+      }))
     ) {
       return;
     }
@@ -720,18 +736,26 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     }
 
     if (
-      !window.confirm(
-        `Save ${name || key}? Tier changes affect quota enforcement and write an admin audit event.`,
-      )
+      !(await confirm({
+        confirmLabel: "Save tier",
+        consequence: "Tier changes affect quota enforcement and write an admin audit event.",
+        description: `Save ${name || key}?`,
+        intent: "admin",
+        title: "Save tier configuration?",
+      }))
     ) {
       return;
     }
 
     if (
       id &&
-      !window.confirm(
-        `Save changes to ${name || key}? Active assignments may rely on this tier, so confirm the limits are intentional.`,
-      )
+      !(await confirm({
+        confirmLabel: "Confirm limits",
+        consequence: "Active assignments may rely on this tier, so confirm the limits are intentional.",
+        description: `Save changes to ${name || key}?`,
+        intent: "admin",
+        title: "Update active tier?",
+      }))
     ) {
       return;
     }
@@ -800,9 +824,14 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
 
     if (
       creditAmount * maxRedemptions >= 250 &&
-      !window.confirm(
-        `This promo can grant up to ${creditAmount * maxRedemptions} credits. Confirm that the owner reason and redemption scope are correct.`,
-      )
+      !(await confirm({
+        confirmLabel: "Create promo",
+        consequence: "Confirm that the owner reason and redemption scope are correct.",
+        description: `This promo can grant up to ${creditAmount * maxRedemptions} credits.`,
+        impact: `Maximum credit impact: ${creditAmount * maxRedemptions} credits.`,
+        intent: "admin",
+        title: "Create high-value promo?",
+      }))
     ) {
       return;
     }
@@ -879,18 +908,28 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
     }
 
     if (
-      !window.confirm(
-        `Add ${creditAmount} credits to ${targets.length} user${targets.length === 1 ? "" : "s"}? This writes credit ledger and admin audit records.`,
-      )
+      !(await confirm({
+        confirmLabel: "Add credits",
+        consequence: "This writes credit ledger and admin audit records.",
+        description: `Add ${creditAmount} credits to ${targets.length} user${targets.length === 1 ? "" : "s"}?`,
+        impact: `Credit impact: ${creditAmount * targets.length} total credits.`,
+        intent: "admin",
+        title: "Grant credits?",
+      }))
     ) {
       return;
     }
 
     if (
       creditAmount * targets.length >= 100 &&
-      !window.confirm(
-        `This will add ${creditAmount} credits to ${targets.length} user${targets.length === 1 ? "" : "s"}. Confirm the reason and recipients before writing ledger events.`,
-      )
+      !(await confirm({
+        confirmLabel: "Confirm grant",
+        consequence: "Confirm the reason and recipients before writing ledger events.",
+        description: `This will add ${creditAmount} credits to ${targets.length} user${targets.length === 1 ? "" : "s"}.`,
+        impact: `Credit impact: ${creditAmount * targets.length} total credits.`,
+        intent: "admin",
+        title: "Confirm high-value credit grant?",
+      }))
     ) {
       return;
     }
@@ -965,6 +1004,7 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
 
   return (
     <main className="owner-console" aria-labelledby="owner-console-title">
+      <TrustDialog />
       <div className="owner-console-header">
         <div className="pane-heading">
           <p className="eyebrow">Owner console</p>
@@ -1615,12 +1655,16 @@ export function OwnerConsole({ metrics: initialMetrics }: OwnerConsoleProps) {
                       <button
                         className="secondary-action danger-action"
                         disabled={issueUpdatingId === ticket.id}
-                        onClick={() => {
-                          if (
-                            !window.confirm(
-                              "Close this support issue with no fix? This writes an audit trail and a user-visible resolution.",
-                            )
-                          ) {
+                        onClick={async () => {
+                          const confirmed = await confirm({
+                            confirmLabel: "Close no fix",
+                            consequence: "This writes an audit trail and a user-visible resolution.",
+                            description: "Close this support issue with no fix?",
+                            intent: "danger",
+                            title: "Close support issue?",
+                          });
+
+                          if (!confirmed) {
                             return;
                           }
 

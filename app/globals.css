@@ -8099,6 +8099,152 @@ input:focus {
   background: var(--pr-mist-beige);
 }
 
+.trust-dialog-backdrop {
+  align-items: center;
+  background: rgba(37, 31, 25, 0.46);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: fixed;
+  z-index: 90;
+}
+
+.trust-dialog {
+  background: var(--pr-card);
+  border: 1px solid rgba(92, 73, 55, 0.2);
+  border-radius: var(--pr-radius-lg);
+  box-shadow: var(--pr-shadow-strong);
+  color: var(--ink);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  max-height: min(88vh, 620px);
+  max-width: 520px;
+  overflow: auto;
+  padding: 20px;
+  position: relative;
+  width: min(100%, 520px);
+}
+
+.trust-dialog-danger {
+  border-color: rgba(159, 63, 54, 0.32);
+}
+
+.trust-dialog-paid,
+.trust-dialog-admin {
+  border-color: rgba(65, 94, 80, 0.28);
+}
+
+.trust-dialog-close {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+}
+
+.trust-dialog-icon {
+  align-items: center;
+  background: var(--pr-mist-beige);
+  border-radius: 999px;
+  color: var(--sage-strong);
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.trust-dialog-danger .trust-dialog-icon {
+  background: rgba(159, 63, 54, 0.11);
+  color: var(--danger);
+}
+
+.trust-dialog-copy {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding-right: 22px;
+}
+
+.trust-dialog-copy h2 {
+  font-size: 1.1rem;
+  letter-spacing: 0;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.trust-dialog-description,
+.trust-dialog-description p,
+.trust-dialog-impact,
+.trust-dialog-consequence,
+.trust-dialog-failure {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.trust-dialog-impact {
+  color: var(--sage-strong);
+  font-weight: 800;
+}
+
+.trust-dialog-consequence {
+  background: rgba(255, 250, 243, 0.86);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  padding: 10px;
+}
+
+.trust-dialog-failure {
+  background: rgba(159, 63, 54, 0.1);
+  border: 1px solid rgba(159, 63, 54, 0.22);
+  border-radius: var(--pr-radius-sm);
+  color: var(--danger);
+  padding: 10px;
+}
+
+.trust-dialog-input {
+  color: var(--ink);
+  display: grid;
+  font-size: 0.84rem;
+  font-weight: 800;
+  gap: 7px;
+}
+
+.trust-dialog-input textarea {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--line);
+  border-radius: var(--pr-radius-sm);
+  color: var(--ink);
+  font: inherit;
+  min-height: 84px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.trust-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+}
+
+.trust-dialog-actions .primary-action,
+.trust-dialog-actions .secondary-action {
+  min-width: 112px;
+}
+
+.spin {
+  animation: trust-dialog-spin 0.85s linear infinite;
+}
+
+@keyframes trust-dialog-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .status-select {
   max-width: 210px;
 }

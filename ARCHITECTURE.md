@@ -1,860 +1,145 @@
 # Architecture
 
-This document describes the intended architecture for the application currently branded as Pramania before feature implementation expands.
+This document describes the current V1 architecture for the application currently branded as Pramania. Product-facing code must continue to use `lib/brand.ts` rather than hardcoded brand names.
 
 ## 1. Product Summary
 
-Pramania is an AI-powered job application assistant.
+Pramania is a conversation-first job application assistant. V1 helps a user build a career profile from conversation, files, OCR-ready images, public links, and direct edits; generate an ATS-friendly master resume; evaluate job URLs or pasted job descriptions; log chosen applications; generate job-specific resume and cover letter artifacts; track application outcomes; and use one-time credit packs for paid operations.
 
-V1 helps a user:
+V1 is deliberately bounded. It does not include subscriptions, auto-renewal, auto-refill, stored payment method management, enterprise invoicing, marketplace billing, auto-apply, job scanning, browser automation, native mobile release, authenticated third-party integrations, or employer submission workflows.
 
-1. Sign up or log in.
-2. Build a profile through conversation, natural-language input, uploads, and links.
-3. Enrich the profile from resumes, credentials, experience, accolades, LinkedIn/profile links, portfolio pages, and common file formats.
-4. Receive proactive role-fit and seniority recommendations.
-5. Acknowledge or adjust the target direction.
-6. Generate an ATS-friendly master resume that preserves a hint of the user's voice.
-7. Paste a job URL into the conversation.
-8. Validate the job against the user's profile.
-9. Log the opportunity as an application if the user chooses to proceed.
-10. Generate and save a role-specific ATS-friendly resume and cover letter as downloadable PDF artifacts.
-11. Track application status.
+## 2. Deployed System
 
-## 2. Current Infrastructure
-
-- GitHub: `ninemush/ResumAI`.
+- Repository: `ninemush/ResumAI`.
+- Production branch: `main`.
+- Production site: `https://pramania.com`.
 - Vercel project: `resum-ai/ai-resume-app`.
-- Supabase project: `ResumAI`.
-- Supabase project ref: `raqsevuqlwofhgljiazv`.
-- Cursor: primary IDE.
-- Codex: assistant/agent inside Cursor workflow.
+- Supabase project: `ResumAI` (`raqsevuqlwofhgljiazv`).
+- Current verified production SHA before this hardening pass: `2d5f038a56a2ee13df44c78b1abe2893ea674d60`.
+- Release metadata endpoint: `GET /api/release`, public and non-secret.
 
-## 3. Current Codebase
+Normal production releases are Git-connected Vercel deployments from `main` after a PR merge. Manual archive deploys are reserved for owner-approved emergency rollback or hotfix use and must provide release metadata fallback variables.
 
-Current scaffold:
-
-- Next.js App Router.
-- TypeScript.
-- Tailwind CSS.
-- ESLint.
-- Shared brand configuration in `lib/brand.ts`.
-- Local Supabase CLI config.
-- Local Vercel CLI dependency.
-- Local Supabase CLI dependency.
-
-No production product features should be added until `DEVELOPMENT_CONTRACT.md` and this architecture are accepted.
-
-## 4. High-Level System
+## 3. Runtime Architecture
 
 ```mermaid
 flowchart TD
-  User["User"]
-  Web["Next.js Web App"]
-  Shell["Three-Panel App Shell"]
-  Commands["Command / Action Layer"]
-  API["Next.js Route Handlers"]
-  Auth["Supabase Auth"]
-  DB["Supabase Postgres"]
-  Storage["Supabase Storage"]
-  Parser["Parsing + OCR Services"]
-  Integrations["Import / Link Integrations"]
-  AI["AI Service Layer"]
-  Admin["Admin Tier Configuration"]
-  Support["Support System"]
-  Observability["Logs / Events / Error Tracking"]
-
-  User --> Web
-  Web --> Shell
-  Web --> Auth
-  Web --> Storage
-  Shell --> Commands
-  Commands --> API
-  API --> Auth
-  API --> DB
-  API --> Storage
-  API --> Parser
-  API --> Integrations
-  API --> AI
-  API --> Admin
-  API --> Support
-  API --> Observability
+  User["User"] --> Web["Next.js App Router Web App"]
+  Web --> Shell["Three-panel Workspace Shell"]
+  Shell --> Conversation["Conversation-first Advisor"]
+  Shell --> Profile["Profile/Resume/Application Panels"]
+  Shell --> Owner["Owner/Admin Console"]
+  Web --> Auth["Supabase Auth + Email Code Gate"]
+  Web --> API["Next.js Route Handlers"]
+  API --> Services["Shared TypeScript Domain Services"]
+  Services --> DB["Supabase Postgres with RLS"]
+  Services --> Storage["Private Supabase Storage"]
+  Services --> AI["AI Providers via Server-only Adapters"]
+  Services --> Billing["Credits, Quota, RevenueCat Webhook"]
+  API --> Observability["Audit, App, Error, Support Events"]
 ```
 
-## 5. Proposed Directory Structure
-
-Current project uses the default Next.js `app/` directory. As product code grows, use this structure:
-
-```text
-app/
-  api/
-  admin/
-  auth/
-  dashboard/
-components/
-  app-shell/
-  conversation/
-  profile/
-  ui/
-  workflow/
-lib/
-  ai/
-  api/
-  auth/
-  commands/
-  db/
-  integrations/
-  observability/
-  parsing/
-  security/
-  tiers/
-  validation/
-supabase/
-  migrations/
-  policies/
-```
-
-Future mobile-aware structure may evolve to:
-
-```text
-apps/
-  web/
-  mobile/
-packages/
-  core/
-  api-contracts/
-  validation/
-  ai/
-  design-system/
-```
-
-Do not move to a monorepo until there is a concrete native mobile milestone.
-
-## 6. Cross-Platform Architecture
-
-The web app must not trap business logic in browser-only components.
-
-Shared and portable:
-
-- Data types.
-- Validation schemas.
-- Prompt contracts.
-- AI output schemas.
-- Resume/job parsing interfaces.
-- API client contracts.
-- Permission rules.
-- Audit event definitions.
-
-Platform-specific:
-
-- Web pages.
-- Native screens.
-- File-picker UI.
-- Browser-specific rendering.
-- Native mobile navigation.
-
-Future native mobile should reuse the same backend, validation contracts, AI orchestration contracts, and domain services.
-
-## 6.1 Command And Action Architecture
-
-User intent must be routed through a single action path.
-
-For any meaningful operation, create one shared command/service entry point and let all interfaces call it.
-
-Examples:
-
-- A button click, keyboard shortcut, and future natural-language command for job analysis must all call the same job-analysis command.
-- A web upload flow and future native upload flow must share the same validation, metadata, storage, and database contract.
-- A manual retry button and automatic retry policy must use the same retry-safe service boundary.
-
-Required layers:
-
-```text
-UI event or command input
-  -> action/command handler
-  -> validation
-  -> authorization
-  -> domain service
-  -> persistence/provider adapter
-  -> observability
-```
-
-Rules:
-
-- UI components must not duplicate domain logic.
-- API routes must not duplicate domain logic.
-- Natural-language command handling must not bypass typed validation.
-- Shared behavior belongs in `lib/` or a future shared package.
-- Provider-specific code must sit behind adapters.
-- Tests must target the shared service path, not only the UI event that triggered it.
+The app uses Next.js App Router, TypeScript, React client components for interactive workspace surfaces, and route handlers for API boundaries. Server code owns secrets, payment processing, AI provider calls, quota checks, storage writes, and database mutations.
 
-V1 command examples:
+## 4. Application Shell
 
-- `profile.ingestSource`
-- `profile.updateField`
-- `profile.recommendRoles`
-- `resume.generateMaster`
-- `job.ingestPosting`
-- `job.evaluateFit`
-- `application.create`
-- `application.generateArtifacts`
-- `application.updateStatus`
-- `tier.checkQuota`
-- `tier.consumeQuota`
-
-Button clicks, direct editor saves, file uploads, pasted URLs, and conversational AI requests must call these shared command paths rather than separate implementations.
-
-## 7. Data Model Draft
+The signed-in workspace is organized around:
 
-Final schema requires approval before implementation.
+- Left navigation for Home, Profile & Resume, Jobs, Applications, Library, Credits, Settings, Support, and owner access where authorized.
+- Center workspace panels for profile exploration/editing, source library, resume review, job review, application materials, credits, settings, support, and owner operations.
+- Right conversation panel for primary natural-language intake, file/link/job submission, advisor responses, and guided next actions.
 
-### `profiles`
+Mobile keeps the same information architecture through chat-first navigation, workspace tabs/drawers, and shared service routes. Mobile does not introduce duplicate business logic.
 
-Purpose: user profile metadata and current career positioning.
+## 5. Supabase Auth, Database, And Storage
 
-Fields:
+Supabase Auth is the identity source. Signed-in UX requires an email-code posture through the app cookie gate when configured. User data tables use RLS, user ownership, and server-side validation. Service-role access is limited to server-only code paths and QA/launch tooling.
 
-- `id`
-- `user_id`
-- `display_name`
-- `headline`
-- `summary`
-- `target_direction`
-- `target_level`
-- `photo_storage_path`
-- `profile_status`
-- `created_at`
-- `updated_at`
-
-Controls:
-
-- RLS by `auth.uid() = user_id`.
-- User can read/update own profile only.
-- Profile photo is optional personal data stored in private user-scoped storage.
-- ATS-first resumes exclude photo by default; photo-compatible formats must opt in through a versioned resume format.
+Supabase Postgres stores profiles, profile sources, profile facts, career profiles, role recommendations, job ingestions, applications, generated resumes, generated cover letters, quota events, credit ledger entries, credit reservations, RevenueCat event records, reversal records, support records, audit events, app events, and owner metrics inputs.
 
-### `profile_sources`
+Supabase Storage is private by default. Resume/source uploads, generated PDFs/DOCX files, and optional profile photos are stored in user-scoped paths unless a specific public asset is approved.
 
-Purpose: source material used to build the profile.
+## 6. Billing, Credits, Quota, And RevenueCat
 
-Fields:
-
-- `id`
-- `user_id`
-- `source_type`
-- `source_url`
-- `storage_path`
-- `original_filename`
-- `mime_type`
-- `extracted_text`
-- `extraction_status`
-- `created_at`
-- `updated_at`
+V1 payments are one-time credit packs through the configured RevenueCat/Stripe checkout and webhook flow. The app does not store payment methods.
 
-Controls:
+The credit model includes:
 
-- RLS by `auth.uid() = user_id`.
-- Supports PDF, DOCX, TXT, JPG/PNG/common images via OCR, public links, and future authenticated integrations.
-- User may delete non-application-dependent sources.
+- `credit_ledger` as append-only accounting evidence.
+- `credit_reservations` for paid-operation idempotency and safe retries.
+- `credit_operation_outputs` for output linkage and retry reuse.
+- `revenuecat_events` for provider event idempotency and reconciliation.
+- `credit_reversals` for refund/reversal metadata without granting credits.
+- Server-computed operation fingerprints for paid and quota-protected operations.
 
-### `profile_facts`
+RevenueCat purchase events are granted through `process_revenuecat_credit_event` exactly once. Unknown products are recorded as ignored without granting credits. Refund/reversal/chargeback events are recorded as reversal metadata and linked to the latest matching purchase ledger where possible.
 
-Purpose: normalized facts inferred or provided for a profile.
+Quota enforcement is server-side through tier configuration, `quota_events`, `quota_reservations`, and operation fingerprints. The same idempotency key with a different server-computed fingerprint is rejected for paid and quota-protected operations.
 
-Fields:
-
-- `id`
-- `user_id`
-- `profile_id`
-- `fact_type`
-- `fact_value`
-- `source_ids`
-- `confidence`
-- `user_confirmed`
-- `created_at`
-- `updated_at`
-
-Controls:
-
-- Facts must distinguish user-provided, imported, inferred, and confirmed data.
-- AI must not treat unconfirmed inferences as hard facts.
-
-### `generated_resumes`
-
-Purpose: generated master resumes and job-specific resumes.
-
-Fields:
+## 7. AI And Generation Architecture
 
-- `id`
-- `user_id`
-- `profile_id`
-- `application_id`
-- `resume_type`
-- `storage_path`
-- `content_json`
-- `pdf_storage_path`
-- `status`
-- `created_at`
-- `updated_at`
-
-Controls:
-
-- RLS by `auth.uid() = user_id`.
-- Generated artifacts are personal data.
-- Job-specific generated artifacts connected to logged applications must follow audit retention rules.
-
-### `job_ingestions`
+AI logic is isolated in server-side modules under `lib/ai`, profile, resume, job, and application service boundaries. AI outputs are assistive drafts and must be grounded in user-provided or user-confirmed evidence. Generated resumes and cover letters must not invent employers, credentials, dates, claims, or outcomes.
 
-Purpose: job URL ingestion and extracted job data.
+Generated artifacts follow a review-before-use posture. PDF/DOCX export readiness requires content validation, claim-risk review where applicable, storage success, and download readiness before files are presented as ready.
 
-Fields:
+## 8. Owner/Admin And Support Surfaces
 
-- `id`
-- `user_id`
-- `job_url`
-- `resolved_url`
-- `title`
-- `company`
-- `extracted_text`
-- `status`
-- `created_at`
-- `updated_at`
+Owner/admin is in V1 and remains server-authorized and RLS-backed. Owner surfaces include operating metrics, user lists, support queues, billing/credit visibility, compliance posture, tier configuration, promo codes, direct credit grants, platform status, artifact cleanup, and launch/operations evidence.
 
-Controls:
+Trust-critical owner actions use in-app dialogs rather than native browser prompts. These dialogs preserve audit context, show consequences, and confirm credit/quota or data-export impact before action.
 
-- RLS by `auth.uid() = user_id`.
-- URL input validation.
-- SSRF protections before launch.
+Support includes L0 self-serve posture, L1 autonomous support boundaries, and L2 human escalation for refunds, legal/privacy/security, account access, sensitive disputes, unresolved issues, and user distress. Support-safe context excludes unnecessary raw personal content by default.
 
-### `role_recommendations`
+## 9. Security And Privacy Controls
 
-Purpose: proactive role-family, function, industry, and seniority recommendations.
+Required controls:
 
-Fields:
+- Supabase Auth and RLS for user data.
+- Server-side validation for every mutation and external input.
+- No service-role keys or provider secrets in browser code.
+- Private storage by default.
+- Rate limiting for public and expensive routes.
+- SSRF protections for URL ingestion.
+- Audit events for sensitive and admin operations.
+- Operation fingerprints for idempotent paid/quota-protected actions.
+- Privacy deletion/minimization flows that retain only audit-safe billing/quota evidence where required.
+- No sensitive data in client logs, server logs, analytics, or error traces.
 
-- `id`
-- `user_id`
-- `profile_id`
-- `role_family`
-- `role_titles`
-- `seniority_level`
-- `rationale`
-- `confidence`
-- `user_acknowledged`
-- `created_at`
-- `updated_at`
+## 10. Launch Gates And Evidence
 
-Controls:
+Launch-readiness evidence is collected through:
 
-- Recommendations must identify assumptions and ask for user acknowledgement.
+- `npm run lint`
+- `npm run typecheck`
+- `npm run test:unit`
+- `npm run build`
+- `npm run test:e2e:smoke`
+- `npm run test:e2e:accessibility`
+- `npm run test:e2e:cross-browser`
+- `npm run test:e2e:launch-readiness`
+- `npm run release:preflight`
+- `npm run release:state`
+- `npm run release:verify`
 
-### `applications`
+Launch-gated checks require `RUN_LAUNCH_READINESS_GATES=1`, email-code auth posture, Supabase-backed rate limiting, RevenueCat webhook secret, QA user A/B credentials, QA admin credentials, and service-role credentials. Secrets must not be printed or committed. Screenshots, traces, command summaries, and launch evidence belong under untracked `qa-artifacts/`.
 
-Purpose: logged application opportunities and status tracking.
+## 11. Rollback Model
 
-Fields:
+Rollback options are:
 
-- `id`
-- `user_id`
-- `profile_id`
-- `company_name`
-- `job_title`
-- `job_url`
-- `job_ingestion_id`
-- `status`
-- `quota_event_id`
-- `created_at`
-- `updated_at`
+- Revert the production PR commit and redeploy `main`.
+- Redeploy the last known good Vercel production deployment.
+- Disable or restore configuration such as tiers, quotas, support automation, or launch gates where applicable.
+- Use forward-fix migrations for database changes when down migration is unsafe.
 
-Statuses:
+Rollback is required or strongly considered for suspected cross-user data exposure, broken RLS/auth, duplicated or missing quota/credit events, artifacts assigned to the wrong user, exposed secrets, unsafe generated claims at scale, or production provenance mismatch.
 
-- `draft`
-- `applied`
-- `no_reply`
-- `rejected`
-- `interview_in_progress`
-- `interviewed_not_selected`
-- `interviewed_selected`
-- `withdrawn`
+## 12. V1 Non-Goals
 
-Controls:
+Do not add these without explicit approval:
 
-- Application records connected to quota usage are retained for audit-safe usage justification.
-- User may update status.
-
-### `generated_cover_letters`
-
-Purpose: generated job-specific cover letters.
-
-Fields:
-
-- `id`
-- `user_id`
-- `application_id`
-- `prompt_version`
-- `model`
-- `content`
-- `pdf_storage_path`
-- `status`
-- `created_at`
-
-Controls:
-
-- RLS by `auth.uid() = user_id`.
-- Output must pass schema validation.
-- No generated facts beyond provided source material.
-
-### Resume Format And PDF Validation
-
-Resume generation must be format-driven.
-
-Default format:
-
-- ATS-friendly.
-- Single-column or parser-safe layout.
-- Searchable/extractable text.
-- No profile photo by default.
-- Conservative typography and spacing.
-
-Photo-compatible formats:
-
-- Must be explicitly selected.
-- Must preserve the same structured resume content.
-- Must not replace the ATS-first format unless the user chooses it.
-
-PDF validation pipeline:
-
-- Open generated PDF successfully.
-- Extract text and verify required sections are present.
-- Check expected page count bounds.
-- Verify no section content is silently dropped.
-- Verify storage upload succeeded and signed download can be created.
-- Mark artifact ready only after validation passes.
-- If validation fails, keep structured content editable and report the validation failure.
-
-### `tiers`
-
-Purpose: configurable user tier definitions.
-
-Fields:
-
-- `id`
-- `name`
-- `description`
-- `application_limit`
-- `generation_limit`
-- `is_active`
-- `created_at`
-- `updated_at`
-
-Controls:
-
-- Admin-only writes.
-- Changes are configuration changes, not code changes.
-
-### `user_tiers`
-
-Purpose: assign users to tier configurations.
-
-Fields:
-
-- `id`
-- `user_id`
-- `tier_id`
-- `starts_at`
-- `ends_at`
-- `status`
-- `created_at`
-- `updated_at`
-
-Controls:
-
-- Users can read own tier status.
-- Admin-only assignment changes.
-
-### `quota_events`
-
-Purpose: audit-safe quota consumption records.
-
-Fields:
-
-- `id`
-- `user_id`
-- `tier_id`
-- `event_type`
-- `resource_type`
-- `resource_id`
-- `amount`
-- `period_start`
-- `period_end`
-- `created_at`
-
-Controls:
-
-- Append-only.
-- Used to justify application quota consumption.
-
-### `audit_events`
-
-Purpose: trace product and security-relevant events.
-
-Fields:
-
-- `id`
-- `user_id`
-- `event_type`
-- `resource_type`
-- `resource_id`
-- `request_id`
-- `metadata`
-- `created_at`
-
-Controls:
-
-- Append-only from server-side code.
-- No raw resumes or secrets in metadata.
-
-## 8. API Contracts Draft
-
-Final schemas must be defined with TypeScript validation before implementation.
-
-### Resume Upload
-
-Flow:
-
-1. Authenticated user selects file.
-2. File is uploaded to private Supabase Storage.
-3. Server records metadata in `resumes`.
-4. Parser extracts text asynchronously or synchronously depending on file type and reliability.
-
-Requirements:
-
-- Accept only approved file types.
-- Enforce max file size.
-- Store in user-scoped path.
-- Never expose another user's file path.
-
-### Profile Source Ingestion
-
-Route:
-
-```text
-POST /api/profile/sources
-```
-
-Accepted inputs:
-
-- Natural-language text.
-- PDF.
-- DOCX.
-- TXT.
-- JPG, PNG, and common image formats with OCR.
-- Public links.
-- Future authenticated LinkedIn/job-site/company-site integrations.
-
-Requirements:
-
-- Authenticated user only.
-- Source type validation.
-- File type and size validation.
-- OCR and parsing status tracking.
-- Extract facts into profile via the same profile command layer used by direct edits and conversation.
-- User can confirm, correct, or delete profile facts.
-
-### Role Recommendation
-
-Route:
-
-```text
-POST /api/profile/recommendations
-```
-
-Requirements:
-
-- Authenticated user only.
-- Requires enough confirmed or high-confidence profile signal.
-- Returns role families, sample titles, seniority guidance, rationale, confidence, and open questions.
-- Must request user acknowledgement before final target direction is used for resume generation.
-
-### Job URL Ingestion
-
-Route:
-
-```text
-POST /api/jobs/ingest
-```
-
-Requirements:
-
-- Authenticated user only.
-- Validate URL.
-- Block private network and localhost URLs before production.
-- Apply timeout.
-- Extract readable text.
-- Store ingestion record.
-- Return structured status.
-
-### AI Generation
-
-Route:
-
-```text
-POST /api/generations
-```
-
-Requirements:
-
-- Authenticated user only.
-- Requires owned resume and owned job ingestion.
-- Uses versioned prompt.
-- Returns schema-validated output.
-- Logs model, prompt version, duration, and status.
-
-### Application Logging
-
-Route:
-
-```text
-POST /api/applications
-```
-
-Requirements:
-
-- Authenticated user only.
-- Requires quota check.
-- Creates quota event when the application consumes a tier allocation.
-- Stores company, job title, posting URL, related job ingestion, status, and generated artifact references.
-- Must not be deletable in a way that erases required quota/audit evidence.
-
-### Admin Tier Configuration
-
-Route group:
-
-```text
-/api/admin/tiers
-```
-
-Requirements:
-
-- Admin-only.
-- Configuration-driven tier creation and updates.
-- Server-side enforcement.
-- Audited changes.
-
-## 9. Security Architecture
-
-Controls:
-
-- Supabase Auth for identity.
-- Supabase RLS for database authorization.
-- Private Supabase Storage for resumes.
-- Server-side API validation.
-- Server-side AI key usage only.
-- No service-role key in browser.
-- Rate limiting for upload, ingestion, and generation.
-- SSRF protection for URL ingestion.
-- File type and size validation for uploads.
-- Audit events for sensitive operations.
-- Admin-only authorization for tier configuration.
-- Quota enforcement cannot rely on client state.
-- Integration tokens for LinkedIn/job boards/company career sites must be encrypted and scoped when future integrations are implemented.
-
-## 10. Privacy Architecture
-
-Personal data categories:
-
-- Email/account identity.
-- Resume content.
-- Uploaded files.
-- OCR extracted profile source text.
-- Imported profile and credential data.
-- Job URLs connected to a user.
-- Generated career materials.
-- Application records and status history.
-- Tier and quota usage events.
-
-Privacy controls:
-
-- Data minimization.
-- Explicit purpose.
-- User-scoped access.
-- Deletion plan.
-- Export plan.
-- Retention plan.
-- Subprocessor list before launch.
-- Region and cross-border transfer notes before launch.
-
-## 11. AI Architecture
-
-AI modules must be isolated under `lib/ai`.
-
-Required boundaries:
-
-- `prompts/`: versioned prompt templates.
-- `schemas/`: AI response schemas.
-- `providers/`: OpenAI/Claude adapters.
-- `generation-service`: orchestration and validation.
-
-AI service must:
-
-- Refuse to invent resume facts.
-- Cite source material internally when generating structured outputs.
-- Fail gracefully.
-- Keep human review in the workflow.
-- Maintain warm, candid, patient, job-advisor tone.
-- Adapt to user frustration by becoming calmer, more concise, and more action-oriented.
-- Ask questions conversationally, not interrogatively.
-- Proactively recommend roles and levels when profile confidence is sufficient.
-
-Conversational AI is the main product interface. Forms and editors support the conversation, but all changes must route through the same command/service layer.
-
-## 12. Observability Architecture
-
-Before public launch:
-
-- Structured server logs.
-- Error tracking.
-- Request ids.
-- Audit events table.
-- AI latency and failure metrics.
-- Basic funnel events.
-- Owner/admin operating console with aggregate product, usage, outcome, support, and health metrics.
-- Support-safe user timeline for troubleshooting by authorized support flows.
-
-Sensitive data must be excluded from logs.
-
-Operating console metrics must be admin-only and aggregate-first:
-
-- Signed-up users from auth/account data.
-- Active users from recent sign-in or product activity.
-- Feature usage from quota events, audit events, profile sources, job ingestions, application records, material generations, and support events.
-- Resume/profile creation counts.
-- Job application counts and status distribution.
-- Conversion proxy counts, initially `interviewed_selected`.
-- Support ticket volume, L1 resolution, L2 escalation, refund/sensitive escalation, and aging.
-
-Admin drill-down must be justified by support, security, billing, fraud, or explicit user troubleshooting consent. Drill-down must write an audit/support action record.
-
-## 12.1 Support Architecture
-
-Support is a controlled product subsystem, not a general chatbot.
-
-Support levels:
-
-- L0: self-serve docs and guided troubleshooting.
-- L1: autonomous support agent that can inspect support-safe account context and recent platform events.
-- L2: human support for sensitive, unresolved, refund, legal/privacy, security, billing dispute, user distress, or escalation cases.
-
-Support data model should include:
-
-- `support_docs`: versioned support articles.
-- `support_tickets`: user-owned support cases with status, severity, category, escalation level, and summary.
-- `support_messages`: user/support-agent conversation messages.
-- `support_actions`: append-only troubleshooting actions, logs inspected, tool calls, and escalation summaries.
-- `support_escalations`: human handoff packets with temperament, timeline, actions taken, results, and recommended next action.
-
-L1 agent access must be least-privilege:
-
-- Allowed: account metadata, plan/tier, feature usage metadata, quota events, application/job status metadata, recent error categories, support history, and user-provided issue details.
-- Not allowed by default: full resume text, full cover letters, raw profile facts, chat history contents, secrets, OAuth tokens, payment card data, or another user's data.
-- Sensitive content access requires explicit user consent, need-to-know purpose, and an audit/support action record.
-
-Every support response and action must be logged. L1 must escalate rather than decide refunds, legal/privacy requests, deletion disputes, security incidents, or emotionally sensitive cases.
-
-## 12.2 Failure Intelligence Architecture
-
-The system must support self-detection, self-diagnosis, and safe self-healing.
-
-Detection:
-
-- Monitor upload, parsing, ingestion, AI generation, and database failures.
-- Detect invalid AI response shape.
-- Detect low-confidence or low-content parsing results.
-- Detect repeated user-facing failures.
-
-Diagnosis:
-
-- Normalize errors into typed failure categories.
-- Include request id, feature name, status, duration, and safe metadata.
-- Separate user-facing messages from internal diagnostics.
-- Preserve root cause when available.
-
-Healing:
-
-- Retry safe idempotent operations with bounded retries.
-- Provide fallback states when AI or parsing fails.
-- Surface user recovery actions.
-- Log persistent failure patterns for engineering review.
-
-No self-healing process may rewrite code, alter schemas, weaken policy, or change prompts outside the reviewed release process.
-
-## 13. UX Architecture
-
-UX principles:
-
-- Contemporary, calm, elegant.
-- Warm and airy.
-- Fast core workflow.
-- Mobile-first.
-- Responsive desktop layout.
-- Browser-compatible across Chrome, Safari, Firefox, and Edge.
-- Accessible forms and navigation.
-- Clear review-before-use stage.
-- Conversation-first with supportive direct editing.
-
-Design system direction:
-
-- Warm neutral base surfaces.
-- Strong readable contrast.
-- One restrained primary accent.
-- Semantic success/warning/error colors.
-- Consistent spacing scale.
-- Reusable form and status components.
-- No novelty UI that slows down the core workflow.
-
-Desktop layout:
-
-- Left navigation: product areas and application history.
-- Center console: profile explorer/editor, recommendations, application artifacts.
-- Right panel: conversational AI and next-best action.
-
-Mobile adaptation:
-
-- Prefer chat-first flow.
-- Profile explorer/editor and application details can become tabs, sheets, or drill-in screens.
-- Mobile must reuse backend, command layer, validation, AI orchestration, tier checks, and audit logic.
-
-## 14. Deployment Architecture
-
-Vercel:
-
-- Production branch: `main`.
-- Preview deployments: pull requests and non-production branches.
-- Environment variables must exist for development, preview, and production.
-
-Supabase:
-
-- Remote project linked.
-- Migrations must be source-controlled.
-- RLS policies must be source-controlled.
-- Manual dashboard changes must be reflected in migrations.
-
-## 15. Current Gaps
-
-Before building V1 features:
-
-- Approve `DEVELOPMENT_CONTRACT.md`.
-- Approve this architecture.
-- Resolve GitHub history divergence.
-- Add `OPENAI_API_KEY` when AI work begins.
-- Decide initial database schema.
-- Create first Supabase migration.
-- Define API schemas.
-- Define design tokens.
-- Add basic CI.
-- Define command/action handler pattern.
-- Define test strategy and tool choices for unit, API, regression, browser, and mobile viewport testing.
-- Define typed error taxonomy for self-detection and self-diagnosis.
-- Finalize tier seed names and quota limits.
-- Define retention policy for applications, generated artifacts, and quota audit records.
-- Define OCR/link ingestion provider approach.
-- Define LinkedIn/job-site integration boundary for V1 versus future authenticated integrations.
+- Subscriptions, automatic renewals, auto-refills, stored payment methods, enterprise invoicing, or marketplace billing.
+- Auto-apply, semi-auto apply, job scanning, browser automation, or employer submission workflows.
+- Native mobile release.
+- Authenticated LinkedIn, job-board, company career-site, or other third-party integrations.
+- Workflows that submit data to an employer without explicit human approval.

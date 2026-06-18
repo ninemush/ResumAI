@@ -155,12 +155,42 @@ test.describe("RevenueCat webhook maturity", () => {
 
     const admin = createServiceRoleClient();
     const userId = await readUserIdByEmail(process.env.QA_DEMO_USER_A_EMAIL ?? "");
+    const purchaseEventId = `launch-refund-purchase-${crypto.randomUUID()}`;
     const eventId = `launch-refund-${crypto.randomUUID()}`;
     const authorization: Record<string, string> | undefined = process.env.REVENUECAT_WEBHOOK_SECRET
       ? { authorization: `Bearer ${process.env.REVENUECAT_WEBHOOK_SECRET}` }
       : undefined;
 
     try {
+      const purchaseResponse = await request.post("/api/revenuecat/webhook", {
+        data: {
+          event: {
+            app_user_id: userId,
+            id: purchaseEventId,
+            product_id: "pramania_credits_25",
+            type: "PURCHASE_REDEEMED",
+          },
+        },
+        headers: authorization,
+      });
+      const purchasePayload = await purchaseResponse.json();
+
+      expect(purchaseResponse.ok()).toBe(true);
+      expect(purchasePayload.creditsGranted).toBe(25);
+
+      const { data: purchaseEvents, error: purchaseEventError } = await admin
+        .from("revenuecat_events")
+        .select("id, credit_ledger_id")
+        .eq("event_id", purchaseEventId);
+      const purchaseEventRows = (purchaseEvents ?? []) as Array<{
+        credit_ledger_id: string | null;
+        id: string;
+      }>;
+
+      expect(purchaseEventError).toBeNull();
+      expect(purchaseEventRows).toHaveLength(1);
+      expect(purchaseEventRows[0]?.credit_ledger_id).toMatch(/[0-9a-f-]{36}/i);
+
       const response = await request.post("/api/revenuecat/webhook", {
         data: {
           event: {
@@ -183,13 +213,22 @@ test.describe("RevenueCat webhook maturity", () => {
 
       const { data: reversals, error: reversalError } = await admin
         .from("credit_reversals")
-        .select("id, provider_reference, reason, metadata")
+        .select("id, original_ledger_event_id, provider_reference, reason, metadata")
         .eq("provider_reference", eventId)
-        .returns<Array<{ id: string; metadata: Record<string, unknown>; provider_reference: string; reason: string }>>();
+        .returns<
+          Array<{
+            id: string;
+            metadata: Record<string, unknown>;
+            original_ledger_event_id: string | null;
+            provider_reference: string;
+            reason: string;
+          }>
+        >();
 
       expect(reversalError).toBeNull();
       expect(reversals).toHaveLength(1);
       expect(reversals?.[0]?.reason).toBe("REFUND");
+      expect(reversals?.[0]?.original_ledger_event_id).toBe(purchaseEventRows[0]?.credit_ledger_id);
       expect((reversals?.[0]?.metadata as { product_id?: string } | null)?.product_id).toBe(
         "pramania_credits_25",
       );
@@ -201,6 +240,18 @@ test.describe("RevenueCat webhook maturity", () => {
       const reversalRows = (reversals ?? []) as Array<{ id: string }>;
 
       await cleanRowsByIds(admin, "credit_reversals", reversalRows.map((event) => event.id));
+
+      const { data: events } = await admin
+        .from("revenuecat_events")
+        .select("id, credit_ledger_id")
+        .in("event_id", [purchaseEventId, eventId]);
+      const eventRows = (events ?? []) as Array<{ credit_ledger_id: string | null; id: string }>;
+      const ledgerIds = eventRows
+        .map((event) => event.credit_ledger_id)
+        .filter((id): id is string => Boolean(id));
+
+      await cleanRowsByIds(admin, "revenuecat_events", eventRows.map((event) => event.id));
+      await cleanRowsByIds(admin, "credit_ledger", ledgerIds);
     }
   });
 });
