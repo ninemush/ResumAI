@@ -26,6 +26,7 @@ const quotaReservationResultSchema = z.object({
 
 const quotaReservationSchema = quotaEventSchema.extend({
   operationKey: z.string().trim().min(8).max(180),
+  operationFingerprint: z.string().trim().length(64).optional(),
   resourceId: z.string().uuid().nullable(),
 });
 
@@ -62,6 +63,7 @@ export async function reserveQuotaEvent(
     p_event_type: parsed.eventType,
     p_metadata: parsed.metadata,
     p_operation_key: parsed.operationKey,
+    p_operation_fingerprint: parsed.operationFingerprint ?? null,
     p_resource_id: parsed.resourceId,
     p_resource_type: parsed.resourceType,
   });
@@ -144,6 +146,9 @@ function normalizeQuotaReservationResult(value: unknown) {
 function mapQuotaError(message: string | undefined, fallback: string) {
   if (message?.includes("QUOTA_TIER_REQUIRED")) return new Error("QUOTA_TIER_REQUIRED");
   if (message?.includes("QUOTA_LIMIT_REACHED")) return new Error("QUOTA_LIMIT_REACHED");
+  if (message?.includes("QUOTA_IDEMPOTENCY_MISMATCH")) {
+    return new Error("QUOTA_IDEMPOTENCY_MISMATCH");
+  }
   if (message?.includes("QUOTA_RESERVATION_NOT_ACTIVE")) {
     return new Error("QUOTA_RESERVATION_NOT_ACTIVE");
   }

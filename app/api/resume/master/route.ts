@@ -5,6 +5,7 @@ import { apiError, apiSuccess, createRequestId, readJsonBody, readOptionalJsonBo
 import {
   buildCreditsApiError,
   getCreditOperationKey,
+  isCreditOperationError,
 } from "@/lib/billing/credits";
 import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
@@ -19,6 +20,7 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { buildOperationFingerprint } from "@/lib/security/operation-fingerprint";
 
 export async function POST(request: Request) {
   const requestId = createRequestId();
@@ -69,6 +71,17 @@ export async function POST(request: Request) {
       }),
       feature: "masterResumeGenerate",
       metadata: { instruction: parsed.data.instruction ?? null },
+      operationFingerprint: buildOperationFingerprint({
+        basis: {
+          instruction: parsed.data.instruction ?? null,
+          operation: "generate_master_resume",
+        },
+        feature: "masterResumeGenerate",
+        operationKey,
+        resourceId: null,
+        resourceType: "master_resume",
+        userId: session.user.id,
+      }),
       operationKey,
       resourceId: null,
       resourceType: "master_resume",
@@ -84,7 +97,7 @@ export async function POST(request: Request) {
       reused: paidOperation.reused,
     });
   } catch (error) {
-    if (isBillingError(error)) {
+    if (isCreditOperationError(error)) {
       const billingError = buildCreditsApiError(error);
 
       return apiError(requestId, billingError);
@@ -178,6 +191,16 @@ function toApiError(error: unknown) {
     };
   }
 
+  if (error instanceof Error && error.message === "QUOTA_IDEMPOTENCY_MISMATCH") {
+    return {
+      category: "validation",
+      code: "quota.idempotency_mismatch",
+      message:
+        "This retry key was already used for a different generation. Start the action again before using quota.",
+      status: 409,
+    };
+  }
+
   if (error instanceof Error && error.message === "MASTER_RESUME_NOT_FOUND") {
     return {
       category: "not_found",
@@ -220,10 +243,6 @@ function toApiError(error: unknown) {
     message: "Unable to update the master resume right now.",
     status: 500,
   };
-}
-
-function isBillingError(error: unknown) {
-  return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
 function buildMasterResumeOperationKey({

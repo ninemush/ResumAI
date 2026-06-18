@@ -4,6 +4,7 @@ import { ClaimReviewRequiredError } from "@/lib/applications/export-gates";
 import {
   buildCreditsApiError,
   getCreditOperationKey,
+  isCreditOperationError,
 } from "@/lib/billing/credits";
 import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
@@ -20,6 +21,7 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { buildOperationFingerprint } from "@/lib/security/operation-fingerprint";
 
 export async function POST(request: Request) {
   const requestId = createRequestId();
@@ -79,6 +81,18 @@ export async function POST(request: Request) {
         operationOutput: Record<string, unknown>;
       }),
       feature: "masterResumeExport",
+      operationFingerprint: buildOperationFingerprint({
+        basis: {
+          acknowledgeClaimReview,
+          operation: "export_master_resume",
+          sectionVisibility,
+        },
+        feature: "masterResumeExport",
+        operationKey,
+        resourceId: null,
+        resourceType: "master_resume_export",
+        userId: session.user.id,
+      }),
       operationKey,
       resourceId: null,
       resourceType: "master_resume_export",
@@ -92,7 +106,7 @@ export async function POST(request: Request) {
       reused: paidOperation.reused || !paidOperation.result.didExport,
     });
   } catch (error) {
-    if (isBillingError(error)) {
+    if (isCreditOperationError(error)) {
       const billingError = buildCreditsApiError(error);
 
       return apiError(requestId, billingError);
@@ -100,10 +114,6 @@ export async function POST(request: Request) {
 
     return apiError(requestId, toApiError(error));
   }
-}
-
-function isBillingError(error: unknown) {
-  return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
 function toApiError(error: unknown) {

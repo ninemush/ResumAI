@@ -3,6 +3,7 @@ import { apiError, apiSuccess, createRequestId, readJsonBody } from "@/lib/api/r
 import {
   buildCreditsApiError,
   getCreditOperationKey,
+  isCreditOperationError,
 } from "@/lib/billing/credits";
 import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
@@ -17,6 +18,7 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { buildOperationFingerprint } from "@/lib/security/operation-fingerprint";
 
 export async function POST(request: Request) {
   const requestId = createRequestId();
@@ -108,6 +110,18 @@ export async function POST(request: Request) {
         job_url: parsed.data.jobUrl ?? null,
         source_type: parsed.data.sourceType,
       },
+      operationFingerprint: buildOperationFingerprint({
+        basis: {
+          jobText: parsed.data.jobText ?? null,
+          jobUrl: parsed.data.jobUrl ?? null,
+          sourceType: parsed.data.sourceType,
+        },
+        feature: "jobIngest",
+        operationKey,
+        resourceId: null,
+        resourceType: "job_ingestion",
+        userId: session.user.id,
+      }),
       operationKey,
       resourceId: null,
       resourceType: "job_ingestion",
@@ -120,7 +134,7 @@ export async function POST(request: Request) {
       reused: paidOperation.reused || !paidOperation.result.didIngest,
     });
   } catch (error) {
-    if (isBillingError(error)) {
+    if (isCreditOperationError(error)) {
       const billingError = buildCreditsApiError(error);
 
       return apiError(requestId, billingError);
@@ -128,10 +142,6 @@ export async function POST(request: Request) {
 
     return apiError(requestId, toApiError(error));
   }
-}
-
-function isBillingError(error: unknown) {
-  return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
 function toApiError(error: unknown) {

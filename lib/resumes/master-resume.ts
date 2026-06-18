@@ -24,6 +24,7 @@ import {
   reserveQuotaEvent,
   type QuotaReservationResult,
 } from "@/lib/quota/quota-events";
+import { buildOperationFingerprint } from "@/lib/security/operation-fingerprint";
 import {
   buildProfileIntelligence,
   type ProfileIntelligence,
@@ -250,15 +251,31 @@ export async function generateMasterResume(
   }
 
   const model = getMaterialsModel();
+  const quotaOperationKey =
+    options.quotaOperationKey ??
+    `masterResumeGenerate:${profile.id}:${hashOperationInput(parsed.instruction ?? "default")}`;
   const quotaReservation = await reserveQuotaEvent({
     eventType: "generation_created",
     metadata: {
       model,
       prompt_version: MASTER_RESUME_PROMPT_VERSION,
     },
-    operationKey:
-      options.quotaOperationKey ??
-      `masterResumeGenerate:${profile.id}:${hashOperationInput(parsed.instruction ?? "default")}`,
+    operationFingerprint: buildOperationFingerprint({
+      basis: {
+        confirmedFactIds: confirmedFacts.map((fact) => fact.id).sort(),
+        instruction: parsed.instruction ?? null,
+        model,
+        profileId: profile.id,
+        promptVersion: MASTER_RESUME_PROMPT_VERSION,
+        sourceEvidenceIds: sourceEvidence.map((source) => source.id).sort(),
+      },
+      feature: "generation_created",
+      operationKey: quotaOperationKey,
+      resourceId: profile.id,
+      resourceType: "master_resume",
+      userId,
+    }),
+    operationKey: quotaOperationKey,
     resourceId: null,
     resourceType: "master_resume",
   });

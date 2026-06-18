@@ -4,6 +4,7 @@ import { ClaimReviewRequiredError } from "@/lib/applications/export-gates";
 import {
   buildCreditsApiError,
   getCreditOperationKey,
+  isCreditOperationError,
 } from "@/lib/billing/credits";
 import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
@@ -17,6 +18,7 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { buildOperationFingerprint } from "@/lib/security/operation-fingerprint";
 
 type RouteContext = {
   params: Promise<{
@@ -53,7 +55,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
-    await requireProtectedApiSession();
+    const session = await requireProtectedApiSession();
     const body = await readOptionalJsonBody(request);
     const acknowledgeClaimReview =
       typeof body === "object" &&
@@ -93,6 +95,18 @@ export async function POST(request: Request, context: RouteContext) {
         operationOutput: Record<string, unknown>;
       }),
       feature: "applicationMaterialsExport",
+      operationFingerprint: buildOperationFingerprint({
+        basis: {
+          acknowledgeClaimReview,
+          applicationId: params.id,
+          operation: "export_application_materials",
+        },
+        feature: "applicationMaterialsExport",
+        operationKey,
+        resourceId: params.id,
+        resourceType: "application_materials_export",
+        userId: session.user.id,
+      }),
       operationKey,
       resourceId: params.id,
       resourceType: "application_materials_export",
@@ -106,7 +120,7 @@ export async function POST(request: Request, context: RouteContext) {
       reused: paidOperation.reused || !paidOperation.result.didExport,
     });
   } catch (error) {
-    if (isBillingError(error)) {
+    if (isCreditOperationError(error)) {
       const billingError = buildCreditsApiError(error);
 
       return apiError(requestId, billingError);
@@ -114,10 +128,6 @@ export async function POST(request: Request, context: RouteContext) {
 
     return apiError(requestId, toApiError(error));
   }
-}
-
-function isBillingError(error: unknown) {
-  return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
 function toApiError(error: unknown) {

@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { buildOperationFingerprint } from "@/lib/security/operation-fingerprint";
 import { createClient } from "@/lib/supabase/server";
 
 export const applicationStatusSchema = z.enum([
@@ -93,6 +94,23 @@ export async function createApplicationFromJob(
     p_decision: parsed.decision,
     p_decision_reason: parsed.decisionReason ?? null,
     p_job_ingestion_id: parsed.jobIngestionId,
+    p_operation_fingerprint: buildOperationFingerprint({
+      basis: {
+        creationMode: "job_ingestion",
+        decision: parsed.decision,
+        decisionReason: parsed.decisionReason ?? null,
+        jobIngestionId: parsed.jobIngestionId,
+        overrideSkip: parsed.overrideSkip,
+        status: parsed.status,
+      },
+      feature: "application_logged",
+      operationKey:
+        parsed.idempotencyKey ??
+        `applicationCreate:${parsed.jobIngestionId}:${parsed.decision}:${parsed.status}`,
+      resourceId: parsed.jobIngestionId,
+      resourceType: "application",
+      userId: user.id,
+    }),
     p_operation_key:
       parsed.idempotencyKey ??
       `applicationCreate:${parsed.jobIngestionId}:${parsed.decision}:${parsed.status}`,
@@ -302,6 +320,7 @@ function mapApplicationCreateRpcError(message: string | undefined) {
   }
   if (message?.includes("QUOTA_TIER_REQUIRED")) return "QUOTA_TIER_REQUIRED";
   if (message?.includes("QUOTA_LIMIT_REACHED")) return "QUOTA_LIMIT_REACHED";
+  if (message?.includes("QUOTA_IDEMPOTENCY_MISMATCH")) return "QUOTA_IDEMPOTENCY_MISMATCH";
   if (message?.includes("INVALID_APPLICATION_DECISION")) return "INVALID_APPLICATION_DECISION";
   return "APPLICATION_CREATE_FAILED";
 }

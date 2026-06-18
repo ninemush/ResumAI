@@ -5,6 +5,7 @@ import { brand } from "@/lib/brand";
 import {
   buildCreditsApiError,
   getCreditOperationKey,
+  isCreditOperationError,
 } from "@/lib/billing/credits";
 import { runPaidCreditOperation } from "@/lib/billing/credit-operations";
 import {
@@ -16,6 +17,7 @@ import {
   getClientRateLimitKey,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { buildOperationFingerprint } from "@/lib/security/operation-fingerprint";
 
 type RouteContext = {
   params: Promise<{
@@ -60,7 +62,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
-    await requireProtectedApiSession();
+    const session = await requireProtectedApiSession();
     const operationKey = getCreditOperationKey(
       request,
       `profileSourceExtract:${params.id}`,
@@ -124,6 +126,17 @@ export async function POST(request: Request, context: RouteContext) {
             : null,
       }),
       feature: "profileSourceExtract",
+      operationFingerprint: buildOperationFingerprint({
+        basis: {
+          operation: "extract_profile_source",
+          sourceId: params.id,
+        },
+        feature: "profileSourceExtract",
+        operationKey,
+        resourceId: params.id,
+        resourceType: "profile_source",
+        userId: session.user.id,
+      }),
       operationKey,
       resourceId: params.id,
       resourceType: "profile_source",
@@ -137,7 +150,7 @@ export async function POST(request: Request, context: RouteContext) {
       reused: paidOperation.reused,
     });
   } catch (error) {
-    if (isBillingError(error)) {
+    if (isCreditOperationError(error)) {
       const apiError = buildCreditsApiError(error);
 
       return NextResponse.json(
@@ -165,10 +178,6 @@ export async function POST(request: Request, context: RouteContext) {
       { status },
     );
   }
-}
-
-function isBillingError(error: unknown) {
-  return error instanceof Error && error.message.startsWith("CREDITS_");
 }
 
 function toApiError(error: unknown) {
