@@ -96,7 +96,7 @@ type ResumeRow = {
   updated_at: string;
 };
 
-type SourceEvidence = {
+export type SourceEvidence = {
   id: string;
   created_at?: string | null;
   extracted_text: string | null;

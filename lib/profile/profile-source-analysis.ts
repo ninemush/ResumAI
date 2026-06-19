@@ -769,7 +769,7 @@ function buildOpenQuestions({
   return questions;
 }
 
-function buildAnalysisWarnings(parsed: ParsedProfileSource) {
+export function buildAnalysisWarnings(parsed: ParsedProfileSource) {
   const warnings: string[] = [];
 
   if (parsed.roles.length === 0) warnings.push("NO_ROLE_CHRONOLOGY_DETECTED");
@@ -779,7 +779,7 @@ function buildAnalysisWarnings(parsed: ParsedProfileSource) {
   return warnings;
 }
 
-function estimateSourceConfidence(parsed: ParsedProfileSource) {
+export function estimateSourceConfidence(parsed: ParsedProfileSource) {
   let score = 0.35;
   if (parsed.roles.length > 0) score += 0.25;
   if (parsed.skills.length > 0) score += 0.1;
