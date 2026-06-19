@@ -23,7 +23,7 @@ export async function logAdminUserAccess({
   visibilityLevel,
 }: {
   accessReason: string;
-  actorUserId: string;
+  actorUserId: string | null;
   metadata?: Record<string, unknown>;
   resourceId?: string | null;
   resourceType: string;
@@ -54,7 +54,7 @@ export async function logAdminUserAccesses({
   visibilityLevel,
 }: {
   accessReason: string;
-  actorUserId: string;
+  actorUserId: string | null;
   metadata?: Record<string, unknown>;
   resourceId?: string | null;
   resourceType: string;
