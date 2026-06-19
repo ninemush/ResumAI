@@ -48,6 +48,10 @@ export async function runPaidCreditOperation<T>({
   resourceType: string;
   run: (context: PaidCreditOperationContext) => Promise<T>;
 }): Promise<{ operationKey: string; result: T; reused: boolean }> {
+  if (!operationFingerprint?.trim()) {
+    throw new Error("CREDIT_OPERATION_FINGERPRINT_REQUIRED");
+  }
+
   const finalizedOutput = await getFinalizedCreditOperationOutput({
     feature,
     operationFingerprint,

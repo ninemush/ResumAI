@@ -213,6 +213,7 @@ test.describe("privacy deletion execution maturity", () => {
           resource_type: "application_materials",
           resource_id: submittedApplicationId,
           idempotency_key: `${marker}:reservation`,
+          operation_fingerprint: "e".repeat(64),
           status: "released",
           metadata: { marker },
         }),

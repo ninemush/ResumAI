@@ -56,8 +56,8 @@ if [[ "$head_sha" != "$origin_sha" ]]; then
   record_failure "HEAD must match origin/main before production release validation."
 fi
 
-if ! npx supabase migration list >/dev/null 2>&1; then
-  record_failure "Supabase migration state could not be read; database migration evidence is missing."
+if ! node scripts/check-supabase-migration-drift.mjs >/dev/null 2>&1; then
+  record_failure "Supabase migration drift detected or migration state could not be verified."
 fi
 
 if (( ${#failures[@]} > 0 )); then

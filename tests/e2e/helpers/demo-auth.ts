@@ -76,6 +76,7 @@ export function hasLaunchReadinessEnv() {
     process.env.RUN_LAUNCH_READINESS_GATES === "1" &&
       hasTwoUserIsolationEnv() &&
       hasAdminQaEnv() &&
+      process.env.REVENUECAT_WEBHOOK_SECRET &&
       process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
 }

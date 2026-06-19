@@ -18,7 +18,11 @@ import type { AppView } from "@/components/app-shell/side-nav";
 import { useTrustDialog, type TrustDialogConfirm } from "@/components/ui/trust-dialog";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import { CREDIT_COSTS, formatCreditCost, type CreditFeature } from "@/lib/billing/credit-catalog";
-import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
+import {
+  clearInFlightOperationId,
+  createIdempotencyHeaders,
+  getInFlightOperationId,
+} from "@/lib/billing/idempotency";
 import type { CreditSummary } from "@/lib/billing/credits";
 import type {
   AdvisorSuggestedAction,
@@ -294,6 +298,7 @@ export function ConversationPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const paidOperationIdsRef = useRef<Record<string, string | undefined>>({});
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const { confirm, TrustDialog } = useTrustDialog();
   const [message, setMessage] = useState("");
@@ -323,6 +328,31 @@ export function ConversationPanel({
     useState<MessageAttachment | null>(null);
   const isSubmitting = pendingRequestCount > 0;
   const isLongDraft = message.length > 96 || message.includes("\n");
+
+  async function fetchPaidOperation(
+    input: RequestInfo | URL,
+    init: RequestInit,
+    operationScope: string,
+  ) {
+    const headers = new Headers(init.headers);
+    const idempotencyHeaders = createIdempotencyHeaders(
+      operationScope,
+      getInFlightOperationId(paidOperationIdsRef, operationScope),
+    );
+
+    for (const [key, value] of Object.entries(idempotencyHeaders as Record<string, string>)) {
+      headers.set(key, value);
+    }
+
+    try {
+      return await fetch(input, {
+        ...init,
+        headers,
+      });
+    } finally {
+      clearInFlightOperationId(paidOperationIdsRef, operationScope);
+    }
+  }
 
   useEffect(() => {
     const messageList = messageListRef.current;
@@ -600,10 +630,11 @@ export function ConversationPanel({
         return "Okay, I paused before preparing paid master resume downloads.";
       }
 
-      const response = await fetch("/api/resume/master/export", {
-        headers: createIdempotencyHeaders("masterResumeExport:chat"),
-        method: "POST",
-      });
+      const response = await fetchPaidOperation(
+        "/api/resume/master/export",
+        { method: "POST" },
+        "masterResumeExport:chat",
+      );
       const payload = await response.json();
 
       if (!response.ok) {
@@ -649,14 +680,17 @@ export function ConversationPanel({
       return "Okay, I paused before spending credits on a new master resume draft.";
     }
 
-    const response = await fetch("/api/resume/master", {
-      headers: {
-        "Content-Type": "application/json",
-        ...createIdempotencyHeaders("masterResumeGenerate:chat"),
+    const response = await fetchPaidOperation(
+      "/api/resume/master",
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+        body: JSON.stringify({ instruction: text }),
       },
-      method: "POST",
-      body: JSON.stringify({ instruction: text }),
-    });
+      "masterResumeGenerate:chat",
+    );
     const payload = await response.json();
 
     if (!response.ok) {
@@ -758,14 +792,13 @@ export function ConversationPanel({
         return "Okay, I paused before drafting paid job-specific materials.";
       }
 
-      const response = await fetch(
+      const operationScope = `applicationMaterialsGenerate:${application.id}:chat`;
+      const response = await fetchPaidOperation(
         `/api/applications/${application.id}/materials`,
         {
-          headers: createIdempotencyHeaders(
-            `applicationMaterialsGenerate:${application.id}:chat`,
-          ),
           method: "POST",
         },
+        operationScope,
       );
       const payload = await response.json();
 
@@ -891,14 +924,13 @@ export function ConversationPanel({
       return "I logged the application and paused before spending credits on job-specific materials.";
     }
 
-    const response = await fetch(
+    const operationScope = `applicationMaterialsGenerate:${applicationId}:chat-preview`;
+    const response = await fetchPaidOperation(
       `/api/applications/${applicationId}/materials`,
       {
-        headers: createIdempotencyHeaders(
-          `applicationMaterialsGenerate:${applicationId}:chat-preview`,
-        ),
         method: "POST",
       },
+      operationScope,
     );
     const payload = await response.json();
 
@@ -1102,14 +1134,17 @@ export function ConversationPanel({
         return "Okay, I saved no paid job analysis for that link.";
       }
 
-      const response = await fetch("/api/jobs/ingest", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...createIdempotencyHeaders("jobIngest:chat"),
+      const response = await fetchPaidOperation(
+        "/api/jobs/ingest",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ jobUrl: url, sourceType: "url_fetch" }),
         },
-        body: JSON.stringify({ jobUrl: url, sourceType: "url_fetch" }),
-      });
+        "jobIngest:chat",
+      );
       const payload = await response.json();
 
       if (!response.ok) {
@@ -1401,10 +1436,14 @@ export function ConversationPanel({
       };
     }
 
-    const response = await fetch(`/api/profile/sources/${sourceId}/extract`, {
-      headers: createIdempotencyHeaders(`profileSourceExtract:${sourceId}:chat`),
-      method: "POST",
-    });
+    const operationScope = `profileSourceExtract:${sourceId}:chat`;
+    const response = await fetchPaidOperation(
+      `/api/profile/sources/${sourceId}/extract`,
+      {
+        method: "POST",
+      },
+      operationScope,
+    );
     const payload = await response.json();
 
     if (!response.ok) {

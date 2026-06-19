@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
+import { withPrivateNoStore } from "@/lib/api/responses";
 import { listAdminPrivacyRequests } from "@/lib/privacy/requests";
 import {
   checkRateLimit,
@@ -17,33 +18,35 @@ export async function GET(request: Request) {
   });
 
   if (!rateLimit.allowed) {
-    return rateLimitResponse({ requestId, result: rateLimit });
+    return withPrivateNoStore(rateLimitResponse({ requestId, result: rateLimit }));
   }
 
   try {
     await requireProtectedApiSession({ requireAdmin: true });
     const requests = await listAdminPrivacyRequests();
 
-    return NextResponse.json({ ok: true, requestId, requests });
+    return withPrivateNoStore(NextResponse.json({ ok: true, requestId, requests }));
   } catch (error) {
     const authResponse = apiAuthErrorResponse({
       error,
       fallbackMessage: "Sign in is required.",
       requestId,
     });
-    if (authResponse) return authResponse;
+    if (authResponse) return withPrivateNoStore(authResponse);
 
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "auth",
-          code: "admin.required",
-          message: "Owner or admin access is required.",
+    return withPrivateNoStore(
+      NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: {
+            category: "auth",
+            code: "admin.required",
+            message: "Owner or admin access is required.",
+          },
         },
-      },
-      { status: 403 },
+        { status: 403 },
+      ),
     );
   }
 }

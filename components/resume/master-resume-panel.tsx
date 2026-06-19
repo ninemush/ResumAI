@@ -25,7 +25,11 @@ import { useRouter } from "next/navigation";
 
 import { brand } from "@/lib/brand";
 import { getBlockingExportRisks } from "@/lib/applications/export-gates";
-import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
+import {
+  clearInFlightOperationId,
+  createIdempotencyHeaders,
+  getInFlightOperationId,
+} from "@/lib/billing/idempotency";
 import { useTrustDialog } from "@/components/ui/trust-dialog";
 import {
   looksLikeEmploymentTypeLabel,
@@ -66,6 +70,7 @@ export function MasterResumePanel({
 }: MasterResumePanelProps) {
   const router = useRouter();
   const { confirm, TrustDialog } = useTrustDialog();
+  const paidOperationIdsRef = useRef<Record<string, string | undefined>>({});
   const resumePreviewRef = useRef<HTMLDivElement | null>(null);
   const [currentOverview, setCurrentOverview] = useState(overview);
   const initialReviewStorageKey = overview.latestResume?.id
@@ -305,10 +310,14 @@ export function MasterResumePanel({
 
     setIsGenerating(true);
     setMessage(null);
+    const operationScope = "masterResumeGenerate:resume-panel";
 
     try {
       const response = await fetch("/api/resume/master", {
-        headers: createIdempotencyHeaders("masterResumeGenerate:resume-panel"),
+        headers: createIdempotencyHeaders(
+          operationScope,
+          getInFlightOperationId(paidOperationIdsRef, operationScope),
+        ),
         method: "POST",
       });
       const payload = await response.json();
@@ -324,6 +333,7 @@ export function MasterResumePanel({
       setMessage(payload.summary ?? "Created a master resume draft.");
       router.refresh();
     } finally {
+      clearInFlightOperationId(paidOperationIdsRef, operationScope);
       setIsGenerating(false);
     }
   }
@@ -365,13 +375,17 @@ export function MasterResumePanel({
 
     setIsGeneratingVariant(true);
     setMessage(null);
+    const operationScope = "masterResumeGenerate:focused-variant";
 
     try {
       const response = await fetch("/api/resume/master", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...createIdempotencyHeaders("masterResumeGenerate:focused-variant"),
+          ...createIdempotencyHeaders(
+            operationScope,
+            getInFlightOperationId(paidOperationIdsRef, operationScope),
+          ),
         },
         body: JSON.stringify({
           instruction: `Create a focused master resume variant for ${focus}. Keep the standard ATS chronology, preserve verified facts, retain contact details and role-by-role work history, and only adjust positioning, selected highlights, skill emphasis, and summary language for this target.`,
@@ -390,6 +404,7 @@ export function MasterResumePanel({
       setMessage(`Created a focused master resume variant for ${focus}. Review it before downloading files.`);
       router.refresh();
     } finally {
+      clearInFlightOperationId(paidOperationIdsRef, operationScope);
       setIsGeneratingVariant(false);
     }
   }
@@ -455,6 +470,7 @@ export function MasterResumePanel({
 
     setIsExporting(true);
     setMessage(null);
+    const operationScope = "masterResumeExport:resume-panel";
 
     try {
       const response = await fetch("/api/resume/master/export", {
@@ -463,7 +479,10 @@ export function MasterResumePanel({
           sectionVisibility: visibleOptionalSections,
         }),
         headers: {
-          ...createIdempotencyHeaders("masterResumeExport:resume-panel"),
+          ...createIdempotencyHeaders(
+            operationScope,
+            getInFlightOperationId(paidOperationIdsRef, operationScope),
+          ),
           "Content-Type": "application/json",
         },
         method: "POST",
@@ -482,6 +501,7 @@ export function MasterResumePanel({
       setMessage("Your master resume PDF and DOCX are ready to download.");
       router.refresh();
     } finally {
+      clearInFlightOperationId(paidOperationIdsRef, operationScope);
       setIsExporting(false);
     }
   }

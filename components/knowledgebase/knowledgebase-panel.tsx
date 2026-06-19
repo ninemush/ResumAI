@@ -2,11 +2,15 @@
 
 import { Download, FileText, RefreshCw, Search, Trash2 } from "lucide-react";
 import Image from "next/image";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { brand } from "@/lib/brand";
-import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
+import {
+  clearInFlightOperationId,
+  createIdempotencyHeaders,
+  getInFlightOperationId,
+} from "@/lib/billing/idempotency";
 import { useTrustDialog } from "@/components/ui/trust-dialog";
 import type { ProfileOverview } from "@/lib/profile/profile-overview";
 
@@ -36,6 +40,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
     null,
   );
   const { confirm, TrustDialog } = useTrustDialog();
+  const paidOperationIdsRef = useRef<Record<string, string | undefined>>({});
   const visibleSources = overview.recentSources.filter((source) =>
     sourceMatchesFilter(source, activeFilter) && sourceMatchesSearch(source, sourceQuery),
   );
@@ -45,11 +50,13 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
   async function retrySourceExtraction(sourceId: string) {
     setPendingId(sourceId);
     setMessage(null);
+    const operationScope = `profileSourceExtract:${sourceId}:library-panel`;
 
     try {
       const response = await fetch(`/api/profile/sources/${sourceId}/extract`, {
         headers: createIdempotencyHeaders(
-          `profileSourceExtract:${sourceId}:library-panel`,
+          operationScope,
+          getInFlightOperationId(paidOperationIdsRef, operationScope),
         ),
         method: "POST",
       });
@@ -68,6 +75,7 @@ export function KnowledgebasePanel({ embedded = false, overview }: Knowledgebase
       );
       router.refresh();
     } finally {
+      clearInFlightOperationId(paidOperationIdsRef, operationScope);
       setPendingId(null);
     }
   }

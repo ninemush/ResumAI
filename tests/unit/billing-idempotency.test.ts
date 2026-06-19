@@ -1,6 +1,14 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
-import { createIdempotencyHeaders, createIdempotencyKey } from "@/lib/billing/idempotency";
+vi.mock("server-only", () => ({}));
+
+import { buildCreditsApiError } from "@/lib/billing/credits";
+import {
+  clearInFlightOperationId,
+  createIdempotencyHeaders,
+  createIdempotencyKey,
+  getInFlightOperationId,
+} from "@/lib/billing/idempotency";
 import { buildOperationFingerprint } from "@/lib/security/operation-fingerprint";
 
 describe("billing idempotency headers", () => {
@@ -32,6 +40,30 @@ describe("billing idempotency headers", () => {
     const second = createIdempotencyKey("masterResumeGenerate:resume-panel");
 
     expect(first).not.toBe(second);
+  });
+
+  test("reuses an in-flight operation id until the action completes", () => {
+    const store = { current: {} };
+    const first = getInFlightOperationId(store, "masterResumeGenerate:resume-panel");
+    const second = getInFlightOperationId(store, "masterResumeGenerate:resume-panel");
+
+    expect(first).toBe(second);
+
+    clearInFlightOperationId(store, "masterResumeGenerate:resume-panel");
+
+    const next = getInFlightOperationId(store, "masterResumeGenerate:resume-panel");
+
+    expect(next).not.toBe(first);
+  });
+});
+
+describe("billing API errors", () => {
+  test("explains missing paid-operation fingerprints as a validation failure", () => {
+    expect(buildCreditsApiError(new Error("CREDIT_OPERATION_FINGERPRINT_REQUIRED"))).toMatchObject({
+      category: "validation",
+      code: "billing.operation_fingerprint_required",
+      status: 400,
+    });
   });
 });
 

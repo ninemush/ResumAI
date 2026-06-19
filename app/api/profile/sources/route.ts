@@ -172,6 +172,24 @@ function toApiError(error: unknown) {
       };
     }
 
+    if (error.message === "PROFILE_LINK_BLOCKED") {
+      return {
+        category: "validation",
+        code: "source.profile_link_blocked",
+        message: "For security, I can only save public internet profile links.",
+        status: 422,
+      };
+    }
+
+    if (error.message === "PROFILE_LINK_UNSUPPORTED_PROTOCOL") {
+      return {
+        category: "validation",
+        code: "source.profile_link_unsupported_protocol",
+        message: "Profile links must use http or https.",
+        status: 400,
+      };
+    }
+
     if (error.message === "DOC_UNSUPPORTED") {
       return {
         category: "validation",

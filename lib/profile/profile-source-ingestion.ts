@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { assertExternalHttpUrl } from "@/lib/security/url-safety";
 import { createClient } from "@/lib/supabase/server";
 
 const profileSourceTypeSchema = z.enum([
@@ -398,6 +399,13 @@ function validateSourceShape(input: ProfileSourceRequest) {
     throw new Error("URL_REQUIRED");
   }
 
+  if (["link", "portfolio"].includes(input.sourceType) && input.sourceUrl) {
+    assertExternalHttpUrl(input.sourceUrl, {
+      blockedErrorCode: "PROFILE_LINK_BLOCKED",
+      unsupportedProtocolErrorCode: "PROFILE_LINK_UNSUPPORTED_PROTOCOL",
+    });
+  }
+
   if (input.sourceType === "linkedin" && !input.sourceUrl && !input.storagePath) {
     throw new Error("LINKEDIN_SOURCE_REQUIRED");
   }
@@ -411,6 +419,11 @@ function validateSourceShape(input: ProfileSourceRequest) {
   }
 
   if (input.sourceType === "linkedin" && input.sourceUrl) {
+    assertExternalHttpUrl(input.sourceUrl, {
+      blockedErrorCode: "PROFILE_LINK_BLOCKED",
+      unsupportedProtocolErrorCode: "PROFILE_LINK_UNSUPPORTED_PROTOCOL",
+    });
+
     const hostname = new URL(input.sourceUrl).hostname.replace(/^www\./, "");
 
     if (!hostname.endsWith("linkedin.com")) {

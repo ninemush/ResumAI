@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
+import { withPrivateNoStore } from "@/lib/api/responses";
 import {
   attachDeletionPlanToRequest,
   completeDeletionReviewForRequest,
@@ -31,11 +32,13 @@ export async function PATCH(request: Request, context: RouteContext) {
   });
 
   if (!rateLimit.allowed) {
-    return rateLimitResponse({
-      message: "Privacy request updates are being submitted too quickly. Pause briefly before trying again.",
-      requestId,
-      result: rateLimit,
-    });
+    return withPrivateNoStore(
+      rateLimitResponse({
+        message: "Privacy request updates are being submitted too quickly. Pause briefly before trying again.",
+        requestId,
+        result: rateLimit,
+      }),
+    );
   }
 
   try {
@@ -49,28 +52,32 @@ export async function PATCH(request: Request, context: RouteContext) {
         requestId: id,
       });
 
-      return NextResponse.json({
-        ok: true,
-        deletionPlan,
-        requestId,
-      });
+      return withPrivateNoStore(
+        NextResponse.json({
+          ok: true,
+          deletionPlan,
+          requestId,
+        }),
+      );
     }
 
     if (input.action === "complete_deletion_review") {
       const resolutionSummary = input.resolutionSummary?.trim();
 
       if (!resolutionSummary) {
-        return NextResponse.json(
-          {
-            ok: false,
-            requestId,
-            error: {
-              category: "validation",
-              code: "privacy.resolution_summary_required",
-              message: "Add a resolution summary before completing deletion review.",
+        return withPrivateNoStore(
+          NextResponse.json(
+            {
+              ok: false,
+              requestId,
+              error: {
+                category: "validation",
+                code: "privacy.resolution_summary_required",
+                message: "Add a resolution summary before completing deletion review.",
+              },
             },
-          },
-          { status: 400 },
+            { status: 400 },
+          ),
         );
       }
 
@@ -80,33 +87,39 @@ export async function PATCH(request: Request, context: RouteContext) {
         resolutionSummary,
       });
 
-      return NextResponse.json({
-        ok: true,
-        completed,
-        requestId,
-      });
+      return withPrivateNoStore(
+        NextResponse.json({
+          ok: true,
+          completed,
+          requestId,
+        }),
+      );
     }
 
     const privacyRequest = await updateAdminPrivacyRequest({ id, input });
 
-    return NextResponse.json({
-      ok: true,
-      request: privacyRequest,
-      requestId,
-    });
+    return withPrivateNoStore(
+      NextResponse.json({
+        ok: true,
+        request: privacyRequest,
+        requestId,
+      }),
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: {
-            category: "validation",
-            code: "privacy.invalid_admin_update",
-            message: "Use a valid status, notes, or deletion-plan action.",
+      return withPrivateNoStore(
+        NextResponse.json(
+          {
+            ok: false,
+            requestId,
+            error: {
+              category: "validation",
+              code: "privacy.invalid_admin_update",
+              message: "Use a valid status, notes, or deletion-plan action.",
+            },
           },
-        },
-        { status: 400 },
+          { status: 400 },
+        ),
       );
     }
 
@@ -115,16 +128,18 @@ export async function PATCH(request: Request, context: RouteContext) {
       fallbackMessage: "Sign in is required.",
       requestId,
     });
-    if (authResponse) return authResponse;
+    if (authResponse) return withPrivateNoStore(authResponse);
 
     if (error instanceof Error && error.message === "ADMIN_REQUIRED") {
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: { category: "auth", code: "admin.required", message: "Owner or admin access is required." },
-        },
-        { status: 403 },
+      return withPrivateNoStore(
+        NextResponse.json(
+          {
+            ok: false,
+            requestId,
+            error: { category: "auth", code: "admin.required", message: "Owner or admin access is required." },
+          },
+          { status: 403 },
+        ),
       );
     }
 
@@ -136,17 +151,19 @@ export async function PATCH(request: Request, context: RouteContext) {
       }),
     );
 
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "server",
-          code: "admin.privacy_request_update_failed",
-          message: "Privacy request could not be updated.",
+    return withPrivateNoStore(
+      NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: {
+            category: "server",
+            code: "admin.privacy_request_update_failed",
+            message: "Privacy request could not be updated.",
+          },
         },
-      },
-      { status: 500 },
+        { status: 500 },
+      ),
     );
   }
 }

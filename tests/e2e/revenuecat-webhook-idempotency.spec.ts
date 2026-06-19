@@ -10,8 +10,65 @@ import {
 test.describe("RevenueCat webhook maturity", () => {
   test.skip(
     !hasLaunchReadinessEnv(),
-    "Launch readiness env, service role, admin, and two-user QA credentials are required for webhook idempotency evidence.",
+    "Launch readiness env, webhook secret, service role, admin, and two-user QA credentials are required for webhook idempotency evidence.",
   );
+
+  test("rejects invalid webhook authorization before processing provider payloads", async ({ request }) => {
+    loadLocalEnv();
+
+    const response = await request.post("/api/revenuecat/webhook", {
+      data: {
+        event: {
+          app_user_id: crypto.randomUUID(),
+          id: `launch-bad-secret-${crypto.randomUUID()}`,
+          product_id: "pramania_credits_25",
+          type: "NON_RENEWING_PURCHASE",
+        },
+      },
+      headers: { authorization: "Bearer definitely-not-the-launch-secret" },
+    });
+    const payload = await response.json();
+
+    expect(response.status()).toBe(401);
+    expect(payload.error.code).toBe("revenuecat.unauthorized");
+  });
+
+  test("ignores web-billing redemption events without granting credits", async ({ request }) => {
+    loadLocalEnv();
+
+    const admin = createServiceRoleClient();
+    const userId = await readUserIdByEmail(process.env.QA_DEMO_USER_A_EMAIL ?? "");
+    const eventId = `launch-redemption-ignored-${crypto.randomUUID()}`;
+    const authorization = revenueCatAuthorizationHeaders();
+
+    const response = await request.post("/api/revenuecat/webhook", {
+      data: {
+        event: {
+          app_user_id: userId,
+          id: eventId,
+          product_id: "pramania_credits_25",
+          type: "PURCHASE_REDEEMED",
+        },
+      },
+      headers: authorization,
+    });
+    const payload = await response.json();
+
+    expect(response.ok()).toBe(true);
+    expect(payload).toMatchObject({
+      ignored: true,
+      reason: "event_type_not_credit_grant",
+    });
+    expect(payload.creditsGranted).toBeUndefined();
+
+    const { data: events, error: eventError } = await admin
+      .from("revenuecat_events")
+      .select("id")
+      .eq("event_id", eventId);
+
+    expect(eventError).toBeNull();
+    expect(events).toHaveLength(0);
+  });
 
   test("grants mapped credits exactly once for duplicate provider delivery", async ({ request }) => {
     loadLocalEnv();
@@ -19,17 +76,18 @@ test.describe("RevenueCat webhook maturity", () => {
     const admin = createServiceRoleClient();
     const userId = await readUserIdByEmail(process.env.QA_DEMO_USER_A_EMAIL ?? "");
     const eventId = `launch-maturity-${crypto.randomUUID()}`;
-    const authorization: Record<string, string> | undefined = process.env.REVENUECAT_WEBHOOK_SECRET
-      ? { authorization: `Bearer ${process.env.REVENUECAT_WEBHOOK_SECRET}` }
-      : undefined;
+    const transactionId = `launch-tx-${crypto.randomUUID()}`;
+    const authorization = revenueCatAuthorizationHeaders();
 
     try {
       const payload = {
         event: {
           app_user_id: userId,
           id: eventId,
+          original_transaction_id: transactionId,
           product_id: "pramania_credits_25",
-          type: "PURCHASE_REDEEMED",
+          transaction_id: transactionId,
+          type: "NON_RENEWING_PURCHASE",
         },
       };
       const responses = await Promise.all([
@@ -98,9 +156,7 @@ test.describe("RevenueCat webhook maturity", () => {
     const admin = createServiceRoleClient();
     const userId = await readUserIdByEmail(process.env.QA_DEMO_USER_A_EMAIL ?? "");
     const eventId = `launch-unknown-product-${crypto.randomUUID()}`;
-    const authorization: Record<string, string> | undefined = process.env.REVENUECAT_WEBHOOK_SECRET
-      ? { authorization: `Bearer ${process.env.REVENUECAT_WEBHOOK_SECRET}` }
-      : undefined;
+    const authorization = revenueCatAuthorizationHeaders();
 
     try {
       const response = await request.post("/api/revenuecat/webhook", {
@@ -109,7 +165,7 @@ test.describe("RevenueCat webhook maturity", () => {
             app_user_id: userId,
             id: eventId,
             product_id: "unknown_credit_pack",
-            type: "PURCHASE_REDEEMED",
+            type: "NON_RENEWING_PURCHASE",
           },
         },
         headers: authorization,
@@ -155,49 +211,68 @@ test.describe("RevenueCat webhook maturity", () => {
 
     const admin = createServiceRoleClient();
     const userId = await readUserIdByEmail(process.env.QA_DEMO_USER_A_EMAIL ?? "");
-    const purchaseEventId = `launch-refund-purchase-${crypto.randomUUID()}`;
+    const purchaseEventIds = [
+      `launch-refund-purchase-old-${crypto.randomUUID()}`,
+      `launch-refund-purchase-new-${crypto.randomUUID()}`,
+    ];
     const eventId = `launch-refund-${crypto.randomUUID()}`;
-    const authorization: Record<string, string> | undefined = process.env.REVENUECAT_WEBHOOK_SECRET
-      ? { authorization: `Bearer ${process.env.REVENUECAT_WEBHOOK_SECRET}` }
-      : undefined;
+    const refundedTransactionId = `launch-refund-tx-${crypto.randomUUID()}`;
+    const newerTransactionId = `launch-current-tx-${crypto.randomUUID()}`;
+    const authorization = revenueCatAuthorizationHeaders();
 
     try {
-      const purchaseResponse = await request.post("/api/revenuecat/webhook", {
-        data: {
-          event: {
-            app_user_id: userId,
-            id: purchaseEventId,
-            product_id: "pramania_credits_25",
-            type: "PURCHASE_REDEEMED",
+      for (const [index, purchaseEventId] of purchaseEventIds.entries()) {
+        const transactionId = index === 0 ? refundedTransactionId : newerTransactionId;
+        const purchaseResponse = await request.post("/api/revenuecat/webhook", {
+          data: {
+            event: {
+              app_user_id: userId,
+              id: purchaseEventId,
+              original_transaction_id: transactionId,
+              product_id: "pramania_credits_25",
+              transaction_id: transactionId,
+              type: "NON_RENEWING_PURCHASE",
+            },
           },
-        },
-        headers: authorization,
-      });
-      const purchasePayload = await purchaseResponse.json();
+          headers: authorization,
+        });
+        const purchasePayload = await purchaseResponse.json();
 
-      expect(purchaseResponse.ok()).toBe(true);
-      expect(purchasePayload.creditsGranted).toBe(25);
+        expect(purchaseResponse.ok()).toBe(true);
+        expect(purchasePayload.creditsGranted).toBe(25);
+      }
 
       const { data: purchaseEvents, error: purchaseEventError } = await admin
         .from("revenuecat_events")
-        .select("id, credit_ledger_id")
-        .eq("event_id", purchaseEventId);
+        .select("event_id, id, credit_ledger_id")
+        .in("event_id", purchaseEventIds);
       const purchaseEventRows = (purchaseEvents ?? []) as Array<{
         credit_ledger_id: string | null;
+        event_id: string;
         id: string;
       }>;
+      const refundedPurchaseEvent = purchaseEventRows.find(
+        (event) => event.event_id === purchaseEventIds[0],
+      );
+      const newerPurchaseEvent = purchaseEventRows.find(
+        (event) => event.event_id === purchaseEventIds[1],
+      );
 
       expect(purchaseEventError).toBeNull();
-      expect(purchaseEventRows).toHaveLength(1);
-      expect(purchaseEventRows[0]?.credit_ledger_id).toMatch(/[0-9a-f-]{36}/i);
+      expect(purchaseEventRows).toHaveLength(2);
+      expect(refundedPurchaseEvent?.credit_ledger_id).toMatch(/[0-9a-f-]{36}/i);
+      expect(newerPurchaseEvent?.credit_ledger_id).toMatch(/[0-9a-f-]{36}/i);
 
       const response = await request.post("/api/revenuecat/webhook", {
         data: {
           event: {
+            cancel_reason: "CUSTOMER_SUPPORT",
             app_user_id: userId,
             id: eventId,
+            original_transaction_id: refundedTransactionId,
             product_id: "pramania_credits_25",
-            type: "REFUND",
+            transaction_id: refundedTransactionId,
+            type: "CANCELLATION",
           },
         },
         headers: authorization,
@@ -227,10 +302,22 @@ test.describe("RevenueCat webhook maturity", () => {
 
       expect(reversalError).toBeNull();
       expect(reversals).toHaveLength(1);
-      expect(reversals?.[0]?.reason).toBe("REFUND");
-      expect(reversals?.[0]?.original_ledger_event_id).toBe(purchaseEventRows[0]?.credit_ledger_id);
+      expect(reversals?.[0]?.reason).toBe("CANCELLATION");
+      expect(reversals?.[0]?.original_ledger_event_id).toBe(
+        refundedPurchaseEvent?.credit_ledger_id,
+      );
+      expect(reversals?.[0]?.original_ledger_event_id).not.toBe(
+        newerPurchaseEvent?.credit_ledger_id,
+      );
+      expect(
+        (reversals?.[0]?.metadata as { matched_by_transaction_id?: boolean } | null)
+          ?.matched_by_transaction_id,
+      ).toBe(true);
       expect((reversals?.[0]?.metadata as { product_id?: string } | null)?.product_id).toBe(
         "pramania_credits_25",
+      );
+      expect((reversals?.[0]?.metadata as { transaction_id?: string } | null)?.transaction_id).toBe(
+        refundedTransactionId,
       );
     } finally {
       const { data: reversals } = await admin
@@ -244,7 +331,7 @@ test.describe("RevenueCat webhook maturity", () => {
       const { data: events } = await admin
         .from("revenuecat_events")
         .select("id, credit_ledger_id")
-        .in("event_id", [purchaseEventId, eventId]);
+        .in("event_id", [...purchaseEventIds, eventId]);
       const eventRows = (events ?? []) as Array<{ credit_ledger_id: string | null; id: string }>;
       const ledgerIds = eventRows
         .map((event) => event.credit_ledger_id)
@@ -255,3 +342,13 @@ test.describe("RevenueCat webhook maturity", () => {
     }
   });
 });
+
+function revenueCatAuthorizationHeaders() {
+  const secret = process.env.REVENUECAT_WEBHOOK_SECRET;
+
+  if (!secret) {
+    throw new Error("REVENUECAT_WEBHOOK_SECRET is required for RevenueCat webhook QA.");
+  }
+
+  return { authorization: `Bearer ${secret}` };
+}

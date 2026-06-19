@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -19,7 +19,11 @@ import { useTrustDialog, type TrustDialogConfirm } from "@/components/ui/trust-d
 import type { JobOverview } from "@/lib/jobs/job-overview";
 import { brand } from "@/lib/brand";
 import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
-import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
+import {
+  clearInFlightOperationId,
+  createIdempotencyHeaders,
+  getInFlightOperationId,
+} from "@/lib/billing/idempotency";
 
 type JobIngestionPanelProps = {
   overview: JobOverview;
@@ -43,6 +47,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
   const [isIngestingJob, setIsIngestingJob] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const { confirm, TrustDialog } = useTrustDialog();
+  const paidOperationIdsRef = useRef<Record<string, string | undefined>>({});
 
   if (overview.recentJobs.length === 0 && !showEmptyState) {
     return null;
@@ -70,13 +75,17 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
 
     setIsIngestingJob(true);
     setMessage(null);
+    const operationScope = "jobIngest:jobs-panel";
 
     try {
       const response = await fetch("/api/jobs/ingest", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...createIdempotencyHeaders("jobIngest:jobs-panel"),
+          ...createIdempotencyHeaders(
+            operationScope,
+            getInFlightOperationId(paidOperationIdsRef, operationScope),
+          ),
         },
         body: JSON.stringify({ jobUrl: trimmedUrl, sourceType: "url_fetch" }),
       });
@@ -95,6 +104,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       );
       router.refresh();
     } finally {
+      clearInFlightOperationId(paidOperationIdsRef, operationScope);
       setIsIngestingJob(false);
     }
   }
@@ -113,13 +123,17 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
 
     setIsIngestingJob(true);
     setMessage(null);
+    const operationScope = "jobIngest:manual-paste";
 
     try {
       const response = await fetch("/api/jobs/ingest", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...createIdempotencyHeaders("jobIngest:manual-paste"),
+          ...createIdempotencyHeaders(
+            operationScope,
+            getInFlightOperationId(paidOperationIdsRef, operationScope),
+          ),
         },
         body: JSON.stringify({ jobText: text, sourceType: "manual_paste" }),
       });
@@ -138,6 +152,7 @@ export function JobIngestionPanel({ overview, showEmptyState = false }: JobInges
       );
       router.refresh();
     } finally {
+      clearInFlightOperationId(paidOperationIdsRef, operationScope);
       setIsIngestingJob(false);
     }
   }

@@ -5,10 +5,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const revenueCatEventSchema = z.object({
   event: z.object({
-    app_user_id: z.string().optional(),
+    app_user_id: z.string().nullish(),
     id: z.string().min(1),
-    product_id: z.string().optional(),
-    type: z.string().optional(),
+    original_transaction_id: z.string().nullish(),
+    product_id: z.string().nullish(),
+    transaction_id: z.string().nullish(),
+    type: z.string().nullish(),
   }),
 });
 
@@ -19,8 +21,8 @@ const revenueCatProcessResultSchema = z.object({
   eventId: z.string().uuid().nullable().optional(),
   ledgerId: z.string().uuid().nullable().optional(),
 });
-const PURCHASE_REDEEMED_EVENT_TYPES = new Set(["PURCHASE_REDEEMED"]);
-const REVERSAL_EVENT_PATTERN = /\b(refund|reversal|chargeback|cancellation)\b/i;
+const CREDIT_GRANT_EVENT_TYPES = new Set(["NON_RENEWING_PURCHASE"]);
+const REVERSAL_EVENT_TYPES = new Set(["CANCELLATION", "REFUND", "REVERSAL", "CHARGEBACK"]);
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
@@ -96,31 +98,58 @@ export async function POST(request: Request) {
   const eventType = parsed.data.event.type ?? "";
   const productId = parsed.data.event.product_id ?? "";
   const appUserId = parsed.data.event.app_user_id ?? "";
+  const transactionId = parsed.data.event.transaction_id ?? "";
+  const originalTransactionId = parsed.data.event.original_transaction_id ?? "";
 
-  if (REVERSAL_EVENT_PATTERN.test(eventType)) {
-    if (appUserId && isUuid(appUserId)) {
-      await persistRevenueCatReversalEvent({
+  if (isReversalEventType(eventType)) {
+    try {
+      await persistIgnoredRevenueCatEvent({
         appUserId,
         body,
         eventId: parsed.data.event.id,
         eventType,
+        processedStatus: appUserId && isUuid(appUserId) ? "recorded_reversal" : "ignored_reversal_unlinked",
         productId,
       });
+      if (appUserId && isUuid(appUserId)) {
+        await persistRevenueCatReversalEvent({
+          appUserId,
+          body,
+          eventId: parsed.data.event.id,
+          eventType,
+          originalTransactionId,
+          productId,
+          transactionId,
+        });
+      }
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: {
+            category: "server",
+            code: "revenuecat.reversal_event_persist_failed",
+            message: "RevenueCat reversal event could not be recorded for reconciliation.",
+          },
+        },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({
       ok: true,
       ignored: true,
-      reason: "recorded_reversal_metadata",
+      reason: appUserId && isUuid(appUserId) ? "recorded_reversal_metadata" : "recorded_unlinked_reversal_event",
       requestId,
     });
   }
 
-  if (!PURCHASE_REDEEMED_EVENT_TYPES.has(eventType)) {
+  if (!CREDIT_GRANT_EVENT_TYPES.has(eventType)) {
     return NextResponse.json({
       ok: true,
       ignored: true,
-      reason: "event_type_not_purchase_redeemed",
+      reason: "event_type_not_credit_grant",
       requestId,
     });
   }
@@ -136,7 +165,7 @@ export async function POST(request: Request) {
         error: {
           category: "validation",
           code: "revenuecat.purchase_missing_required_fields",
-          message: "Purchase redemption payload did not include a product id and app user id.",
+          message: "Credit purchase payload did not include a product id and app user id.",
         },
       },
       { status: 400 },
@@ -266,6 +295,10 @@ function isUuid(value: string) {
   );
 }
 
+function isReversalEventType(eventType: string) {
+  return REVERSAL_EVENT_TYPES.has(eventType.trim().toUpperCase());
+}
+
 async function persistIgnoredRevenueCatEvent({
   appUserId,
   body,
@@ -311,34 +344,52 @@ async function persistRevenueCatReversalEvent({
   body,
   eventId,
   eventType,
+  originalTransactionId,
   productId,
+  transactionId,
 }: {
   appUserId: string;
   body: unknown;
   eventId: string;
   eventType: string;
+  originalTransactionId: string;
   productId: string;
+  transactionId: string;
 }) {
   const supabase = createAdminClient();
-  const { data: priorEvent } = await supabase
+  const transactionIds = new Set([transactionId, originalTransactionId].filter(Boolean));
+  const { data: priorEvents, error: priorEventError } = await supabase
     .from("revenuecat_events")
-    .select("credit_ledger_id")
+    .select("credit_ledger_id, raw_event")
     .eq("app_user_id", appUserId)
     .eq("product_id", productId)
     .not("credit_ledger_id", "is", null)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(25);
+
+  if (priorEventError) {
+    throw priorEventError;
+  }
+
+  const matchingPriorEvent =
+    transactionIds.size > 0
+      ? (priorEvents ?? []).find((event) =>
+          revenueCatEventHasTransactionId(event.raw_event, transactionIds),
+        )
+      : (priorEvents ?? [])[0];
 
   const { error } = await supabase.from("credit_reversals").upsert(
     {
       metadata: {
         event_id: eventId,
         event_type: eventType,
+        matched_by_transaction_id: Boolean(matchingPriorEvent && transactionIds.size > 0),
+        original_transaction_id: originalTransactionId || null,
         product_id: productId,
+        transaction_id: transactionId || null,
         raw_event: body,
       },
-      original_ledger_event_id: priorEvent?.credit_ledger_id ?? null,
+      original_ledger_event_id: matchingPriorEvent?.credit_ledger_id ?? null,
       provider_reference: eventId,
       reason: eventType || "revenuecat_reversal",
       user_id: appUserId,
@@ -352,4 +403,45 @@ async function persistRevenueCatReversalEvent({
   if (error) {
     throw error;
   }
+}
+
+function revenueCatEventHasTransactionId(rawEvent: unknown, transactionIds: Set<string>) {
+  const eventPayload = readRevenueCatEventPayload(rawEvent);
+
+  if (!eventPayload) {
+    return false;
+  }
+
+  const candidateTransactionId = readStringField(eventPayload, "transaction_id");
+  const candidateOriginalTransactionId = readStringField(eventPayload, "original_transaction_id");
+
+  return [candidateTransactionId, candidateOriginalTransactionId].some(
+    (candidate) => candidate && transactionIds.has(candidate),
+  );
+}
+
+function readRevenueCatEventPayload(rawEvent: unknown) {
+  if (!isRecord(rawEvent)) {
+    return null;
+  }
+
+  if (isRecord(rawEvent.event)) {
+    return rawEvent.event;
+  }
+
+  if (isRecord(rawEvent.payload) && isRecord(rawEvent.payload.event)) {
+    return rawEvent.payload.event;
+  }
+
+  return null;
+}
+
+function readStringField(value: Record<string, unknown>, field: string) {
+  const raw = value[field];
+
+  return typeof raw === "string" ? raw : "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
+import { withPrivateNoStore } from "@/lib/api/responses";
 import {
   createPrivacyRequest,
   listUserPrivacyRequests,
@@ -22,14 +23,14 @@ export async function GET(request: Request) {
   });
 
   if (!rateLimit.allowed) {
-    return rateLimitResponse({ requestId, result: rateLimit });
+    return withPrivateNoStore(rateLimitResponse({ requestId, result: rateLimit }));
   }
 
   try {
     await requireProtectedApiSession();
     const requests = await listUserPrivacyRequests();
 
-    return NextResponse.json({ ok: true, requestId, requests });
+    return withPrivateNoStore(NextResponse.json({ ok: true, requestId, requests }));
   } catch (error) {
     return privacyApiError(error, requestId, "privacy.requests_failed");
   }
@@ -44,11 +45,13 @@ export async function POST(request: Request) {
   });
 
   if (!rateLimit.allowed) {
-    return rateLimitResponse({
-      message: "Privacy requests are being submitted too quickly. Pause briefly before trying again.",
-      requestId,
-      result: rateLimit,
-    });
+    return withPrivateNoStore(
+      rateLimitResponse({
+        message: "Privacy requests are being submitted too quickly. Pause briefly before trying again.",
+        requestId,
+        result: rateLimit,
+      }),
+    );
   }
 
   try {
@@ -56,11 +59,13 @@ export async function POST(request: Request) {
     const input = privacyRequestCreateSchema.parse(await request.json());
     const privacyRequest = await createPrivacyRequest(input);
 
-    return NextResponse.json({
-      ok: true,
-      request: privacyRequest,
-      requestId,
-    });
+    return withPrivateNoStore(
+      NextResponse.json({
+        ok: true,
+        request: privacyRequest,
+        requestId,
+      }),
+    );
   } catch (error) {
     return privacyApiError(error, requestId, "privacy.request_create_failed");
   }
@@ -68,17 +73,19 @@ export async function POST(request: Request) {
 
 function privacyApiError(error: unknown, requestId: string, code: string) {
   if (error instanceof z.ZodError) {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "validation",
-          code: "privacy.invalid_request",
-          message: "Use a valid privacy request type and concise details.",
+    return withPrivateNoStore(
+      NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: {
+            category: "validation",
+            code: "privacy.invalid_request",
+            message: "Use a valid privacy request type and concise details.",
+          },
         },
-      },
-      { status: 400 },
+        { status: 400 },
+      ),
     );
   }
 
@@ -87,7 +94,7 @@ function privacyApiError(error: unknown, requestId: string, code: string) {
     fallbackMessage: "Sign in is required.",
     requestId,
   });
-  if (authResponse) return authResponse;
+  if (authResponse) return withPrivateNoStore(authResponse);
 
   console.warn(
     JSON.stringify({
@@ -97,16 +104,18 @@ function privacyApiError(error: unknown, requestId: string, code: string) {
     }),
   );
 
-  return NextResponse.json(
-    {
-      ok: false,
-      requestId,
-      error: {
-        category: "server",
-        code,
-        message: "Privacy requests could not be processed right now.",
+  return withPrivateNoStore(
+    NextResponse.json(
+      {
+        ok: false,
+        requestId,
+        error: {
+          category: "server",
+          code,
+          message: "Privacy requests could not be processed right now.",
+        },
       },
-    },
-    { status: 500 },
+      { status: 500 },
+    ),
   );
 }
