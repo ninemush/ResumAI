@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -21,7 +21,11 @@ import { useRouter } from "next/navigation";
 import { useTrustDialog } from "@/components/ui/trust-dialog";
 import type { ApplicationOverview } from "@/lib/applications/application-overview";
 import { CREDIT_COSTS, formatCreditCost } from "@/lib/billing/credit-catalog";
-import { createIdempotencyHeaders } from "@/lib/billing/idempotency";
+import {
+  clearInFlightOperationId,
+  createIdempotencyHeaders,
+  getInFlightOperationId,
+} from "@/lib/billing/idempotency";
 import type { ResumeContent } from "@/lib/resumes/resume-content";
 
 type ApplicationPanelProps = {
@@ -142,6 +146,7 @@ export function ApplicationPanel({
   const [planDraft, setPlanDraft] = useState<ApplicationPlanDraft>(emptyPlanDraft);
   const [message, setMessage] = useState<string | null>(null);
   const { confirm, TrustDialog } = useTrustDialog();
+  const paidOperationIdsRef = useRef<Record<string, string | undefined>>({});
 
   if (overview.recentApplications.length === 0 && !showEmptyState) {
     return null;
@@ -276,11 +281,13 @@ export function ApplicationPanel({
 
     setGeneratingApplicationId(applicationId);
     setMessage(null);
+    const operationScope = `applicationMaterialsGenerate:${applicationId}:applications-panel`;
 
     try {
       const response = await fetch(`/api/applications/${applicationId}/materials`, {
         headers: createIdempotencyHeaders(
-          `applicationMaterialsGenerate:${applicationId}:applications-panel`,
+          operationScope,
+          getInFlightOperationId(paidOperationIdsRef, operationScope),
         ),
         method: "POST",
       });
@@ -305,6 +312,7 @@ export function ApplicationPanel({
       );
       router.refresh();
     } finally {
+      clearInFlightOperationId(paidOperationIdsRef, operationScope);
       setGeneratingApplicationId(null);
     }
   }
@@ -397,6 +405,7 @@ export function ApplicationPanel({
 
     setExportingApplicationId(activeReview.application.id);
     setMessage(null);
+    const operationScope = `applicationMaterialsExport:${activeReview.application.id}:applications-panel`;
 
     try {
       const response = await fetch(`/api/applications/${activeReview.application.id}/materials/export`, {
@@ -406,7 +415,8 @@ export function ApplicationPanel({
         }),
         headers: {
           ...createIdempotencyHeaders(
-            `applicationMaterialsExport:${activeReview.application.id}:applications-panel`,
+            operationScope,
+            getInFlightOperationId(paidOperationIdsRef, operationScope),
           ),
           "Content-Type": "application/json",
         },
@@ -427,6 +437,7 @@ export function ApplicationPanel({
       setMessage("PDF and DOCX files are prepared. You can download them from this packet.");
       router.refresh();
     } finally {
+      clearInFlightOperationId(paidOperationIdsRef, operationScope);
       setExportingApplicationId(null);
     }
   }

@@ -62,6 +62,34 @@ test.describe("hostile source ingestion maturity", () => {
 
     expect(after).toEqual(before);
   });
+
+  test("rejects unsafe profile links before creating sources or facts", async ({ request }) => {
+    loadLocalEnv();
+
+    const admin = createServiceRoleClient();
+    const userId = await readUserIdByEmail(process.env.QA_DEMO_USER_A_EMAIL ?? "");
+    const userCookie = await buildAuthCookieHeader({
+      email: process.env.QA_DEMO_USER_A_EMAIL ?? "",
+      password: process.env.QA_DEMO_USER_A_PASSWORD ?? "",
+      request,
+    });
+    const before = await readSourceAndFactCounts(admin, userId);
+    const response = await request.post("/api/profile/sources", {
+      data: {
+        sourceType: "link",
+        sourceUrl: "http://127.0.0.1:54321/internal-profile",
+      },
+      headers: { cookie: userCookie },
+    });
+    const payload = await response.json();
+
+    expect(response.status()).toBe(422);
+    expect(payload.error.code).toBe("source.profile_link_blocked");
+
+    const after = await readSourceAndFactCounts(admin, userId);
+
+    expect(after).toEqual(before);
+  });
 });
 
 async function readSourceAndFactCounts(

@@ -8,9 +8,12 @@ const publicEnvSchema = z.object({
 
 const serverEnvSchema = publicEnvSchema.extend({
   OPENAI_API_KEY: z.string().min(1),
-  OPENAI_FALLBACK_MODEL: z.string().min(1).default("gpt-4.1"),
-  OPENAI_MATERIALS_MODEL: z.string().min(1).default("gpt-5.4"),
-  OPENAI_PROFILE_INTAKE_MODEL: z.string().min(1).default("gpt-5.4"),
+  OPENAI_FALLBACK_MODEL: z.preprocess(emptyStringToUndefined, z.string().min(1).default("gpt-4.1")),
+  OPENAI_MATERIALS_MODEL: z.preprocess(emptyStringToUndefined, z.string().min(1).default("gpt-5.4")),
+  OPENAI_PROFILE_INTAKE_MODEL: z.preprocess(
+    emptyStringToUndefined,
+    z.string().min(1).default("gpt-5.4"),
+  ),
 });
 
 const qaDemoEnvSchema = publicEnvSchema.extend({

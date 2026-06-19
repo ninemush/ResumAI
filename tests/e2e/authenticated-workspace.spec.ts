@@ -559,12 +559,31 @@ test.describe("authenticated workspace", () => {
     await expect(headline).toBeVisible();
     await headline.fill("Temporary QA headline");
 
-    page.once("dialog", async (dialog) => {
-      expect(dialog.message()).toMatch(/unsaved resume edits/i);
-      await dialog.dismiss();
-    });
+    const homeNav = page.locator(".side-nav").getByRole("button", { name: /^Home$/i });
+    await homeNav.click();
 
-    await page.locator(".side-nav").getByRole("button", { name: /^Home$/i }).click();
+    const dialog = page.getByRole("dialog", { name: /Leave Profile & Resume/i });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("You have unsaved resume edits.")).toBeVisible();
+    await expect.poll(
+      () =>
+        page.evaluate(() => {
+          const dialogElement = document.querySelector('[role="dialog"]');
+
+          return Boolean(dialogElement?.contains(document.activeElement));
+        }),
+      { message: "focus moves into the trust dialog" },
+    ).toBe(true);
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(dialog.getByRole("button", { name: /Leave without saving/i })).toBeFocused();
+
+    await page.keyboard.press("Tab");
+    await expect(dialog.getByRole("button", { name: "Close dialog" })).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(homeNav).toBeFocused();
     await expect(page.getByRole("heading", { name: /Master profile and resume/i })).toBeVisible();
   });
 });

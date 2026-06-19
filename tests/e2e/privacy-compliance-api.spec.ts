@@ -7,6 +7,7 @@ test("requires authentication before reading privacy requests", async ({ request
   const payload = await response.json();
 
   expect(response.status()).toBe(401);
+  expect(response.headers()["cache-control"]).toBe("no-store, private");
   expect(payload.error.code).toBe("auth.required");
 });
 
@@ -20,6 +21,7 @@ test("requires authentication before creating privacy requests", async ({ reques
   const payload = await response.json();
 
   expect(response.status()).toBe(401);
+  expect(response.headers()["cache-control"]).toBe("no-store, private");
   expect(payload.error.code).toBe("auth.required");
 });
 
@@ -32,6 +34,7 @@ test("requires authentication before validating privacy request payloads", async
   const payload = await response.json();
 
   expect(response.status()).toBe(401);
+  expect(response.headers()["cache-control"]).toBe("no-store, private");
   expect(payload.error.code).toBe("auth.required");
 });
 
@@ -40,6 +43,7 @@ test("requires authentication before generating a privacy export", async ({ requ
   const payload = await response.json();
 
   expect(response.status()).toBe(401);
+  expect(response.headers()["cache-control"]).toBe("no-store, private");
   expect(payload.error.code).toBe("auth.required");
 });
 
@@ -48,6 +52,7 @@ test("requires owner or admin access before reading admin privacy requests", asy
   const payload = await response.json();
 
   expect(response.status()).toBe(401);
+  expect(response.headers()["cache-control"]).toBe("no-store, private");
   expect(payload.error.code).toBe("auth.required");
 });
 
@@ -60,6 +65,7 @@ test("requires owner or admin access before updating privacy requests", async ({
   const payload = await response.json();
 
   expect(response.status()).toBe(401);
+  expect(response.headers()["cache-control"]).toBe("no-store, private");
   expect(payload.error.code).toBe("auth.required");
 });
 
@@ -72,6 +78,7 @@ test("requires authentication before validating admin privacy request updates", 
   const payload = await response.json();
 
   expect(response.status()).toBe(401);
+  expect(response.headers()["cache-control"]).toBe("no-store, private");
   expect(payload.error.code).toBe("auth.required");
 });
 
@@ -84,6 +91,7 @@ test("requires authentication before validating deletion review completion", asy
   const payload = await response.json();
 
   expect(response.status()).toBe(401);
+  expect(response.headers()["cache-control"]).toBe("no-store, private");
   expect(payload.error.code).toBe("auth.required");
 });
 

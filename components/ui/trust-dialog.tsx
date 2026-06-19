@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Loader2, ShieldCheck, X } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 
 type TrustDialogIntent = "default" | "admin" | "danger" | "paid";
@@ -37,13 +37,44 @@ type DialogRequest =
 export type TrustDialogConfirm = (options: TrustDialogOptions) => Promise<boolean>;
 export type TrustDialogPrompt = (options: TrustDialogOptions) => Promise<string | null>;
 
+const focusableSelector = [
+  "a[href]",
+  "button:not([disabled])",
+  "textarea:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
 export function useTrustDialog() {
   const [request, setRequest] = useState<DialogRequest | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [isWorking, setIsWorking] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLFormElement | null>(null);
+  const isWorkingRef = useRef(false);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    isWorkingRef.current = isWorking;
+  }, [isWorking]);
+
+  const restoreFocus = useCallback(() => {
+    const target = restoreFocusRef.current;
+    restoreFocusRef.current = null;
+
+    if (!target?.isConnected) {
+      return;
+    }
+
+    window.setTimeout(() => target.focus(), 0);
+  }, []);
 
   const openDialog = useCallback((nextRequest: DialogRequest) => {
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      restoreFocusRef.current = document.activeElement;
+    }
+
     setFailure(null);
     setIsWorking(false);
     setInputValue(nextRequest.options.input?.initialValue ?? "");
@@ -84,17 +115,25 @@ export function useTrustDialog() {
     [openDialog],
   );
 
+  const settleDialog = useCallback(
+    (dialogRequest: DialogRequest, value: string | boolean | null) => {
+      dialogRequest.resolve(value);
+      setRequest(null);
+      setFailure(null);
+      restoreFocus();
+    },
+    [restoreFocus],
+  );
+
   const closeDialog = useCallback(
     (value: string | boolean | null) => {
-      if (isWorking) {
+      if (isWorkingRef.current || !request) {
         return;
       }
 
-      request?.resolve(value);
-      setRequest(null);
-      setFailure(null);
+      settleDialog(request, value);
     },
-    [isWorking, request],
+    [request, settleDialog],
   );
 
   const submitDialog = useCallback(
@@ -113,16 +152,12 @@ export function useTrustDialog() {
           return;
         }
 
-        request.resolve(trimmed);
-        setRequest(null);
-        setFailure(null);
+        settleDialog(request, trimmed);
         return;
       }
 
       if (!request.action) {
-        request.resolve(true);
-        setRequest(null);
-        setFailure(null);
+        settleDialog(request, true);
         return;
       }
 
@@ -131,16 +166,78 @@ export function useTrustDialog() {
 
       try {
         await request.action();
-        request.resolve(true);
-        setRequest(null);
+        settleDialog(request, true);
       } catch (error) {
         setFailure(error instanceof Error ? error.message : "This action could not be completed.");
       } finally {
         setIsWorking(false);
       }
     },
-    [inputValue, request],
+    [inputValue, request, settleDialog],
   );
+
+  useEffect(() => {
+    if (!request) {
+      return;
+    }
+
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    const focusInitialElement = () => {
+      const textarea = dialog.querySelector<HTMLTextAreaElement>("textarea:not([disabled])");
+      const firstFocusable = getFocusableElements(dialog)[0];
+
+      (textarea ?? firstFocusable ?? dialog).focus();
+    };
+
+    const animationFrame = window.requestAnimationFrame(focusInitialElement);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDialog(null);
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const focusableElements = getFocusableElements(dialog);
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey && (!activeElement || activeElement === firstElement || !dialog.contains(activeElement))) {
+        event.preventDefault();
+        lastElement.focus();
+        return;
+      }
+
+      if (!event.shiftKey && activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeDialog, request]);
 
   const TrustDialog = useCallback(() => {
     if (!request) {
@@ -160,8 +257,10 @@ export function useTrustDialog() {
           aria-labelledby="trust-dialog-title"
           className={`trust-dialog trust-dialog-${intent}`}
           onSubmit={submitDialog}
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
+          tabIndex={-1}
         >
           <button
             aria-label="Close dialog"
@@ -221,4 +320,16 @@ export function useTrustDialog() {
   }, [closeDialog, failure, inputValue, isWorking, request, submitDialog]);
 
   return { confirm, prompt, runWithConfirmation, TrustDialog };
+}
+
+function getFocusableElements(root: HTMLElement) {
+  return Array.from(root.querySelectorAll<HTMLElement>(focusableSelector)).filter((element) => {
+    if (element.getAttribute("aria-hidden") === "true") {
+      return false;
+    }
+
+    const styles = window.getComputedStyle(element);
+
+    return styles.display !== "none" && styles.visibility !== "hidden";
+  });
 }

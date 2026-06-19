@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { apiAuthErrorResponse, requireProtectedApiSession } from "@/lib/api/auth";
+import { withPrivateNoStore } from "@/lib/api/responses";
 import { createUserDataExport } from "@/lib/privacy/data-export";
 import {
   checkRateLimit,
@@ -17,31 +18,35 @@ export async function POST(request: Request) {
   });
 
   if (!rateLimit.allowed) {
-    return rateLimitResponse({
-      message: "Data exports are being requested too quickly. Pause briefly before trying again.",
-      requestId,
-      result: rateLimit,
-    });
+    return withPrivateNoStore(
+      rateLimitResponse({
+        message: "Data exports are being requested too quickly. Pause briefly before trying again.",
+        requestId,
+        result: rateLimit,
+      }),
+    );
   }
 
   try {
     await requireProtectedApiSession();
     const exportResult = await createUserDataExport();
 
-    return NextResponse.json({
-      ok: true,
-      export: exportResult.exportJson,
-      privacyRequestId: exportResult.requestId,
-      requestId,
-      storagePath: exportResult.storagePath,
-    });
+    return withPrivateNoStore(
+      NextResponse.json({
+        ok: true,
+        export: exportResult.exportJson,
+        privacyRequestId: exportResult.requestId,
+        requestId,
+        storagePath: exportResult.storagePath,
+      }),
+    );
   } catch (error) {
     const authResponse = apiAuthErrorResponse({
       error,
       fallbackMessage: "Sign in is required.",
       requestId,
     });
-    if (authResponse) return authResponse;
+    if (authResponse) return withPrivateNoStore(authResponse);
 
     console.warn(
       JSON.stringify({
@@ -51,17 +56,19 @@ export async function POST(request: Request) {
       }),
     );
 
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          category: "server",
-          code: "privacy.export_failed",
-          message: "Your data export could not be generated right now.",
+    return withPrivateNoStore(
+      NextResponse.json(
+        {
+          ok: false,
+          requestId,
+          error: {
+            category: "server",
+            code: "privacy.export_failed",
+            message: "Your data export could not be generated right now.",
+          },
         },
-      },
-      { status: 500 },
+        { status: 500 },
+      ),
     );
   }
 }

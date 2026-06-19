@@ -8,8 +8,16 @@ export type ApiErrorResponse = {
   [key: string]: unknown;
 };
 
+const privateNoStoreCacheControl = "no-store, private";
+
 export function createRequestId() {
   return crypto.randomUUID();
+}
+
+export function withPrivateNoStore<T>(response: NextResponse<T>) {
+  response.headers.set("Cache-Control", privateNoStoreCacheControl);
+
+  return response;
 }
 
 export function apiSuccess<T extends Record<string, unknown>>({

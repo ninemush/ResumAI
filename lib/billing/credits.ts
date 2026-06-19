@@ -839,6 +839,15 @@ export function buildCreditsApiError(error: unknown) {
       };
     }
 
+    if (error.message === "CREDIT_OPERATION_FINGERPRINT_REQUIRED") {
+      return {
+        category: "validation",
+        code: "billing.operation_fingerprint_required",
+        message: "This paid action needs a server-verified operation fingerprint before it can use credits.",
+        status: 400,
+      };
+    }
+
     if (
       error.message === "CREDIT_RESERVATION_NOT_FOUND" ||
       error.message === "CREDIT_RESERVATION_NOT_FINALIZABLE"
@@ -959,6 +968,10 @@ function mapCreditError(message: string | undefined) {
 
   if (normalizedMessage.includes("CREDIT_IDEMPOTENCY_MISMATCH")) {
     return new Error("CREDIT_IDEMPOTENCY_MISMATCH");
+  }
+
+  if (normalizedMessage.includes("CREDIT_OPERATION_FINGERPRINT_REQUIRED")) {
+    return new Error("CREDIT_OPERATION_FINGERPRINT_REQUIRED");
   }
 
   if (normalizedMessage.includes("CREDIT_RESERVATION_NOT_FOUND")) {

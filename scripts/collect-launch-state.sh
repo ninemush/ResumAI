@@ -4,6 +4,7 @@ set -uo pipefail
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 output_dir="qa-artifacts/launch-state-$timestamp"
 target_url="${RELEASE_PROVENANCE_URL:-${PLAYWRIGHT_BASE_URL:-${NEXT_PUBLIC_SITE_URL:-https://pramania.com}}}"
+failed_steps=0
 mkdir -p "$output_dir"
 
 run_step() {
@@ -17,6 +18,7 @@ run_step() {
   else
     local status=$?
     printf '%s=failed:%s\n' "$label" "$status" >> "$output_dir/status.env"
+    failed_steps=$((failed_steps + 1))
   fi
 }
 
@@ -55,7 +57,7 @@ expected_sha="$(git rev-parse origin/main 2>/dev/null || git rev-parse HEAD 2>/d
 run_step lint lint.log npm run lint
 run_step typecheck typecheck.log npm run typecheck
 run_step unit unit.log npm run test:unit
-run_step supabase_migrations supabase-migrations.log npx supabase migration list
+run_step supabase_migrations supabase-migrations.log node scripts/check-supabase-migration-drift.mjs
 
 RELEASE_EXPECTED_SHA="$expected_sha" \
 RELEASE_PROVENANCE_OUTPUT_DIR="$output_dir/release-provenance" \
@@ -81,6 +83,11 @@ if [[ "$route_smoke_status" -eq 0 ]]; then
   printf 'route_smoke=passed\n' >> "$output_dir/status.env"
 else
   printf 'route_smoke=failed:%s\n' "$route_smoke_status" >> "$output_dir/status.env"
+  failed_steps=$((failed_steps + 1))
 fi
 
 printf 'Launch state artifacts written to %s\n' "$output_dir"
+if [[ "$failed_steps" -gt 0 ]]; then
+  printf 'Launch state collected with %s failed step(s); see %s/status.env.\n' "$failed_steps" "$output_dir" >&2
+  exit 1
+fi
