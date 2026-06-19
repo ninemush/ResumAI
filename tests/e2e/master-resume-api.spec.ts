@@ -47,6 +47,16 @@ test("requires owner access before repairing master resumes", async ({ request }
   expectApiErrorEnvelope(payload, "admin.required");
 });
 
+test("requires owner access before reprocessing profile evidence", async ({ request }) => {
+  const response = await request.post("/api/admin/profile-reprocess", {
+    data: { dryRun: true },
+  });
+  const payload = await response.json();
+
+  expect(response.status()).toBe(403);
+  expectApiErrorEnvelope(payload, "admin.required");
+});
+
 test("requires owner access before cleaning up stale artifacts", async ({ request }) => {
   const response = await request.post("/api/admin/artifact-cleanup", {
     data: { dryRun: true },

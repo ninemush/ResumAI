@@ -17,7 +17,7 @@ type MergeCareerProfileInput = {
   userId: string;
 };
 
-type FactRow = {
+export type CareerProfileMergeFactRow = {
   confidence: number | null;
   evidence_status?: "user_confirmed" | "source_supported" | "inferred" | "conflict" | "missing_evidence" | null;
   fact_type: string;
@@ -29,7 +29,7 @@ type FactRow = {
   user_confirmed: boolean | null;
 };
 
-type ProfileRow = {
+export type CareerProfileMergeProfileRow = {
   display_name: string | null;
   headline: string | null;
   id: string;
@@ -111,7 +111,7 @@ export async function mergeCareerProfile({
   const parsedAnalyses = (analyses ?? [])
     .map((analysis) => parsedProfileSourceSchema.safeParse(analysis.content_json).data)
     .filter((analysis): analysis is ParsedProfileSource => Boolean(analysis));
-  const careerProfile = buildCareerProfile({
+  const careerProfile = buildCareerProfileFromEvidence({
     analyses: parsedAnalyses,
     facts: facts ?? [],
     previous,
@@ -170,16 +170,16 @@ export async function mergeCareerProfile({
   };
 }
 
-function buildCareerProfile({
+export function buildCareerProfileFromEvidence({
   analyses,
   facts,
   previous,
   profile,
 }: {
   analyses: ParsedProfileSource[];
-  facts: FactRow[];
+  facts: CareerProfileMergeFactRow[];
   previous: CanonicalCareerProfile | null;
-  profile: ProfileRow;
+  profile: CareerProfileMergeProfileRow;
 }): CanonicalCareerProfile {
   const base = previous ?? createEmptyCanonicalCareerProfile();
   const conflicts: CareerProfileConflict[] = [...base.conflicts];
@@ -326,7 +326,7 @@ function mergeExtraSections(
 
 function mergeFacts(
   target: CanonicalCareerProfile,
-  facts: FactRow[],
+  facts: CareerProfileMergeFactRow[],
   conflicts: CareerProfileConflict[],
 ) {
   for (const fact of facts) {
@@ -394,7 +394,7 @@ function mergeFacts(
   }
 }
 
-function isTrustedFact(fact: FactRow) {
+function isTrustedFact(fact: CareerProfileMergeFactRow) {
   return (
     fact.user_confirmed === true ||
     fact.evidence_status === "user_confirmed" ||
@@ -408,7 +408,7 @@ async function projectCareerProfileToProfileFields({
   userId,
 }: {
   careerProfile: CanonicalCareerProfile;
-  profile: ProfileRow;
+  profile: CareerProfileMergeProfileRow;
   userId: string;
 }) {
   const supabase = await createClient();
