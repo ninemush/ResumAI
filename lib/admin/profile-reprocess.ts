@@ -82,6 +82,7 @@ export type ProfileReprocessReport = {
   parsedProjectCount: number;
   profileId: string;
   sourceCount: number;
+  sourceFailures: number;
   sourcesAnalyzed: number;
   userId: string;
 };
@@ -96,12 +97,24 @@ export type ProfileReprocessResult = {
   profilesScanned: number;
   repairMasterResumes: boolean;
   reports: ProfileReprocessReport[];
+  sourceFailures: number;
   sourcesAnalyzed: number;
   targets: {
     limit: number;
     userId: string | null;
   };
 };
+
+export async function reprocessProfileEvidenceWithServiceRole(
+  input: z.input<typeof adminProfileReprocessSchema>,
+  options: {
+    actorUserId?: string | null;
+  } = {},
+): Promise<ProfileReprocessResult> {
+  return runProfileEvidenceReprocess(adminProfileReprocessSchema.parse(input), {
+    actorUserId: options.actorUserId ?? null,
+  });
+}
 
 export async function reprocessProfileEvidenceForUsers(
   input: z.input<typeof adminProfileReprocessSchema>,
@@ -122,6 +135,22 @@ export async function reprocessProfileEvidenceForUsers(
     throw new Error("ADMIN_REQUIRED");
   }
 
+  return runProfileEvidenceReprocess(parsed, {
+    actorUserId: user.id,
+    accessAuditClient: sessionClient,
+  });
+}
+
+async function runProfileEvidenceReprocess(
+  parsed: z.output<typeof adminProfileReprocessSchema>,
+  {
+    accessAuditClient,
+    actorUserId,
+  }: {
+    accessAuditClient?: Awaited<ReturnType<typeof createClient>>;
+    actorUserId: string | null;
+  },
+): Promise<ProfileReprocessResult> {
   const adminClient = createAdminClient();
   const profiles = await readTargetProfiles(adminClient, {
     limit: parsed.limit,
@@ -142,7 +171,7 @@ export async function reprocessProfileEvidenceForUsers(
 
   await logAdminUserAccesses({
     accessReason: parsed.dryRun ? "admin_profile_reprocess_dry_run" : "admin_profile_reprocess_apply",
-    actorUserId: user.id,
+    actorUserId,
     metadata: {
       dryRun: parsed.dryRun,
       limit: parsed.limit,
@@ -151,7 +180,7 @@ export async function reprocessProfileEvidenceForUsers(
       userId: parsed.userId ?? null,
     },
     resourceType: "profile_source_reprocess",
-    supabase: sessionClient,
+    supabase: accessAuditClient ?? adminClient,
     targetUserIds: profiles.map((profile) => profile.user_id),
     visibilityLevel: "sensitive_source_review",
   });
@@ -165,7 +194,7 @@ export async function reprocessProfileEvidenceForUsers(
     const { data: auditEvent, error: auditError } = await adminClient
       .from("audit_events")
       .insert({
-        actor_user_id: user.id,
+        actor_user_id: actorUserId,
         event_type: "admin.profile_reprocess.applied",
         metadata: {
           careerProfilesChanged: changedReports.filter((report) => report.careerProfileChanged).length,
@@ -175,6 +204,7 @@ export async function reprocessProfileEvidenceForUsers(
           repairMasterResumes: parsed.repairMasterResumes,
           reports: changedReports.slice(0, 100),
           sourceCount: sumReports(reports, "sourceCount"),
+          sourceFailures: sumReports(reports, "sourceFailures"),
           sourcesAnalyzed: sumReports(reports, "sourcesAnalyzed"),
           userId: parsed.userId ?? null,
         },
@@ -202,9 +232,16 @@ export async function reprocessProfileEvidenceForUsers(
     profilesScanned: profiles.length,
     repairMasterResumes: parsed.repairMasterResumes,
     reports: reports
-      .filter((report) => report.careerProfileChanged || report.latestResumeChanged || report.parsedProjectCount > 0)
+      .filter(
+        (report) =>
+          report.careerProfileChanged ||
+          report.latestResumeChanged ||
+          report.parsedProjectCount > 0 ||
+          report.sourceFailures > 0,
+      )
       .slice(0, 100),
     sourcesAnalyzed: sumReports(reports, "sourcesAnalyzed"),
+    sourceFailures: sumReports(reports, "sourceFailures"),
     targets: {
       limit: parsed.limit,
       userId: parsed.userId ?? null,
@@ -229,9 +266,8 @@ async function reprocessProfile({
     readProfileFacts(adminClient, profile),
     readCurrentCareerProfile(adminClient, profile),
   ]);
-  const parsedSources = sources
-    .map((source) => parseSourceRow(source))
-    .filter((result): result is { parsed: ParsedProfileSource; source: ProfileSourceRow } => Boolean(result));
+  const parsedSourceResults = parseSourceRows(sources);
+  const parsedSources = parsedSourceResults.parsedSources;
   const parsedExistingAnalyses = existingAnalyses
     .map((analysis) => parsedProfileSourceSchema.safeParse(analysis.content_json).data)
     .filter((analysis): analysis is ParsedProfileSource => Boolean(analysis));
@@ -281,6 +317,7 @@ async function reprocessProfile({
     parsedProjectCount: parsedSources.reduce((total, result) => total + result.parsed.projects.length, 0),
     profileId: profile.id,
     sourceCount: sources.length,
+    sourceFailures: parsedSourceResults.sourceFailures,
     sourcesAnalyzed: parsedSources.length,
     userId: profile.user_id,
   };
@@ -390,23 +427,37 @@ async function readCurrentCareerProfile(
   return data as CurrentCareerProfileRow | null;
 }
 
-function parseSourceRow(source: ProfileSourceRow) {
-  const text = source.extracted_text?.trim();
+function parseSourceRows(sources: ProfileSourceRow[]) {
+  const parsedSources: { parsed: ParsedProfileSource; source: ProfileSourceRow }[] = [];
+  let sourceFailures = 0;
 
-  if (!text) {
-    return null;
+  for (const source of sources) {
+    const text = source.extracted_text?.trim();
+
+    if (!text) {
+      continue;
+    }
+
+    try {
+      const parsed = parsedProfileSourceSchema.parse(
+        parseProfileSourceText({
+          sourceId: source.id,
+          sourceLabel: source.original_filename ?? source.source_url ?? source.source_type,
+          sourceType: source.source_type,
+          text,
+        }),
+      );
+
+      parsedSources.push({ parsed, source });
+    } catch {
+      sourceFailures += 1;
+    }
   }
 
-  const parsed = parsedProfileSourceSchema.parse(
-    parseProfileSourceText({
-      sourceId: source.id,
-      sourceLabel: source.original_filename ?? source.source_url ?? source.source_type,
-      sourceType: source.source_type,
-      text,
-    }),
-  );
-
-  return { parsed, source };
+  return {
+    parsedSources,
+    sourceFailures,
+  };
 }
 
 async function insertSourceAnalysis(
@@ -626,7 +677,7 @@ function didResumeChange(before: ResumeContent, after: ResumeContent) {
 
 function sumReports(
   reports: ProfileReprocessReport[],
-  key: "parsedProjectCount" | "sourceCount" | "sourcesAnalyzed",
+  key: "parsedProjectCount" | "sourceCount" | "sourceFailures" | "sourcesAnalyzed",
 ) {
   return reports.reduce((total, report) => total + report[key], 0);
 }

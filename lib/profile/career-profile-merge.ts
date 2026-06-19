@@ -435,18 +435,19 @@ async function projectCareerProfileToProfileFields({
 
 function dedupe(values: string[]) {
   const seen = new Set<string>();
+  const deduped: string[] = [];
 
-  return values.filter((value) => {
-    const normalized = value.trim();
+  for (const value of values) {
+    const normalized = value.trim().slice(0, 500);
     const key = normalizeComparable(normalized);
 
-    if (!normalized || seen.has(key)) {
-      return false;
+    if (normalized && !seen.has(key)) {
+      seen.add(key);
+      deduped.push(normalized);
     }
+  }
 
-    seen.add(key);
-    return true;
-  });
+  return deduped;
 }
 
 function normalizeComparable(value: string) {
